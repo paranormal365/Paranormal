@@ -211,7 +211,12 @@ struct FieldKitHomeView: View {
                 } footer: {
                     // Only sessions the server can hand back get a button. The older kind is
                     // counted rather than listed with a Download that would only be refused.
-                    Text("Sessions you sent from another device, or cleared from this one. Downloading brings the whole night back — readings, marks and recordings."
+                    // With nothing left to bring back, the heading and the sentence about
+                    // downloading stood over an empty section (walk, 2026-10-02): say only what is
+                    // true then — the older ones are on the website.
+                    Text((pullable.isEmpty
+                          ? "Everything that can come back to this phone is here."
+                          : "Sessions you sent from another device, or cleared from this one. Downloading brings the whole night back — readings, marks and recordings.")
                          + (older > 0
                             ? " \(older == 1 ? "One older session was" : "\(older) older sessions were") sent before session files existed and can't be pulled back; they're still on the website."
                             : ""))
@@ -416,6 +421,7 @@ struct FieldKitHomeView: View {
 }
 
 private struct SessionRow: View {
+    @Environment(AppDependencies.self) private var dependencies
     let summary: FieldSessionSummary
 
     var body: some View {
@@ -483,7 +489,7 @@ private struct SessionRow: View {
         // handed over, or this person's own pulled back from the server.
         if summary.isPublicArchiveCopy {
             parts.append("public archive")
-        } else if summary.wasRecordedElsewhere(thisDeviceId: DeviceModel.vendorIdentifier()) {
+        } else if summary.wasRecordedElsewhere(thisDeviceId: DeviceModel.vendorIdentifier(), me: dependencies.session.me?.userId) {
             parts.append("shared with you")
         } else if summary.isImported {
             // Your own night, back on this phone — from the server, or from a file you had kept.

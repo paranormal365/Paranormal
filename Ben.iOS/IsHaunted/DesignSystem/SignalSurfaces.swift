@@ -12,6 +12,9 @@ struct SignalListSurface: ViewModifier {
         content
             .scrollContentBackground(.hidden)
             .background(Theme.ink)
+            // A sheet does not inherit the app's tint, so its icons fell back to system blue
+            // (walk, 2026-10-02 — the Send session sheet). Every list and form carries it.
+            .tint(Theme.ecto)
             .toolbarBackground(Theme.ink, for: .navigationBar)
             .listRowBackground(Theme.mist)
     }

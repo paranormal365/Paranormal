@@ -176,6 +176,7 @@ and is never stored — leave, and it's forgotten.
 |---|---|
 | **All posts** | Everything, newest first. |
 | **Following** | Only people you follow — plus your own posts, so you can see what you just wrote. |
+| **Mentions** | Posts that name you with your **@name** — and posts whose replies do. The bell's *Mentions* row opens this. |
 
 Click a post's reply count to open it and read the replies. Opening a post is what clears a
 "mentioned you" badge from your **Feed** menu entry, so nothing disappears before you have seen it.
@@ -217,6 +218,15 @@ Two things worth knowing:
   *Reported* afterwards so you know it registered.
 
 You cannot report your own post.
+
+## Taking down your own post
+
+Your own posts and replies carry a **Delete** button (in the app, it is in the post's **…** menu).
+You are asked once more — *Delete this post?* — because there is no undo. A deleted post comes off
+the feed for everybody at once, and **its replies go with it**: a reply under a post nobody can open
+has nothing left to answer. Deleting a reply of yours leaves the post it answered alone.
+
+Nobody else can delete your post. If a post of somebody else's should go, report it.
 
 ## If the feed is not there
 

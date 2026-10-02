@@ -94,7 +94,9 @@ struct EventDetailView: View {
     private func header(_ event: PublicEventRecord) -> some View {
         VStack(alignment: .leading, spacing: 4) {
             if let tour = event.tourName {
-                Label(tour, systemImage: "figure.walk")
+                // The walk's name above the night's — unless they are the same words, when the
+                // kicker says what kind of night it is instead of printing the name twice.
+                Label(tour == event.title ? "Ghost walk" : tour, systemImage: "figure.walk")
                     .font(.subheadline.weight(.medium)).foregroundStyle(Theme.ecto)
             }
             Text(event.title).font(.title2.weight(.semibold)).foregroundStyle(Theme.bone)

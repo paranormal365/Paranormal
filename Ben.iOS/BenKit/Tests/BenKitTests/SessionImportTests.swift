@@ -101,6 +101,16 @@ struct SessionImportTests {
         #expect(summary.recordedByAccountId == recorder)
         #expect(summary.wasRecordedElsewhere(thisDeviceId: "PHONE-B"))
         #expect(!summary.wasRecordedElsewhere(thisDeviceId: "PHONE-A"))
+        // Somebody's own night recorded on their other phone is theirs, not "shared with you"
+        // (walk, 2026-10-02): the account that recorded it decides, the device only when nobody's
+        // account is known.
+        #expect(!summary.wasRecordedElsewhere(thisDeviceId: "PHONE-B", me: recorder))
+        #expect(summary.wasRecordedElsewhere(thisDeviceId: "PHONE-B", me: UUID()))
+        // A session pulled from the server's list of your own, whose seal names nobody, is yours.
+        var pulled = summary
+        pulled.recordedByAccountId = nil
+        pulled.serverSessionId = UUID()
+        #expect(!pulled.wasRecordedElsewhere(thisDeviceId: "PHONE-B", me: UUID()))
         #expect(!summary.isUploaded)
 
         // The files are where a session recorded here keeps them, byte for byte.

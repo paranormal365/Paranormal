@@ -24,6 +24,22 @@ move the last number, new things the middle one, a whole new part of the app the
 
 ## 2026-10-02 · 1.1.2
 
+- The app has the website's new look, in light and in dark: the same colors, buttons and cards.
+- Anywhere you need to sign in, there is a **Sign in** button right there. The sign-in sheet has
+  **Forgot your password?** and **Create an account**, and the account form says what a password
+  needs before you try one.
+- You can delete your own posts from their **…** menu.
+- **You were mentioned** opens the posts that name you.
+- On an iPhone, a group member finds **Investigations** under Profile, and opening a case from an
+  investigation no longer jumps back to the feed.
+- Switching on video, audio or location asks iOS there and then; if you said no, the switch stays off
+  and the app offers to open Settings, rather than recording nothing.
+- The microphone is asked for before a session starts, so a first session keeps its opening seconds.
+- Profile shows the name people see and your posts and followers.
+- A walk that has already set off says **Under way now** instead of offering places.
+- Public events keep their title at the top, and a walk's name is no longer printed twice.
+- Finding public sessions says it is finding where you are, instead of showing a blank page.
+
 - The magnetometer keeps reading during a session again. With Watch for Motion on — the setting new
   sessions start with — the motion reading and the magnetometer were each asking the phone's motion
   sensors for something different, and the magnetometer stopped updating; they now share one reading.

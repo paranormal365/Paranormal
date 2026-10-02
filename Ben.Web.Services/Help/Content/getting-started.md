@@ -455,6 +455,12 @@ number is always the sum of the rows underneath it. If the bell says four, four 
 | A venue answered you | Your booking at an event has been decided. |
 | Your hold is running out | You picked places, the venue has not confirmed them, and they lapse within a day. |
 
+**Every row opens the thing it counts.** *Posts that mention you* opens the feed's **Mentions** tab
+— the posts that name you, and posts whose replies do. *Unread messages* opens the oldest one and
+marks it read, so the number comes down as you read. *Bookings waiting on you*, *Holds running out*
+and a tour's sign-ups open that event's or that date's own page rather than the list of your
+groups.
+
 ![The notifications page](/help/media/getting-started/notifications.png)
 *Everything waiting on you, grouped by what it is.*
 

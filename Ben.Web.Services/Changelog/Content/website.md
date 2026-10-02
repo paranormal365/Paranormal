@@ -22,6 +22,23 @@ it carry no number.
 The history before 2026-08-22 is summarized rather than listed: the site was not yet open, and a
 day-by-day account of building it would say nothing to anyone using it now.
 
+## 2026-10-02 · 2.14.0
+
+- You can delete your own posts and replies on the feed, after confirming. A post takes its replies
+  with it.
+- The feed has a **Mentions** tab: the posts that name you, and posts whose replies do. The bell's
+  mentions row opens it instead of the top of the feed.
+- Every notification opens what it counts: an unread message opens that message (and the count comes
+  down), and a booking, a hold or a tour sign-up opens that event's or that date's own page rather
+  than the list of your groups.
+- Opening a help guide at a heading lands on that heading, even with pictures still loading above it.
+- The equipment catalog's help is a guide anyone can read; signed out, its links used to say the topic
+  wasn't available.
+- Text boxes you write paragraphs in have rounded corners that stay clear of the cursor.
+- The icons on a list's row buttons turn white when you point at them, so they stay readable.
+- The site is written in American English throughout — catalog, color, program, canceled.
+- A request the site could not read now says so, instead of reporting an error on our side.
+
 ## 2026-10-02 · 2.13.0
 
 - The whole site has a new look, in light and in dark: one set of colors, type and pictures from the

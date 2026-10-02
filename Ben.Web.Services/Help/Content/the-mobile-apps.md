@@ -35,6 +35,11 @@ already confirmed the email address, so there is no confirmation link to wait fo
 "Hide My Email" works too; the address Apple gives us is a relay that reaches you. Your phone stays signed in afterwards; you will not be asked again every time you
 open the app.
 
+Anywhere the app needs an account — My Cases, a case, Investigations, Notifications, asking for a
+place on a night — it says so **and offers a Sign in button right there**, so you are signed in
+where you stood rather than sent off to Profile. The sign-in sheet has **Forgot your password?**,
+which opens the website's reset (the email it sends links back there), and **Create an account**.
+
 Setting two-step **up** on the phone works a little differently from the website, for a good
 reason: on a phone the app is itself the second device, so there is no QR code to scan. Instead
 the app shows you the key to copy, and offers a link that hands it straight to your authenticator
@@ -46,10 +51,10 @@ show them to you again.
 | | |
 |---|---|
 | **The feed** | Scroll it signed out or signed in, open a post and its replies, tap a hashtag or category to see everything like it, and open somebody's profile. Photos and video play in the app. |
-| **Posting** | Write a post, attach a photo or video from your library, or **take one with the camera right there** — which is the thing a phone is genuinely better at than a laptop. Add a category so people can find your footage. Like, reply, follow and report. |
-| **Notifications** | Everything waiting on you, in the same buckets the website's bell uses. Color follows the AGE of the oldest item rather than the count — fifty messages from this morning are a busy day, one from last week is the thing worth chasing. Rows open exactly what they count. |
+| **Posting** | Write a post, attach a photo or video from your library, or **take one with the camera right there** — which is the thing a phone is genuinely better at than a laptop. Add a category so people can find your footage. Like, reply, follow and report — and **delete your own post** from its **…** menu. |
+| **Notifications** | Everything waiting on you, in the same buckets the website's bell uses. Color follows the AGE of the oldest item rather than the count — fifty messages from this morning are a busy day, one from last week is the thing worth chasing. Rows open exactly what they count: *You were mentioned* opens the posts that name you. |
 | **Your cases** | Your cases and their timelines — what happened, what the group has written back, and photos attached to either. **Log something that happened** right from the case, with photos from your library or one you take there and then; say when it happened, or say that you don't know rather than guessing. **Reports** your group has published are there to read in full, and to share or save, and you can **message your group** about the case — what you send and what they send back, in one conversation. Who to contact is listed, and the group's **visits** to your case show when each one is, where, and the last moment to cancel it. |
-| **Investigations** | The ones you're on, split into what's coming and what's been, with your assigned role and any evidence deadline. **Where you've been** draws the places you've investigated on a map. |
+| **Investigations** | The ones you're on, split into what's coming and what's been, with your assigned role and any evidence deadline, and the group's case behind each one. **Where you've been** draws the places you've investigated on a map. On an iPhone the bar has room for five tabs, so for a group member Investigations lives on **Profile → Investigations**; on an iPad it is in the sidebar. |
 | **Haunted Tours** | Ghost walks near you, or near a place you look up, with how far away they are and when they next run. No account needed. Tapping one opens the walk — where you meet, how long it runs, who leads it and the nights coming up — and a night opens that night. Asking for a place is done there. **Location is asked for, never taken**: the tab opens on a list, and if you would rather not share where you are, type a city instead. |
 | **Events** | Public events, readable without an account, and you can reserve a place. A night that belongs to a **walking tour** carries the tour's name under its title, because a walk is booked by its name and a business with three of them would otherwise show three rows reading "Saturday walk". Times read **where you are**, with the zone named beside them, and **Local time** switches to the clock of the place the night happens in — a Nashville walk's 3:08 PM CDT (see *Times and time zones*, below). An event whose organizer never said which zone it is in reads in Central time and says so. **Add to calendar** puts one straight into your own calendar. Tapping a night opens it, with your seat on it, directions to the meeting point and who is guiding. A night that belongs to a **hosted event** — a weekend at a venue, a dinner and a show — shows where your booking stands and your pass instead; see below. |
 | **Field Kit** | The phone as an instrument during an investigation — see below. |
@@ -168,6 +173,16 @@ Four channels: **magnetic field**, **audio**, **video** and **location**. Each s
 You choose them on the **New session** sheet before the session opens, and the same switches are on
 the running session's screen under *Recording* — switching one off tears it down rather than
 leaving it running quietly, which is the whole reason to switch video off at two in the morning.
+
+**Switching on a channel that needs permission asks for it there and then.** If iOS has never asked,
+turning on video, audio or location brings up its question straight away. If you said no — then or
+before — the switch stays off rather than turning on and recording nothing, and the app says so and
+offers to open **Settings**, where IsHaunted's camera, microphone and location switches are. iOS only
+ever asks once; after a no, Settings is the only place to change your mind. The same goes for the
+**Sound** and **Movement in the camera's view** watches when you leave the device in a room.
+
+The **microphone is asked for while the session is still waiting**, not when you press Start, so a
+first session does not lose its opening seconds to the question.
 
 Video starts **off**. With it on, the camera **records the whole session** at 720p from the moment
 you press Start until you press Stop, with a viewfinder to aim by on the running session's screen.
