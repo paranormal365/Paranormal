@@ -14,7 +14,7 @@ namespace Ben.Data.WebApi.Services.Events;
 /// <para><b>"There that night"</b> means holding a place on that date, or holding a pass for the whole event — a day
 /// pass with no nights is a pass for every one of them, as the door already reads it.</para>
 ///
-/// <para><b>A limit, because it is mail.</b> Ten a day per event: enough for "the car park has flooded" and three
+/// <para><b>A limit, because it is mail.</b> Ten a day per event: enough for "the parking lot has flooded" and three
 /// follow-ups, and a stop before a stuck button or a host in a temper becomes forty letters.</para>
 /// </remarks>
 public static class HostedEventAnnouncements

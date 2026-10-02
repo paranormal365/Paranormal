@@ -80,7 +80,7 @@ public sealed class FlyerPageShots : BenTestBase
         await ClickUntilAsync(Page.Locator("#letter-start"), Page.Locator("#letter-subject"));
         await Page.Locator("#letter-subject").FillAsync("Parking for Friday night");
         await Page.Locator("#letter-body").FillAsync(
-            "The hotel car park is closed on Friday for resurfacing.\nPark behind the Methodist church on Main Street — it's a two-minute walk, and we'll have a lantern at the corner.");
+            "The hotel parking lot is closed on Friday for resurfacing.\nPark behind the Methodist church on Main Street — it's a two-minute walk, and we'll have a lantern at the corner.");
 
         // Written and photographed, never sent.
         var board = Page.Locator("#board-letters").First;

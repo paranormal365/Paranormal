@@ -399,7 +399,7 @@ ADS = [
             ("chart", "At a glance", "Coming, waiting, places left, arrivals and reviews on one card."),
         ],
         screen=WALK + "10-organizer-writing-to-guests.png", shot_focus="top left",
-        quote="“The car park moved. Everybody knew by lunchtime.”",
+        quote="“The parking lot moved. Everybody knew by lunchtime.”",
         quote_who="Write to every guest at once",
         steps=[("Create the event", "Nights, venue, rooms or seats — a draft costs nothing."),
                ("Publish", "One credit, or your business plan. It's live in minutes."),

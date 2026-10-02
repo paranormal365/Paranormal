@@ -95,7 +95,7 @@ public sealed record ScanHostedEventPassRequest(
 /// </param>
 /// <param name="AlreadyCheckedInUtc">
 /// Set when this party had already been scanned. <b>Not a refusal</b>: a door that turned away the
-/// same party walking back in from the car park would be a worse door than one that says when they
+/// same party walking back in from the parking lot would be a worse door than one that says when they
 /// first arrived and lets the person on the door decide.
 /// </param>
 public sealed record HostedEventScanResult(
