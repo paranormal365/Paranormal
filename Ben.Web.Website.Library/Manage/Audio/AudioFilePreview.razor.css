@@ -1,0 +1,419 @@
+/* ============================================================================
+ * The EVP lab — the full view's EVP Markers panel in the Signal look.
+ *
+ * Ben, 10/02/2026: "Make the EVP editor page flashy and unique like the rest of the new site."
+ * Built only from the Signal tokens (signal-tokens.css), so it follows light and dark with the
+ * rest of the site and names no color of its own beyond the white of the scan highlight. Seen in BOTH modes before it was done —
+ * every fault found while building Signal was light-only.
+ *
+ * Motion is decoration, never information: everything animated here stops under
+ * prefers-reduced-motion and the page reads the same without it.
+ * ========================================================================= */
+
+/* ── the panel ─────────────────────────────────────────────────────────── */
+
+.evp-lab {
+    position: relative;
+    padding: 1rem 1.1rem 1.1rem;
+    font-size: .85rem;
+    border: 1px solid var(--ben-line);
+    border-radius: var(--ben-radius-lg);
+    /* The gradient edge along the top is the first background layer, not a ::before: the panel
+       scrolls inside itself (below), and a background stays with the box while the contents move,
+       so the edge does not scroll away. */
+    background:
+        var(--ben-accent-grad) top / 100% 3px no-repeat,
+        radial-gradient(120% 140% at 100% 0%, rgba(var(--ben-accent-rgb), .13), transparent 55%),
+        radial-gradient(90% 120% at 0% 100%, rgba(var(--ben-accent-2-rgb), .10), transparent 55%),
+        var(--ben-surface);
+    box-shadow: var(--ben-shadow);
+
+    /* The full view is a fixed-height column with the player below this panel. Left to shrink, the
+       panel was squeezed and its bottom — the Scan button — cut off. It scrolls inside itself
+       instead, and never takes more than about half the screen from the waveform. */
+    flex: 0 1 auto;
+    min-height: 0;
+    max-height: 52vh;
+    overflow-y: auto;
+}
+
+/* While a scan runs, a bright pulse travels the top edge — the panel is visibly listening. Sticky,
+   so it stays on the edge however far the panel is scrolled; the margins put it on the border and
+   hand the padding back to what follows. */
+.evp-lab__sweep {
+    position: sticky;
+    top: 0;
+    z-index: 2;
+    height: 3px;
+    margin: -1rem -1.1rem calc(1rem - 3px);
+    overflow: hidden;
+}
+.evp-lab__sweep::after {
+    content: "";
+    position: absolute;
+    top: 0; bottom: 0;
+    width: 30%;
+    background: linear-gradient(90deg, transparent, rgba(255, 255, 255, .95), transparent);
+    animation: evp-sweep 1.4s ease-in-out infinite;
+}
+
+/* Icons follow the words they sit beside. The template draws every icon as a 1px grey outline
+   over a grey fill, whatever it sits on, which on the gradient buttons read as a grey disc. */
+.evp-lab ::deep .sa-icon,
+.evp-info ::deep .sa-icon {
+    --sa-icon-color: currentColor;
+    stroke: currentColor;
+    stroke-width: 2px;
+    fill: none;
+}
+
+/* ── the heading ───────────────────────────────────────────────────────── */
+
+.evp-lab__head {
+    display: flex;
+    align-items: flex-end;
+    justify-content: space-between;
+    gap: .75rem;
+    flex-wrap: wrap;
+    margin-bottom: .85rem;
+}
+
+/* The home page's kicker, at panel size. */
+.evp-lab__kicker {
+    display: inline-flex;
+    align-items: center;
+    gap: .35rem;
+    font-size: .68rem;
+    font-weight: 700;
+    letter-spacing: .16em;
+    text-transform: uppercase;
+    color: var(--ben-link);
+    margin-bottom: .15rem;
+}
+.evp-lab__kicker ::deep .sa-icon { width: .85rem; height: .85rem; stroke: currentColor; --sa-icon-color: currentColor; }
+
+.evp-lab__title {
+    display: flex;
+    align-items: center;
+    gap: .5rem;
+    margin: 0;
+    font-size: 1.3rem;
+    line-height: 1.1;
+    font-weight: var(--ben-display-weight);
+    letter-spacing: var(--ben-display-tracking);
+}
+.evp-lab__title-text {
+    background-image: var(--ben-accent-grad);
+    -webkit-background-clip: text;
+    background-clip: text;
+    color: transparent;
+}
+
+.evp-lab__chip {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 1.6rem;
+    height: 1.6rem;
+    padding: 0 .45rem;
+    border-radius: var(--ben-radius-pill);
+    font-size: .75rem;
+    font-weight: 700;
+    letter-spacing: 0;
+    color: var(--ben-ink);
+    background: var(--ben-accent-soft);
+    font-variant-numeric: tabular-nums;
+}
+.evp-lab__chip--hot {
+    color: var(--ben-on-accent);
+    background-image: var(--ben-accent-grad);
+    box-shadow: var(--ben-glow);
+}
+
+/* ── the smarter-detector banner (item 253) ────────────────────────────── */
+
+.evp-lab__promo {
+    display: flex;
+    align-items: center;
+    gap: .85rem;
+    flex-wrap: wrap;
+    padding: .7rem .9rem;
+    margin-bottom: 1rem;
+    border-radius: var(--ben-radius);
+    border: 1px solid rgba(var(--ben-accent-rgb), .28);
+    background: linear-gradient(120deg, rgba(var(--ben-accent-rgb), .12), rgba(var(--ben-accent-2-rgb), .10));
+}
+.evp-lab__promo-mark {
+    flex: 0 0 auto;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 2.2rem;
+    height: 2.2rem;
+    border-radius: 50%;
+    color: var(--ben-on-accent);
+    background-image: var(--ben-accent-grad);
+    box-shadow: var(--ben-glow);
+    animation: evp-pulse 2.8s ease-in-out infinite;
+}
+.evp-lab__promo-mark ::deep .sa-icon { width: 1.1rem; height: 1.1rem; stroke: currentColor; --sa-icon-color: currentColor; }
+.evp-lab__promo-text {
+    flex: 1 1 14rem;
+    display: flex;
+    flex-direction: column;
+    line-height: 1.3;
+}
+.evp-lab__promo-text strong { color: var(--ben-ink); font-size: .92rem; }
+.evp-lab__promo-text span   { color: var(--ben-ink-muted); }
+
+/* ── sections ──────────────────────────────────────────────────────────── */
+
+.evp-lab__section { margin-top: .9rem; }
+
+.evp-lab__section-head {
+    display: inline-block;
+    margin-bottom: .45rem;
+    font-size: .7rem;
+    font-weight: 700;
+    letter-spacing: .12em;
+    text-transform: uppercase;
+    color: var(--ben-ink-muted);
+}
+
+.evp-lab__empty {
+    padding: .8rem .9rem;
+    border: 1px dashed var(--ben-line-strong);
+    border-radius: var(--ben-radius);
+    color: var(--ben-ink-muted);
+    font-style: italic;
+}
+
+.evp-lab__review-head {
+    display: flex;
+    align-items: center;
+    gap: .5rem;
+    flex-wrap: wrap;
+    margin-bottom: .5rem;
+}
+
+.evp-lab__list { display: flex; flex-direction: column; gap: .4rem; }
+.evp-lab__list--scroll { max-height: 240px; overflow-y: auto; padding-right: .15rem; }
+
+/* ── the detector ──────────────────────────────────────────────────────── */
+
+.evp-lab__detector {
+    margin-top: 1rem;
+    padding-top: .9rem;
+    border-top: 1px solid var(--ben-line);
+}
+.evp-lab__detector-row {
+    display: flex;
+    align-items: center;
+    gap: .6rem;
+    flex-wrap: wrap;
+}
+.evp-lab__msg { color: var(--ben-ink-muted); }
+.evp-lab__hint { margin: .5rem 0 0; color: var(--ben-ink-muted); font-size: .78rem; max-width: 60rem; }
+
+.evp-lab__tuning {
+    margin-top: .75rem;
+    padding: .75rem .9rem;
+    border-radius: var(--ben-radius);
+    background: var(--ben-fill);
+    border: 1px solid var(--ben-line);
+}
+
+/* The scan button shimmers while it works: the gradient slides through itself. */
+.evp-lab__scan.is-scanning,
+.evp-lab__scan.is-scanning:disabled {
+    background-image: linear-gradient(90deg, var(--ben-accent), var(--ben-accent-2), var(--ben-accent));
+    background-size: 200% 100%;
+    opacity: 1;
+    animation: evp-shimmer 1.2s linear infinite;
+}
+
+/* ── the segmented switch (sensitivity, sort) ──────────────────────────── */
+
+.evp-seg {
+    display: inline-flex;
+    padding: 3px;
+    gap: 2px;
+    border-radius: var(--ben-radius-pill);
+    background: var(--ben-fill-strong);
+    border: 1px solid var(--ben-line);
+}
+.evp-seg__btn {
+    border: 0;
+    padding: .3rem .85rem;
+    border-radius: var(--ben-radius-pill);
+    background: transparent;
+    color: var(--ben-ink-muted);
+    font-weight: 600;
+    font-size: .8rem;
+    line-height: 1.2;
+    transition: background-color .15s ease, color .15s ease, box-shadow .15s ease;
+}
+.evp-seg__btn:hover:not(:disabled) { color: var(--ben-ink); }
+.evp-seg__btn.is-active {
+    color: var(--ben-ink);
+    background: var(--ben-surface);
+    box-shadow: var(--ben-shadow-sm), inset 0 -2px 0 var(--ben-accent);
+}
+.evp-seg__btn:disabled { opacity: .6; }
+.evp-seg__btn:focus-visible { outline: 2px solid var(--ben-accent); outline-offset: 1px; }
+.evp-seg--sm .evp-seg__btn { padding: .2rem .65rem; font-size: .75rem; }
+
+/* ── rows: kept markers and candidates ─────────────────────────────────── */
+
+.evp-row {
+    display: flex;
+    align-items: center;
+    gap: .6rem;
+    padding: .4rem .5rem .4rem .7rem;
+    border-radius: var(--ben-radius);
+    background: var(--ben-fill);
+    border: 1px solid transparent;
+    transition: border-color .15s ease, box-shadow .15s ease, transform .15s ease;
+}
+.evp-row:hover {
+    border-color: rgba(var(--ben-accent-rgb), .35);
+    box-shadow: var(--ben-shadow-sm);
+    transform: translateY(-1px);
+}
+
+/* A kept marker carries its confidence color as an edge, not as a colored badge to read. */
+.evp-row--marker { box-shadow: inset 3px 0 0 var(--marker-color, var(--ben-accent)); }
+.evp-row--marker:hover { box-shadow: inset 3px 0 0 var(--marker-color, var(--ben-accent)), var(--ben-shadow-sm); }
+
+.evp-row--candidate.is-adjusting {
+    border-color: var(--ben-accent-2);
+    background: rgba(var(--ben-accent-2-rgb), .10);
+}
+
+.evp-row__time  { font-weight: 600; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.evp-row__label { font-weight: 650; color: var(--ben-ink); }
+.evp-row__meta  { color: var(--ben-ink-muted); font-size: .78rem; }
+.evp-row__note  {
+    color: var(--ben-ink-muted);
+    font-size: .78rem;
+    max-width: 200px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+.evp-row__pill {
+    display: inline-flex;
+    align-items: center;
+    gap: .25rem;
+    padding: .1rem .5rem;
+    border-radius: var(--ben-radius-pill);
+    font-size: .72rem;
+    font-weight: 600;
+    color: var(--ben-ink);
+    background: var(--ben-accent-soft);
+    white-space: nowrap;
+}
+.evp-row__pill ::deep .sa-icon { width: .8rem; height: .8rem; stroke: currentColor; --sa-icon-color: currentColor; }
+.evp-row__pill--clip { background: rgba(var(--ben-accent-2-rgb), .16); }
+
+.evp-row__actions { margin-left: auto; display: inline-flex; gap: .25rem; flex-shrink: 0; }
+
+/* The score as a meter: the number to read, the bar to scan a list by. */
+.evp-score {
+    flex: 0 0 3.2rem;
+    display: flex;
+    flex-direction: column;
+    gap: .2rem;
+}
+.evp-score__num {
+    font-weight: 700;
+    font-size: .95rem;
+    line-height: 1;
+    font-variant-numeric: tabular-nums;
+    color: var(--ben-ink);
+}
+.evp-score__meter {
+    display: block;
+    height: 4px;
+    border-radius: var(--ben-radius-pill);
+    background: var(--ben-fill-strong);
+    overflow: hidden;
+}
+.evp-score__meter > span {
+    display: block;
+    height: 100%;
+    border-radius: inherit;
+    background-image: var(--ben-accent-grad);
+}
+
+/* ── the How it works modal ────────────────────────────────────────────── */
+
+.evp-info { font-size: .92rem; }
+.evp-info__lede { color: var(--ben-ink); margin-bottom: 1rem; }
+
+.evp-info__steps { display: flex; flex-direction: column; gap: .75rem; margin-bottom: 1rem; }
+.evp-info__step  { display: flex; gap: .75rem; align-items: flex-start; color: var(--ben-ink-muted); }
+.evp-info__step strong { color: var(--ben-ink); }
+.evp-info__num {
+    flex: 0 0 auto;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 1.8rem;
+    height: 1.8rem;
+    border-radius: 50%;
+    font-weight: 700;
+    color: var(--ben-on-accent);
+    background-image: var(--ben-accent-grad);
+    box-shadow: var(--ben-glow);
+}
+
+.evp-info__facts {
+    display: flex;
+    flex-direction: column;
+    gap: .4rem;
+    padding: .75rem .9rem;
+    margin-bottom: .9rem;
+    border-radius: var(--ben-radius);
+    background: var(--ben-fill);
+    border: 1px solid var(--ben-line);
+}
+.evp-info__facts > div { display: flex; gap: .5rem; align-items: flex-start; color: var(--ben-ink-muted); }
+.evp-info__facts strong { color: var(--ben-ink); }
+.evp-info__facts ::deep .sa-icon {
+    flex: 0 0 auto;
+    width: 1rem;
+    height: 1rem;
+    margin-top: .15rem;
+    stroke: var(--ben-link);
+    --sa-icon-color: var(--ben-link);
+}
+
+.evp-info__fine { color: var(--ben-ink-muted); font-size: .82rem; margin-bottom: 0; }
+
+/* ── motion ────────────────────────────────────────────────────────────── */
+
+@keyframes evp-sweep   { from { left: -30%; } to { left: 100%; } }
+@keyframes evp-shimmer { from { background-position: 0% 0; } to { background-position: 200% 0; } }
+@keyframes evp-pulse {
+    0%, 100% { box-shadow: var(--ben-glow); }
+    50%      { box-shadow: 0 0 0 6px rgba(var(--ben-accent-rgb), .12), var(--ben-glow); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .evp-lab__sweep::after,
+    .evp-lab__scan.is-scanning,
+    .evp-lab__promo-mark { animation: none; }
+    .evp-row, .evp-seg__btn { transition: none; }
+    .evp-row:hover { transform: none; }
+}
+
+/* ── phone width ───────────────────────────────────────────────────────── */
+
+@media (max-width: 575.98px) {
+    .evp-lab { padding: .85rem .8rem .9rem; }
+    .evp-lab__sweep { margin: -.85rem -.8rem calc(.85rem - 3px); }
+    .evp-row { flex-wrap: wrap; }
+    .evp-row__actions { width: 100%; justify-content: flex-end; }
+    .evp-row__note { max-width: 100%; }
+}

@@ -200,6 +200,9 @@ namespace Ben.Data.Source.Context
         public virtual DbSet<UploadFileRegionNote> UploadFileRegionNotes { get; set; }
         public virtual DbSet<UploadFileVote> UploadFileVotes { get; set; }
         public virtual DbSet<AudioMarker> AudioMarkers { get; set; }
+        public virtual DbSet<EvpScan> EvpScans { get; set; }
+        public virtual DbSet<EvpScanCandidate> EvpScanCandidates { get; set; }
+        public virtual DbSet<EvpRuling> EvpRulings { get; set; }
         public virtual DbSet<AuditLog> AuditLogs { get; set; }
         public virtual DbSet<SidecarInstallLog> SidecarInstallLogs { get; set; }
         public virtual DbSet<EquipmentCategory> EquipmentCategories { get; set; }
@@ -2464,6 +2467,26 @@ namespace Ben.Data.Source.Context
             // pending candidates, dedupe a re-scan against the dismissed ones.
             modelBuilder.Entity<AudioMarker>()
                 .HasIndex(e => new { e.UploadFileId, e.ReviewStatus });
+
+            // ── EVP learning records (item 253) ──────────────────────────────
+            // Measurements and rulings kept for re-fitting the detector. They hang off the
+            // recording and leave with it; nothing points at a person.
+            modelBuilder.Entity<EvpScan>()
+                .HasOne(e => e.UploadFile).WithMany()
+                .HasForeignKey(e => e.UploadFileId).OnDelete(DeleteBehavior.Cascade);
+            modelBuilder.Entity<EvpScan>()
+                .HasIndex(e => new { e.UploadFileId, e.DateCreated });
+            modelBuilder.Entity<EvpScanCandidate>()
+                .HasOne(e => e.EvpScan).WithMany(e => e.Candidates)
+                .HasForeignKey(e => e.EvpScanId).OnDelete(DeleteBehavior.Cascade);
+            // Joining a candidate to its marker's ruling is the one question a re-fit asks.
+            modelBuilder.Entity<EvpScanCandidate>()
+                .HasIndex(e => e.AudioMarkerId);
+            modelBuilder.Entity<EvpRuling>()
+                .HasOne(e => e.UploadFile).WithMany()
+                .HasForeignKey(e => e.UploadFileId).OnDelete(DeleteBehavior.Cascade);
+            modelBuilder.Entity<EvpRuling>()
+                .HasIndex(e => e.AudioMarkerId);
 
             // ── UploadFileVote ───────────────────────────────────────────────
             // One vote per (user, file): unique index enforces the business rule.

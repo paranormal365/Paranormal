@@ -306,11 +306,11 @@ public sealed class AudioMarkerController : BenControllerBase
         if (!(source.ContentType ?? "").StartsWith("audio", StringComparison.OrdinalIgnoreCase))
             return BadRequest("That file isn't audio.");
 
-        IReadOnlyList<EvpCandidate> detected;
+        EvpAnalysis analysis;
         try
         {
             await using var stream = await OpenSourceStreamAsync(source, ct);
-            detected = EvpDetector.Detect(stream, source.ContentType ?? "", settings, MaxCandidatesPerScan);
+            analysis = EvpDetector.Analyze(stream, source.ContentType ?? "", settings, MaxCandidatesPerScan);
         }
         catch (Exception ex) when (ex is InvalidOperationException or NotSupportedException or FormatException)
         {
@@ -324,13 +324,137 @@ public sealed class AudioMarkerController : BenControllerBase
             .Select(m => new { m.TimeSeconds, m.EndSeconds })
             .ToListAsync(ct);
 
-        var fresh = detected
+        var proposed = analysis.Candidates
             .Where(c => !reviewed.Any(r => OverlapsEnough(c, r.TimeSeconds, r.EndSeconds)))
+            .ToList();
+        var fresh = proposed
             .Select(c => new AudioCandidateRequest(c.StartSeconds, c.EndSeconds, c.Score))
             .ToList();
 
-        return await ReplaceCandidates(fileId, new BulkCreateAudioCandidatesRequest(fresh), ct);
+        var result = await ReplaceCandidates(fileId, new BulkCreateAudioCandidatesRequest(fresh), ct);
+
+        if (result.Result is OkObjectResult { Value: IEnumerable<AudioMarkerRecord> created })
+            await TryRecordScanAsync(fileId, sensitivity, settings, analysis, proposed, created, ct);
+
+        return result;
     }
+
+    /// <summary>
+    /// Keeps what this scan measured, for the detector to learn from later (item 253).
+    /// </summary>
+    /// <remarks>
+    /// <para>Written after the candidates are saved, in its own save, and allowed to fail: the
+    /// person asked for a scan, not for a training record, and must get their candidates either
+    /// way. A failure is logged, the way a failed audit write is.</para>
+    /// <para>Only scans made here are recorded. <see cref="ReplaceCandidates"/> also accepts
+    /// candidates sent from outside, with scores nobody here measured, and those are not evidence
+    /// of anything the detector did.</para>
+    /// </remarks>
+    private async Task TryRecordScanAsync(
+        Guid fileId, EvpSensitivity sensitivity, EvpDetectionOptions settings, EvpAnalysis analysis,
+        IReadOnlyList<EvpCandidate> proposed, IEnumerable<AudioMarkerRecord> created, CancellationToken ct)
+    {
+        try
+        {
+            // Each marker was made from one proposal's exact bounds, so the bounds pair them.
+            var markerBySpan = created
+                .Where(m => m.EndSeconds is not null)
+                .ToDictionary(m => (m.TimeSeconds, m.EndSeconds!.Value), m => m.Id);
+            var proposedSet = proposed.ToHashSet();
+
+            var scan = new EvpScan
+            {
+                Id                 = Guid.NewGuid(),
+                UploadFileId       = fileId,
+                DateCreated        = DateTime.UtcNow,
+                DetectorVersion    = EvpDetector.Version,
+                Sensitivity        = sensitivity,
+                ThresholdDb        = settings.ThresholdDb,
+                MinDurationSeconds = settings.MinDurationSeconds,
+                MergeGapSeconds    = settings.MergeGapSeconds,
+                ContextPadSeconds  = settings.ContextPadSeconds,
+                MaxEventSeconds    = settings.MaxEventSeconds,
+                RecordingSeconds   = analysis.RecordingSeconds,
+                FoundCount         = analysis.Candidates.Count,
+                ProposedCount      = proposed.Count,
+            };
+            foreach (var c in analysis.Candidates)
+            {
+                var wasProposed = proposedSet.Contains(c);
+                scan.Candidates.Add(new EvpScanCandidate
+                {
+                    Id                = Guid.NewGuid(),
+                    AudioMarkerId     = wasProposed && markerBySpan.TryGetValue((c.StartSeconds, c.EndSeconds), out var markerId)
+                                            ? markerId : null,
+                    Proposed          = wasProposed,
+                    StartSeconds      = c.StartSeconds,
+                    EndSeconds        = c.EndSeconds,
+                    Score             = c.Score,
+                    PeakProminenceDb  = c.Features.PeakProminenceDb,
+                    MeanBandGapDb     = c.Features.MeanBandGapDb,
+                    EventSeconds      = c.Features.EventSeconds,
+                    MeanFloorDb       = c.Features.MeanFloorDb,
+                    PeakBandDb        = c.Features.PeakBandDb,
+                    BandLevelSpreadDb = c.Features.BandLevelSpreadDb,
+                    ZeroCrossingRate  = c.Features.ZeroCrossingRate,
+                });
+            }
+
+            await using var db = await _dbContextFactory.CreateDbContextAsync(ct);
+            db.EvpScans.Add(scan);
+            await db.SaveChangesAsync(ct);
+        }
+        catch (Exception ex) when (ex is not OperationCanceledException)
+        {
+            LogLearningFailure(ex, "scan", fileId);
+        }
+    }
+
+    /// <summary>
+    /// Keeps one Keep or Dismiss on a detected candidate (item 253). Like
+    /// <see cref="TryRecordScanAsync"/>, it never fails the review it follows.
+    /// </summary>
+    private async Task TryRecordRulingAsync(
+        AudioMarker before, AudioMarker after, bool? playedFirst, CancellationToken ct)
+    {
+        if (!before.IsAutoDetected) return;   // a hand-placed marker is not a ruling on the detector
+        try
+        {
+            await using var db = await _dbContextFactory.CreateDbContextAsync(ct);
+
+            // Edges are moved through Update before the ruling, not by it, so compare with what
+            // the detector proposed rather than with the marker a moment ago.
+            var proposedSpan = await db.EvpScanCandidates.AsNoTracking()
+                .Where(c => c.AudioMarkerId == after.Id)
+                .Select(c => new { c.StartSeconds, c.EndSeconds })
+                .FirstOrDefaultAsync(ct);
+            var boundsAdjusted = proposedSpan is not null
+                ? proposedSpan.StartSeconds != after.TimeSeconds || proposedSpan.EndSeconds != after.EndSeconds
+                : before.TimeSeconds != after.TimeSeconds || before.EndSeconds != after.EndSeconds;
+
+            db.EvpRulings.Add(new EvpRuling
+            {
+                Id             = Guid.NewGuid(),
+                UploadFileId   = after.UploadFileId,
+                AudioMarkerId  = after.Id,
+                Ruling         = after.ReviewStatus,
+                PlayedFirst    = playedFirst,
+                BoundsAdjusted = boundsAdjusted,
+                DetectionScore = after.DetectionScore,
+                DateCreated    = DateTime.UtcNow,
+            });
+            await db.SaveChangesAsync(ct);
+        }
+        catch (Exception ex) when (ex is not OperationCanceledException)
+        {
+            LogLearningFailure(ex, "ruling", after.UploadFileId);
+        }
+    }
+
+    private void LogLearningFailure(Exception ex, string what, Guid fileId)
+        => HttpContext?.RequestServices?
+            .GetService<ILogger<AudioMarkerController>>()?
+            .LogError(ex, "EVP learning record ({What}) not written for file {FileId}", what, fileId);
 
     /// <summary>
     /// True when a proposal covers enough of an already-reviewed marker to be the same event.
@@ -413,6 +537,7 @@ public sealed class AudioMarkerController : BenControllerBase
 
         await db.SaveChangesAsync(ct);
         _ = TryAuditAsync(_auditLog.LogUpdateAsync(nameof(AudioMarker), markerId, before, entity, userId, AppSources.WebApi));
+        await TryRecordRulingAsync(before, entity, request.PlayedFirst, ct);
         return Ok(_mapper.Map<AudioMarkerRecord>(entity));
     }
 

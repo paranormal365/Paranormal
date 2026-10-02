@@ -12,10 +12,44 @@ namespace Ben.Data.WebApi.Services.Audio;
 /// its own noise floor, how much of its energy sits in the voice band, and whether its length is
 /// speech-like. A loud door slam can score well; a real EVP buried in hiss can score poorly.
 /// </param>
-public readonly record struct EvpCandidate(double StartSeconds, double EndSeconds, float Score)
+/// <param name="Features">
+/// The measurements the score was made from, kept so a reviewer's Keep or Dismiss can later
+/// re-weight them (item 253). Default for a candidate built by hand.
+/// </param>
+public readonly record struct EvpCandidate(
+    double StartSeconds, double EndSeconds, float Score, EvpFeatures Features = default)
 {
     public double DurationSeconds => EndSeconds - StartSeconds;
 }
+
+/// <summary>
+/// What the detector measured about one event, before any weighting (item 253).
+/// </summary>
+/// <remarks>
+/// <para>The first three are what <see cref="EvpDetector"/>'s score is made of today; the score is
+/// computed from these values and nothing else, so storing them is enough to re-fit its weights.
+/// The rest are cheap extras measured now so that a re-fit has something to learn from beyond
+/// the hand-picked three.</para>
+/// <para>All are of the detected sound itself — the context padding is not included.</para>
+/// </remarks>
+/// <param name="PeakProminenceDb">Highest voice-band level above the local noise floor, in dB.</param>
+/// <param name="MeanBandGapDb">Mean voice-band level minus full-band level, in dB; 0 means all of the energy is in the voice band.</param>
+/// <param name="EventSeconds">Length of the detected sound, unpadded.</param>
+/// <param name="MeanFloorDb">Mean local noise floor under the event, in dBFS — how quiet the room was.</param>
+/// <param name="PeakBandDb">Loudest voice-band frame, in dBFS.</param>
+/// <param name="BandLevelSpreadDb">Standard deviation of the voice-band level across the event: speech rises and falls with syllables, hum holds steady.</param>
+/// <param name="ZeroCrossingRate">Fraction of samples where the full-band signal changes sign: hiss is high, voiced sound is low.</param>
+public readonly record struct EvpFeatures(
+    double PeakProminenceDb,
+    double MeanBandGapDb,
+    double EventSeconds,
+    double MeanFloorDb,
+    double PeakBandDb,
+    double BandLevelSpreadDb,
+    double ZeroCrossingRate);
+
+/// <summary>One scan's result: the candidates, and how long the recording was.</summary>
+public sealed record EvpAnalysis(IReadOnlyList<EvpCandidate> Candidates, double RecordingSeconds);
 
 /// <summary>
 /// Finds stretches of a recording where voice-band energy rises above the local noise floor.
@@ -42,6 +76,13 @@ public readonly record struct EvpCandidate(double StartSeconds, double EndSecond
 /// </remarks>
 internal static class EvpDetector
 {
+    /// <summary>
+    /// Which scoring the candidates came from, stored with every scan (item 253). Raise it whenever
+    /// <see cref="Score(EvpFeatures)"/> or the way events are found changes, so labels gathered
+    /// under one version are never mistaken for another's.
+    /// </summary>
+    public const int Version = 1;
+
     // ── Framing ───────────────────────────────────────────────────────────────
     // 25 ms is long enough for a stable RMS at speech frequencies and short enough to place an
     // onset tightly; 10 ms of hop gives 3 frames per the shortest event we keep.
@@ -75,9 +116,19 @@ internal static class EvpDetector
     /// </summary>
     public static IReadOnlyList<EvpCandidate> Detect(
         Stream sourceStream, string sourceContentType, EvpDetectionOptions options, int maxResults)
+        => Analyze(sourceStream, sourceContentType, options, maxResults).Candidates;
+
+    /// <summary>
+    /// <see cref="Detect(Stream, string, EvpDetectionOptions, int)"/>, plus the recording's length
+    /// for the scan's record.
+    /// </summary>
+    public static EvpAnalysis Analyze(
+        Stream sourceStream, string sourceContentType, EvpDetectionOptions options, int maxResults)
     {
         var (mono, sampleRate) = ReadMono(sourceStream, sourceContentType);
-        return Detect(mono, sampleRate, options, maxResults);
+        return new EvpAnalysis(
+            Detect(mono, sampleRate, options, maxResults),
+            sampleRate > 0 ? mono.Length / (double)sampleRate : 0);
     }
 
     /// <summary>
@@ -108,10 +159,15 @@ internal static class EvpDetector
         // itself would push a 60 ms click past the minimum and back into the queue.
         var scored = events
             .Where(e => FrameToSeconds(e.End, sampleRate) - FrameToSeconds(e.Start, sampleRate) >= options.MinDurationSeconds)
-            .Select(e => new EvpCandidate(
-                Math.Max(0,            FrameToSeconds(e.Start, sampleRate) - options.ContextPadSeconds),
-                Math.Min(totalSeconds, FrameToSeconds(e.End,   sampleRate) + options.ContextPadSeconds),
-                Score(e, bandDb, fullDb, floorDb, sampleRate)))
+            .Select(e =>
+            {
+                var features = Measure(e, mono, bandDb, fullDb, floorDb, sampleRate);
+                return new EvpCandidate(
+                    Math.Max(0,            FrameToSeconds(e.Start, sampleRate) - options.ContextPadSeconds),
+                    Math.Min(totalSeconds, FrameToSeconds(e.End,   sampleRate) + options.ContextPadSeconds),
+                    Score(features),
+                    features);
+            })
             .ToList();
 
         // Cap by score, then hand back in playback order — a review queue reads top to bottom
@@ -279,39 +335,70 @@ internal static class EvpDetector
         return bounded.Where(r => r.End - r.Start + 1 >= minFrames).ToList();
     }
 
-    // ── Scoring ───────────────────────────────────────────────────────────────
+    // ── Measuring and scoring ─────────────────────────────────────────────────
+
+    /// <summary>
+    /// Everything the score needs, and a few things it doesn't use yet (item 253).
+    /// </summary>
+    private static EvpFeatures Measure(
+        Run run, float[] mono, double[] bandDb, double[] fullDb, double[] floorDb, int sampleRate)
+    {
+        double peakProminence = 0, peakBand = double.MinValue;
+        double bandSum = 0, fullSum = 0, floorSum = 0, bandSquares = 0;
+
+        for (var f = run.Start; f <= run.End; f++)
+        {
+            peakProminence = Math.Max(peakProminence, bandDb[f] - floorDb[f]);
+            peakBand = Math.Max(peakBand, bandDb[f]);
+            bandSum += bandDb[f];
+            fullSum += fullDb[f];
+            floorSum += floorDb[f];
+            bandSquares += bandDb[f] * bandDb[f];
+        }
+        var frames = run.End - run.Start + 1;
+        var bandMean = bandSum / frames;
+
+        // The samples the event's frames cover, for the sign changes.
+        var hop    = Math.Max(1, (int)(HopSeconds    * sampleRate));
+        var window = Math.Max(1, (int)(WindowSeconds * sampleRate));
+        var first  = run.Start * hop;
+        var last   = Math.Min(mono.Length - 1, run.End * hop + window - 1);
+        var crossings = 0;
+        for (var i = first + 1; i <= last; i++)
+            if ((mono[i] >= 0) != (mono[i - 1] >= 0)) crossings++;
+
+        return new EvpFeatures(
+            PeakProminenceDb:  peakProminence,
+            MeanBandGapDb:     (bandSum - fullSum) / frames,
+            EventSeconds:      frames * HopSeconds,
+            MeanFloorDb:       floorSum / frames,
+            PeakBandDb:        peakBand,
+            BandLevelSpreadDb: Math.Sqrt(Math.Max(0, bandSquares / frames - bandMean * bandMean)),
+            ZeroCrossingRate:  last > first ? crossings / (double)(last - first) : 0);
+    }
 
     /// <summary>
     /// Blends three independent signals. None is decisive alone: prominence alone promotes any
     /// loud bang, band ratio alone promotes steady tonal hum, and duration alone means nothing.
     /// </summary>
-    private static float Score(
-        Run run, double[] bandDb, double[] fullDb, double[] floorDb, int sampleRate)
+    /// <remarks>
+    /// The weights are hand-set. Item 253 is the plan for letting reviewers' rulings re-fit them;
+    /// until then this is <see cref="Version"/> 1, and it reads nothing but its argument so the
+    /// stored features always reproduce the stored score.
+    /// </remarks>
+    internal static float Score(EvpFeatures features)
     {
-        double peakProminence = 0;
-        double bandSum = 0, fullSum = 0;
-
-        for (var f = run.Start; f <= run.End; f++)
-        {
-            peakProminence = Math.Max(peakProminence, bandDb[f] - floorDb[f]);
-            bandSum += bandDb[f];
-            fullSum += fullDb[f];
-        }
-        var frames = run.End - run.Start + 1;
-
         // How far it stood out. 20 dB over the floor is emphatic; beyond that adds nothing.
-        var prominence = Math.Clamp(peakProminence / 20.0, 0, 1);
+        var prominence = Math.Clamp(features.PeakProminenceDb / 20.0, 0, 1);
 
         // How much of the energy is in the voice band. Band-passing can only remove energy, so this
         // difference is <= 0 dB; near 0 means the sound lives where speech lives. A wideband clap
         // or a sub-bass thump loses most of its energy here and scores low.
-        var bandGapDb = (bandSum - fullSum) / frames;
-        var bandRatio = Math.Clamp(1.0 + bandGapDb / 20.0, 0, 1);
+        var bandRatio = Math.Clamp(1.0 + features.MeanBandGapDb / 20.0, 0, 1);
 
         // Speech-shaped length. Anything can happen in 60 ms; anything over ~10 s is usually a
         // person in the room talking, kept but demoted.
-        var seconds  = frames * HopSeconds;
-        var duration = seconds switch
+        var duration = features.EventSeconds switch
         {
             < 0.20 => 0.3,
             <= 3.0 => 1.0,

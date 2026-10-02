@@ -24,6 +24,9 @@ day-by-day account of building it would say nothing to anyone using it now.
 
 ## 2026-10-02 · 2.14.0
 
+- EVP scans now keep a few measurements of each sound they find, and your keep or dismiss choices
+  beside them, so a future version can rank candidates more like investigators do. No audio is
+  copied, and they are deleted with the recording. The privacy page says so.
 - You can delete your own posts and replies on the feed, after confirming. A post takes its replies
   with it.
 - The feed has a **Mentions** tab: the posts that name you, and posts whose replies do. The bell's

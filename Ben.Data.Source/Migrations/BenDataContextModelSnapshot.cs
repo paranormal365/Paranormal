@@ -3086,6 +3086,145 @@ namespace Ben.Data.Source.Migrations
                     b.ToTable("EvidenceVotes");
                 });
 
+            modelBuilder.Entity("Ben.Data.Source.Entities.EvpRuling", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<Guid>("AudioMarkerId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<bool>("BoundsAdjusted")
+                        .HasColumnType("bit");
+
+                    b.Property<DateTime>("DateCreated")
+                        .HasColumnType("datetime2");
+
+                    b.Property<float?>("DetectionScore")
+                        .HasColumnType("real");
+
+                    b.Property<bool?>("PlayedFirst")
+                        .HasColumnType("bit");
+
+                    b.Property<int>("Ruling")
+                        .HasColumnType("int");
+
+                    b.Property<Guid>("UploadFileId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("AudioMarkerId");
+
+                    b.HasIndex("UploadFileId");
+
+                    b.ToTable("EvpRulings");
+                });
+
+            modelBuilder.Entity("Ben.Data.Source.Entities.EvpScan", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<double>("ContextPadSeconds")
+                        .HasColumnType("float");
+
+                    b.Property<DateTime>("DateCreated")
+                        .HasColumnType("datetime2");
+
+                    b.Property<int>("DetectorVersion")
+                        .HasColumnType("int");
+
+                    b.Property<int>("FoundCount")
+                        .HasColumnType("int");
+
+                    b.Property<double>("MaxEventSeconds")
+                        .HasColumnType("float");
+
+                    b.Property<double>("MergeGapSeconds")
+                        .HasColumnType("float");
+
+                    b.Property<double>("MinDurationSeconds")
+                        .HasColumnType("float");
+
+                    b.Property<int>("ProposedCount")
+                        .HasColumnType("int");
+
+                    b.Property<double>("RecordingSeconds")
+                        .HasColumnType("float");
+
+                    b.Property<int>("Sensitivity")
+                        .HasColumnType("int");
+
+                    b.Property<double>("ThresholdDb")
+                        .HasColumnType("float");
+
+                    b.Property<Guid>("UploadFileId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("UploadFileId", "DateCreated");
+
+                    b.ToTable("EvpScans");
+                });
+
+            modelBuilder.Entity("Ben.Data.Source.Entities.EvpScanCandidate", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<Guid?>("AudioMarkerId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<double>("BandLevelSpreadDb")
+                        .HasColumnType("float");
+
+                    b.Property<double>("EndSeconds")
+                        .HasColumnType("float");
+
+                    b.Property<double>("EventSeconds")
+                        .HasColumnType("float");
+
+                    b.Property<Guid>("EvpScanId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<double>("MeanBandGapDb")
+                        .HasColumnType("float");
+
+                    b.Property<double>("MeanFloorDb")
+                        .HasColumnType("float");
+
+                    b.Property<double>("PeakBandDb")
+                        .HasColumnType("float");
+
+                    b.Property<double>("PeakProminenceDb")
+                        .HasColumnType("float");
+
+                    b.Property<bool>("Proposed")
+                        .HasColumnType("bit");
+
+                    b.Property<float>("Score")
+                        .HasColumnType("real");
+
+                    b.Property<double>("StartSeconds")
+                        .HasColumnType("float");
+
+                    b.Property<double>("ZeroCrossingRate")
+                        .HasColumnType("float");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("AudioMarkerId");
+
+                    b.HasIndex("EvpScanId");
+
+                    b.ToTable("EvpScanCandidates");
+                });
+
             modelBuilder.Entity("Ben.Data.Source.Entities.ExperienceCategory", b =>
                 {
                     b.Property<Guid>("Id")
@@ -16103,6 +16242,39 @@ namespace Ben.Data.Source.Migrations
                     b.Navigation("VoterOrganization");
                 });
 
+            modelBuilder.Entity("Ben.Data.Source.Entities.EvpRuling", b =>
+                {
+                    b.HasOne("Ben.Data.Source.Entities.UploadFile", "UploadFile")
+                        .WithMany()
+                        .HasForeignKey("UploadFileId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("UploadFile");
+                });
+
+            modelBuilder.Entity("Ben.Data.Source.Entities.EvpScan", b =>
+                {
+                    b.HasOne("Ben.Data.Source.Entities.UploadFile", "UploadFile")
+                        .WithMany()
+                        .HasForeignKey("UploadFileId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("UploadFile");
+                });
+
+            modelBuilder.Entity("Ben.Data.Source.Entities.EvpScanCandidate", b =>
+                {
+                    b.HasOne("Ben.Data.Source.Entities.EvpScan", "EvpScan")
+                        .WithMany("Candidates")
+                        .HasForeignKey("EvpScanId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("EvpScan");
+                });
+
             modelBuilder.Entity("Ben.Data.Source.Entities.ExperienceCategory", b =>
                 {
                     b.HasOne("Ben.Data.Source.Entities.AppUser", "ApprovedByAppUser")
@@ -21577,6 +21749,11 @@ namespace Ben.Data.Source.Migrations
             modelBuilder.Entity("Ben.Data.Source.Entities.EquipmentModel", b =>
                 {
                     b.Navigation("EquipmentItems");
+                });
+
+            modelBuilder.Entity("Ben.Data.Source.Entities.EvpScan", b =>
+                {
+                    b.Navigation("Candidates");
                 });
 
             modelBuilder.Entity("Ben.Data.Source.Entities.ExperienceCategory", b =>

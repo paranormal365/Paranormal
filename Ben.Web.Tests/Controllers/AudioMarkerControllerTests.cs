@@ -1125,4 +1125,209 @@ public class AudioMarkerControllerTests
         await using var db = await factory.CreateDbContextAsync();
         Assert.Equal(5.0, (await db.AudioMarkers.FirstAsync(m => m.Id == markerId)).TimeSeconds);
     }
+
+    // ── Learning records (item 253) ───────────────────────────────────────────
+
+    private static async Task<List<AudioMarkerRecord>> ScanAsync(
+        IDbContextFactory<BenDataContext> factory, Guid fileId, Guid userId)
+    {
+        var result = await Build(factory, userId).Scan(fileId, EvpSensitivity.Medium, null, default);
+        return Assert.IsAssignableFrom<IEnumerable<AudioMarkerRecord>>(
+            Assert.IsType<OkObjectResult>(result.Result).Value).ToList();
+    }
+
+    [Fact]
+    public async Task Scan_KeepsARecordOfItselfAndWhatItMeasured()
+    {
+        var factory = CreateFactory();
+        var (fileId, ownerId) = await SeedWavFileAsync(factory);
+
+        var created = await ScanAsync(factory, fileId, ownerId);
+
+        await using var db = await factory.CreateDbContextAsync();
+        var scan = await db.EvpScans.Include(s => s.Candidates).SingleAsync();
+        Assert.Equal(fileId, scan.UploadFileId);
+        Assert.Equal(1, scan.DetectorVersion);
+        Assert.Equal(EvpSensitivity.Medium, scan.Sensitivity);
+        Assert.Equal(6.0, scan.ThresholdDb);
+        Assert.Equal(20.0, scan.RecordingSeconds, 2);
+        Assert.Equal(2, scan.FoundCount);
+        Assert.Equal(2, scan.ProposedCount);
+
+        // Every candidate points at the Pending marker it became, with the score the reviewer sees.
+        Assert.Equal(2, scan.Candidates.Count);
+        Assert.All(scan.Candidates, c =>
+        {
+            Assert.True(c.Proposed);
+            var marker = Assert.Single(created, m => m.Id == c.AudioMarkerId);
+            Assert.Equal(marker.DetectionScore, c.Score);
+            Assert.Equal(marker.TimeSeconds, c.StartSeconds);
+            Assert.True(c.EventSeconds > 0.5, $"measured {c.EventSeconds:0.00}s for a 0.7–0.8s utterance");
+            Assert.True(c.PeakProminenceDb > 6.0);
+        });
+    }
+
+    [Fact]
+    public async Task Scan_RecordsWhatItFoundButDidNotPropose()
+    {
+        // A hand-placed marker on the 5 s utterance means the detector found something a person
+        // had already marked — a hit, worth keeping, though it never reaches the review queue.
+        var factory = CreateFactory();
+        var (fileId, ownerId) = await SeedWavFileAsync(factory);
+        await SeedMarkerAsync(factory, fileId, timeSeconds: 5.2, label: "Heard it", createdBy: ownerId);
+
+        await ScanAsync(factory, fileId, ownerId);
+
+        await using var db = await factory.CreateDbContextAsync();
+        var scan = await db.EvpScans.Include(s => s.Candidates).SingleAsync();
+        Assert.Equal(2, scan.FoundCount);
+        Assert.Equal(1, scan.ProposedCount);
+        var skipped = Assert.Single(scan.Candidates, c => !c.Proposed);
+        Assert.Null(skipped.AudioMarkerId);
+        Assert.True(skipped.StartSeconds < 5.2 && skipped.EndSeconds > 5.2);
+    }
+
+    [Fact]
+    public async Task Scan_RecordsEveryScan_EvenWhenItReplacesTheLastOnesCandidates()
+    {
+        // The candidates a re-scan deletes were still proposed; their record stays.
+        var factory = CreateFactory();
+        var (fileId, ownerId) = await SeedWavFileAsync(factory);
+
+        await ScanAsync(factory, fileId, ownerId);
+        await ScanAsync(factory, fileId, ownerId);
+
+        await using var db = await factory.CreateDbContextAsync();
+        Assert.Equal(2, await db.EvpScans.CountAsync());
+        Assert.Equal(4, await db.EvpScanCandidates.CountAsync());
+    }
+
+    [Fact]
+    public async Task Scan_StillAnswers_WhenTheLearningRecordCannotBeWritten()
+    {
+        // The person asked for candidates, not for a training record.
+        var factory = CreateFactoryRefusing<EvpScan>();
+        var (fileId, ownerId) = await SeedWavFileAsync(factory);
+
+        var created = await ScanAsync(factory, fileId, ownerId);
+
+        Assert.Equal(2, created.Count);
+        await using var db = await factory.CreateDbContextAsync();
+        Assert.Equal(2, await db.AudioMarkers.CountAsync(m => m.ReviewStatus == EvpReviewStatus.Pending));
+        Assert.Equal(0, await db.EvpScans.CountAsync());
+    }
+
+    [Fact]
+    public async Task Review_KeepsTheRuling_AndWhetherItWasHeardFirst()
+    {
+        var factory = CreateFactory();
+        var (fileId, ownerId) = await SeedWavFileAsync(factory);
+        var created = await ScanAsync(factory, fileId, ownerId);
+
+        await Build(factory, ownerId).Review(fileId, created[0].Id,
+            new ReviewAudioMarkerRequest(EvpReviewStatus.Dismissed, PlayedFirst: true), default);
+        await Build(factory, ownerId).Review(fileId, created[1].Id,
+            new ReviewAudioMarkerRequest(EvpReviewStatus.Confirmed, "A voice"), default);
+
+        await using var db = await factory.CreateDbContextAsync();
+        var dismissed = await db.EvpRulings.SingleAsync(r => r.AudioMarkerId == created[0].Id);
+        Assert.Equal(EvpReviewStatus.Dismissed, dismissed.Ruling);
+        Assert.True(dismissed.PlayedFirst);
+        Assert.False(dismissed.BoundsAdjusted);
+        Assert.Equal(created[0].DetectionScore, dismissed.DetectionScore);
+        Assert.Equal(fileId, dismissed.UploadFileId);
+
+        var kept = await db.EvpRulings.SingleAsync(r => r.AudioMarkerId == created[1].Id);
+        Assert.Equal(EvpReviewStatus.Confirmed, kept.Ruling);
+        Assert.Null(kept.PlayedFirst);   // the caller didn't say
+    }
+
+    [Fact]
+    public async Task Review_KeepsEveryRuling_IncludingAChangeOfMind()
+    {
+        var factory = CreateFactory();
+        var (fileId, ownerId) = await SeedWavFileAsync(factory);
+        var created = await ScanAsync(factory, fileId, ownerId);
+
+        await Build(factory, ownerId).Review(fileId, created[0].Id,
+            new ReviewAudioMarkerRequest(EvpReviewStatus.Dismissed), default);
+        await Build(factory, ownerId).Review(fileId, created[0].Id,
+            new ReviewAudioMarkerRequest(EvpReviewStatus.Confirmed, "On second listen"), default);
+
+        await using var db = await factory.CreateDbContextAsync();
+        var rulings = await db.EvpRulings.Where(r => r.AudioMarkerId == created[0].Id)
+            .OrderBy(r => r.DateCreated).Select(r => r.Ruling).ToListAsync();
+        Assert.Equal([EvpReviewStatus.Dismissed, EvpReviewStatus.Confirmed], rulings);
+    }
+
+    [Fact]
+    public async Task Review_NotesThatTheEdgesWereMoved_EvenThroughAnEarlierUpdate()
+    {
+        // The editor saves moved edges through Update, then rules — so the ruling has to compare
+        // with what the detector proposed, not with the marker it was handed.
+        var factory = CreateFactory();
+        var (fileId, ownerId) = await SeedWavFileAsync(factory);
+        var created = await ScanAsync(factory, fileId, ownerId);
+        var c = created[0];
+
+        await Build(factory, ownerId).Update(fileId, c.Id,
+            new UpdateAudioMarkerRequest(c.TimeSeconds + 0.2, c.Label, c.ConfidenceLevel, null, c.EndSeconds), default);
+        await Build(factory, ownerId).Review(fileId, c.Id,
+            new ReviewAudioMarkerRequest(EvpReviewStatus.Confirmed, "A voice"), default);
+
+        await using var db = await factory.CreateDbContextAsync();
+        Assert.True((await db.EvpRulings.SingleAsync()).BoundsAdjusted);
+    }
+
+    [Fact]
+    public async Task Review_OfAMarkerAPersonPlaced_IsNotARulingOnTheDetector()
+    {
+        var factory = CreateFactory();
+        var (fileId, ownerId) = await SeedFileAsync(factory);
+        var markerId = await SeedMarkerAsync(factory, fileId, createdBy: ownerId, endSeconds: 12);
+
+        await Build(factory, ownerId).Review(fileId, markerId,
+            new ReviewAudioMarkerRequest(EvpReviewStatus.Dismissed), default);
+
+        await using var db = await factory.CreateDbContextAsync();
+        Assert.Equal(0, await db.EvpRulings.CountAsync());
+    }
+
+    [Fact]
+    public async Task Review_StillAnswers_WhenTheRulingCannotBeRecorded()
+    {
+        var factory = CreateFactoryRefusing<EvpRuling>();
+        var (fileId, ownerId) = await SeedWavFileAsync(factory);
+        var created = await ScanAsync(factory, fileId, ownerId);
+
+        var result = await Build(factory, ownerId).Review(fileId, created[0].Id,
+            new ReviewAudioMarkerRequest(EvpReviewStatus.Dismissed), default);
+
+        Assert.IsType<OkObjectResult>(result.Result);
+        await using var db = await factory.CreateDbContextAsync();
+        Assert.Equal(EvpReviewStatus.Dismissed, (await db.AudioMarkers.SingleAsync(m => m.Id == created[0].Id)).ReviewStatus);
+    }
+
+    /// <summary>A database that refuses to save any new <typeparamref name="T"/>.</summary>
+    private static IDbContextFactory<BenDataContext> CreateFactoryRefusing<T>() where T : class
+    {
+        var opts = new DbContextOptionsBuilder<BenDataContext>()
+            .UseInMemoryDatabase(Guid.NewGuid().ToString())
+            .AddInterceptors(new RefuseAdded<T>())
+            .Options;
+        return new PooledDbContextFactory<BenDataContext>(opts);
+    }
+
+    private sealed class RefuseAdded<T> : Microsoft.EntityFrameworkCore.Diagnostics.SaveChangesInterceptor where T : class
+    {
+        public override ValueTask<Microsoft.EntityFrameworkCore.Diagnostics.InterceptionResult<int>> SavingChangesAsync(
+            Microsoft.EntityFrameworkCore.Diagnostics.DbContextEventData eventData,
+            Microsoft.EntityFrameworkCore.Diagnostics.InterceptionResult<int> result,
+            CancellationToken cancellationToken = default)
+        {
+            if (eventData.Context!.ChangeTracker.Entries<T>().Any(e => e.State == EntityState.Added))
+                throw new DbUpdateException($"refused: {typeof(T).Name}");
+            return base.SavingChangesAsync(eventData, result, cancellationToken);
+        }
+    }
 }

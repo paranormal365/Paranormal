@@ -12754,7 +12754,7 @@ likely exceed his Claude usage allowance — **"invaluable for my business"**, s
   of confirmed EVPs can exist), the scoring harness (catch rate, false-speech rate on noise, quietest voice caught), and the
   server integration.
 - **Investigators keep teaching it:** every Accept/Dismiss is a real-tape label that later re-tunes scoring (as FeedLearning
-  re-fits the feed).
+  re-fits the feed). Spelled out as item 253.
 - Anthropic's terms restrict training models that compete with Claude on its outputs; a narrow audio detector built with
   code Claude wrote is ordinary software work, but Ben should read the terms himself for a commercial product.
 
@@ -13621,3 +13621,146 @@ pressed; the upload cap stays 600 MB; the lead plus group managers may launch.
 - Whether a push can START a recording, or only open the sheet ready to start (iOS will not record
   in the background from a push, and starting a microphone unasked needs the person's tap).
 - Which roles count as "lead" for each of the three (guide, event staff role, investigation lead).
+
+## 253. The EVP detector learns from every Keep and Dismiss (STEP ONE BUILT 10/02/2026 — feature/evp-learning-253; the re-fit is still future)
+
+Ben, 10/02/2026: *"I would like to be able to use the audio editor EVP detector to learn the more it
+is used."* This is the cheap first step toward item 242, and it works with today's detector. Item
+242's bullet "Investigators keep teaching it" is this item. Item 242's speech model can later take
+the same labels as its training material.
+
+### What already exists
+- `AudioMarkerController.Scan` runs `EvpDetector.Detect` on the server and saves each candidate as
+  `Pending` with its `DetectionScore` and span. A reviewer turns it `Confirmed` or `Dismissed`.
+  Dismissed rows are kept, not deleted (`EvpReviewStatus.cs`). **Every review is already a label.**
+- The score is hand-weighted: `EvpDetector.Score` blends prominence over the noise floor (0.5),
+  voice-band ratio (0.3) and speech-shaped length (0.2). Nothing changes those weights.
+
+### What is missing before it can learn
+1. **The features are thrown away.** Only the blended score is saved, so the weights can't be
+   re-fit. Save each candidate's feature values:
+   - peak prominence in dB, band gap in dB, duration and floor dB;
+   - cheap new ones such as spectral flatness (from E5) and voiced-frame fraction;
+   - the detector version and the scan settings.
+   Compute them in `Scan` only. `BulkCreateAudioCandidatesRequest` accepts scores sent by the
+   browser, so only scan-made candidates count for training. Older reviewed candidates can be
+   backfilled by re-running feature extraction on their span while the file still exists.
+2. **Misses are invisible.** Suppose a person places a marker by hand on a recording that was
+   scanned, and no candidate overlaps it. That is a candidate the detector missed. Telling "scanned
+   and missed" apart from "never scanned" needs a scan record: file, time, settings, detector
+   version and candidate count.
+3. **How carefully a candidate was reviewed.** A Dismiss after listening counts for more than a
+   two-second batch dismiss. Record whether the span was played before the ruling.
+
+### How it learns
+- A scheduled job re-fits the weights: logistic regression from the features to kept versus
+  dismissed, plus a term for the misses. This is the same shape as FeedLearning re-fitting the feed.
+  The output is a small versioned weights row, not a model file.
+- **A refit only goes live if it is better.** It must beat the current weights on held-out
+  reviewed candidates and still pass the `EvpDetectorTests` fixture. Earlier versions are kept, and
+  a SuperAdmin page shows the versions and their scores, with one-click roll back.
+- The score stays 0–100. The Low/Medium/High presets are recalibrated so each still passes about
+  the same share of candidates, so the sensitivity setting keeps its meaning.
+- **A floor before the first refit**, for example 500 reviewed candidates from 20 or more
+  recordings in five or more groups, so one group's habits don't define it for everyone.
+- Later (L): a per-group or per-recorder adjustment once a group has enough labels of its own,
+  because a recorder near a fridge has its own hum.
+
+### Honest limits (these go into the help article and the score's tooltip)
+- It learns **what investigators keep**, not what is paranormal. Say "ranked by what reviewers have
+  kept before", never "likely EVP".
+- **Priming.** A reviewer who sees a high score keeps more. Hide the score until the ruling, at
+  least for a sample (the blind review from item 242), or the model learns its own opinion back.
+- **Feedback loop.** If the detector proposes only what it already likes, it never learns what it
+  is missing. Keep a small share of lower-ranked candidates in every scan, and count the misses
+  from point 2.
+
+### Privacy
+- Only numbers and rulings are used. No audio is copied for training.
+- Private-engagement recordings (item 184) are left out unless the group opts in. A group can opt
+  out entirely.
+- The privacy policy says that review decisions improve detection for everyone.
+
+### Where it runs (Blazor Server or WASM)
+Training is central, on the API. Scoring uses the current weights wherever the detector runs:
+today that is the server. If the editor ever moves into `Ben.Wasm.Video`, the detector goes into a
+shared `Ben.Audio.Core`, the browser downloads the weights, and rulings still post to the same API.
+Learning does not depend on that move.
+
+### First step when it starts (M)
+One migration that records features, scan records and "played before ruling", with **no change to
+scoring**. Labels then build up while the rest waits. After a few weeks of real use, look at how
+many there are and how kept and dismissed candidates separate on each feature. That decides whether
+the refit (M) is worth building yet.
+
+## 254. Known voices: say "that's Sarah" once, and the scanner sets her aside everywhere (FUTURE — Ben, 10/02/2026)
+
+Ben, 10/02/2026, while item 253 was being built: *"Maybe when we scan, we can point out found voices
+so the user can say they know the person's voice. So, then we can compare the remaining recording
+and eliminate that person's voice and let them select voices and say yes or no if it is a person
+they know."* And: *"Then, what is left being analyzed is true EVPs."*
+
+### What it is
+Speaker recognition, not speech recognition. A small pretrained model turns a few seconds of a voice
+into a **voiceprint** (a speaker embedding: a list of a couple of hundred numbers). Two clips of the
+same person give voiceprints that sit close together, and different people's sit further apart.
+Nothing about *what* was said is involved.
+
+1. **Group the voices.** After a scan, cluster the candidates by voiceprint ("diarization"): "these
+   14 candidates sound like one person, these 6 like another".
+2. **Name them.** The investigator listens to a cluster and answers "Yes, that's Sarah (who is on
+   the team)", "That's me", or "No, I don't know this voice".
+3. **Set them aside.** Candidates matching a known voice are moved to a collapsed "Known voices"
+   group, not deleted, and are skipped by later scans of the same night or the same team.
+4. **What's left** is the shorter list worth careful listening: voices not matched to anyone known.
+5. Every Yes or No is a label, the same way item 253's Keep and Dismiss are.
+
+### Honest wording: "unexplained", not "true EVP"
+Taking out known voices leaves *voices not matched to anyone you named*. That is a much better list,
+but it is not proof. Things that will still be in it:
+- people nobody named: neighbors, passersby, another team in the building;
+- TVs, radios, phones on speaker, car stereos;
+- a known person whose clip was too short (under ~1–2 s), whispered, muffled or distorted to match;
+- the recorder's own artifacts.
+
+The product already labels candidates "Detected signal" rather than "Possible EVP" for this reason.
+The leftover group should read **"Unexplained voices"** and leave the verdict to the investigator.
+Whispers, the classic EVP, are also where voiceprints are weakest, so a match threshold that is
+too eager would wrongly set aside a real anomaly as "Sarah". The default has to lean toward
+keeping things in.
+
+### Privacy and law: the part that decides the design
+A voiceprint is **biometric data**:
+- Illinois BIPA requires written consent, a public retention policy, and carries per-violation
+  damages that private plaintiffs can sue for;
+- Texas and Washington have their own biometric laws;
+- GDPR treats it as special-category data.
+
+So:
+- **Each person enrolls their own voice and consents themselves.** An investigator may not
+  enroll a teammate, client or homeowner. "That's Sarah" becomes a request that Sarah confirms
+  from her own account.
+- **Stored per group, never shared across groups**, never used for item 253's cross-group learning,
+  never sold, and listed on the privacy page.
+- **Delete is one tap** and also happens automatically when the person leaves the group or closes
+  their account. There is a stated retention period.
+- **Private-engagement recordings (item 184):** clients and homeowners are never enrolled.
+  Matching only runs against team members who consented.
+- **Ben should get legal advice** before shipping, specifically on BIPA.
+
+### How it would be built
+- An open-source speaker-embedding model run locally as ONNX (for example ECAPA-TDNN or a
+  pyannote/WeSpeaker export). Same pattern as `OnnxNsfwScreener`: fetched by a script, never
+  committed, degrades loudly if missing. No audio leaves the server.
+- Tables: `VoiceProfile` (person, group, embedding, consented-at, model version) and per-candidate
+  embeddings computed at scan time for files whose group has opted in.
+- Matching is a cosine-similarity threshold, tuned on real tape before launch, with "not sure" as a
+  real outcome.
+- It fits after item 253 step one and beside item 242's speech detector. 242's "is this speech at
+  all" check is a good gate before trying a voiceprint.
+
+### First step when it starts
+Same as 242: a throwaway measurement outside the product, run on Ben's real recordings of the team
+talking. How often does the model match a known teammate correctly, how often does it wrongly match
+a stranger, and how short or whispered can a clip be before it gives up? Those numbers decide
+whether the feature is worth building and where the threshold sits.
