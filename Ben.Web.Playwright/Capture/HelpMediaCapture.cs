@@ -331,18 +331,178 @@ public sealed class HelpMediaCapture : BenTestBase
         await SettleAsync();
     }
 
+    // ── Arranging what a picture is of ───────────────────────────────────────
+
+    /// <summary>A seeded account on the group's roster, to photograph what only its people see.</summary>
+    private async Task<(string Email, string Password)> AMemberOfAsync(string orgId)
+    {
+        var admin = await ApiAsAsync(await ApiTokenAsync(SuperAdminEmail, SuperAdminPassword));
+        var roster = await admin.GetAsync($"/api/organizations/{orgId}/roster");
+        Assert.That(roster.Ok, Is.True, await roster.TextAsync());
+        var text = await roster.TextAsync();
+        foreach (var (email, password) in new[] { (UserEmail, UserPassword), (MemberEmail, MemberPassword), (SellerEmail, SellerPassword) })
+        {
+            var me = await (await ApiAsAsync(await ApiTokenAsync(email, password))).GetAsync("/api/me");
+            var id = (await me.JsonAsync())!.Value.GetProperty("userId").GetString()!;
+            if (text.Contains(id, StringComparison.OrdinalIgnoreCase)) return (email, password);
+        }
+        Assert.Fail($"No seeded account is on the roster of {orgId}, so nobody here can see what its guests sent.");
+        return default;
+    }
+
+    /// <summary>
+    /// A lead launch on a tour date, built the way the phones build it: the site's first tour gets a
+    /// date starting in half an hour, the seeded guest is registered for it, the lead launches it
+    /// (the SuperAdmin, who may launch anything), and the guest sends a recorded session to the
+    /// launch — the Field Kit fixture the playback tests use. Returns the same shape BEN_RP_FILE has.
+    /// </summary>
+    private async Task<System.Text.Json.JsonElement> BuildALaunchedTourDateAsync()
+    {
+        var anon = await Playwright.APIRequest.NewContextAsync(new() { BaseURL = ApiUrl });
+        var tours = await anon.GetAsync("/api/public/tours");
+        Assert.That(tours.Ok, Is.True, await tours.TextAsync());
+        var tour = (await tours.JsonAsync())!.Value[0];
+        var orgId = tour.GetProperty("organizationId").GetString()!;
+        var tourId = tour.GetProperty("id").GetString()!;
+
+        var admin = await ApiAsAsync(await ApiTokenAsync(SuperAdminEmail, SuperAdminPassword));
+        var starts = DateTime.UtcNow.AddMinutes(30);
+        var created = await admin.PostAsync($"/api/organizations/{orgId}/calendar", new()
+        {
+            DataObject = new
+            {
+                title = tour.GetProperty("name").GetString(), description = (string?)null, location = (string?)null,
+                startDateTime = starts, endDateTime = starts.AddHours(2), isAllDay = false, isPublic = true,
+                eventTypeId = (Guid?)null, caseId = (Guid?)null, recurrenceRule = (string?)null, tourId,
+            },
+        });
+        Assert.That(created.Ok, Is.True, "the tour date was refused: " + await created.TextAsync());
+        var dateId = (await created.JsonAsync())!.Value.GetProperty("id").GetString()!;
+
+        // By the person's account, not by address: adding by email only finds people who have
+        // published theirs, and the seeded guest has not.
+        var guestToken = await ApiTokenAsync(ClientEmail, ClientPassword);
+        var guestApi = await ApiAsAsync(guestToken);
+        var me = await guestApi.GetAsync("/api/me");
+        Assert.That(me.Ok, Is.True, await me.TextAsync());
+        var guestId = (await me.JsonAsync())!.Value.GetProperty("userId").GetString()!;
+        var added = await admin.PostAsync($"/api/organizations/{orgId}/calendar/{dateId}/attendees",
+            new() { DataObject = new { appUserId = guestId, assignedTask = (string?)null } });
+        Assert.That(added.Ok, Is.True, "the guest could not be registered: " + await added.TextAsync());
+        var attendeeId = (await added.JsonAsync())!.Value.GetProperty("id").GetString()!;
+        var accepted = await admin.PutAsync($"/api/organizations/{orgId}/calendar/{dateId}/attendees/{attendeeId}/rsvp",
+            new() { DataObject = new { rsvpStatus = 1 /* RsvpStatus.Accepted */ } });
+        Assert.That(accepted.Ok, Is.True, "the guest's place could not be accepted: " + await accepted.TextAsync());
+
+        var launched = await admin.PostAsync("/api/field-launches", new() { DataObject = new { target = "event", id = dateId } });
+        Assert.That(launched.Ok, Is.True, "the launch was refused: " + await launched.TextAsync());
+        var launchId = (await launched.JsonAsync())!.Value.GetProperty("launch").GetProperty("id").GetString()!;
+
+        // The guest's phone sends what it recorded to the launch it was joined from.
+        var bytes = await File.ReadAllBytesAsync(Path.Combine(AppContext.BaseDirectory, "Fixtures", "field-session-stage.ben"));
+        string deviceSessionId;
+        using (var zip = new System.IO.Compression.ZipArchive(new MemoryStream(bytes)))
+        using (var seal = zip.GetEntry("seal.json")!.Open())
+            deviceSessionId = System.Text.Json.JsonDocument.Parse(seal).RootElement.GetProperty("session_id").GetString()!;
+        var guest = guestApi;
+        var form = Context.APIRequest.CreateFormData();
+        form.Append("file", new FilePayload { Name = "field-session.ben", MimeType = "application/vnd.ishaunted.field-session", Buffer = bytes });
+        form.Append("deviceSessionId", deviceSessionId);
+        form.Append("fieldLaunchId", launchId);
+        var sent = await guest.PostAsync("/api/field-sessions/bundle", new() { Multipart = form });
+        Assert.That(sent.Ok, Is.True, "the guest's session was refused: " + await sent.TextAsync());
+
+        return System.Text.Json.JsonDocument.Parse(System.Text.Json.JsonSerializer.Serialize(new
+        {
+            orgId, tourId, tourDateId = dateId,
+        })).RootElement;
+    }
+
+    /// <summary>A bearer token for a seeded account, from the API's own sign-in.</summary>
+    private async Task<string> ApiTokenAsync(string email, string password)
+    {
+        var api = await Playwright.APIRequest.NewContextAsync(new() { BaseURL = ApiUrl });
+        var login = await api.PostAsync("/login", new() { DataObject = new { email, password } });
+        Assert.That(login.Ok, Is.True, $"{email} could not sign in to the API");
+        return (await login.JsonAsync())!.Value.GetProperty("accessToken").GetString()!;
+    }
+
+    private async Task<IAPIRequestContext> ApiAsAsync(string token)
+        => await Playwright.APIRequest.NewContextAsync(new()
+        {
+            BaseURL = ApiUrl,
+            ExtraHTTPHeaders = new Dictionary<string, string> { ["Authorization"] = $"Bearer {token}" },
+        });
+
+    /// <summary>
+    /// The seeded guest asks for a place at the rooms weekend for three people, each with what
+    /// they cannot eat — staying elsewhere, so no room is taken from anybody.
+    /// </summary>
+    private async Task ArrangeAPartyWithDietaryNotesAsync()
+    {
+        var anon = await Playwright.APIRequest.NewContextAsync(new() { BaseURL = ApiUrl });
+        var ev = await anon.GetAsync($"/api/public/hosted-events/{SeededRoomsEventId}");
+        Assert.That(ev.Ok, Is.True, await ev.TextAsync());
+        var nights = (await ev.JsonAsync())!.Value.GetProperty("nights").EnumerateArray()
+            .Select(n => new { hostedEventNightId = n.GetProperty("id").GetString(), hostedEventLayoutUnitId = (string?)null })
+            .ToArray();
+
+        var guest = await ApiAsAsync(await ApiTokenAsync(ClientEmail, ClientPassword));
+        await guest.DeleteAsync($"/api/public/hosted-events/{SeededRoomsEventId}/my-booking");
+        var asked = await guest.PostAsync($"/api/public/hosted-events/{SeededRoomsEventId}/bookings", new()
+        {
+            DataObject = new
+            {
+                kind = 0, partySize = 3, nights,
+                guests = new[]
+                {
+                    new { displayName = "Daniel Park", dietaryNotes = "Vegetarian" },
+                    new { displayName = "Mia Park", dietaryNotes = "No nuts — a serious allergy" },
+                    new { displayName = "Sam Ortiz", dietaryNotes = "Gluten-free" },
+                },
+                note = "Three of us, staying in town.",
+                firstName = "Daniel", lastName = "Park", phone = "615-555-0142",
+            },
+        });
+        Assert.That(asked.Ok, Is.True, "the guest's request was refused: " + await asked.TextAsync());
+    }
+
+    [Test]
+    [Description("site-administration: the sidecar installs screen, with installs reported the way the installer reports them.")]
+    public async Task Capture_SidecarTelemetry()
+    {
+        // The installer reports itself anonymously, before anybody signs in; three installs on two
+        // versions make a screen with something to read. This database is the run's own.
+        var anon = await Playwright.APIRequest.NewContextAsync(new() { BaseURL = ApiUrl });
+        foreach (var (version, platform) in new[] { ("1.4.0", "macOS"), ("1.4.0", "Windows"), ("1.3.2", "macOS") })
+        {
+            var r = await anon.PostAsync("/api/sidecar-telemetry/installs",
+                new() { DataObject = new { installId = Guid.NewGuid(), version, platform } });
+            Assert.That(r.Ok, Is.True, await r.TextAsync());
+        }
+
+        await LoginAsync(SuperAdminEmail, SuperAdminPassword);
+        await GoAsync("/admin/sidecar-telemetry");
+        await ShootAsync("site-administration", "sidecar-telemetry.png", gated: true, proves: "1.4.0");
+    }
+
     // ── Everyone ──────────────────────────────────────────────────────────────
 
     [Test]
     [Description("the-feed and organization-administration: a lead's launch (item 252) — its card in the feed, and what the group was sent.")]
     public async Task Capture_GroupSessions()
     {
-        // Needs tonight's world from the item-252 capture run: a tour date with a session sent up,
-        // and a launch card in the guest's feed. BEN_RP_FILE names the JSON that run wrote.
+        // Needs tonight's world: a tour date with a session sent up, and a launch card in the
+        // guest's feed. BEN_RP_FILE names the JSON an item-252 phone role-play wrote; without one
+        // the same world is built here, through the same doors the phones use (2026-10-02).
         var file = Environment.GetEnvironmentVariable("BEN_RP_FILE");
-        if (string.IsNullOrEmpty(file) || !File.Exists(file)) Assert.Ignore("set BEN_RP_FILE to the item-252 capture world");
-        var world = System.Text.Json.JsonDocument.Parse(await File.ReadAllTextAsync(file!)).RootElement;
+        var world = !string.IsNullOrEmpty(file) && File.Exists(file)
+            ? System.Text.Json.JsonDocument.Parse(await File.ReadAllTextAsync(file!)).RootElement
+            : await BuildALaunchedTourDateAsync();
         string Id(string name) => world.GetProperty(name).GetString()!;
+        // The group's view is a member's: only the group's people (or the date's guides) may read
+        // what guests sent, which is the point of the picture.
+        var (groupEmail, groupPassword) = await AMemberOfAsync(Id("orgId"));
 
         // The guest's view: the launch card in the feed.
         await LoginAsync(ClientEmail, ClientPassword);
@@ -352,7 +512,7 @@ public sealed class HelpMediaCapture : BenTestBase
 
         // The group's view: what was recorded and sent to the tour date.
         await LogoutAsync();
-        await LoginAsync(UserEmail, UserPassword);
+        await LoginAsync(groupEmail, groupPassword);
         await Page.GotoAsync($"{BaseUrl}/organizations/{Id("orgId")}/tours/{Id("tourId")}/dates/{Id("tourDateId")}");
         await ShootAsync("organization-administration", "tour-date-field-sessions.png", gated: true,
             selector: "#group-field-sessions", proves: "Field sessions sent up");
@@ -533,6 +693,26 @@ public sealed class HelpMediaCapture : BenTestBase
             await WaitUntilLoadedAsync();
 
             var solo = Main.Locator(".place-investigate-solo");
+            if (await solo.CountAsync() == 0)
+            {
+                // Wren was given a space by an earlier run, so she is no longer the person this
+                // picture is of. Somebody brand new is: signed up and confirmed here, belonging to
+                // nothing (2026-10-02).
+                await LogoutAsync();
+                var tag = Guid.NewGuid().ToString("N")[..8];
+                var (email, password) = await NewConfirmedUserAsync($"solo{tag}");
+                await LoginAsync(email, password);
+                await GoAsync("/places/40000001-0000-0000-0000-000000000001");
+                await WaitUntilLoadedAsync();
+                var skip = Page.Locator("#onboarding-skip");
+                if (await skip.CountAsync() > 0)
+                {
+                    await skip.ClickAsync();
+                    await GoAsync("/places/40000001-0000-0000-0000-000000000001");
+                    await WaitUntilLoadedAsync();
+                }
+                await solo.First.WaitForAsync(new() { Timeout = 20_000 });
+            }
             if (await solo.CountAsync() > 0)
             {
                 await solo.First.ClickAsync();
@@ -2722,7 +2902,19 @@ public sealed class HelpMediaCapture : BenTestBase
         await ShootAsync("organization-administration", "event-menus-phone.png",
             gated: true, proves: "Friday", width: 375);
 
+        // The kitchen sheet needs somebody who has said what they cannot eat. A guest asks for a
+        // place for three, with their party's notes, and the sheet is read with the requests not
+        // yet confirmed counted in — the switch the sheet offers for exactly this, planning the
+        // food before every booking is settled (2026-10-02; the picture had been taken from a
+        // database where the walk had left confirmed parties behind).
+        await ArrangeAPartyWithDietaryNotesAsync();
         await GoAsync($"/organizations/{orgId}/events/{SeededRoomsEventId}/dietary");
+        var unconfirmed = Page.Locator("#kitchen-include-unconfirmed");
+        if (await unconfirmed.CountAsync() > 0 && !await unconfirmed.IsCheckedAsync())
+        {
+            await unconfirmed.CheckAsync();
+            await SettleAsync();
+        }
         await ShootAsync("organization-administration", "event-dietary.png",
             gated: true, proves: "How many of each");
 
@@ -3848,10 +4040,23 @@ public sealed class HelpMediaCapture : BenTestBase
 
         // Reading a letter that actually went — the other half of the same screen's job.
         await GoAsync("/admin/mail");
-        var all = Page.GetByRole(AriaRole.Button, new() { Name = "All", Exact = true });
+        // "Everything" — the filter was named "All" when this was written, and since it was
+        // renamed the click found nothing and the page stayed on "Given up", empty here.
+        var all = Page.GetByRole(AriaRole.Button, new() { Name = "Everything", Exact = true });
         if (await all.CountAsync() > 0) await all.First.ClickAsync();
 
+        // Waited for, not counted at once: the rows arrive over the circuit after the click on
+        // "All", and counting straight away found none on a database full of letters (2026-10-02).
         var read = Page.Locator("[data-testid=outbox-view]");
+        try { await read.First.WaitForAsync(new() { Timeout = 20_000 }); } catch (TimeoutException) { }
+        // A letter that is not a key: a confirmation or reset letter carries a working sign-in
+        // link, and a picture of one in the help would be a picture of a token. Any other letter
+        // shows the screen just as well (2026-10-02).
+        var ordinary = Page.Locator("tr")
+            .Filter(new() { Has = Page.Locator("[data-testid=outbox-view]") })
+            .Filter(new() { HasNotTextRegex = new System.Text.RegularExpressions.Regex("confirm|reset|password|sign.?in|invitation", System.Text.RegularExpressions.RegexOptions.IgnoreCase) })
+            .Locator("[data-testid=outbox-view]");
+        if (await ordinary.CountAsync() > 0) read = ordinary;
         if (await read.CountAsync() > 0)
         {
             await ClickUntilAsync(

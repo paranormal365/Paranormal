@@ -30,48 +30,6 @@ public class NewGroupJourneyTests : BenTestBase
 
     // ── helpers ──────────────────────────────────────────────────────────────
 
-    private async Task SignUpAsync(string tag, string email, string password)
-    {
-        await Page.GotoAsync($"{BaseUrl}/signup");
-        await Expect(Page.Locator("#signup-handle")).ToBeVisibleAsync(new() { Timeout = 15_000 });
-
-        await TypeHandleAsync($"journey{tag}");
-        await Expect(Page.GetByText("is free.")).ToBeVisibleAsync(new() { Timeout = 15_000 });
-
-        await FillAndConfirmAsync("#signup-first", "Journey");
-        await FillAndConfirmAsync("#signup-last", $"User{tag}");
-        await FillAndConfirmAsync("#signup-name", $"Journey {tag}");
-        await FillAndConfirmAsync("#signup-email", email);
-        await FillAndConfirmAsync("#signup-password", password);
-
-        await Page.GetByRole(AriaRole.Button, new() { Name = "Create account" }).ClickAsync();
-        await Expect(Page.GetByText("Check your email").First).ToBeVisibleAsync(new() { Timeout = 20_000 });
-    }
-
-    /// <summary>
-    /// Completes the confirmation the way a dev deployment really does it: with no mail server the
-    /// letter waits in the outbox, and its link is the one this sign-up just minted.
-    /// </summary>
-    private async Task ConfirmFromTheOutboxAsync(string email)
-    {
-        var link = await LinkFromTheOutboxAsync(email, "/confirm-email?");
-
-        await Page.GotoAsync($"{BaseUrl}{link}");
-        await Page.GetByRole(AriaRole.Button, new() { Name = "Confirm my email" })
-            .ClickAsync(new() { Timeout = 15_000 });
-        await Expect(Page.GetByText("confirmed", new() { Exact = false }).First)
-            .ToBeVisibleAsync(new() { Timeout = 15_000 });
-    }
-
-    private async Task<(string Email, string Password)> NewConfirmedUserAsync(string tag)
-    {
-        var email = $"journey{tag}@example.com";
-        var password = NewTestPassword();
-        await SignUpAsync(tag, email, password);
-        await ConfirmFromTheOutboxAsync(email);
-        return (email, password);
-    }
-
     /// <summary>
     /// A cold account's first sign-in lands in onboarding (item 166 W2) — that IS the product
     /// now, so the journey answers it the way an impatient founder would: Skip. Skipping
