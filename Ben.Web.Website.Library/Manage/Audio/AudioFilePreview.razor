@@ -424,6 +424,16 @@ else
                                     </span>
                                 </div>
 
+                                @* Item 253: what is kept from a scan and a ruling, said where the
+                                   ruling is made. Worded to what is true today — the records are
+                                   kept for a future re-fit, nothing re-fits yet — and to what is
+                                   not kept, which is what anybody reading it wants to know. *@
+                                <p class="small text-secondary mb-2" id="evp-learning-notice">
+                                    Your Keep and Dismiss choices are saved with a few measurements of
+                                    each sound, never the audio, to help future versions rank
+                                    candidates better. Delete the recording and they go with it.
+                                </p>
+
                                 <div style="max-height:180px; overflow-y:auto;">
                                     @foreach (var candidate in SortedCandidates)
                                     {
@@ -537,7 +547,10 @@ else
                                       Resizable="true"
                                       OnReady="@OnModalReadyAsync"
                                       OnTimeUpdate="@(t => { _modalTime = t; StateHasChanged(); })"
-                                      OnFinish="@(() => { _modalTime = 0; StateHasChanged(); })"
+                                      OnFinish="@(() => { _modalTime = 0; _modalPlaying = false; StateHasChanged(); })"
+                                      OnPlay="@(() => _modalPlaying = true)"
+                                      OnPause="@(() => _modalPlaying = false)"
+                                      OnRegionIn="@OnModalRegionIn"
                                       OnRegionContextMenu="@OnRegionRightClick"
                                       OnRegionCreated="@OnModalRegionCreated"
                                       OnRegionUpdated="@OnModalRegionUpdated"
@@ -2049,6 +2062,19 @@ else
     private string              _confirmNote       = string.Empty;
     private string?             _confirmError;
 
+    // Item 253: whether a ruling was made after listening is kept with it, because a Dismiss
+    // made without hearing the sound says much less about the sound. "Heard" is the candidate's
+    // own play button, or the playhead entering it while the recording plays.
+    private bool                _modalPlaying;
+    private readonly HashSet<Guid> _heardCandidates = [];
+
+    private void OnModalRegionIn(string regionId)
+    {
+        if (_modalPlaying && regionId.StartsWith("marker-", StringComparison.Ordinal)
+            && Guid.TryParse(regionId["marker-".Length..], out var id))
+            _heardCandidates.Add(id);
+    }
+
     /// <summary>
     /// Score order first by default — the strongest signals are the best use of the first few
     /// minutes of review. Playback order is a click away for working straight through a recording.
@@ -2065,6 +2091,7 @@ else
     private async Task PlayCandidateAsync(AudioMarkerRecord candidate)
     {
         if (_modalPlayer is null) return;
+        _heardCandidates.Add(candidate.Id);
         await _modalPlayer.PlayRegionAsync($"marker-{candidate.Id}");
     }
 
@@ -2093,11 +2120,13 @@ else
             EvpReviewStatus.Confirmed,
             _confirmLabel.Trim(),
             _confirmConfidence,
-            string.IsNullOrWhiteSpace(_confirmNote) ? null : _confirmNote.Trim()));
+            string.IsNullOrWhiteSpace(_confirmNote) ? null : _confirmNote.Trim(),
+            PlayedFirst: _heardCandidates.Contains(candidate.Id)));
     }
 
     private Task DismissCandidateAsync(AudioMarkerRecord candidate) =>
-        ReviewCandidateAsync(candidate, new ReviewAudioMarkerRequest(EvpReviewStatus.Dismissed));
+        ReviewCandidateAsync(candidate, new ReviewAudioMarkerRequest(
+            EvpReviewStatus.Dismissed, PlayedFirst: _heardCandidates.Contains(candidate.Id)));
 
     // ── Adjusting a candidate's bounds ────────────────────────────────────────
 

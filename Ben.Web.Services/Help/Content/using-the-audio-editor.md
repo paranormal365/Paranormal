@@ -97,6 +97,13 @@ label, because a marker with no name is not a finding anybody can use — or **d
 dismiss is remembered, so a second scan will not propose it again, and what you keep is left alone
 by every later scan.
 
+Your choices also help the scanner get better. Each scan saves a few measurements of every sound it
+finds, such as how far it rose above the background and how much of it was in the voice band, and
+each keep or dismiss is saved beside them, along with whether you played the candidate first. No
+audio is copied and nothing records who made the choice. A future version will use these to rank
+candidates more like investigators do. It will learn which sounds people tend to keep, not whether
+a sound is paranormal. Delete the recording and its measurements and choices go with it.
+
 A kept marker's ▶ plays it. If the marker names a single moment rather than a stretch, you hear a
 couple of seconds either side of it, which is usually what you need to tell a voice from a bump.
 

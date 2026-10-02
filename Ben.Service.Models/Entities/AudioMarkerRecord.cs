@@ -81,10 +81,15 @@ public record BulkCreateAudioCandidatesRequest(
 /// <param name="Note">Optional note.</param>
 /// <param name="StartSeconds">Adjusted span start, when the reviewer moved the bounds.</param>
 /// <param name="EndSeconds">Adjusted span end, when the reviewer moved the bounds.</param>
+/// <param name="PlayedFirst">
+/// Whether the reviewer heard the candidate before ruling on it; null when the caller can't tell.
+/// Kept with the ruling so the detector can learn more from a considered one (item 253).
+/// </param>
 public record ReviewAudioMarkerRequest(
     EvpReviewStatus     ReviewStatus,
     string?             Label            = null,
     EvpConfidenceLevel? ConfidenceLevel  = null,
     string?             Note             = null,
     double?             StartSeconds     = null,
-    double?             EndSeconds       = null);
+    double?             EndSeconds       = null,
+    bool?               PlayedFirst      = null);

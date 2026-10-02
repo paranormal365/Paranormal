@@ -614,4 +614,82 @@ public class EvpDetectorTests(ITestOutputHelper output)
             $"with no merge gap the detector found {unmerged.Count} candidates and with the "
             + $"default it found {merged.Count} — the gap is not being read");
     }
+
+    // ── What it measured (item 253) ───────────────────────────────────────────
+
+    /// <summary>
+    /// The scores version 1 gives the standard fixture, taken from the code before the
+    /// measurements were added and unchanged by adding them.
+    /// </summary>
+    /// <remarks>
+    /// Every Keep and Dismiss is now stored beside the detector version that scored it. If this
+    /// test fails because scoring was changed on purpose, raise <see cref="EvpDetector.Version"/>
+    /// and re-pin these numbers — otherwise rulings made under the old scoring would be read as
+    /// rulings on the new one.
+    /// </remarks>
+    [Fact]
+    public void Version_one_scores_are_pinned()
+    {
+        Assert.Equal(1, EvpDetector.Version);
+
+        var found = EvpDetector.Detect(BuildFixture(), SampleRate, Medium, 500);
+
+        Assert.Equal([93.69105f, 89.54498f, 84.79998f], found.Select(c => c.Score).ToArray());
+    }
+
+    /// <summary>
+    /// The stored measurements are enough to reproduce the score, which is what makes them
+    /// worth storing: a re-fit can only re-weight what was kept.
+    /// </summary>
+    [Fact]
+    public void The_measurements_reproduce_the_score()
+    {
+        var found = EvpDetector.Detect(BuildFixture(), SampleRate, High, 500);
+
+        Assert.NotEmpty(found);
+        Assert.All(found, c => Assert.Equal(c.Score, EvpDetector.Score(c.Features)));
+    }
+
+    [Fact]
+    public void The_measurements_describe_the_sound_not_its_padding()
+    {
+        var found = EvpDetector.Detect(BuildFixture(), SampleRate, Medium, 500);
+
+        Assert.All(found, c =>
+        {
+            var f = c.Features;
+            Assert.InRange(f.EventSeconds, 0.15, c.DurationSeconds - 2 * ContextPad + 0.011);
+            Assert.True(f.PeakProminenceDb >= Medium.ThresholdDb, $"prominence {f.PeakProminenceDb:0.0} dB is below the threshold that found it");
+            Assert.InRange(f.MeanBandGapDb, -120, 0);
+            Assert.InRange(f.ZeroCrossingRate, 0, 1);
+            Assert.True(f.BandLevelSpreadDb >= 0);
+            Assert.True(f.PeakBandDb > f.MeanFloorDb, "the loudest frame should stand above the floor under it");
+        });
+    }
+
+    /// <summary>
+    /// The extra measurements tell apart what they claim to: the steady hum, which High
+    /// sensitivity proposes, holds its level, while a syllabic utterance rises and falls.
+    /// </summary>
+    [Fact]
+    public void A_steady_hum_has_less_level_spread_than_an_utterance()
+    {
+        var found = EvpDetector.Detect(BuildFixture(), SampleRate, High, 500);
+        var hum       = found.Single(c => Covers(c, 18.0));
+        var utterance = found.Single(c => Covers(c, 13.5));
+
+        Assert.True(hum.Features.BandLevelSpreadDb < utterance.Features.BandLevelSpreadDb,
+            $"hum spread {hum.Features.BandLevelSpreadDb:0.00} dB, utterance {utterance.Features.BandLevelSpreadDb:0.00} dB");
+    }
+
+    [Fact]
+    public void Analyze_reports_the_recordings_length()
+    {
+        var wav = ToWav16BitMono(BuildFixture(), SampleRate);
+
+        var analysis = EvpDetector.Analyze(new MemoryStream(wav), "audio/wav", Medium, 500);
+
+        Assert.Equal(30.0, analysis.RecordingSeconds, 2);
+        Assert.Equal(3, analysis.Candidates.Count);
+    }
 }
