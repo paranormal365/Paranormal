@@ -1,6 +1,6 @@
 {
   "fill": {
-    "automatic-gradient": "extended-srgb:0.05098,0.05490,0.07843,1.00000"
+    "automatic-gradient": "extended-srgb:0.35686,0.23922,0.96078,1.00000"
   },
   "groups": [
     {
@@ -12,8 +12,8 @@
               "value": "overlay"
             }
           ],
-          "image-name": "is-haunted-logo.svg",
-          "name": "is-haunted-logo",
+          "image-name": "is-haunted-logo-white.svg",
+          "name": "is-haunted-logo-white",
           "position": {
             "scale": 1.82,
             "translation-in-points": [
