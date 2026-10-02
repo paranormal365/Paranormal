@@ -257,7 +257,65 @@ else
                does not inherit the page's font — shown here first, it rendered in Times New Roman. *@
             <label class="form-label mt-3">BenEditor (TelerikEditor, in-page mode)</label>
             <BenEditor @bind-Value="_html" Height="180px" />
+
+            @*
+                Signal phase 3 (2026-10-01): the rest of the Telerik the site actually uses, so every
+                one of them can be checked here in both themes rather than by happening to visit the
+                one screen that has it. Counted across the website: the chart (the Field Kit
+                player), the calendar (the date field, tour dates, a client's case), the scheduler
+                (a group's calendar), the upload (case files), the window (posting from an editor)
+                and the tooltip (the layout's).
+            *@
+            <label class="form-label mt-3">TelerikChart — a session's readings, as the Field Kit player draws them</label>
+            <TelerikChart Height="220px">
+                <ChartSeriesItems>
+                    <ChartSeries Type="ChartSeriesType.Column" Data="@_series" Field="@nameof(Reading.Emf)"
+                                 CategoryField="@nameof(Reading.Minute)" Name="EMF (mG)" />
+                    <ChartSeries Type="ChartSeriesType.Line" Data="@_series" Field="@nameof(Reading.Temp)"
+                                 CategoryField="@nameof(Reading.Minute)" Name="Temperature (°F)" />
+                    <ChartSeries Type="ChartSeriesType.Line" Data="@_series" Field="@nameof(Reading.Sound)"
+                                 CategoryField="@nameof(Reading.Minute)" Name="Sound (dB)" />
+                </ChartSeriesItems>
+                <ChartLegend Position="ChartLegendPosition.Bottom" />
+            </TelerikChart>
+
+            <div class="row g-3 mt-1">
+                <div class="col-md-5">
+                    <label class="form-label">TelerikCalendar</label>
+                    <TelerikCalendar @bind-Value="_calendar" />
+                </div>
+                <div class="col-md-7">
+                    <label class="form-label">TelerikUpload</label>
+                    <TelerikUpload SaveUrl="/styleguide-upload-nowhere" AutoUpload="false" Multiple="true" />
+
+                    <label class="form-label mt-3">TelerikWindow · TelerikTooltip</label>
+                    <div class="d-flex flex-wrap gap-2 align-items-center">
+                        <button type="button" class="btn btn-outline-primary" @onclick="() => _window = true">Open a window</button>
+                        <span class="sg-tip btn btn-outline-secondary" title="A tooltip, themed">Hover for a tooltip</span>
+                    </div>
+                    <TelerikTooltip TargetSelector=".sg-tip" />
+                </div>
+            </div>
+
+            <label class="form-label mt-3">TelerikScheduler — a group's week</label>
+            <TelerikScheduler Data="@_appointments" @bind-Date="@_schedulerDate" Height="460px"
+                              AllowCreate="false" AllowUpdate="false" AllowDelete="false">
+                <SchedulerViews>
+                    <SchedulerWeekView StartTime="@_dayStart" EndTime="@_dayEnd" />
+                    <SchedulerMonthView />
+                </SchedulerViews>
+            </TelerikScheduler>
         </BenPanel>
+
+        <TelerikWindow @bind-Visible="_window" Width="420px" Modal="true">
+            <WindowTitle>A Telerik window</WindowTitle>
+            <WindowActions><WindowAction Name="Close" /></WindowActions>
+            <WindowContent>
+                <p>The raised surface, the large radius and the deep shadow — the same three things a
+                   Bootstrap modal has under Signal.</p>
+                <button type="button" class="btn btn-primary" @onclick="() => _window = false">Done</button>
+            </WindowContent>
+        </TelerikWindow>
 
         <BenPanel Title="Alerts &amp; badges" Collapsible="true" Collapsed="false">
             <div class="alert alert-primary py-2">Primary alert</div>
@@ -326,6 +384,32 @@ else
     private string _html = "<p>Some <strong>rich</strong> text, as a case summary would have.</p>";
 
     private DateTime? _date = DateTime.Today;
+    private DateTime _calendar = DateTime.Today;
+    private bool _window;
+
+    private sealed record Reading(string Minute, double Emf, double Temp, double Sound);
+    private readonly List<Reading> _series = Enumerable.Range(0, 10)
+        .Select(i => new Reading($"{i * 2}m", Math.Round(1.2 + Math.Abs(Math.Sin(i * .9)) * 4, 1),
+                                 Math.Round(68 - i * .6 + Math.Cos(i) * 1.5, 1), Math.Round(32 + Math.Sin(i * 1.3) * 6, 1)))
+        .ToList();
+
+    private DateTime _schedulerDate = DateTime.Today;
+    private readonly DateTime _dayStart = DateTime.Today.AddHours(17);
+    private readonly DateTime _dayEnd = DateTime.Today.AddHours(23);
+    private sealed class Appointment
+    {
+        public string Title { get; set; } = "";
+        public DateTime Start { get; set; }
+        public DateTime End { get; set; }
+        public bool IsAllDay { get; set; }
+        public string Description { get; set; } = "";
+    }
+    private readonly List<Appointment> _appointments =
+    [
+        new() { Title = "Walk-through, Ravenswood", Start = DateTime.Today.AddHours(18), End = DateTime.Today.AddHours(20) },
+        new() { Title = "Evidence review", Start = DateTime.Today.AddDays(1).AddHours(19), End = DateTime.Today.AddDays(1).AddHours(21) },
+        new() { Title = "Public night walk", Start = DateTime.Today.AddDays(2).AddHours(20), End = DateTime.Today.AddDays(2).AddHours(22) },
+    ];
     private string _option = "Second";
     private readonly List<string> _options = new() { "First", "Second", "Third" };
 

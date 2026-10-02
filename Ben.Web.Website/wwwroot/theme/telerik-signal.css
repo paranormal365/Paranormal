@@ -8,13 +8,13 @@
  * Scheduler, Editor, Map, date/time pickers, ColorPicker, ContextMenu) read as part of the
  * template rather than as a control suite dropped on top of it.
  *
- * Values come from the Night skin's own compiled palette, referenced through Bootstrap's
- * custom properties so light and dark both follow whatever data-bs-theme is active — the same
- * attribute the template and Bootstrap already key off. That is why this file has no explicit
- * dark-mode block: the variables it reads are themselves theme-dependent.
+ * Values come from Signal's tokens (signal-tokens.css), mostly through Bootstrap's custom
+ * properties, which those tokens feed — so light and dark both follow whatever data-bs-theme is
+ * active, the same attribute the template and Bootstrap already key off. That is why this file has
+ * no explicit dark-mode block: the variables it reads are themselves theme-dependent.
  *
- * Phase 3 fills in the per-component corrections (grid header/row treatment, popup surfaces,
- * focus rings) once there is a styleguide page to check them against in both themes.
+ * The per-component corrections below are each checked on /styleguide, which shows every Telerik
+ * widget the site uses, in both themes.
  */
 
 :root {
@@ -308,3 +308,101 @@ body.k-body {
     background-color: transparent;
     border-bottom: 1px solid var(--ben-line);
 }
+
+
+/* ══ Signal phase 3: the rest of the widgets the site uses ══════════════════════════════════
+   Each one checked on /styleguide in both themes. Class names read off the rendered elements,
+   not guessed — twice this file had a selector that matched nothing. */
+
+/* ── Charts (the Field Kit player) ───────────────────────────────────────────
+   Kendo derives every series colour from --kendo-color-series-a…f. Left alone they were the
+   theme's stock blue/orange/green, the only place on the site still drawn in someone else's
+   colours. Signal's order: the accent, its partner, then the semantic three, then a rose. */
+:root {
+    --kendo-color-series-a: var(--ben-accent);
+    --kendo-color-series-b: var(--ben-accent-2);
+    --kendo-color-series-c: var(--bs-success);
+    --kendo-color-series-d: var(--bs-warning);
+    --kendo-color-series-e: var(--bs-danger);
+    --kendo-color-series-f: #e879a6;
+    --kendo-chart-bg: transparent;
+    --kendo-chart-major-lines: var(--ben-line);
+    --kendo-chart-minor-lines: var(--ben-line);
+}
+
+/* ── Lists in popups (drop-downs, pickers) ───────────────────────────────── */
+.k-list-item:hover,
+.k-list-item.k-hover { background-color: var(--ben-accent-soft); color: var(--ben-ink); }
+.k-list-item.k-selected,
+.k-list-item.k-selected:hover { background-color: var(--ben-accent); color: var(--ben-on-accent); }
+
+/* ── Fields and pickers: the same focus ring as a Bootstrap field ──────────
+   Kendo drew its own grey ring; beside a .form-control the two read as two different sites. */
+.k-input.k-focus,
+.k-picker.k-focus,
+.k-input:focus-within,
+.k-picker:focus-within {
+    border-color: var(--ben-accent);
+    box-shadow: 0 0 0 .2rem rgba(var(--ben-accent-rgb), .25);
+}
+.k-button:focus-visible,
+.k-button.k-focus { box-shadow: 0 0 0 .2rem rgba(var(--ben-accent-rgb), .3); }
+
+/* ── Calendar (the date field, tour dates, a client's case) ─────────────── */
+.k-calendar { border-color: var(--ben-line); border-radius: var(--ben-radius); background: var(--ben-surface); }
+.k-calendar .k-calendar-header .k-title,
+.k-calendar .k-calendar-header .k-calendar-title { font-weight: 700; color: var(--ben-ink); }
+.k-calendar .k-calendar-th,
+.k-calendar .k-calendar-caption { color: var(--ben-ink-faint); }
+.k-calendar .k-calendar-td .k-link { border-radius: var(--ben-radius-sm); }
+.k-calendar .k-calendar-td:hover .k-link,
+.k-calendar .k-calendar-td.k-hover .k-link { background-color: var(--ben-accent-soft); }
+.k-calendar .k-calendar-td.k-today .k-link { box-shadow: inset 0 0 0 2px var(--ben-accent); color: var(--ben-ink); }
+.k-calendar .k-calendar-td.k-selected .k-link,
+.k-calendar .k-calendar-td.k-selected:hover .k-link {
+    background: var(--ben-accent-grad);
+    color: #fff;
+    box-shadow: var(--ben-glow);
+}
+.k-calendar .k-calendar-td.k-other-month .k-link { color: var(--ben-ink-faint); }
+
+/* ── Scheduler (a group's calendar) ──────────────────────────────────────── */
+.k-scheduler { border-color: var(--ben-line); border-radius: var(--ben-radius); overflow: hidden; background: var(--ben-surface); }
+.k-scheduler-toolbar { background: var(--ben-fill); border-color: var(--ben-line); }
+.k-scheduler-table td,
+.k-scheduler-table th,
+.k-scheduler-layout td,
+.k-scheduler-header-wrap,
+.k-scheduler-times { border-color: var(--ben-line); }
+.k-scheduler-header .k-scheduler-table th,
+.k-scheduler-times th { color: var(--ben-ink-muted); font-weight: 600; }
+.k-scheduler .k-today { background-color: rgba(var(--ben-accent-rgb), .07); }
+.k-scheduler .k-nonwork-hour,
+.k-scheduler .k-scheduler-nonwork { background-color: var(--ben-bg-sunken); }
+.k-scheduler .k-event {
+    border: 0;
+    border-left: 3px solid var(--ben-accent-2);
+    border-radius: var(--ben-radius-sm);
+    background: var(--ben-accent);
+    color: var(--ben-on-accent);
+    box-shadow: var(--ben-shadow-sm);
+}
+.k-scheduler .k-event.k-selected { box-shadow: 0 0 0 2px var(--ben-accent-2), var(--ben-shadow-sm); }
+.k-scheduler .k-current-time { background-color: var(--ben-accent-2); }
+
+/* ── Upload (case files) ─────────────────────────────────────────────────── */
+.k-upload { border-color: var(--ben-line); border-radius: var(--ben-radius); background: var(--ben-surface); }
+.k-upload .k-dropzone,
+.k-upload .k-upload-dropzone { background: var(--ben-fill); border-radius: var(--ben-radius) var(--ben-radius) 0 0; }
+.k-upload .k-dropzone-hint,
+.k-upload .k-upload-status { color: var(--ben-ink-muted); }
+
+/* ── Tooltip: the inverse of the page, like Bootstrap's ──────────────────── */
+.k-tooltip {
+    background-color: var(--ben-ink);
+    color: var(--ben-bg);
+    border: 0;
+    border-radius: var(--ben-radius-sm);
+    box-shadow: var(--ben-shadow);
+}
+.k-tooltip .k-callout { color: var(--ben-ink); }

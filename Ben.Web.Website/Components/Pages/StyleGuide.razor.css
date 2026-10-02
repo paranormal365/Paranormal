@@ -30,3 +30,6 @@
 .sg-chip--grad { background-image: var(--ben-accent-grad); background-size: cover; }
 
 .sg-chip--text { display: grid; place-items: center; font-size: 1.15rem; font-weight: 700; }
+
+/* the tooltip sample's target: a pointer that says "there is more here" */
+.sg-tip { cursor: help; }

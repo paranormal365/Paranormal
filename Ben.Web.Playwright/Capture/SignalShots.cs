@@ -47,6 +47,16 @@ public class SignalShots : BenTestBase
         ("admin-users",     "/admin/users"),
         ("admin-dashboard", "/admin/dashboard"),
         ("admin-system-drilled", "/admin/email-templates"),
+        ("admin-site-settings", "/admin/site-settings"),
+        ("admin-audit-log",     "/admin/audit-log"),
+        ("admin-error-log",     "/admin/error-log"),
+        ("admin-tiers",         "/admin/subscription-tiers"),
+        ("admin-ledger",        "/admin/billing-ledger"),
+        ("admin-places",        "/admin/places"),
+        ("admin-cases",         "/admin/cases"),
+        ("admin-store-products", "/admin/store/products"),
+        ("admin-mail",          "/admin/mail"),
+        ("admin-roles",         "/admin/roles"),
     ];
 
     /// <summary>Phase 2's public pages, as a visitor sees them (one screen each).</summary>
