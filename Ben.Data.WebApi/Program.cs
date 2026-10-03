@@ -319,6 +319,11 @@ builder.Services.AddSingleton<Ben.Data.WebApi.Services.Apple.AppleClientSecret>(
 builder.Services.AddHttpClient<Ben.Data.WebApi.Services.Apple.IAppleTokenClient,
                                Ben.Data.WebApi.Services.Apple.AppleTokenClient>();
 builder.Services.AddScoped<Ben.Data.WebApi.Services.Apple.AppleCredentialService>();
+// Which app version is live (10/03/2026): Apple's public lookup, cached, behind
+// api/public/app-version/ios. Short timeout — Profile waits on it.
+builder.Services.AddHttpClient<Ben.Data.WebApi.Services.Apple.IAppStoreVersionLookup,
+                               Ben.Data.WebApi.Services.Apple.AppStoreVersionLookup>(client =>
+    client.Timeout = TimeSpan.FromSeconds(8));
 // Push to phones (item 252): APNs with a token signed by the APNs key, read from a FILE named in
 // configuration — never from configuration itself, the repository is public. No key means
 // "not configured": launches still happen, the feed post still goes up, and nobody is pushed.
