@@ -163,6 +163,9 @@ struct SettingsHomeView: View {
                 }
             }
 
+            // Which version this is, and whether a newer one is out (10/03/2026). Signed out too.
+            AppUpdateSection()
+
             // Deliberately outside the signed-in branch. App Review works through a build
             // without an account for as long as it can, and "where does this app say what it
             // does with my data" must be answerable from that state.

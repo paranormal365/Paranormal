@@ -22,6 +22,11 @@ The same link is at the foot of every page on the website, and if you open the w
 on an iPhone or iPad, a banner at the top offers to open the app — or to get it, if you have not
 yet.
 
+**Is mine the newest?** Profile shows which version you have, under **App**, and checks whether a
+newer one is in the App Store each time you open it. When there is, it says what changed and
+**Update in the App Store** takes you straight there. **Check for updates** asks again. If the new
+version needs a newer iOS than your phone has, it says so, so you know to update iOS first.
+
 ## What you need an account for — and what you don't
 
 Reading the feed and browsing public events needs **no account at all**, exactly as on the
