@@ -864,7 +864,7 @@ internal static class DevelopmentDataSeeder
         {
             Id = Guid.NewGuid(), OrganizationId = tgh.Id,
             Title = "Bell Witch Cave — Public Night Walk",
-            Description = "<p>An open evening at the cave. Bring a torch; we supply the recorders.</p>",
+            Description = "<p>An open evening at the cave. Bring a flashlight; we supply the recorders.</p>",
             PlaceId = placeId,
             StartDateTime = TennesseeTimeToUtc(now.AddDays(14).Date.AddHours(20)),
             EndDateTime   = TennesseeTimeToUtc(now.AddDays(14).Date.AddHours(23)),

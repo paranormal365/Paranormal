@@ -1778,7 +1778,9 @@ public abstract class BenTestBase : PageTest
 
         // The grid shows ten files a page in the order the API returns them, and this account
         // collects a file every run - so the new one can be on any page.
-        var row = Page.Locator("tr", new() { HasTextString = name });
+        // First: the help capture's readable name repeats from run to run on a kept database, and
+        // any copy of the same photograph opens the same editor (10/05/2026, two rows → strict-mode).
+        var row = Page.Locator("tr", new() { HasTextString = name }).First;
         var next = Page.GetByRole(AriaRole.Button, new() { Name = "Go to the next page" });
         for (var pageNo = 0; pageNo < 40 && !await row.IsVisibleAsync(); pageNo++)
         {

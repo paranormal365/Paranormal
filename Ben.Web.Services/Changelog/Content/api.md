@@ -24,6 +24,13 @@ before it carries no number.
 This stream deliberately does not repeat the website's list. A change people meet as a page
 belongs there; this is for the part underneath.
 
+## 2026-10-05 · 2.9.0
+
+- The apps can ask which version of the iPhone and iPad app is newest on the App Store, so a phone
+  can say when an update is waiting.
+- A venue's letter about a new request with no room chosen yet says the party asked for a place; it
+  used to read "asked for Waiting to be placed".
+
 ## 2026-09-29 · 2.8.1
 
 - The service now answers the apps at a new address of its own; the iPhone and iPad app's next

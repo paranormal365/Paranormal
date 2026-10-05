@@ -29,6 +29,11 @@ day-by-day account of building it would say nothing to anyone using it now.
 - A new six-page app guide shows what the app does on its own screens, and the home page and the help
   link to it.
 - The site says "parking lot" everywhere it talks about parking.
+- The printed guides — the full documentation, the guide for each kind of account, and the iPhone and
+  iPad guides — look like the site now, and every picture in the help was retaken to show the site
+  and the apps as they are today.
+- The help no longer says the iPhone and iPad app is waiting for Apple's review; it is on the App
+  Store, and the help shows the home page's section for it.
 
 ## 2026-10-02 · 2.14.0
 

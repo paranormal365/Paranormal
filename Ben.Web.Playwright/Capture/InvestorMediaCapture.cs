@@ -77,7 +77,10 @@ public sealed class InvestorMediaCapture : BenTestBase
         await WaitUntilLoadedAsync();
 
         if (proves is not null)
-            await Expect(Page.GetByText(proves, new() { Exact = false }).First)
+            // Visible only: the sidebar carries a page's name too, collapsed and hidden, and it is
+            // first in the document — "Price Bands" waited on it for 15 s (10/05/2026).
+            await Expect(Page.Locator(selector).First.GetByText(proves, new() { Exact = false })
+                    .Filter(new() { Visible = true }).First)
                 .ToBeVisibleAsync(new() { Timeout = 15_000 });
 
         await Page.AddStyleTagAsync(new() { Content = InvestorShotCss });
@@ -144,7 +147,7 @@ public sealed class InvestorMediaCapture : BenTestBase
         if (await Page.Locator("#feed-composer").CountAsync() == 0)
             Assert.Ignore("The feed is switched off; run the help capture's feed test first or enable features.public-feed.");
 
-        await ShootAsync("feed.png", ".container.py-3", proves: "Post");
+        await ShootAsync("feed.png", ".feed-column", proves: "Post");   // the Signal feed (10/05/2026)
         // The raw shot is the whole column; the document wants the composer and the top post.
         // Cropped by the build step (docs/build-investor-pdf.sh) rather than here.
     }

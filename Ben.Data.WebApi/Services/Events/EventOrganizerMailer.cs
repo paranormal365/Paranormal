@@ -173,7 +173,11 @@ public sealed class EventOrganizerMailer
         if (booking.Kind == HostedEventBookingKind.DayPass || live.Count == 0)
             return $"{party} {verb} a day pass";
 
+        // Only rooms somebody has actually been put in. An overnight request with no preference
+        // has no room yet, and naming it with the board's "Waiting to be placed" made the letter read
+        // "has asked for Waiting to be placed on Fri 11/06" (seen 10/05/2026); it asked for a place.
         var units = live
+            .Where(n => n.HostedEventLayoutUnit is not null)
             .Select(n => EventCapacity.NameOf(n, booking.Kind))
             .Where(n => !string.IsNullOrWhiteSpace(n))
             .Distinct()

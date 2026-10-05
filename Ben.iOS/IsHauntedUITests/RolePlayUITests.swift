@@ -202,6 +202,9 @@ final class RolePlayUITests: XCTestCase {
     func testLeadLetsTheWalkUpIn() throws {
         let app = try app(openLink: "ishaunted://field-kit/launch/\(env["BEN_RP_LAUNCH"] ?? "")/requests")
         app.launch()
+        // The lead's page asks for notifications on a fresh install, and the prompt sits over the
+        // very list being photographed (10/05/2026).
+        allowNotificationsIfAsked(timeout: 8)
         let approve = app.buttons["approve-\((env["BEN_RP_WALKUP_ID"] ?? "").lowercased())"].firstMatch
         for _ in 0..<6 where !(approve.waitForExistence(timeout: 6) && approve.isHittable) { app.swipeUp() }
         XCTAssertTrue(approve.exists, "the guide should see the walk-up asking")

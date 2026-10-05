@@ -75,7 +75,7 @@ final class DeveloperDocCaptureTests: XCTestCase {
     private func tap(_ id: String, timeout: TimeInterval = 8) -> Bool {
         let el = app.descendants(matching: .any).matching(identifier: id).firstMatch
         guard el.waitForExistence(timeout: timeout) else { return false }
-        for _ in 0..<4 {
+        for _ in 0..<8 {
             if el.isHittable { el.tap(); return true }
             app.swipeUp()
             Thread.sleep(forTimeInterval: 0.6)
@@ -194,10 +194,16 @@ final class DeveloperDocCaptureTests: XCTestCase {
                     if !filled.isEmpty, filled != placeholder {
                         label.typeText(String(repeating: XCUIKeyboardKey.delete.rawValue, count: filled.count))
                     }
-                    label.typeText("Cellar stairs")
+                    // Return puts the keyboard away: on an iPhone it covers "Open the session", which
+                    // sits below the fold once "public sessions near here" is on the form (10/05/2026).
+                    label.typeText("Cellar stairs\n")
                 }
                 settle(1)
 
+                // A Form builds its rows lazily: below the fold on an iPhone the button does not
+                // exist yet, so scroll until it does rather than until it is hittable.
+                let open = app.descendants(matching: .any).matching(identifier: "confirm-start-session").firstMatch
+                for _ in 0..<8 where !open.exists { app.swipeUp(); Thread.sleep(forTimeInterval: 0.5) }
                 if tap("confirm-start-session") || tapLabel("Open the session") {
                     // Item 215: the session opens pending; Start begins the log.
                     _ = tap("start-recording", timeout: 15) || tapLabel("Start")

@@ -147,7 +147,7 @@ public class StoreBrowseTests : BenTestBase
     [Description("Filters, sorting and pages are the address: an option filter, its chip, and the sort.")]
     public async Task Listing_FiltersAndPagesThroughTheQueryString()
     {
-        await Page.GotoAsync($"{BaseUrl}/store/products?opt=Colour%3AOlive");
+        await Page.GotoAsync($"{BaseUrl}/store/products?opt=Color%3AOlive");
         await Expect(Page.Locator("[data-testid=listing-count]")).ToHaveTextAsync("1 product", new() { Timeout = 30_000 });
         await Expect(Card("investigators-field-bag")).ToBeVisibleAsync();
 

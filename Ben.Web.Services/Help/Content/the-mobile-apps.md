@@ -23,6 +23,10 @@ on an iPhone or iPad, a banner at the top offers to open the app — or to get i
 yet. On a computer, the app's section near the foot of the [home page](/#the-app) has a QR code to
 point your iPhone's camera at.
 
+![The app's section near the foot of the home page](/help/media/getting-started/home-app.png)
+*The home page's section for the app: Apple's badge opens the App Store, and the QR code does the
+same from your iPhone's camera.*
+
 **[The app guide (PDF)](/guides/IsHaunted-App-Guide.pdf)** shows what the app does in six pages, on
 its own screens: Field Kit, marking and watching, playing a night back, and events and the door.
 
@@ -862,11 +866,6 @@ The app follows exactly the same rules as the website about who may see what. A 
 engagement is redacted the same way, media waits for the same safety check before it appears,
 and a group's name only appears on footage it has claimed. Nothing is looser on a phone because
 it is on a phone.
-
-## Getting the app
-
-The iPhone and iPad app has been submitted to the App Store and is awaiting Apple's review. When
-it is approved, this page will link to it.
 
 ## Links that open the app
 

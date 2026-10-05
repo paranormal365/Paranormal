@@ -365,8 +365,10 @@ ADS = [
             ("star", "Withdraw fairly", "Pull out with a reason and the organizer's credit goes back."),
         ],
         screen=WALK + "43-public-venue.png", shot_focus="top center",
-        quote="“The Thomas House has had guests on the second-floor landing since the 1970s. Now they book.”",
-        quote_who="Demo venue, the Thomas House Hotel",
+        # Never a real business's words (10/05/2026): the demo venue shares its name with a real hotel
+        # whose owner is now interested, so the line is in our own voice and names nobody.
+        quote="“Guests have been reporting the second-floor landing for decades. Now they can book it.”",
+        quote_who="Haunted hotels, theatres and historic homes",
         steps=[("Describe the place", "History, rooms and what each one sleeps."),
                ("Approve organizers", "Say yes to the nights and what you'll lend."),
                ("Open the doors", "Guests arrive with a pass; your staff check them in.")],

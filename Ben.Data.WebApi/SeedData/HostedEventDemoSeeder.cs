@@ -102,7 +102,7 @@ internal static class HostedEventDemoSeeder
         var notes = new Dictionary<Guid, string>
         {
             [RoomsEventId] =
-                "The hotel has no lift: the bedrooms are up one flight of stairs, and the ballroom and bar are on the "
+                "The hotel has no elevator: the bedrooms are up one flight of stairs, and the ballroom and bar are on the "
                 + "ground floor.\nSome of the hunt is in low light. Park on the street or in the lot behind the hotel.",
             [SeatsEventId] =
                 "The ballroom is step-free from the side door on Main Street. Seats in row A have the most leg room; "

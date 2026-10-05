@@ -1042,7 +1042,7 @@ event page. The **board**, where requests wait for your decision, is *Bookings* 
 ### Getting in and getting around
 
 **Access and what to know** on the event page is where you say what a guest needs to know before they
-come: *no lift — the bedrooms are up one flight*, *the ballroom is step-free from the side door*,
+come: *no elevator — the bedrooms are up one flight*, *the ballroom is step-free from the side door*,
 *some of the hunt is in low light*, *a hearing loop in the bar*, where to park. It shows on the
 public event page under *Getting in and getting around*, in the iPhone app's page for the event, and
 in every confirmation letter, just before the pass.
