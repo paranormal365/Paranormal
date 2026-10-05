@@ -1,5 +1,17 @@
 # Generated documents
 
+## The site's look: `site_doc_style.py`
+
+The product documentation, the seven seat guides (`IsHaunted-Web-*.pdf`) and the iPhone and iPad
+developer guides all print in the website's dark Signal look (10/05/2026): Public Sans from
+`Ben.Web.Website/wwwroot/fonts`, the dark-mode token values, a cover built like the site's PageHero
+(photo from `docs/media/stock`, kicker, title, brand tile, three fact cards, an about card). Each
+build script calls `site_doc_style.css(...)` and `site_doc_style.cover(...)` and adds only its own
+pieces. Two print rules learned the hard way: the dark color is on `@page`, not the body, or the
+margins print white; and no `box-shadow` or `background-clip: text`, which Chrome prints as dark bars
+and solid blocks. The flyers, the brochure and the app guide in `docs/ads/` keep their own design and
+do not use it; `python3 docs/ads/publish-to-site.py` copies them and their thumbnails to the site.
+
 ## IsHaunted-Product-Documentation.pdf
 
 Every in-app help document, reproduced **verbatim**, as one printable PDF.

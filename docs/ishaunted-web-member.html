@@ -1,33 +1,201 @@
-<!doctype html><html><head><meta charset='utf-8'><title>IsHaunted — The ordinary member</title><style>
-@page { size: A4; margin: 15mm 13mm; }
-body { font: 11pt/1.55 -apple-system, "Helvetica Neue", Arial, sans-serif; color: #0E1726; margin: 0; }
-h1 { font-size: 25pt; margin: 0 0 2mm; letter-spacing: -0.6px; font-weight: 800;
-     background-image: linear-gradient(120deg, #5B3DF5, #0891A6); -webkit-background-clip: text;
-     background-clip: text; color: transparent; }
-h1::after { content: ""; display: block; width: 18mm; height: 1.2mm; margin-top: 2mm; border-radius: 1mm;
-            background-image: linear-gradient(120deg, #5B3DF5, #0891A6); }
-h2 { font-size: 14.5pt; margin: 8mm 0 2mm; padding-top: 3mm; border-top: 1px solid #E3E8F1;
-     page-break-after: avoid; letter-spacing: -0.2px; }
-.sub { color: #5A6679; font-size: 11pt; margin: 0 0 5mm; }
-p { margin: 0 0 3mm; }
-code, .mono { font-family: ui-monospace, Menlo, monospace; font-size: 9.5pt;
-              background: #F4F7FC; padding: 0 3px; border-radius: 3px; }
-.rule { border-left: 3px solid #5B3DF5; padding-left: 4mm; background: #F3F0FF; border-radius: 0 2mm 2mm 0;
-        padding-top: 2mm; padding-bottom: 2mm; }
-.cover { border: 1px solid #E3E8F1; border-radius: 3mm; padding: 5mm; background: #F8F7FF;
-         box-shadow: inset 0 1.2mm 0 #5B3DF5;
-         margin-bottom: 6mm; }
-figure { margin: 4mm 0; page-break-inside: avoid; text-align: center; }
-figure img { max-width: 100%; max-height: 130mm; border: 1px solid #E3E8F1; border-radius: 8px;
-             box-shadow: 0 2mm 6mm rgba(14, 23, 38, .12); }
-figcaption { color: #5A6679; font-size: 9pt; margin-top: 1.5mm; }
-table { border-collapse: collapse; width: 100%; margin: 3mm 0; font-size: 9.5pt; }
-th, td { border: 1px solid #E3E8F1; padding: 2mm 2.5mm; text-align: left; vertical-align: top; }
-th { background: #F4F7FC; }
+<!doctype html><html><head><meta charset='utf-8'><title>IsHaunted — The ordinary member</title><style>/*
+    Self-hosted web fonts.
+
+    These used to arrive via `@import url(https://fonts.googleapis.com/...)` — one in
+    `css/smartapp.min.css` (Public Sans, the body font) and one in `app.css` (Irish Grover, the
+    logo face). Both were **render-blocking**, confirmed by the browser's own
+    `renderBlockingStatus`, and both sat on a serial chain: fetch the stylesheet, parse it, fetch
+    the @import, then fetch the font files — on every navigation of every page.
+
+    That is a third party on the critical path of every page view. It also leaks a page view to
+    Google each time, and hangs the whole site on a restricted or air-gapped network.
+
+    It was the last external dependency left after Fabric was vendored (item 114), and it matches
+    the remaining intermittent Playwright failures exactly: `navigating to /login, waiting until
+    "load"` timing out after 30s, roughly 1% of navigations.
+
+    The @font-face blocks below are Google's own, verbatim, with the gstatic URLs rewritten to
+    local files. Every unicode subset is kept — dropping `latin-ext` or `vietnamese` would
+    silently break accented characters rather than fail loudly.
+
+    `font-display: swap` is preserved: text paints immediately in a fallback and swaps when the
+    face arrives, so a slow font can never block content again.
+
+    To update: re-fetch the CSS from Google with a modern browser User-Agent (an old one yields
+    TTF instead of woff2), re-download the referenced files, and rewrite the URLs.
+*/
+
+/* ── Public Sans ─────────────────────────────────────────────── */
+/* vietnamese */
+@font-face {
+  font-family: 'Public Sans';
+  font-style: italic;
+  font-weight: 100 900;
+  font-display: swap;
+  src: url(../Ben.Web.Website/wwwroot/fonts/ps-73dc128d.woff2) format('woff2');
+  unicode-range: U+0102-0103, U+0110-0111, U+0128-0129, U+0168-0169, U+01A0-01A1, U+01AF-01B0, U+0300-0301, U+0303-0304, U+0308-0309, U+0323, U+0329, U+1EA0-1EF9, U+20AB;
+}
+/* latin-ext */
+@font-face {
+  font-family: 'Public Sans';
+  font-style: italic;
+  font-weight: 100 900;
+  font-display: swap;
+  src: url(../Ben.Web.Website/wwwroot/fonts/ps-2b49dc19.woff2) format('woff2');
+  unicode-range: U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C0, U+2113, U+2C60-2C7F, U+A720-A7FF;
+}
+/* latin */
+@font-face {
+  font-family: 'Public Sans';
+  font-style: italic;
+  font-weight: 100 900;
+  font-display: swap;
+  src: url(../Ben.Web.Website/wwwroot/fonts/ps-47e20378.woff2) format('woff2');
+  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+}
+/* vietnamese */
+@font-face {
+  font-family: 'Public Sans';
+  font-style: normal;
+  font-weight: 100 900;
+  font-display: swap;
+  src: url(../Ben.Web.Website/wwwroot/fonts/ps-d02ba471.woff2) format('woff2');
+  unicode-range: U+0102-0103, U+0110-0111, U+0128-0129, U+0168-0169, U+01A0-01A1, U+01AF-01B0, U+0300-0301, U+0303-0304, U+0308-0309, U+0323, U+0329, U+1EA0-1EF9, U+20AB;
+}
+/* latin-ext */
+@font-face {
+  font-family: 'Public Sans';
+  font-style: normal;
+  font-weight: 100 900;
+  font-display: swap;
+  src: url(../Ben.Web.Website/wwwroot/fonts/ps-a915e6d9.woff2) format('woff2');
+  unicode-range: U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C0, U+2113, U+2C60-2C7F, U+A720-A7FF;
+}
+/* latin */
+@font-face {
+  font-family: 'Public Sans';
+  font-style: normal;
+  font-weight: 100 900;
+  font-display: swap;
+  src: url(../Ben.Web.Website/wwwroot/fonts/ps-5fc5c7b6.woff2) format('woff2');
+  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+}
+
+/* ── Irish Grover ─────────────────────────────────────────────── */
+/* latin */
+@font-face {
+  font-family: 'Irish Grover';
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  src: url(../Ben.Web.Website/wwwroot/fonts/ig-10fc9b91.woff2) format('woff2');
+  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+}
+
+:root {
+  --bg: #0C1017; --sunken: #090D13; --surface: #151C28; --raised: #1B2433;
+  --ink: #E9EDF4; --body: #C6CEDA; --muted: #98A3B4; --faint: #6C7889;
+  --line: rgba(255,255,255,.09); --line-strong: rgba(255,255,255,.18);
+  --accent: #7C5CFF; --accent2: #22D3EE; --link: #A78BFA; --soft: rgba(124,92,255,.16);
+  --grad: linear-gradient(120deg, #7C5CFF, #22D3EE);
+  --glow: 0 8px 24px rgba(124,92,255,.40);
+}
+@page { size: 8.5in 11in; margin: .62in .66in .72in; background: #0C1017;
+  @bottom-center { content: counter(page); font-family: 'Public Sans', sans-serif; font-size: 8pt; color: #6C7889; } }
+@page cover { margin: 0; @bottom-center { content: none; } }
+* { box-sizing: border-box; }
+html { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+body { margin: 0; background: #0C1017; color: var(--body);
+  font-family: 'Public Sans', system-ui, -apple-system, sans-serif; font-size: 10.2pt; line-height: 1.6; }
+
+h1, h2, h3, h4 { color: var(--ink); font-weight: 700; letter-spacing: -.028em; line-height: 1.12;
+  break-after: avoid-page; page-break-after: avoid; }
+h1 { font-size: 30pt; margin: 0 0 .1in; }
+h2 { font-size: 16.5pt; margin: .42in 0 .12in; }
+h2::before { content: ""; display: block; width: .38in; height: 3px; border-radius: 2px; background: var(--grad);
+  margin-bottom: .12in; }
+h3 { font-size: 12.5pt; margin: .26in 0 .08in; }
+p { margin: 0 0 .11in; }
+ul, ol { margin: 0 0 .12in; padding-left: .24in; }
+li { margin-bottom: .05in; }
+li::marker { color: var(--link); }
+a { color: var(--link); text-decoration: none; }
+b, strong { color: var(--ink); font-weight: 650; }
+em { color: var(--ink); }
+.kicker { font-size: 8pt; font-weight: 700; letter-spacing: .2em; text-transform: uppercase; color: var(--accent2); margin-bottom: .06in; }
+.accent-text { background-image: var(--grad); -webkit-background-clip: text; background-clip: text; color: transparent; }
+
+code, .mono { font-family: ui-monospace, 'SF Mono', Menlo, monospace; font-size: 8.7pt; color: var(--ink);
+  background: var(--raised); border: 1px solid var(--line); padding: 0 4px; border-radius: 4px; }
+pre { font-family: ui-monospace, 'SF Mono', Menlo, monospace; font-size: 8.6pt; line-height: 1.5; color: var(--ink);
+  background: var(--surface); border: 1px solid var(--line); border-radius: 10px; padding: .12in .16in; white-space: pre-wrap; }
+pre code { background: none; border: 0; padding: 0; }
+
+blockquote { margin: 0 0 .14in; padding: .1in .16in; border-left: 3px solid var(--accent); border-radius: 0 10px 10px 0;
+  background: var(--soft); color: var(--body); }
+blockquote p:last-child { margin-bottom: 0; }
+
+table { width: 100%; border-collapse: separate; border-spacing: 0; margin: .06in 0 .16in; font-size: 9pt;
+  border: 1px solid var(--line); border-radius: 10px; overflow: hidden; page-break-inside: avoid; }
+th { text-align: left; padding: .07in .1in; background: var(--raised); color: var(--muted); font-size: 7.6pt;
+  font-weight: 700; letter-spacing: .08em; text-transform: uppercase; border-bottom: 1px solid var(--line-strong); }
+td { padding: .07in .1in; border-bottom: 1px solid var(--line); vertical-align: top; background: var(--surface); }
+tr:last-child td { border-bottom: 0; }
+
+/* No drop shadow: on a dark page it adds nothing, and Chrome draws a shadow split by a page break as a
+   dark bar at the foot of the page before (seen on the first build, 10/05). */
+img { max-width: 100%; height: auto; border-radius: 10px; border: 1px solid var(--line-strong); page-break-inside: avoid; }
+/* A screen and the words about it travel together. */
+.shot { break-inside: avoid; page-break-inside: avoid; }
+figure { margin: .14in 0 .2in; text-align: center; page-break-inside: avoid; }
+figcaption { color: var(--faint); font-size: 8.4pt; margin-top: .07in; }
+
+/* ── the cover: the site's PageHero, on paper ─────────────────────────── */
+.site-cover { page: cover; position: relative; width: 8.5in; height: 11in; overflow: hidden; break-after: page;
+  page-break-after: always; background: radial-gradient(90% 50% at 100% 0%, #1E1650 0%, #0C1017 65%); }
+.site-cover .hero { position: absolute; left: .45in; right: .45in; top: .45in; height: 6.4in; border-radius: .3in; overflow: hidden;
+  background-size: cover; background-position: center; box-shadow: 0 24px 60px rgba(0,0,0,.55); }
+.site-cover .hero::after { content: ""; position: absolute; inset: 0;
+  background: linear-gradient(180deg, rgba(12,16,23,.25) 0%, rgba(12,16,23,.15) 35%, rgba(12,16,23,.92) 100%),
+              linear-gradient(90deg, rgba(30,22,80,.55) 0%, rgba(30,22,80,0) 60%); }
+.site-cover .brand { position: absolute; top: .38in; left: .45in; z-index: 2; display: flex; align-items: center; gap: .12in;
+  color: #fff; font-weight: 700; font-size: 13pt; letter-spacing: -.01em; }
+.site-cover .tile { width: .5in; height: .5in; border-radius: .13in; display: grid; place-items: center; background: var(--grad);
+  box-shadow: var(--glow); }
+.site-cover .tile img { width: 68%; height: 68%; border: 0; border-radius: 0; box-shadow: none; filter: brightness(0) invert(1); }
+.site-cover .brand span { color: var(--link); }
+.site-cover .words { position: absolute; left: .45in; right: .6in; bottom: .48in; z-index: 2; }
+.site-cover h1 { font-size: 40pt; line-height: 1.02; color: #fff; margin: .06in 0 .14in; }
+.site-cover .lede { font-size: 13pt; line-height: 1.45; color: rgba(255,255,255,.88); margin: 0; max-width: 5.6in; }
+.site-cover .facts { position: absolute; left: .45in; right: .45in; top: 7.1in; display: grid; grid-template-columns: repeat(3, 1fr); gap: .14in; }
+.site-cover .fact { background: var(--surface); border: 1px solid var(--line); border-radius: .16in; padding: .15in .18in; }
+.site-cover .fact b { display: block; font-size: 7.4pt; letter-spacing: .16em; text-transform: uppercase; color: var(--muted); font-weight: 700; }
+.site-cover .fact span { display: block; font-size: 12pt; color: var(--ink); font-weight: 650; margin-top: .04in; letter-spacing: -.01em; }
+.site-cover .about { position: absolute; left: .45in; right: .45in; top: 8.25in; background: var(--surface); border: 1px solid var(--line);
+  border-left: 3px solid var(--accent); border-radius: .16in; padding: .16in .22in; font-size: 9.4pt; line-height: 1.55; color: var(--body); }
+.site-cover .about b { color: var(--ink); }
+.site-cover .foot { position: absolute; left: .45in; right: .45in; bottom: .38in; display: flex; justify-content: space-between;
+  align-items: center; font-size: 8pt; color: var(--faint); letter-spacing: .06em; }
+.site-cover .foot::before { content: ""; position: absolute; left: 0; right: 0; top: -.14in; height: 2px; border-radius: 2px; background: var(--grad); opacity: .7; }
+
+.cover { background: var(--surface); border: 1px solid var(--line); border-left: 3px solid var(--accent);
+         border-radius: 12px; padding: .14in .2in; margin: .1in 0 .2in; }
+.rule { background: var(--soft); border-left: 3px solid var(--accent); border-radius: 0 10px 10px 0; padding: .1in .16in; }
+figure img { max-height: 6.4in; }
 </style></head><body>
-<h1>IsHaunted &mdash; The ordinary member</h1>
-<p class='sub'>Belongs to a group, holds no named role and no extra grants. Written for a developer joining the project.</p>
-<div class='cover'><p style='margin:0'><b>Every screenshot shows simulated, seeded data</b>, captured in dark mode while signed in as this user type. Nothing here is a real person, case or investigation. Where a page shows a refusal, that is the designed behavior for this seat.</p></div>
+
+<section class="site-cover">
+  <div class="hero" style="background-image:url('media/stock/i2-dark-hallway.jpg')"></div>
+  <div class="brand" style="top:.82in;left:.9in"><div class="tile"><img src="../Ben.Web.Website/wwwroot/static/images/is-haunted-logo.svg" alt=""></div><div>IsHaunted<span>.com</span></div></div>
+  <div class="words" style="left:.9in;right:1in;bottom:auto;top:4.3in">
+    <div class="kicker">The website, seat by seat</div>
+    <h1>The ordinary member</h1>
+    <p class="lede">Belongs to a group, holds no named role and no extra grants. Written for a developer joining the project.</p>
+  </div>
+  <div class="facts"><div class="fact"><b>Who</b><span>Ordinary member</span></div><div class="fact"><b>Screens</b><span>15</span></div><div class="fact"><b>Captured</b><span>10/05/2026</span></div></div>
+  <div class="about"><b>Every screenshot shows simulated, seeded data</b>, captured in dark mode while signed in as this user type. Nothing here is a real person, case or investigation. Where a page shows a refusal, that is the designed behavior for this seat.</div>
+  <div class="foot"><span>ishaunted.com</span><span>Website guide</span></div>
+</section>
 
 <p><b>This is the most useful seat to test and the easiest to get wrong.</b> An ordinary member
 belongs to the group but holds no grants, so the permission service returns false on every table.
@@ -57,34 +225,19 @@ words on screen.</p>
 designed behavior for this seat, not a broken page.</p>
 
 <h2>What this user sees, screen by screen</h2>
-<p><b>Home.</b> The member's landing page — their desk: next investigation, open cases, unread, gear out.</p>
-<figure><img src='web-media/member/30-home.png'><figcaption>Home</figcaption></figure>
-<p><b>Organizations.</b> The groups they belong to.</p>
-<figure><img src='web-media/member/31-organizations.png'><figcaption>Organizations</figcaption></figure>
-<p><b>My investigations.</b> Investigations they are part of.</p>
-<figure><img src='web-media/member/32-my-investigations.png'><figcaption>My investigations</figcaption></figure>
-<p><b>Media library.</b> Shared media for their group.</p>
-<figure><img src='web-media/member/33-media-library.png'><figcaption>Media library</figcaption></figure>
-<p><b>My equipment.</b> Equipment assigned to or borrowed by them.</p>
-<figure><img src='web-media/member/34-my-equipment.png'><figcaption>My equipment</figcaption></figure>
-<p><b>Events.</b> Events, including public ones they can attend.</p>
-<figure><img src='web-media/member/35-events.png'><figcaption>Events</figcaption></figure>
-<p><b>Feed.</b> The feed, where a member can post as themselves or as the group.</p>
-<figure><img src='web-media/member/36-feed.png'><figcaption>Feed</figcaption></figure>
-<p><b>Profile.</b> Account, security and privacy.</p>
-<figure><img src='web-media/member/37-profile.png'><figcaption>Profile</figcaption></figure>
-<p><b>Refused admin.</b> Site administration, refused.</p>
-<figure><img src='web-media/member/38-refused-admin.png'><figcaption>Refused admin</figcaption></figure>
-<p><b>Asked to help at an event.</b> An invitation to help at a hosted event. It grants only what it names — here, the door — whatever the member's seat in the group.</p>
-<figure><img src='web-media/member/39-asked-to-help-at-an-event.png'><figcaption>Asked to help at an event</figcaption></figure>
-<p><b>The door on a phone.</b> The door for tonight on a phone: who is expected, search by name or pass code, and walk-ups.</p>
-<figure><img src='web-media/member/3a-the-door-on-a-phone.png'><figcaption>The door on a phone</figcaption></figure>
-<p><b>A public place.</b> </p>
-<figure><img src='web-media/member/3b-a-public-place.png'><figcaption>A public place</figcaption></figure>
-<p><b>My orders.</b> Their store orders and where each has got to. An order with items from more than one sender comes as that many packages, each with its own tracking.</p>
-<figure><img src='web-media/member/3c-my-orders.png'><figcaption>My orders</figcaption></figure>
-<p><b>My questions.</b> Questions they asked about store items, and the answers — private to them unless copied into an item's FAQ, which never names them.</p>
-<figure><img src='web-media/member/3d-my-questions.png'><figcaption>My questions</figcaption></figure>
-<p><b>Tour date field sessions.</b> The same date as its guide sees it: what guests recorded and sent, for the group and the date's guides only.</p>
-<figure><img src='web-media/member/3e-tour-date-field-sessions.png'><figcaption>Tour date field sessions</figcaption></figure>
+<div class='shot'><p><b>Home.</b> The member's landing page — their desk: next investigation, open cases, unread, gear out.</p><figure><img src='web-media/member/30-home.png'><figcaption>Home</figcaption></figure></div>
+<div class='shot'><p><b>Organizations.</b> The groups they belong to.</p><figure><img src='web-media/member/31-organizations.png'><figcaption>Organizations</figcaption></figure></div>
+<div class='shot'><p><b>My investigations.</b> Investigations they are part of.</p><figure><img src='web-media/member/32-my-investigations.png'><figcaption>My investigations</figcaption></figure></div>
+<div class='shot'><p><b>Media library.</b> Shared media for their group.</p><figure><img src='web-media/member/33-media-library.png'><figcaption>Media library</figcaption></figure></div>
+<div class='shot'><p><b>My equipment.</b> Equipment assigned to or borrowed by them.</p><figure><img src='web-media/member/34-my-equipment.png'><figcaption>My equipment</figcaption></figure></div>
+<div class='shot'><p><b>Events.</b> Events, including public ones they can attend.</p><figure><img src='web-media/member/35-events.png'><figcaption>Events</figcaption></figure></div>
+<div class='shot'><p><b>Feed.</b> The feed, where a member can post as themselves or as the group.</p><figure><img src='web-media/member/36-feed.png'><figcaption>Feed</figcaption></figure></div>
+<div class='shot'><p><b>Profile.</b> Account, security and privacy.</p><figure><img src='web-media/member/37-profile.png'><figcaption>Profile</figcaption></figure></div>
+<div class='shot'><p><b>Refused admin.</b> Site administration, refused.</p><figure><img src='web-media/member/38-refused-admin.png'><figcaption>Refused admin</figcaption></figure></div>
+<div class='shot'><p><b>Asked to help at an event.</b> An invitation to help at a hosted event. It grants only what it names — here, the door — whatever the member's seat in the group.</p><figure><img src='web-media/member/39-asked-to-help-at-an-event.png'><figcaption>Asked to help at an event</figcaption></figure></div>
+<div class='shot'><p><b>The door on a phone.</b> The door for tonight on a phone: who is expected, search by name or pass code, and walk-ups.</p><figure><img src='web-media/member/3a-the-door-on-a-phone.png'><figcaption>The door on a phone</figcaption></figure></div>
+<div class='shot'><p><b>A public place.</b> </p><figure><img src='web-media/member/3b-a-public-place.png'><figcaption>A public place</figcaption></figure></div>
+<div class='shot'><p><b>My orders.</b> Their store orders and where each has got to. An order with items from more than one sender comes as that many packages, each with its own tracking.</p><figure><img src='web-media/member/3c-my-orders.png'><figcaption>My orders</figcaption></figure></div>
+<div class='shot'><p><b>My questions.</b> Questions they asked about store items, and the answers — private to them unless copied into an item's FAQ, which never names them.</p><figure><img src='web-media/member/3d-my-questions.png'><figcaption>My questions</figcaption></figure></div>
+<div class='shot'><p><b>Tour date field sessions.</b> The same date as its guide sees it: what guests recorded and sent, for the group and the date's guides only.</p><figure><img src='web-media/member/3e-tour-date-field-sessions.png'><figcaption>Tour date field sessions</figcaption></figure></div>
 </body></html>

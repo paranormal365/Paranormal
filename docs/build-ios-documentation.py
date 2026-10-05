@@ -34,6 +34,9 @@ if DEVICE not in ("iphone", "ipad"):
 DOCS = os.path.dirname(os.path.abspath(__file__))
 MEDIA = os.path.join(DOCS, "ios-media", DEVICE)
 DEVICE_NAME = "iPhone" if DEVICE == "iphone" else "iPad"
+import datetime, sys as _sys
+_sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+import site_doc_style  # the website's look (10/05/2026)
 SHELL = ("a <code>TabView</code> across the bottom" if DEVICE == "iphone"
          else "a <code>NavigationSplitView</code> sidebar down the left")
 OTHER = "iPad" if DEVICE == "iphone" else "iPhone"
@@ -522,19 +525,29 @@ th { background: #F4F7FC; }
 """
 
 
+# This document's own pieces, on top of the site's look.
+EXTRA = """
+.rule { background: var(--soft); border-left: 3px solid var(--accent); border-radius: 0 10px 10px 0; padding: .1in .16in; margin: 0 0 .12in; }
+.note { color: var(--muted); font-size: 9pt; }
+figure img { max-height: 6.6in; max-width: 3.4in; }
+"""
+
+
 def main():
     parts = [f"<!doctype html><html><head><meta charset='utf-8'>"
              f"<title>IsHaunted {DEVICE_NAME} — developer guide</title>"
-             f"<style>{CSS}</style></head><body>"]
-    parts.append(f"<h1>IsHaunted for {DEVICE_NAME}</h1>")
-    parts.append("<p class='sub'>What the app does, how it is built, and how to run it — "
-                 "written for a developer joining the project.</p>")
-    parts.append(
-        "<div class='cover'><p style='margin:0'><b>Every screenshot in this document shows "
-        "simulated data.</b> The accounts, cases, feed posts and recordings are seeded; the "
-        "photographs and audio waveforms are generated, and each is captioned "
-        "<span class='mono'>SIMULATED</span>. Nothing here is a real investigation or a real "
-        f"person. Screens were captured on {'an' if DEVICE_NAME[0] in 'AEIOUi' else 'a'} {DEVICE_NAME} simulator in dark mode.</p></div>")
+             f"<style>{site_doc_style.css(DOCS)}{EXTRA}</style></head><body>"]
+    shots_total = sum(1 for _, prefix, _ in SECTIONS if prefix and shot(prefix))
+    parts.append(site_doc_style.cover(
+        DOCS, kicker="Developer guide", title_html=f"IsHaunted for <span class='accent-text'>{DEVICE_NAME}</span>",
+        lede="What the app does, how it is built, and how to run it — written for a developer joining the project.",
+        photo="p2-holding-phone.jpg" if DEVICE == "iphone" else "p1-phone-camera.jpg",
+        facts=[("Device", DEVICE_NAME), ("Screens", str(shots_total)), ("Built", datetime.date.today().strftime("%m/%d/%Y"))],
+        about_html="<b>Every screenshot in this document shows simulated data.</b> The accounts, cases, feed posts and "
+                   "recordings are seeded; the photographs and audio waveforms are generated, and each is captioned "
+                   "<span class='mono'>SIMULATED</span>. Nothing here is a real investigation or a real person. Screens "
+                   f"were captured on {'an' if DEVICE_NAME[0] in 'AEIOUi' else 'a'} {DEVICE_NAME} simulator in dark mode.",
+        foot_right=f"{DEVICE_NAME} developer guide"))
 
     missing = []
     for heading, prefix, body in SECTIONS:

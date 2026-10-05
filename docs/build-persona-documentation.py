@@ -28,6 +28,9 @@ import subprocess
 import sys
 
 DOCS = os.path.dirname(os.path.abspath(__file__))
+import sys, datetime, html as html_lib
+sys.path.insert(0, DOCS)
+import site_doc_style  # the website's look (10/05/2026)
 CHROME = "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome"
 
 CSS = """
@@ -56,6 +59,14 @@ figcaption { color: #5A6679; font-size: 9pt; margin-top: 1.5mm; }
 table { border-collapse: collapse; width: 100%; margin: 3mm 0; font-size: 9.5pt; }
 th, td { border: 1px solid #E3E8F1; padding: 2mm 2.5mm; text-align: left; vertical-align: top; }
 th { background: #F4F7FC; }
+"""
+
+# This document's own pieces, on top of the site's look.
+EXTRA = """
+.cover { background: var(--surface); border: 1px solid var(--line); border-left: 3px solid var(--accent);
+         border-radius: 12px; padding: .14in .2in; margin: .1in 0 .2in; }
+.rule { background: var(--soft); border-left: 3px solid var(--accent); border-radius: 0 10px 10px 0; padding: .1in .16in; }
+figure img { max-height: 6.4in; }
 """
 
 # The rules every document repeats, because a reader of one will not read the others.
@@ -92,6 +103,7 @@ def figure(path, caption):
 
 PERSONAS = {
     "visitor": {
+        "photo": "i3-walking-to-house.jpg",
         "title": "The visitor",
         "who": "Somebody with no account, who arrived from a search or a link.",
         "intro": """
@@ -124,6 +136,7 @@ identity — which is where the refusals below come from.</p>
         },
     },
     "client": {
+        "photo": "v2-victorian-mansion.jpg",
         "title": "The client",
         "who": "Somebody who asked a group to investigate their home or business.",
         "intro": """
@@ -151,6 +164,7 @@ every render rather than depending on somebody having remembered to set a flag.<
         },
     },
     "member": {
+        "photo": "i2-dark-hallway.jpg",
         "title": "The ordinary member",
         "who": "Belongs to a group, holds no named role and no extra grants.",
         "intro": """
@@ -184,6 +198,7 @@ account for exactly this reason.</p>
         },
     },
     "viewer": {
+        "photo": "w2-cobblestone-night.jpg",
         "title": "The viewer",
         "who": "Belongs to a group, may look, changes nothing.",
         "intro": """
@@ -203,6 +218,7 @@ never works is worse than no button, because it invites a click and then refuses
         },
     },
     "owner": {
+        "photo": "v6-ballroom.jpg",
         "title": "The group owner and administrator",
         "who": "Runs a group: its people, its cases, its equipment and its bill.",
         "intro": """
@@ -236,6 +252,7 @@ documents for what the same page looks like without those grants.</p>
         },
     },
     "superadmin": {
+        "photo": "s3-candle-chandelier.jpg",
         "title": "The site administrator",
         "who": "Runs the platform itself. Passes every permission check, everywhere.",
         "intro": """
@@ -277,6 +294,7 @@ rather than requiring somebody to read the database.</p>
         },
     },
     "seller": {
+        "photo": "i1-flashlight-silhouette.jpg",
         "title": "The seller",
         "who": "A member who makes equipment and sells it through the store.",
         "intro": """
@@ -308,27 +326,28 @@ approved asking price per unit, by hand, against an append-only earnings ledger.
 def build(key):
     p = PERSONAS[key]
     parts = [f"<!doctype html><html><head><meta charset='utf-8'>"
-             f"<title>IsHaunted — {p['title']}</title><style>{CSS}</style></head><body>"]
-    parts.append(f"<h1>IsHaunted &mdash; {p['title']}</h1>")
-    parts.append(f"<p class='sub'>{p['who']} Written for a developer joining the project.</p>")
-    parts.append(
-        "<div class='cover'><p style='margin:0'><b>Every screenshot shows simulated, seeded "
-        "data</b>, captured in dark mode while signed in as this user type. Nothing here is a real "
-        "person, case or investigation. Where a page shows a refusal, that is the designed "
-        "behavior for this seat.</p></div>")
+             f"<title>IsHaunted — {p['title']}</title><style>{site_doc_style.css(DOCS)}{EXTRA}</style></head><body>"]
+    found = shots(key)
+    parts.append(site_doc_style.cover(
+        DOCS, kicker="The website, seat by seat", title_html=html_lib.escape(p['title']),
+        lede=f"{p['who']} Written for a developer joining the project.", photo=p.get("photo", "i2-dark-hallway.jpg"),
+        facts=[("Who", p['title'].replace("The ", "").capitalize()), ("Screens", str(len(found))),
+               ("Captured", datetime.date.today().strftime("%m/%d/%Y"))],
+        about_html="<b>Every screenshot shows simulated, seeded data</b>, captured in dark mode while signed in as "
+                   "this user type. Nothing here is a real person, case or investigation. Where a page shows a "
+                   "refusal, that is the designed behavior for this seat.",
+        foot_right="Website guide"))
     parts.append(p["intro"])
     parts.append(SHARED)
     parts.append("<h2>What this user sees, screen by screen</h2>")
 
-    found = shots(key)
     if not found:
         parts.append("<p><i>No screenshots captured for this user type.</i></p>")
     for path in found:
         stem = os.path.splitext(os.path.basename(path))[0]
         note = p["notes"].get(stem, "")
         heading = stem.split("-", 1)[1].replace("-", " ").capitalize()
-        parts.append(f"<p><b>{heading}.</b> {note}</p>")
-        parts.append(figure(path, heading))
+        parts.append(f"<div class='shot'><p><b>{heading}.</b> {note}</p>{figure(path, heading)}</div>")
 
     parts.append("</body></html>")
 
