@@ -20,7 +20,11 @@ editing video, laying out a public page) stays better on the website, and always
 It is free on the App Store: **[IsHaunted for iPhone and iPad](https://apps.apple.com/us/app/ishaunted/id6806786633)**.
 The same link is at the foot of every page on the website, and if you open the website in Safari
 on an iPhone or iPad, a banner at the top offers to open the app — or to get it, if you have not
-yet.
+yet. On a computer, the app's section near the foot of the [home page](/#the-app) has a QR code to
+point your iPhone's camera at.
+
+**[The app guide (PDF)](/guides/IsHaunted-App-Guide.pdf)** shows what the app does in six pages, on
+its own screens: Field Kit, marking and watching, playing a night back, and events and the door.
 
 ## What you need an account for — and what you don't
 
@@ -261,7 +265,7 @@ You can correct the wording before saving; a transcription is a machine's best g
 person who said it is the authority on what they said.
 
 If a device cannot turn speech into text without a connection, **the option is not offered at
-all**. A button that works in the car park and fails in the building would be worse than none.
+all**. A button that works in the parking lot and fails in the building would be worse than none.
 Typing is always available, and you can record the note **as audio** instead — sometimes what was
 said matters less than how it was said.
 

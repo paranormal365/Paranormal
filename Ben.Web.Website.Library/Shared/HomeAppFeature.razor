@@ -1,0 +1,90 @@
+@namespace Ben.Web.Website.Library.Shared
+@inject Microsoft.Extensions.Options.IOptions<Ben.Data.Common.SiteIdentity> SiteOptions
+
+@*
+    The iPhone and iPad app, as a feature of the home page (Ben, 10/05/2026: "include these on the
+    home page of the site with the link to the app in the app store ... images and information about
+    the app store app as a feature on that page"). Near the foot, with a link at the top that scrolls
+    here (#the-app, from HomeHero).
+
+    Apple's own artwork, used as Apple supplies it: the "Download on the App Store" badge, black on
+    the light page and white on the dark one, never recolored or put inside a button of ours; and the
+    QR code App Store Marketing Tools made for the app (https://apple.co/4y7fKo7, which opens
+    apps.apple.com/us/app/ishaunted/id6806786633). The icon is the one the store shows today.
+
+    The phones are the app's own screens from the iPhone guide's captures, not mock-ups. The event
+    pass is left out deliberately: its QR code is a real pass on the capture database, and pictured
+    passes are meant to be withdrawn ones.
+*@
+
+<section class="app-feature" id="the-app" data-testid="home-app">
+    <div class="app-feature__card">
+        <div class="app-feature__copy">
+            <div class="app-feature__store">
+                <img class="app-feature__icon" src="/static/images/app/app-icon.png" alt="IsHaunted app icon" width="64" height="64" />
+                <div>
+                    <div class="ben-kicker mb-0">IsHaunted for iPhone &amp; iPad</div>
+                    <div class="app-feature__meta">Free on the App Store · iOS 18 or later</div>
+                </div>
+            </div>
+
+            <h2 class="app-feature__title">Your phone is the <span class="ben-accent-text">instrument.</span></h2>
+            <p class="app-feature__lede">
+                Field Kit turns the iPhone in your pocket into a meter, a recorder and a camera that keep
+                the same clock, then puts the night on your group's case once you have signal again.
+            </p>
+
+            <ul class="app-feature__list">
+                @foreach (var f in Features)
+                {
+                    <li>
+                        <span class="app-feature__dot"><BenIcon Name="@f.Icon" /></span>
+                        <span><strong>@f.Title</strong> @f.Line</span>
+                    </li>
+                }
+            </ul>
+
+            <div class="app-feature__get">
+                <a class="app-feature__badge" href="@SiteOptions.Value.AppStoreUrl" target="_blank" rel="noopener"
+                   data-testid="home-app-store" aria-label="Download IsHaunted on the App Store">
+                    <img class="on-light" src="/static/images/app/app-store-badge-black.svg" alt="Download on the App Store" />
+                    <img class="on-dark" src="/static/images/app/app-store-badge-white.svg" alt="Download on the App Store" />
+                </a>
+                <div class="app-feature__qr">
+                    <img class="on-light" src="/static/images/app/app-store-qr-light.png" alt="QR code for IsHaunted on the App Store" width="96" height="96" />
+                    <img class="on-dark" src="/static/images/app/app-store-qr-dark.png" alt="QR code for IsHaunted on the App Store" width="96" height="96" />
+                    <span>On a computer?<br />Scan with your iPhone's camera.</span>
+                </div>
+            </div>
+
+            <div class="app-feature__more">
+                <a href="/help/the-mobile-apps">Everything the app does <BenIcon Name="arrow-right" /></a>
+                <a href="/guides/IsHaunted-App-Guide.pdf" target="_blank" rel="noopener" data-testid="home-app-guide">
+                    <BenIcon Name="file-text" /> The app guide (PDF)
+                </a>
+            </div>
+        </div>
+
+        <div class="app-feature__phones" aria-hidden="true">
+            <div class="app-phone app-phone--left"><img src="/static/images/app/phone-53-session-review.jpg" alt="" loading="lazy" /></div>
+            <div class="app-phone app-phone--right"><img src="/static/images/app/phone-47-evp-mode.jpg" alt="" loading="lazy" /></div>
+            <div class="app-phone app-phone--center"><img src="/static/images/app/phone-42b-meter-with-needle.jpg" alt="" loading="lazy" /></div>
+        </div>
+    </div>
+</section>
+
+@code {
+    private sealed record Feature(string Icon, string Title, string Line);
+
+    // What the help's "The mobile apps" article says the app does, said short. Each one is a real
+    // screen in the app today.
+    private static readonly Feature[] Features =
+    [
+        new("activity",  "A meter in your pocket.", "Magnetic field and sound against a base level you set in the room."),
+        new("mic",       "Ask, then wait.",         "EVP question and answer marks every question on the recording."),
+        new("eye",       "Leave it watching.",      "Set it down and it marks anything past your levels, screen dark."),
+        new("camera",    "Photos, notes, rooms.",   "Each one stamped with the moment and the room it came from."),
+        new("upload-cloud", "Straight to the case.", "It sends the session to your group when there's signal, and plays it back on a chart."),
+        new("credit-card", "Passes with no signal.",  "Event passes open in a cellar; helpers scan them at the door."),
+    ];
+}

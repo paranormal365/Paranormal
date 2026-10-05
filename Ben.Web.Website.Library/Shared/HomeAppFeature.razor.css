@@ -1,0 +1,153 @@
+/* The app feature on Home (10/05/2026). Signal tokens only, both modes. Apple's badge and QR code
+   are shown as supplied: the light versions on the light page, the dark versions on the dark one. */
+
+.app-feature {
+    width: 100%;
+    margin: 3rem 0 2rem;
+    /* The hero's "see the app" link scrolls here; clear the sticky header. */
+    scroll-margin-top: 6rem;
+}
+
+.app-feature__card {
+    position: relative;
+    display: grid;
+    grid-template-columns: minmax(0, 1.1fr) minmax(0, 1fr);
+    gap: 2rem;
+    align-items: center;
+    padding: 2.5rem 2.75rem;
+    border: 1px solid var(--ben-line);
+    border-radius: var(--ben-radius-lg);
+    overflow: hidden;
+    background:
+        var(--ben-accent-grad) top / 100% 4px no-repeat,
+        radial-gradient(70% 90% at 85% 40%, rgba(var(--ben-accent-rgb), .22), transparent 60%),
+        radial-gradient(60% 80% at 100% 100%, rgba(var(--ben-accent-2-rgb), .16), transparent 60%),
+        var(--ben-surface);
+    box-shadow: var(--ben-shadow-lg);
+}
+
+/* ── the words ─────────────────────────────────────────────────────────── */
+
+.app-feature__store { display: flex; align-items: center; gap: .9rem; margin-bottom: 1rem; }
+.app-feature__icon {
+    width: 64px;
+    height: 64px;
+    border-radius: 22%;
+    box-shadow: var(--ben-shadow);
+    flex: none;
+}
+.app-feature__meta { color: var(--ben-ink-muted); font-size: .88rem; margin-top: .15rem; }
+
+.app-feature__title {
+    font-size: clamp(2rem, 4vw, 3rem);
+    line-height: 1.04;
+    margin: 0 0 .75rem;
+    font-weight: var(--ben-display-weight);
+    letter-spacing: var(--ben-display-tracking);
+}
+.app-feature__lede { color: var(--ben-ink-muted); font-size: 1.05rem; line-height: 1.55; margin: 0 0 1.25rem; max-width: 38rem; }
+
+.app-feature__list {
+    list-style: none;
+    padding: 0;
+    margin: 0 0 1.5rem;
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: .75rem 1.25rem;
+}
+.app-feature__list li { display: flex; gap: .65rem; align-items: flex-start; font-size: .92rem; line-height: 1.4; color: var(--ben-ink-muted); }
+.app-feature__list strong { color: var(--ben-ink); font-weight: 650; }
+.app-feature__dot {
+    flex: none;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 2rem;
+    height: 2rem;
+    border-radius: 50%;
+    color: var(--ben-on-accent);
+    background-image: var(--ben-accent-grad);
+    box-shadow: var(--ben-glow);
+}
+.app-feature__dot ::deep .sa-icon { width: 1rem; height: 1rem; }
+
+/* ── getting it: Apple's badge and QR code ─────────────────────────────── */
+
+.app-feature__get { display: flex; align-items: center; gap: 1.5rem; flex-wrap: wrap; margin-bottom: 1.25rem; }
+
+/* Apple's minimum is 40px tall on screen; 52 reads as the call to action it is. */
+.app-feature__badge { display: inline-block; line-height: 0; border-radius: 9px; transition: transform .15s ease, box-shadow .15s ease; }
+.app-feature__badge img { height: 52px; width: auto; }
+.app-feature__badge:hover { transform: translateY(-2px); box-shadow: var(--ben-glow); }
+.app-feature__badge:focus-visible { outline: 2px solid var(--ben-accent); outline-offset: 3px; }
+
+.app-feature__qr { display: flex; align-items: center; gap: .75rem; color: var(--ben-ink-muted); font-size: .82rem; line-height: 1.35; }
+.app-feature__qr img { width: 96px; height: 96px; border-radius: .6rem; box-shadow: var(--ben-shadow-sm); }
+
+/* The light graphics on the light page, the dark ones on the dark page. */
+.on-dark { display: none; }
+[data-bs-theme="dark"] .on-dark { display: inline-block; }
+[data-bs-theme="dark"] .on-light { display: none; }
+
+.app-feature__more { display: flex; flex-wrap: wrap; gap: .5rem 1.5rem; }
+.app-feature__more a { display: inline-flex; align-items: center; gap: .35rem; color: var(--ben-link); font-weight: 650; text-decoration: none; }
+.app-feature__more a:hover { text-decoration: underline; }
+.app-feature__more ::deep .sa-icon { width: 1rem; height: 1rem; }
+
+/* ── the phones ────────────────────────────────────────────────────────── */
+
+.app-feature__phones {
+    position: relative;
+    height: 34rem;
+}
+.app-phone {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    width: 13.5rem;
+    aspect-ratio: 1206 / 2622;
+    padding: .45rem;
+    border-radius: 2.1rem;
+    background: #07090e;
+    box-shadow: 0 0 0 1px rgba(255, 255, 255, .10), 0 24px 60px rgba(0, 0, 0, .45);
+    transition: transform .35s ease;
+}
+.app-phone img {
+    display: block;
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    object-position: top;
+    border-radius: 1.7rem;
+}
+.app-phone--center {
+    z-index: 2;
+    transform: translate(-50%, -50%);
+    box-shadow: 0 0 0 1px rgba(255, 255, 255, .12), 0 30px 70px rgba(0, 0, 0, .5), var(--ben-glow);
+}
+.app-phone--left  { z-index: 1; transform: translate(-108%, -46%) rotate(-9deg) scale(.86); opacity: .92; }
+.app-phone--right { z-index: 1; transform: translate(8%, -46%) rotate(9deg) scale(.86); opacity: .92; }
+
+.app-feature__card:hover .app-phone--left  { transform: translate(-114%, -47%) rotate(-11deg) scale(.86); }
+.app-feature__card:hover .app-phone--right { transform: translate(14%, -47%) rotate(11deg) scale(.86); }
+
+@media (prefers-reduced-motion: reduce) {
+    .app-phone, .app-feature__badge { transition: none; }
+}
+
+/* ── narrower screens ──────────────────────────────────────────────────── */
+
+@media (max-width: 991.98px) {
+    .app-feature__card { grid-template-columns: 1fr; padding: 2rem 1.5rem; }
+    .app-feature__phones { height: 28rem; order: -1; }
+    .app-phone { width: 11rem; }
+}
+
+@media (max-width: 575.98px) {
+    .app-feature__list { grid-template-columns: 1fr; }
+    .app-feature__phones { height: 22rem; }
+    .app-phone { width: 8.75rem; border-radius: 1.5rem; padding: .3rem; }
+    .app-phone img { border-radius: 1.25rem; }
+    /* A phone does not need a QR code to reach the store: the badge is right there. */
+    .app-feature__qr { display: none; }
+}
