@@ -372,6 +372,72 @@ public sealed class HostedEventUncoveredEndpointTests
         Assert.False(profile.IsPublished);
     }
 
+    /// <summary>
+    /// A venue writes as much as it wants about its own building, and adds sections of its own (Ben, 2026-10-05:
+    /// "If they want to add text to the site for their location it should be okay ... make things editable for them").
+    /// </summary>
+    [Fact]
+    public async Task A_venue_writes_without_a_limit_and_adds_sections_of_its_own_in_its_order()
+    {
+        await using var sqlite = await SeedAsync();
+        VenueProfileController Venue() => new(sqlite.Factory, new Mock<AutoMapper.IMapper>().Object, Security().Object) { ControllerContext = As(HostId) };
+
+        // The story and the rules were capped at 8,000 and 4,000 characters.
+        var story = string.Concat(Enumerable.Repeat("The landing creaks at midnight. ", 700));
+        var rules = string.Concat(Enumerable.Repeat("No candles upstairs. ", 300));
+        Assert.True(story.Length > 20_000 && rules.Length > 6_000);
+
+        var saved = Assert.IsType<OkObjectResult>((await Venue().Save(OrgId, new SaveVenueProfileRequest(PlaceId, story, rules, 22, false,
+            [
+                new VenueSectionInput("Ghost Hunt Weekends", "Lodging, meals and an all-night hunt, once a month."),
+                new VenueSectionInput("  ", "  "),                                 // a blank row somebody added and left
+                new VenueSectionInput("Dining", "Supper in the dining room, with a stage for performers."),
+            ]), default)).Result);
+        var profile = Assert.Single(Assert.IsAssignableFrom<IReadOnlyList<VenueProfileRecord>>(saved.Value));
+        Assert.Equal(story.Trim(), profile.History);
+        Assert.Equal(["Ghost Hunt Weekends", "Dining"], profile.Sections!.Select(x => x.Title));
+
+        // Saving the list again is the list: reordered, one removed, one added.
+        await Venue().Save(OrgId, new SaveVenueProfileRequest(PlaceId, story, rules, 22, false,
+            [new VenueSectionInput("Dining", "Supper at seven."), new VenueSectionInput("The chapel", "Across the lawn.")]), default);
+        // Leaving the list out leaves the sections alone.
+        await Venue().Save(OrgId, new SaveVenueProfileRequest(PlaceId, story, rules, 22, false), default);
+
+        await using (var db = await sqlite.NewContextAsync())
+        {
+            var rows = await db.VenueSections.OrderBy(x => x.SortOrder).ToListAsync();
+            Assert.Equal(["Dining", "The chapel"], rows.Select(x => x.Title));
+            Assert.Equal("Supper at seven.", rows[0].Body);
+
+            // What a visitor reads, once the page is the venue's and published.
+            var venue = await db.OrganizationVenueProfiles.SingleAsync();
+            venue.VerifiedUtc = DateTime.UtcNow;
+            venue.IsPublished = true;
+            await db.SaveChangesAsync();
+        }
+
+        await using var read = await sqlite.NewContextAsync();
+        var urlName = (await read.Organizations.SingleAsync(o => o.Id == OrgId)).UrlName!;
+        var page = Assert.IsType<PublicVenueRecord>(Assert.IsType<OkObjectResult>(
+            (await new PublicVenueController(sqlite.Factory).Get(urlName, PlaceId, default)).Result).Value);
+        Assert.Equal(["Dining", "The chapel"], page.Sections!.Select(x => x.Title));
+        Assert.Equal(rules.Trim(), page.HouseRules);
+    }
+
+    [Fact]
+    public async Task A_section_with_words_needs_a_heading()
+    {
+        await using var sqlite = await SeedAsync();
+        var venue = new VenueProfileController(sqlite.Factory, new Mock<AutoMapper.IMapper>().Object, Security().Object) { ControllerContext = As(HostId) };
+
+        var refusal = Assert.IsType<BadRequestObjectResult>((await venue.Save(OrgId, new SaveVenueProfileRequest(PlaceId, null, null, null, false,
+            [new VenueSectionInput("", "Words with nowhere to go.")]), default)).Result);
+        Assert.Contains("heading", refusal.Value as string);
+
+        await using var db = await sqlite.NewContextAsync();
+        Assert.Empty(await db.VenueSections.ToListAsync());
+    }
+
     [Fact]
     public async Task A_guests_contact_details_prefill_with_their_listed_phone_before_the_account_one()
     {

@@ -109,7 +109,9 @@
                         </div>
 
                         <div class="d-flex flex-wrap gap-2 mt-3">
-                            <button type="button" class="btn btn-primary" id="@($"approve-{r.Id:N}")"
+                            @* Wraps: "Say yes to Thu 11/19/2026 – Fri 11/20/2026" is wider than the card on a phone,
+                               and a button that runs out of its card is cut off by it (found 10/05/2026). *@
+                            <button type="button" class="btn btn-primary text-wrap text-start mw-100" id="@($"approve-{r.Id:N}")"
                                     disabled="@_busy" @onclick="() => ApproveAsync(r)">
                                 Say yes to @Nights(r)
                             </button>

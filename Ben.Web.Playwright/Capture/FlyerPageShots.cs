@@ -70,6 +70,28 @@ public sealed class FlyerPageShots : BenTestBase
         await BothWidthsAsync("45-public-event", null, "/o/paranormal365/events/thomas-house-seance-weekend", "[data-testid=event-hero]");
     }
 
+    /// <summary>
+    /// One venue's own page, for a flyer prepared for that venue (10/05/2026: The Thomas House).
+    /// </summary>
+    /// <remarks>
+    /// Run with <c>BEN_FLYER_VENUE=&lt;org url name&gt;/&lt;place id&gt;</c> and an absolute
+    /// <c>BEN_FLYER_OUT</c>; it writes <c>venue.png</c> and <c>venue-phone.png</c> there and nothing into the
+    /// shared walk folder, so the generic flyers keep the demo's pages.
+    /// </remarks>
+    [Test]
+    public async Task Photograph_one_venue_for_its_own_flyer()
+    {
+        var venue = Environment.GetEnvironmentVariable("BEN_FLYER_VENUE");
+        var output = Environment.GetEnvironmentVariable("BEN_FLYER_OUT");
+        if (string.IsNullOrWhiteSpace(venue) || string.IsNullOrWhiteSpace(output) || !Path.IsPathRooted(output))
+            Assert.Ignore("Set BEN_FLYER_VENUE=<org url name>/<place id> and an absolute BEN_FLYER_OUT.");
+        Directory.CreateDirectory(output!);
+
+        await LogoutAsync();
+        var parts = venue!.Split('/');
+        await BothWidthsAsync("venue", "venue-phone", $"/o/{parts[0]}/venues/{parts[1]}", "#venue-title", output);
+    }
+
     [Test]
     public async Task Photograph_an_organizer_writing_to_their_guests()
     {
@@ -99,12 +121,13 @@ public sealed class FlyerPageShots : BenTestBase
 
     // ── photographing ────────────────────────────────────────────────────────
 
-    private async Task BothWidthsAsync(string desktopName, string? phoneName, string route, string subject)
+    private async Task BothWidthsAsync(string desktopName, string? phoneName, string route, string subject, string? folder = null)
     {
+        folder ??= Folder();
         await GoAsync(route);
         await Expect(Page.Locator(subject).First).ToBeVisibleAsync(new() { Timeout = 30_000 });
         await SettledAsync();
-        await Page.ScreenshotAsync(new() { Path = Path.Combine(Folder(), desktopName + ".png") });
+        await Page.ScreenshotAsync(new() { Path = Path.Combine(folder, desktopName + ".png") });
 
         if (phoneName is null) return;
         await Page.SetViewportSizeAsync(390, 844);
@@ -113,7 +136,7 @@ public sealed class FlyerPageShots : BenTestBase
             await GoAsync(route);
             await Expect(Page.Locator(subject).First).ToBeVisibleAsync(new() { Timeout = 30_000 });
             await SettledAsync();
-            await Page.ScreenshotAsync(new() { Path = Path.Combine(Folder(), phoneName + ".png") });
+            await Page.ScreenshotAsync(new() { Path = Path.Combine(folder, phoneName + ".png") });
         }
         finally { await Page.SetViewportSizeAsync(Wide, Tall); }
     }

@@ -58,7 +58,6 @@ public sealed class VenuePhotoController : OrgCmsControllerBase
 
         await using var db = await DbFactory.CreateDbContextAsync(ct);
         if (!await OwnsAsync(db, orgId, profileId, ct)) return NotFound();
-        if (await WhyFullAsync(db, profileId, ct) is { } full) return BadRequest(full);
 
         var (picture, unreadable) = await PictureFitting.FitAsync(file, _images, ct);
         if (picture is null) return BadRequest(unreadable);
@@ -105,12 +104,10 @@ public sealed class VenuePhotoController : OrgCmsControllerBase
     /// <summary>Keeps a picture an organizer offered: it joins the library and the public page.</summary>
     [HttpPost("{photoId:guid}/accept")]
     public async Task<ActionResult<IReadOnlyList<VenuePhotoRecord>>> Accept(Guid orgId, Guid profileId, Guid photoId, CancellationToken ct)
-        => await ChangeAsync(orgId, profileId, photoId, async (photo, now) =>
+        => await ChangeAsync(orgId, profileId, photoId, (photo, now) =>
         {
-            await using var db = await DbFactory.CreateDbContextAsync(ct);
-            if (photo.AcceptedUtc is null && await WhyFullAsync(db, profileId, ct) is { } full) return full;
             photo.AcceptedUtc ??= now;
-            return null;
+            return Task.FromResult<string?>(null);
         }, ct);
 
     /// <summary>
@@ -176,11 +173,6 @@ public sealed class VenuePhotoController : OrgCmsControllerBase
 
     private static Task<bool> OwnsAsync(BenDataContext db, Guid orgId, Guid profileId, CancellationToken ct)
         => db.OrganizationVenueProfiles.AnyAsync(p => p.Id == profileId && p.OrganizationId == orgId, ct);
-
-    internal static async Task<string?> WhyFullAsync(BenDataContext db, Guid profileId, CancellationToken ct)
-        => await db.VenuePhotos.CountAsync(p => p.OrganizationVenueProfileId == profileId && p.AcceptedUtc != null, ct) >= VenuePhoto.MaxPerVenue
-            ? $"A venue's library holds up to {VenuePhoto.MaxPerVenue} pictures. Remove one to make room."
-            : null;
 
     private static async Task<int> NextSortAsync(BenDataContext db, Guid profileId, CancellationToken ct)
         => (await db.VenuePhotos.Where(p => p.OrganizationVenueProfileId == profileId).Select(p => (int?)p.SortOrder).MaxAsync(ct) ?? -1) + 1;

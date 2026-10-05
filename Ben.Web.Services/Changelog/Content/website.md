@@ -34,6 +34,9 @@ day-by-day account of building it would say nothing to anyone using it now.
   and the apps as they are today.
 - The help no longer says the iPhone and iPad app is waiting for Apple's review; it is on the App
   Store, and the help shows the home page's section for it.
+- Venues can keep as many photos as they like on their venue page, write as much as they want about
+  their building and house rules, and add sections of their own — ghost hunt weekends, dining, shows —
+  in the order they choose.
 
 ## 2026-10-02 · 2.14.0
 

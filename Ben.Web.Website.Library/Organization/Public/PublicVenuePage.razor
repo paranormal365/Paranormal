@@ -65,6 +65,23 @@
             </div>
         }
 
+        @* The venue's own sections, in its order (2026-10-05). *@
+        @if (v.Sections is { Count: > 0 } sections)
+        {
+            <div id="venue-sections">
+                @foreach (var section in sections)
+                {
+                    <div class="card mb-3 venue-section">
+                        <div class="card-header fw-semibold">@section.Title</div>
+                        @if (section.Body is { Length: > 0 })
+                        {
+                            <div class="card-body" style="white-space:pre-line;">@section.Body</div>
+                        }
+                    </div>
+                }
+            </div>
+        }
+
         @if (v.Photos is { Count: > 0 } photos)
         {
             @* The pictures the venue chose to keep (item 235 phase 12). *@

@@ -30,6 +30,8 @@ belongs there; this is for the part underneath.
   can say when an update is waiting.
 - A venue's letter about a new request with no room chosen yet says the party asked for a place; it
   used to read "asked for Waiting to be placed".
+- A venue's photo library and its writing have no limit, and a venue page can carry sections of the
+  venue's own.
 
 ## 2026-09-29 · 2.8.1
 

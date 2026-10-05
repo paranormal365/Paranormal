@@ -3405,14 +3405,24 @@ public sealed class HelpMediaCapture : BenTestBase
             await ShootAsync("organization-administration", "event-venue-yes.png",
                 gated: true, selector: "#event-venue", proves: "They said yes to");
 
-            await LoginAsync(SuperAdminEmail, SuperAdminPassword);
-            await GoAsync($"/organizations/{venueOrgId}/venue");
-            await ShootAsync("organization-administration", "venue-profile.png",
-                gated: true, selector: ".venue-profile", proves: "Confirmed as the venue");
+            // The venue's own sections (2026-10-05), so both pictures show what a venue may add beyond its story.
+            await AddVenueSectionsAsync(venueOrgId, thomasHouse);
 
-            await GoAsync($"/o/paranormal365/venues/{thomasHouse}");
-            await ShootAsync("organization-administration", "venue-page.png",
-                gated: true, selector: "#venue-summary", proves: "The building");
+            // A taller window for these two: with the sections both are longer than 900px, and what lay below the
+            // fold came out blank (10/05/2026).
+            await LoginAsync(SuperAdminEmail, SuperAdminPassword);
+            await Page.SetViewportSizeAsync(DesktopWidth, 2000);
+            try
+            {
+                await GoAsync($"/organizations/{venueOrgId}/venue");
+                await ShootAsync("organization-administration", "venue-profile.png",
+                    gated: true, selector: ".venue-profile", proves: "Your own sections");
+
+                await GoAsync($"/o/paranormal365/venues/{thomasHouse}");
+                await ShootAsync("organization-administration", "venue-page.png",
+                    gated: true, selector: "#venue-summary", proves: "Ghost hunt weekends");
+            }
+            finally { await Page.SetViewportSizeAsync(DesktopWidth, DesktopHeight); }
         }
         finally
         {
@@ -3422,6 +3432,43 @@ public sealed class HelpMediaCapture : BenTestBase
             await admin.DisposeAsync();
             await organizer.DisposeAsync();
         }
+    }
+
+    /// <summary>
+    /// Gives the demo venue two sections of its own, keeping everything else it says as it is.
+    /// </summary>
+    private async Task AddVenueSectionsAsync(string venueOrgId, string placeId)
+    {
+        var admin = await SignedInApiAsync(SuperAdminEmail, SuperAdminPassword);
+        try
+        {
+            var list = await admin.GetAsync($"/api/organizations/{venueOrgId}/venue-profiles");
+            Assert.That(list.Ok, Is.True, await list.TextAsync());
+            var profile = (await list.JsonAsync())!.Value.EnumerateArray()
+                .Single(p => p.GetProperty("placeId").GetString() == placeId);
+            string? Text(string name) => profile.GetProperty(name).ValueKind == System.Text.Json.JsonValueKind.Null
+                ? null : profile.GetProperty(name).GetString();
+
+            var saved = await admin.PutAsync($"/api/organizations/{venueOrgId}/venue-profiles", new()
+            {
+                DataObject = new
+                {
+                    placeId,
+                    history = Text("history"),
+                    houseRules = Text("houseRules"),
+                    maxOvernightGuests = profile.GetProperty("maxOvernightGuests").ValueKind == System.Text.Json.JsonValueKind.Null
+                        ? (int?)null : profile.GetProperty("maxOvernightGuests").GetInt32(),
+                    isPublished = profile.GetProperty("isPublished").GetBoolean(),
+                    sections = new[]
+                    {
+                        new { title = "Ghost hunt weekends", body = "Two nights, supper in the dining room, and a lights-out hunt with the investigators on the Saturday." },
+                        new { title = "Getting here", body = "Park behind the building, not on Main Street.\nThe front door is under the arches, past the fountain." },
+                    },
+                },
+            });
+            Assert.That(saved.Ok, Is.True, await saved.TextAsync());
+        }
+        finally { await admin.DisposeAsync(); }
     }
 
     /// <summary>A place's contact details, claiming it, and the reviewer's queue (item 235 phase 9).</summary>

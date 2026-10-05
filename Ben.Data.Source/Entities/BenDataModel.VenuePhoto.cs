@@ -16,10 +16,12 @@ namespace Ben.Data.Source.Entities
     /// <para><b>An offered picture is the organizer's file, referenced, not copied.</b> While the venue keeps it the
     /// file survives the event's 90-day tidy-up, because nothing deletes a file something still points at.</para>
     /// </remarks>
+    ///
+    /// <para><b>No limit on how many</b> (Ben, 2026-10-05: "For venue or property owners, there is no limit on
+    /// their photos and items uploaded to display"). The library once stopped at 60; each picture is still fitted
+    /// to 1920×1080 on the way in, which is what keeps the page quick.</para>
     public class VenuePhoto : IAuditableEntity
     {
-        public const int MaxPerVenue = 60;
-
         public Guid Id { get; set; }
         public Guid OrganizationVenueProfileId { get; set; }
         public Guid UploadFileId { get; set; }

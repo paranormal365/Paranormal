@@ -1686,6 +1686,13 @@ how many may stay — and, once you are confirmed as the venue, show the page to
 your public rooms and everything on at the place, whoever runs it, and the place's own page links
 to it.
 
+**Write as much as you like, and add your own sections.** There is no limit on how long the story or
+the house rules are. Under them, **Add a section** gives you a heading and as much text as you need —
+ghost hunt weekends, dining, shows, the chapel, how to find you. Add as many as you want, put them in
+order with the arrows, and remove one with the trash can. They appear on your venue page under their own
+headings, in that order, after the building's story. A section needs a heading; an empty one is left
+out when you save.
+
 ![A venue's page](help-media:organization-administration/venue-page.png)
 
 **Describing a place does not make you its venue.** Any group may write about a hall it rents every
@@ -1695,8 +1702,8 @@ itself a claim to be the building.
 
 ![Describing a place you run](help-media:organization-administration/venue-profile.png)
 
-**Photos of the venue.** Under each place you run, *Photos of the venue* keeps pictures of the building.
-Pictures you add are kept straight away. Organizers holding events at your venue can offer pictures from
+**Photos of the venue.** Under each place you run, *Photos of the venue* keeps pictures of the building —
+as many as you want; there is no limit. Pictures you add are kept straight away. Organizers holding events at your venue can offer pictures from
 their event's gallery with **Offer to venue**; an offer waits for you to press *Keep it* or *No thanks*.
 Kept pictures show on your published venue page, fitted and with their location removed. Declining an
 offer never takes the picture away from the organizer's gallery, and a picture you keep stays in your

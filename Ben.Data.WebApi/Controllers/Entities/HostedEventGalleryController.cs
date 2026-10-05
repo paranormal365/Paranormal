@@ -147,7 +147,6 @@ public sealed class HostedEventGalleryController : OrgCmsControllerBase
         if (!await db.VenuePhotos.AnyAsync(p => p.OrganizationVenueProfileId == profile.Id && p.UploadFileId == image.UploadFileId, ct))
         {
             var ours = profile.OrganizationId == orgId;
-            if (ours && await VenuePhotoController.WhyFullAsync(db, profile.Id, ct) is { } full) return BadRequest(full);
 
             var now = DateTime.UtcNow;
             db.VenuePhotos.Add(new VenuePhoto
