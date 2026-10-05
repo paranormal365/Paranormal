@@ -1,0 +1,138 @@
+/* The ad on Home (10/05/2026). Signal tokens only, both modes. The frame itself stays dark in either
+   mode: it is a video, and the badge sits on the picture, not on the page. */
+
+.ad-player {
+    width: 100%;
+    margin: 1rem 0 3rem;
+}
+
+/* The same card the app feature sits in: rule on the top edge, a purple and cyan glow, the surface. */
+.ad-player__card {
+    position: relative;
+    padding: 2.5rem 2.75rem 2.75rem;
+    border: 1px solid var(--ben-line);
+    border-radius: var(--ben-radius-lg);
+    overflow: hidden;
+    background:
+        var(--ben-accent-grad) top / 100% 4px no-repeat,
+        radial-gradient(60% 70% at 15% 0%, rgba(var(--ben-accent-rgb), .22), transparent 60%),
+        radial-gradient(55% 70% at 100% 100%, rgba(var(--ben-accent-2-rgb), .14), transparent 60%),
+        var(--ben-surface);
+    box-shadow: var(--ben-shadow-lg);
+}
+
+.ad-player__title {
+    font-size: clamp(2rem, 4vw, 3rem);
+    line-height: 1.04;
+    margin: 0 0 .75rem;
+    font-weight: var(--ben-display-weight);
+    letter-spacing: var(--ben-display-tracking);
+}
+.ad-player__lede { color: var(--ben-ink-muted); font-size: 1.05rem; line-height: 1.55; margin: 0 0 1.75rem; max-width: 38rem; }
+
+.ad-player__frame {
+    position: relative;
+    aspect-ratio: 16 / 9;
+    border: 1px solid rgba(var(--ben-accent-rgb), .35);
+    border-radius: var(--ben-radius-lg);
+    overflow: hidden;
+    background: #0C1017;
+    /* the purple glow: a lift, then the accent haze around the picture */
+    box-shadow:
+        var(--ben-shadow),
+        0 0 0 1px rgba(var(--ben-accent-rgb), .12),
+        0 12px 48px rgba(var(--ben-accent-rgb), .35),
+        0 0 90px rgba(var(--ben-accent-rgb), .18);
+    cursor: pointer;
+    isolation: isolate;
+    transition: box-shadow .3s ease;
+}
+@media (hover: hover) {
+    .ad-player__frame:hover {
+        box-shadow:
+            var(--ben-shadow),
+            0 0 0 1px rgba(var(--ben-accent-rgb), .25),
+            0 14px 56px rgba(var(--ben-accent-rgb), .5),
+            0 0 120px rgba(var(--ben-accent-rgb), .26);
+    }
+}
+.ad-player__frame:focus-visible {
+    outline: var(--bs-focus-ring-width, 3px) solid var(--bs-focus-ring-color, rgba(var(--ben-accent-rgb), .35));
+    outline-offset: 3px;
+}
+
+.ad-player__video {
+    display: block;
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+}
+
+/* ── the badge: what a click or tap will do ─────────────────────────────── */
+.ad-player__hint {
+    position: absolute;
+    left: 1rem;
+    bottom: 1rem;
+    z-index: 2;
+    display: inline-flex;
+    align-items: center;
+    gap: .45rem;
+    padding: .45rem .85rem;
+    border-radius: var(--ben-radius-pill);
+    background: rgba(9, 13, 19, .72);
+    color: #E9EDF4;
+    font-size: .875rem;
+    font-weight: 650;
+    line-height: 1;
+    -webkit-backdrop-filter: blur(6px);
+    backdrop-filter: blur(6px);
+    pointer-events: none;
+    transition: opacity .25s ease, transform .25s ease;
+}
+.ad-player__hint ::deep .sa-icon { width: 1rem; height: 1rem; }
+.ad-player__frame ::deep .ad-player__ico--on { display: none; }
+.ad-player__frame[data-sound="on"] ::deep .ad-player__ico--on { display: inline-block; color: #22D3EE; }
+.ad-player__frame[data-sound="on"] ::deep .ad-player__ico--off { display: none; }
+
+/* with sound on and the pointer over it, the badge steps back so the picture is the thing */
+@media (hover: hover) {
+    .ad-player__frame[data-sound="on"]:hover .ad-player__hint { opacity: .55; }
+}
+
+/* ── paused: the play button ────────────────────────────────────────────── */
+.ad-player__play {
+    position: absolute;
+    inset: 50% auto auto 50%;
+    z-index: 2;
+    width: 5rem;
+    height: 5rem;
+    margin: -2.5rem 0 0 -2.5rem;
+    display: grid;
+    place-items: center;
+    border-radius: 50%;
+    background: var(--ben-accent-grad);
+    color: #fff;
+    box-shadow: var(--ben-glow);
+    opacity: 0;
+    transform: scale(.85);
+    pointer-events: none;
+    transition: opacity .2s ease, transform .2s ease;
+}
+.ad-player__play ::deep .sa-icon { width: 2rem; height: 2rem; margin-left: .25rem; }
+.ad-player__frame[data-paused="true"] .ad-player__play { opacity: 1; transform: none; }
+.ad-player__frame[data-paused="true"] .ad-player__video { filter: brightness(.7); }
+
+@media (prefers-reduced-motion: reduce) {
+    .ad-player__hint, .ad-player__play, .ad-player__frame { transition: none; }
+}
+
+@media (max-width: 991.98px) {
+    .ad-player__card { padding: 2rem 1.5rem 2.25rem; }
+}
+
+@media (max-width: 575.98px) {
+    .ad-player__card { padding: 1.5rem 1rem 1.75rem; }
+    .ad-player__frame { border-radius: var(--ben-radius); }
+    .ad-player__hint { left: .6rem; bottom: .6rem; font-size: .8rem; padding: .4rem .7rem; }
+    .ad-player__play { width: 4rem; height: 4rem; margin: -2rem 0 0 -2rem; }
+}
