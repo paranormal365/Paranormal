@@ -130,7 +130,7 @@ internal static class StoreDemoSeeder
             "The standard radio-sweep box, at the speed you choose.",
             "<p>Sweeps AM or FM at an adjustable rate, with a line out for a speaker or a recorder.</p>",
             featured: false, newUntil: null, active: true,
-            options: [new("Colour", StoreOptionKind.Swatch, [("Black", "#1b1b1b"), ("Camo", "#5b6b3a")])],
+            options: [new("Color", StoreOptionKind.Swatch, [("Black", "#1b1b1b"), ("Camo", "#5b6b3a")])],
             variants: [new("PSB7-BLACK", ["Black"], 79.99m, null, 8, Default: true), new("PSB7-CAMO", ["Camo"], 84.99m, null, 0, Default: false, OwnPicture: true)],
             specs: [("Radio", "Bands", "AM and FM"), ("Radio", "Sweep", "50–350 ms")]);
 
@@ -139,8 +139,8 @@ internal static class StoreDemoSeeder
             "Stereo recorder small enough to leave running on a shelf.",
             "<p>Records to microSD at up to 96 kHz, with a one-touch start and a low-cut filter for rooms with a hum.</p>",
             featured: false, newUntil: null, active: true,
-            options: [new("Colour", StoreOptionKind.Swatch, [("Black", "#1b1b1b"), ("Grey", "#8a8f94")])],
-            variants: [new("H1N-BLACK", ["Black"], 99.99m, null, 5, Default: true), new("H1N-GREY", ["Grey"], 99.99m, null, 3, Default: false)],
+            options: [new("Color", StoreOptionKind.Swatch, [("Black", "#1b1b1b"), ("Gray", "#8a8f94")])],
+            variants: [new("H1N-BLACK", ["Black"], 99.99m, null, 5, Default: true), new("H1N-GREY", ["Gray"], 99.99m, null, 3, Default: false)],
             specs: [("Recording", "Formats", "WAV up to 96 kHz / 24-bit, MP3")]);
 
         // ── Boo Buddy: exists, but hidden ────────────────────────────────────
@@ -157,7 +157,7 @@ internal static class StoreDemoSeeder
             "A padded shoulder bag with room for a meter, a recorder and a night's batteries.",
             "<p>Padded dividers, a water-resistant base and a pocket that fits a phone in a glove.</p>",
             featured: false, newUntil: null, active: true,
-            options: [new("Colour", StoreOptionKind.Swatch, [("Black", "#1b1b1b"), ("Olive", "#556b2f")]), new("Size", StoreOptionKind.Pill, [("Standard", null), ("Large", null)])],
+            options: [new("Color", StoreOptionKind.Swatch, [("Black", "#1b1b1b"), ("Olive", "#556b2f")]), new("Size", StoreOptionKind.Pill, [("Standard", null), ("Large", null)])],
             variants:
             [
                 new("BAG-BLK-STD", ["Black", "Standard"], 39m, null, 20, Default: true),

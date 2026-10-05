@@ -22,6 +22,18 @@ to the property.
 Nothing about a case is public unless the group publishes it, and even then the client's name is
 replaced by whatever name they chose.
 
+## The iPhone and iPad app
+
+![The app's section near the foot of the home page](/help/media/getting-started/home-app.png)
+*Near the foot of the home page: the App Store badge, a QR code to scan from a computer, and the
+app's own screens.*
+
+IsHaunted is also an app for iPhone and iPad, free on the App Store. **Field Kit for iPhone & iPad**
+at the top of the home page jumps to its section near the foot, where the badge opens the App Store
+and the QR code does the same from your phone's camera when you are on a computer. Field Kit turns
+the phone into a meter, a recorder and a camera that keep the same clock, then sends the night to
+your group's case. [The iPhone and iPad Apps](/help/the-mobile-apps) explains everything it does.
+
 ## Who does what
 
 | You are | You can |

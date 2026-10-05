@@ -191,13 +191,13 @@ public sealed class HostedEventAnnouncementTests
 
         var result = Assert.IsType<HostedEventAnnouncementsRecord>(Assert.IsType<OkObjectResult>(
             (await Controller(sqlite, HostId, email.Object).Send(OrgId, EventId,
-                new SendHostedEventAnnouncementRequest("Doors at eight", "Bring a torch <b>and</b> a coat.\nThe lift is out.", FridayId, false), default)).Result).Value);
+                new SendHostedEventAnnouncementRequest("Doors at eight", "Bring a flashlight <b>and</b> a coat.\nThe elevator is out.", FridayId, false), default)).Result).Value);
 
         Assert.Equal(2, sent.Count);
         Assert.All(sent, m => Assert.Equal("Seance Weekend: Doors at eight", m.Subject));
         Assert.All(sent, m => Assert.Equal("desk@thomas.test", m.ReplyTo));
         var fay = Assert.Single(sent, m => m.HtmlBody.Contains("Fay &lt;Friday&gt;"));
-        Assert.Contains("Bring a torch &lt;b&gt;and&lt;/b&gt; a coat.<br />The lift is out.", fay.HtmlBody);
+        Assert.Contains("Bring a flashlight &lt;b&gt;and&lt;/b&gt; a coat.<br />The elevator is out.", fay.HtmlBody);
         Assert.Contains("because you have a place at", fay.HtmlBody);
         Assert.Equal(2, Assert.Single(result.Letters).Emailed);
     }

@@ -166,6 +166,17 @@ no-op over a restored session — a whole capture once came out as a different p
 without a word about it. The test now signs that session out and asks again, and fails loudly if
 the account it ends up in is not the one it was told to use.
 
+**Order matters, and the website captures go first (learned 10/05/2026).** The website's help
+capture releases the demo guest's hosted-event booking and clears the feed, so after it: give the
+guest a confirmed booking with an issued pass again (`HostedEventBookingController` confirm, then
+pass), post a note and a photo to the event's room as that guest (the help captions it "with a photo
+posted from the phone"), and run `StoreShotsArrange` for the feed. On an iPhone the new-session form
+builds its rows lazily, so "Open the session" does not exist until the form is scrolled to it — the
+capture now scrolls until it exists. The group-session notification frame is delivered with
+`xcrun simctl push` carrying exactly the title, body and link `FieldLaunchService` sends, because a
+real sandbox push the API reported as delivered never surfaced on the simulator; uninstall the
+`…uitests.xctrunner` app first or its icon sits on the home screen in the picture.
+
 Set the simulator to dark first: `xcrun simctl ui <udid> appearance dark`. The website captures
 force dark by emulating `prefers-color-scheme`, which is the path `ben-boot.js` already falls back
 to — the site choosing dark for itself rather than a test writing a stored preference.
@@ -253,6 +264,11 @@ BEN_CAPTURE_WALK=1 BEN_MAIL_CATCHER_DIR=<catcher folder> dotnet test Ben.Web.Pla
 ```
 
 Photograph the letters with headless Chrome at 720 px wide.
+
+**The organizer's "somebody asked" letter** is written by `EventBookingAlertJob` on its next pass
+and only when mail is configured, so it never reaches the outbox the other letters are read from:
+run the stack with `Smtp__Host=127.0.0.1 Smtp__Port=2525 Smtp__UseSsl=false Smtp__User=` and the
+catcher, have a guest without a booking ask for a place, and it arrives within a few minutes.
 
 **Then reissue the demo guest's pass.** Every pictured QR code must be a withdrawn one, because this
 repository is public.

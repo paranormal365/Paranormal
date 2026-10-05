@@ -534,6 +534,12 @@ public sealed class HelpMediaCapture : BenTestBase
         await Page.WaitForTimeoutAsync(4_000);
         await ShootAsync("getting-started", "public-map.png", selector: ".ben-map");
 
+        // The app's section near the foot of the home page (10/05/2026): Apple's badge, the QR
+        // code and the app's own screens, which the hero's pill scrolls to.
+        await Page.Locator("#the-app").ScrollIntoViewIfNeededAsync();
+        await Page.WaitForTimeoutAsync(800);
+        await ShootAsync("getting-started", "home-app.png", selector: "#the-app", proves: "Your phone is the");
+
         await GoAsync("/find");
         await ShootAsync("getting-started", "find-groups.png");
 

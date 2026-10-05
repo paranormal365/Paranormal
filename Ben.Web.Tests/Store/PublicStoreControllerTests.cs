@@ -83,15 +83,15 @@ public sealed class PublicStoreControllerTests : IAsyncLifetime
     [Fact]
     public async Task Filters_narrow_the_listing_and_the_counts_describe_the_shelf()
     {
-        Assert.Equal(["investigators-field-bag"], (await ListAsync("?opt=Colour:Olive")).Products.Select(p => p.Slug));
+        Assert.Equal(["investigators-field-bag"], (await ListAsync("?opt=Color:Olive")).Products.Select(p => p.Slug));
         Assert.Equal(["h1n-handy-recorder", "investigators-field-bag"],
-            (await ListAsync("?opt=Colour:Olive&opt=Colour:Grey")).Products.Select(p => p.Slug).Order());
-        Assert.Empty((await ListAsync("?opt=Colour:Olive&opt=Size:Tiny")).Products);
+            (await ListAsync("?opt=Color:Olive&opt=Color:Gray")).Products.Select(p => p.Slug).Order());
+        Assert.Empty((await ListAsync("?opt=Color:Olive&opt=Size:Tiny")).Products);
 
         var band = await ListAsync("?price=50-100");
         Assert.Equal(["h1n-handy-recorder", "k-ii-emf-meter", "p-sb7-spirit-box"], band.Products.Select(p => p.Slug).Order());
 
-        var colour = band.Facets.Options.Single(o => o.Name == "Colour");
+        var colour = band.Facets.Options.Single(o => o.Name == "Color");
         Assert.Equal(3, colour.Values.Single(v => v.Label == "Black").Count);
         Assert.Equal("#556b2f", colour.Values.Single(v => v.Label == "Olive").SwatchHex);
         Assert.Contains(band.Facets.PriceBands, b => b.Key == "under-25" && b.Count == 1);
@@ -183,7 +183,7 @@ public sealed class PublicStoreControllerTests : IAsyncLifetime
         Assert.Equal((3, 30), (kii.LowStockThreshold, kii.ReturnsWindowDays));
 
         var bag = Ok(await Controller().Product("investigators-field-bag", null, default));
-        Assert.Equal(["Colour", "Size"], bag.Options.Select(o => o.Name));
+        Assert.Equal(["Color", "Size"], bag.Options.Select(o => o.Name));
         Assert.Contains(bag.Related, r => r.Slug == "single-unit-probe");
         Assert.DoesNotContain(bag.Related, r => r.Slug == "investigators-field-bag");
     }
