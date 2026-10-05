@@ -73,9 +73,16 @@ public sealed class PublicVenueController : BenControllerBase
             .Select(p => new PublicVenuePhotoRecord(p.UploadFileId, p.Caption))
             .ToListAsync(ct);
 
+        var sections = await db.VenueSections.AsNoTracking()
+            .Where(x => x.OrganizationVenueProfile.PlaceId == placeId
+                     && x.OrganizationVenueProfile.Organization.UrlName == orgUrlName)
+            .OrderBy(x => x.SortOrder)
+            .Select(x => new PublicVenueSectionRecord(x.Title, x.Body))
+            .ToListAsync(ct);
+
         return Ok(new PublicVenueRecord(
             profile.OrgName, profile.OrgUrlName, placeId, profile.PlaceName ?? "", profile.City, profile.State,
-            profile.History, profile.HouseRules, profile.MaxOvernightGuests, rooms, events, photos));
+            profile.History, profile.HouseRules, profile.MaxOvernightGuests, rooms, events, photos, sections));
     }
 
     /// <summary>

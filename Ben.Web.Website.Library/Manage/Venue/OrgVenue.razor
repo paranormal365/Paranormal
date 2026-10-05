@@ -79,15 +79,52 @@
                 <div class="card-body">
                     <div class="mb-3">
                         <label class="form-label" for="@($"venue-history-{key}")">The building's story</label>
-                        <textarea class="form-control" rows="5" id="@($"venue-history-{key}")" maxlength="8000"
+                        <textarea class="form-control" rows="6" id="@($"venue-history-{key}")"
                                   @bind="f.History"></textarea>
                         <div class="form-text">Shown on your venue page, and on events you let tell it.</div>
                     </div>
                     <div class="mb-3">
                         <label class="form-label" for="@($"venue-rules-{key}")">House rules</label>
-                        <textarea class="form-control" rows="3" id="@($"venue-rules-{key}")" maxlength="4000"
+                        <textarea class="form-control" rows="3" id="@($"venue-rules-{key}")"
                                   placeholder="e.g. No candles upstairs. Quiet after midnight. Park behind the barn."
                                   @bind="f.HouseRules"></textarea>
+                    </div>
+                    @* The venue's own sections (2026-10-05): as many as it wants, in its order, after the story. *@
+                    <div class="mb-3 venue-sections" id="@($"venue-sections-{key}")">
+                        <div class="d-flex align-items-center mb-2">
+                            <span class="form-label mb-0 me-auto">Your own sections</span>
+                            <button type="button" class="btn btn-outline-primary btn-sm text-nowrap" id="@($"venue-section-add-{key}")"
+                                    @onclick="() => f.Sections.Add(new SectionForm())">
+                                <BenIcon Name="plus" /> Add a section
+                            </button>
+                        </div>
+                        <div class="form-text mt-0 mb-2">
+                            Anything else visitors should know — ghost hunt weekends, dining, shows, the chapel, how
+                            to find you. Each one appears on your venue page under its own heading, in this order.
+                        </div>
+                        @for (var i = 0; i < f.Sections.Count; i++)
+                        {
+                            var index = i;
+                            var section = f.Sections[index];
+                            <div class="border rounded p-2 mb-2 venue-section" data-index="@index">
+                                <div class="d-flex gap-2 mb-2">
+                                    <input type="text" class="form-control" placeholder="Heading, e.g. Ghost Hunt Weekends"
+                                           id="@($"venue-section-title-{key}-{index}")" maxlength="200" aria-label="Section heading"
+                                           @bind="section.Title" />
+                                    <div class="btn-group btn-group-sm flex-shrink-0" role="group" aria-label="Move or remove">
+                                        <button type="button" class="btn btn-outline-secondary" title="Move up" aria-label="Move up"
+                                                disabled="@(index == 0)" @onclick="() => Move(f, index, -1)"><BenIcon Name="arrow-up" /></button>
+                                        <button type="button" class="btn btn-outline-secondary" title="Move down" aria-label="Move down"
+                                                disabled="@(index == f.Sections.Count - 1)" @onclick="() => Move(f, index, 1)"><BenIcon Name="arrow-down" /></button>
+                                        <button type="button" class="btn btn-outline-danger" title="Remove this section" aria-label="Remove this section"
+                                                id="@($"venue-section-remove-{key}-{index}")" @onclick="() => f.Sections.RemoveAt(index)"><BenIcon Name="trash-2" /></button>
+                                    </div>
+                                </div>
+                                <textarea class="form-control" rows="4" placeholder="What visitors should know."
+                                          id="@($"venue-section-body-{key}-{index}")" aria-label="Section text"
+                                          @bind="section.Body"></textarea>
+                            </div>
+                        }
                     </div>
                     <div class="row g-3 align-items-end">
                         <div class="col-6 col-md-4">
@@ -157,6 +194,20 @@
         public int? MaxOvernightGuests { get; set; }
         public bool IsPublished { get; set; }
         public DateTime? VerifiedUtc { get; init; }
+        public List<SectionForm> Sections { get; init; } = [];
+    }
+
+    private sealed class SectionForm
+    {
+        public string? Title { get; set; }
+        public string? Body { get; set; }
+    }
+
+    private static void Move(Form f, int index, int by)
+    {
+        var to = index + by;
+        if (to < 0 || to >= f.Sections.Count) return;
+        (f.Sections[index], f.Sections[to]) = (f.Sections[to], f.Sections[index]);
     }
 
     protected override async Task OnAfterRenderAsync(bool firstRender)
@@ -193,6 +244,7 @@
         {
             PlaceId = p.PlaceId, ProfileId = p.Id == Guid.Empty ? null : p.Id, PlaceName = p.PlaceName, History = p.History, HouseRules = p.HouseRules,
             MaxOvernightGuests = p.MaxOvernightGuests, IsPublished = p.IsPublished, VerifiedUtc = p.VerifiedUtc,
+            Sections = (p.Sections ?? []).OrderBy(x => x.SortOrder).Select(x => new SectionForm { Title = x.Title, Body = x.Body }).ToList(),
         }));
     }
 
@@ -203,7 +255,8 @@
         _error = null;
 
         var (saved, error) = await AdminClient.SaveVenueProfileAsync(OrgId,
-            new SaveVenueProfileRequest(f.PlaceId, f.History, f.HouseRules, f.MaxOvernightGuests, f.IsPublished));
+            new SaveVenueProfileRequest(f.PlaceId, f.History, f.HouseRules, f.MaxOvernightGuests, f.IsPublished,
+                f.Sections.Select(x => new VenueSectionInput(x.Title, x.Body)).ToList()));
 
         _busy = false;
         if (saved is null) { _error = error ?? "That couldn't be saved just now."; return; }

@@ -143,6 +143,57 @@ public class VenueHostingTests : BenTestBase
         await Expect(Page.Locator("#venue-history")).ToContainTextAsync("1890");
     }
 
+    /// <summary>
+    /// A venue adds a section of its own, sees it on its public page, and takes it away again (2026-10-05).
+    /// </summary>
+    [Test]
+    public async Task A_venue_adds_a_section_of_its_own_and_visitors_read_it()
+    {
+        var key = ThomasHouse.Replace("-", "");
+        var title = $"Ghost hunts {Guid.NewGuid():N}"[..20];
+        await LoginAsync(SuperAdminEmail, SuperAdminPassword);
+        await Page.GotoAsync($"{BaseUrl}/organizations/{_venueOrgId}/venue");
+        await WaitForTheCircuitAsync();
+        var card = Page.Locator($".venue-profile[data-place='{ThomasHouse}']");
+        await Expect(card).ToBeVisibleAsync(new() { Timeout = 30_000 });
+
+        var sections = card.Locator(".venue-section");
+        var before = await sections.CountAsync();
+        await ClickUntilAsync(Page.Locator($"#venue-section-add-{key}"), sections.Nth(before));
+        await FillAndConfirmAsync($"#venue-section-title-{key}-{before}", title);
+        await FillAndConfirmAsync($"#venue-section-body-{key}-{before}", "Once a month: supper, then lights out.");
+        await Page.Locator($"#venue-save-{key}").ClickAsync();
+        await Expect(Page.Locator("#venue-profile-note")).ToBeVisibleAsync(new() { Timeout = 15_000 });
+
+        // What a visitor reads.
+        await Page.GotoAsync($"{BaseUrl}/o/paranormal365/venues/{ThomasHouse}");
+        await WaitUntilLoadedAsync();
+        var shown = Page.Locator("#venue-sections .venue-section", new() { HasTextString = title });
+        await Expect(shown).ToBeVisibleAsync(new() { Timeout = 30_000 });
+        await Expect(shown).ToContainTextAsync("lights out");
+
+        // And it can be taken away again.
+        await Page.GotoAsync($"{BaseUrl}/organizations/{_venueOrgId}/venue");
+        await WaitForTheCircuitAsync();
+        await Expect(card).ToBeVisibleAsync(new() { Timeout = 30_000 });
+        // Found by what its heading holds: a bound input's text is its value, not an attribute to select on.
+        await Expect(sections.Nth(before)).ToBeVisibleAsync(new() { Timeout = 15_000 });
+        var index = -1;
+        for (var i = 0; i < await sections.CountAsync() && index < 0; i++)
+            if (await sections.Nth(i).Locator("input[type=text]").InputValueAsync() == title) index = i;
+        Assert.That(index, Is.GreaterThanOrEqualTo(0), "the saved section should be back in the editor");
+        var count = await sections.CountAsync();
+        await sections.Nth(index).Locator("button[aria-label='Remove this section']").ClickAsync();
+        await Expect(sections).ToHaveCountAsync(count - 1);
+        await Page.Locator($"#venue-save-{key}").ClickAsync();
+        await Expect(Page.Locator("#venue-profile-note")).ToBeVisibleAsync(new() { Timeout = 15_000 });
+
+        await Page.GotoAsync($"{BaseUrl}/o/paranormal365/venues/{ThomasHouse}");
+        await WaitUntilLoadedAsync();
+        await Expect(Page.Locator("#venue-title")).ToBeVisibleAsync(new() { Timeout = 30_000 });
+        await Expect(Page.Locator(".venue-section", new() { HasTextString = title })).ToHaveCountAsync(0);
+    }
+
     [Test]
     [TestCase(1280, 800)]
     [TestCase(768, 1024)]

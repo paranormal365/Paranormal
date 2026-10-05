@@ -198,4 +198,43 @@ public sealed class VenuePhotoTests
 
         Assert.IsType<NotFoundResult>(await Public(sqlite).Controller.GetVenuePhoto(FileId, default));
     }
+
+    /// <summary>
+    /// No limit on a venue's pictures (Ben, 2026-10-05: "For venue or property owners, there is no limit on their
+    /// photos and items uploaded to display"). The library used to refuse the 61st.
+    /// </summary>
+    [Fact]
+    public async Task A_venue_library_keeps_pictures_past_the_old_sixty()
+    {
+        await using var sqlite = await SeedAsync();
+        await using (var db = await sqlite.NewContextAsync())
+        {
+            var now = DateTime.UtcNow;
+            var typeId = (await db.UploadFileTypes.FirstAsync()).Id;
+            for (var n = 0; n < 60; n++)
+            {
+                var file = Guid.NewGuid();
+                db.UploadFiles.Add(new UploadFile
+                {
+                    Id = file, UploadFileTypeId = typeId, OwnerOrganizationId = VenueOrgId, FileName = $"room-{n}.jpg",
+                    StoredFileName = $"{n}.jpg", ContentType = "image/jpeg", FileSize = 10, StoragePath = $"v/{n}.jpg",
+                    DateCreated = now, CreatedByAppUserId = HostId,
+                });
+                db.VenuePhotos.Add(new VenuePhoto
+                {
+                    Id = Guid.NewGuid(), OrganizationVenueProfileId = ProfileId, UploadFileId = file, SortOrder = n,
+                    AcceptedUtc = now, DateCreated = now, CreatedByAppUserId = HostId,
+                });
+            }
+            await db.SaveChangesAsync();
+        }
+
+        await Gallery(sqlite).OfferToVenue(OrganizerId, EventId, ImageId, default);
+        var (library, _) = Library(sqlite);
+        var offer = (await sqlite.NewContextAsync()).VenuePhotos.Single(p => p.UploadFileId == FileId).Id;
+        Assert.IsType<OkObjectResult>((await library.Accept(VenueOrgId, ProfileId, offer, default)).Result);
+
+        await using var check = await sqlite.NewContextAsync();
+        Assert.Equal(61, await check.VenuePhotos.CountAsync(p => p.AcceptedUtc != null));
+    }
 }

@@ -152,6 +152,7 @@ namespace Ben.Data.Source.Context
         public virtual DbSet<HostedEventGalleryImage> HostedEventGalleryImages { get; set; }
         public virtual DbSet<HostedEventReview> HostedEventReviews { get; set; }
         public virtual DbSet<VenuePhoto> VenuePhotos { get; set; }
+        public virtual DbSet<VenueSection> VenueSections { get; set; }
         public virtual DbSet<HostedEventDiningTable> HostedEventDiningTables { get; set; }
         public virtual DbSet<HostedEventDiningSeat> HostedEventDiningSeats { get; set; }
         public virtual DbSet<EventPhotoConsent> EventPhotoConsents { get; set; }
@@ -1163,8 +1164,15 @@ namespace Ben.Data.Source.Context
                 .HasIndex(v => v.PlaceId).IsUnique()
                 .HasDatabaseName("IX_OrganizationVenueProfiles_PlaceId_Verified")
                 .HasFilter("[VerifiedUtc] IS NOT NULL");
-            modelBuilder.Entity<OrganizationVenueProfile>().Property(v => v.History).HasMaxLength(8000);
-            modelBuilder.Entity<OrganizationVenueProfile>().Property(v => v.HouseRules).HasMaxLength(4000);
+            // No length on the story or the rules (2026-10-05): a venue may write as much as it wants about its
+            // own building. They were 8,000 and 4,000.
+
+            modelBuilder.Entity<VenueSection>()
+                .HasOne(s => s.OrganizationVenueProfile).WithMany()
+                .HasForeignKey(s => s.OrganizationVenueProfileId).OnDelete(DeleteBehavior.Cascade);
+            modelBuilder.Entity<VenueSection>().Property(s => s.Title).HasMaxLength(VenueSection.MaxTitleLength).IsRequired();
+            modelBuilder.Entity<VenueSection>().Property(s => s.Body).IsRequired();
+            modelBuilder.Entity<VenueSection>().HasIndex(s => new { s.OrganizationVenueProfileId, s.SortOrder });
 
             modelBuilder.Entity<VenueHostingRequest>()
                 .HasOne(r => r.HostedEvent).WithMany()

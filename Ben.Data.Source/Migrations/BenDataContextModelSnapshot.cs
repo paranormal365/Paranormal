@@ -8832,12 +8832,10 @@ namespace Ben.Data.Source.Migrations
                         .HasColumnType("datetime2");
 
                     b.Property<string>("History")
-                        .HasMaxLength(8000)
                         .HasColumnType("nvarchar(max)");
 
                     b.Property<string>("HouseRules")
-                        .HasMaxLength(4000)
-                        .HasColumnType("nvarchar(4000)");
+                        .HasColumnType("nvarchar(max)");
 
                     b.Property<bool>("IsPublished")
                         .HasColumnType("bit");
@@ -14270,6 +14268,46 @@ namespace Ben.Data.Source.Migrations
                     b.HasIndex("State", "ObjectionsCloseUtc");
 
                     b.ToTable("VenuePlaceClaims");
+                });
+
+            modelBuilder.Entity("Ben.Data.Source.Entities.VenueSection", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<string>("Body")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<Guid>("CreatedByAppUserId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<DateTime>("DateCreated")
+                        .HasColumnType("datetime2");
+
+                    b.Property<DateTime?>("DateUpdated")
+                        .HasColumnType("datetime2");
+
+                    b.Property<Guid>("OrganizationVenueProfileId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<int>("SortOrder")
+                        .HasColumnType("int");
+
+                    b.Property<string>("Title")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("nvarchar(200)");
+
+                    b.Property<Guid?>("UpdatedByAppUserId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("OrganizationVenueProfileId", "SortOrder");
+
+                    b.ToTable("VenueSections");
                 });
 
             modelBuilder.Entity("Ben.Data.Source.Entities.VideoAsset", b =>
@@ -21530,6 +21568,17 @@ namespace Ben.Data.Source.Migrations
                     b.Navigation("PlaceContact");
 
                     b.Navigation("UpdatedByAppUser");
+                });
+
+            modelBuilder.Entity("Ben.Data.Source.Entities.VenueSection", b =>
+                {
+                    b.HasOne("Ben.Data.Source.Entities.OrganizationVenueProfile", "OrganizationVenueProfile")
+                        .WithMany()
+                        .HasForeignKey("OrganizationVenueProfileId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("OrganizationVenueProfile");
                 });
 
             modelBuilder.Entity("Ben.Data.Source.Entities.VideoAsset", b =>

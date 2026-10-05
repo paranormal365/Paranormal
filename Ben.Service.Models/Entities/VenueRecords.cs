@@ -89,15 +89,27 @@ public sealed record VenueProfileRecord(
     string? HouseRules,
     int? MaxOvernightGuests,
     bool IsPublished,
-    DateTime? VerifiedUtc);
+    DateTime? VerifiedUtc,
+    /// <summary>The venue's own titled sections, in its order (2026-10-05).</summary>
+    IReadOnlyList<VenueSectionRecord>? Sections = null);
+
+/// <summary>A titled piece of writing on a venue's page.</summary>
+public sealed record VenueSectionRecord(Guid Id, string Title, string Body, int SortOrder);
+
+/// <summary>One section as the venue wrote it; the list's order is the page's order.</summary>
+public sealed record VenueSectionInput(string? Title, string? Body);
 
 /// <summary>Creates or replaces the group's profile at one place.</summary>
+/// <param name="Sections">
+/// The whole list of the venue's own sections, replacing what was there; null leaves them as they are.
+/// </param>
 public sealed record SaveVenueProfileRequest(
     Guid PlaceId,
     string? History,
     string? HouseRules,
     int? MaxOvernightGuests,
-    bool IsPublished);
+    bool IsPublished,
+    IReadOnlyList<VenueSectionInput>? Sections = null);
 
 // ── what anybody sees ───────────────────────────────────────────────────────────
 
@@ -115,7 +127,12 @@ public sealed record PublicVenueRecord(
     IReadOnlyList<PublicVenueRoomRecord> Rooms,
     IReadOnlyList<PublicVenueEventRecord> Events,
     /// <summary>The pictures in the venue's library that it chose to keep (item 235 phase 12).</summary>
-    IReadOnlyList<PublicVenuePhotoRecord>? Photos = null);
+    IReadOnlyList<PublicVenuePhotoRecord>? Photos = null,
+    /// <summary>The venue's own titled sections, in its order (2026-10-05).</summary>
+    IReadOnlyList<PublicVenueSectionRecord>? Sections = null);
+
+/// <summary>A titled piece of writing on a venue's public page.</summary>
+public sealed record PublicVenueSectionRecord(string Title, string Body);
 
 /// <summary>A picture of the venue, on its public page.</summary>
 public sealed record PublicVenuePhotoRecord(Guid UploadFileId, string? Caption);
