@@ -212,7 +212,13 @@ def draw_qr(ctx, x, y, size, fg=(0.05, 0.06, 0.09, 1)):
 SKIN = hx('#F2C7A5'); HAIR = hx('#3B2A20'); HOODIE = hx('#7C5CFF'); PANTS = hx('#2C3550'); SHOE = hx('#EDEDED')
 OUTLINE = (0.07, 0.06, 0.1, 1)
 
-GUEST = dict(skin=SKIN, hair=HAIR, top=HOODIE, pants=PANTS, shoe=SHOE, hair_style='short', costume=None)
+NINJA_TOP = hx('#232A4A'); NINJA_HAIR = hx('#1C2340')
+GUEST = dict(skin=hx('#F2C9A8'), hair=NINJA_HAIR, top=NINJA_TOP, pants=NINJA_TOP, shoe=hx('#14182A'),
+             hair_style='spiky', costume='ninja', iris=hx('#7C5CFF'))
+NINJA = GUEST
+UNICORN = dict(skin=hx('#F7D6C4'), hair=hx('#FF8FD1'), top=hx('#FFF4FB'), pants=hx('#FFF4FB'), shoe=hx('#B7A3E0'),
+               hair_style='none', costume='unicorn', iris=hx('#E05FB0'), hand=hx('#EADCF5'))
+RAINBOW = [hx('#FF7AA8'), hx('#FFB86B'), hx('#FFE37A'), hx('#8FE3A8'), hx('#7FC8FF'), hx('#B79BFF')]
 
 def _limb(ctx, x, y, a1, a2, l1, l2, w, c, hand=None, hand_r=None):
     """two-segment limb from (x,y). angles in degrees, 0 = straight down, +90 = +x."""
@@ -245,74 +251,147 @@ def draw_phone_small(ctx, x, y, ang, s=1.0, glow_on=True, back=False):
         circle(ctx, -w / 2 + 7 * s, -h / 2 + 8 * s, 3.5 * s); setc(ctx, hx('#05070A')); ctx.fill()
     ctx.restore()
 
-def face(ctx, cx, cy, view, expr, t, look=(0, 0), blink=0.0, skin=SKIN):
-    """cx,cy = head centre (local). view 'front' | 'side' (facing +x)."""
+def face(ctx, cx, cy, view, expr, t, look=(0, 0), blink=0.0, skin=SKIN, iris=None, eye_scale=1.0):
+    """Anime faces: tall eyes with a coloured iris and two highlights, a lash line, small nose and mouth.
+    expr: neutral | smile | fear | hero | huge.  view 'front' | 'side' (facing +x)."""
     ink = OUTLINE
+    iris = iris or hx('#5B3A29')
     if view == 'front':
-        ex = [(-21, -6), (21, -6)]; scale = [1, 1]
-        mx = 0
+        ex = [(-22, -2, 1.0), (22, -2, 1.0)]; mx = 0
     else:
-        ex = [(14, -6), (40, -6)]; scale = [.8, 1]
-        mx = 30
+        ex = [(16, -2, .72), (42, -2, 1.0)]; mx = 32
     lx, ly = look
+
+    def lash(x, y, k, slant=0.0, sgn=1):
+        ctx.set_line_width(5); setc(ctx, ink); ctx.set_line_cap(cairo.LINE_CAP_ROUND)
+        ctx.move_to(x - 14 * k, y - 15 + slant * sgn * -6); ctx.curve_to(x - 6 * k, y - 22, x + 6 * k, y - 22, x + 15 * k, y - 14 - slant * sgn * -6)
+        ctx.stroke()
+        # the little flick at the outer corner
+        ox = x + (15 * k if sgn > 0 else -14 * k)
+        ctx.set_line_width(3.5); ctx.move_to(ox, y - 14); ctx.line_to(ox + 6 * sgn, y - 18); ctx.stroke()
+
+    def anime_eye(x, y, k, sgn, narrow=0.0, pupil_scale=1.0, shrink=False):
+        ctx.save(); ctx.translate(x, y); ctx.scale(eye_scale, eye_scale); ctx.translate(-x, -y)
+        _anime_eye(x, y, k, sgn, narrow, pupil_scale, shrink)
+        ctx.restore()
+
+    def _anime_eye(x, y, k, sgn, narrow=0.0, pupil_scale=1.0, shrink=False):
+        ry = 19 * (1 - narrow * .45)
+        ctx.save()
+        ellipse(ctx, x, y + narrow * 4, 13 * k, ry)
+        setc(ctx, (1, 1, 1, 1)); ctx.fill_preserve(); ctx.set_line_width(2.5); setc(ctx, ink); ctx.stroke()
+        ellipse(ctx, x, y + narrow * 4, 13 * k, ry); ctx.clip()
+        if shrink:
+            circle(ctx, x + lx * 3 + math.sin(t * 60) * 1.2, y + 2, 3.6); setc(ctx, ink); ctx.fill()
+        else:
+            ix, iy = x + lx * 4 * k, y + 2 + ly * 4
+            ctx.set_source(lingrad(0, iy - 15, 0, iy + 15, [(0, shade(iris, .45)), (.55, iris), (1, shade(iris, 1.35))]))
+            ellipse(ctx, ix, iy, 10 * k, 15 * pupil_scale); ctx.fill()
+            ellipse(ctx, ix, iy + 1, 4.2 * k, 7.5 * pupil_scale); setc(ctx, hx('#100A18')); ctx.fill()
+            circle(ctx, ix + 4 * k, iy - 6, 4.2); setc(ctx, (1, 1, 1, 1)); ctx.fill()
+            circle(ctx, ix - 3.5 * k, iy + 6, 2); setc(ctx, (1, 1, 1, .9)); ctx.fill()
+        ctx.restore()
+        if narrow > 0:
+            # heavy lid across the top, slanted
+            ctx.set_line_width(6); setc(ctx, ink); ctx.set_line_cap(cairo.LINE_CAP_ROUND)
+            inner = x - 13 * k * sgn; outer = x + 13 * k * sgn
+            ctx.move_to(inner, y - 6); ctx.line_to(outer, y - 15); ctx.stroke()
+        else:
+            lash(x, y, k, sgn=sgn)
+
+    sgns = (-1, 1)
     if expr == 'fear':
-        jit = math.sin(t * 60) * 1.2
-        for (x, y), k in zip(ex, scale):
-            ellipse(ctx, cx + x, cy + y, 15 * k, 20); setc(ctx, (1, 1, 1, 1)); ctx.fill_preserve()
-            ctx.set_line_width(3); setc(ctx, ink); ctx.stroke()
-            circle(ctx, cx + x + lx * 4 + jit, cy + y + 3 + ly * 3, 4.5); setc(ctx, ink); ctx.fill()
+        for (x, y, k), sg in zip(ex, sgns):
+            anime_eye(cx + x, cy + y, k * 1.12, sg, shrink=True)
         # brows up in the middle
-        ctx.set_line_width(5); setc(ctx, HAIR); ctx.set_line_cap(cairo.LINE_CAP_ROUND)
-        (x0, y0), (x1, y1) = ex
-        ctx.move_to(cx + x0 - 13, cy + y0 - 22); ctx.line_to(cx + x0 + 10, cy + y0 - 32); ctx.stroke()
-        ctx.move_to(cx + x1 + 13, cy + y1 - 22); ctx.line_to(cx + x1 - 10, cy + y1 - 32); ctx.stroke()
+        ctx.set_line_width(4); setc(ctx, ink); ctx.set_line_cap(cairo.LINE_CAP_ROUND)
+        for (x, y, k), sg in zip(ex, sgns):
+            ctx.move_to(cx + x + 14 * k * sg, cy + y - 26); ctx.line_to(cx + x - 9 * k * sg, cy + y - 36); ctx.stroke()
+        # the gloom lines (anime shock)
+        for i in range(6):
+            xx = cx - 30 + i * 12 + (8 if view == 'side' else 0)
+            line(ctx, xx, cy - 54, xx, cy - 30 - (i % 2) * 6, 2.5, hx('#5468C8', .75))
         # wobbly open mouth
         ctx.save(); ctx.translate(cx + mx, cy + 30)
-        ellipse(ctx, 0, 0, 13, 15 + math.sin(t * 40) * 1.5); setc(ctx, hx('#4A1620')); ctx.fill_preserve()
-        ctx.set_line_width(3); setc(ctx, ink); ctx.stroke()
-        rrect(ctx, -8, -12, 16, 6, 2); setc(ctx, (1, 1, 1, 1)); ctx.fill()
+        ctx.move_to(-12, 0)
+        for i in range(7):
+            ctx.line_to(-12 + i * 4, -3 + (3 if i % 2 else -2) + math.sin(t * 40 + i) * 1.2)
+        ctx.curve_to(12, 14, -12, 14, -12, 0); ctx.close_path()
+        setc(ctx, hx('#4A1620')); ctx.fill_preserve(); ctx.set_line_width(2.5); setc(ctx, ink); ctx.stroke()
         ctx.restore()
-        # sweat drop
-        dx = cx + (48 if view == 'front' else -30); dy = cy - 30 + (t * 30 % 18)
-        ctx.move_to(dx, dy - 14); ctx.curve_to(dx + 9, dy, dx + 7, dy + 9, dx, dy + 9)
-        ctx.curve_to(dx - 7, dy + 9, dx - 9, dy, dx, dy - 14); setc(ctx, hx('#9ED8FF')); ctx.fill_preserve()
-        ctx.set_line_width(2); setc(ctx, hx('#3B7FB5')); ctx.stroke()
+        # two sweat drops
+        for (ddx, ph) in ((50, 0), (40, .45)):
+            dx = cx + (ddx if view == 'front' else -28 - ddx * .2); dy = cy - 34 + ((t + ph) * 30 % 22)
+            ctx.move_to(dx, dy - 14); ctx.curve_to(dx + 9, dy, dx + 7, dy + 9, dx, dy + 9)
+            ctx.curve_to(dx - 7, dy + 9, dx - 9, dy, dx, dy - 14); setc(ctx, hx('#9ED8FF')); ctx.fill_preserve()
+            ctx.set_line_width(2); setc(ctx, hx('#3B7FB5')); ctx.stroke()
         return
     if expr == 'huge':
-        # happy closed eyes ^ ^
-        for (x, y), k in zip(ex, scale):
+        for (x, y, k) in ex:
             ctx.set_line_width(5); setc(ctx, ink); ctx.set_line_cap(cairo.LINE_CAP_ROUND)
-            ctx.arc(cx + x, cy + y + 6, 11 * k, math.pi * 1.1, math.pi * 1.9); ctx.stroke()
-        # cheeks
-        for x in ((-38, 38) if view == 'front' else (8, 52)):
-            ellipse(ctx, cx + x, cy + 16, 11, 7); setc(ctx, hx('#FF7A8A', .55)); ctx.fill()
-        # huge D mouth
-        ctx.save(); ctx.translate(cx + mx, cy + 14)
-        w = 32 if view == 'front' else 24
-        ctx.move_to(-w, 0); ctx.line_to(w, 0); ctx.curve_to(w, 34, -w, 34, -w, 0); ctx.close_path()
-        setc(ctx, hx('#5A1A22')); ctx.fill_preserve(); ctx.set_line_width(3.5); setc(ctx, ink); ctx.stroke()
-        ctx.save(); ctx.move_to(-w, 0); ctx.line_to(w, 0); ctx.curve_to(w, 34, -w, 34, -w, 0); ctx.close_path(); ctx.clip()
-        ctx.rectangle(-w, 0, 2 * w, 8); setc(ctx, (1, 1, 1, 1)); ctx.fill()
-        ellipse(ctx, 0, 26, w * .55, 10); setc(ctx, hx('#FF7A8A')); ctx.fill()
+            ctx.arc(cx + x, cy + y + 8, 12 * k, math.pi * 1.1, math.pi * 1.9); ctx.stroke()
+        for x in ((-38, 38) if view == 'front' else (8, 54)):
+            for k in range(3):
+                line(ctx, cx + x - 8 + k * 6, cy + 20, cx + x - 12 + k * 6, cy + 26, 2.5, hx('#FF6F86', .8))
+        ctx.save(); ctx.translate(cx + mx, cy + 16)
+        w = 30 if view == 'front' else 22
+        ctx.move_to(-w, 0); ctx.line_to(w, 0); ctx.curve_to(w, 32, -w, 32, -w, 0); ctx.close_path()
+        setc(ctx, hx('#5A1A22')); ctx.fill_preserve(); ctx.set_line_width(3); setc(ctx, ink); ctx.stroke()
+        ctx.save(); ctx.move_to(-w, 0); ctx.line_to(w, 0); ctx.curve_to(w, 32, -w, 32, -w, 0); ctx.close_path(); ctx.clip()
+        ctx.rectangle(-w, 0, 2 * w, 7); setc(ctx, (1, 1, 1, 1)); ctx.fill()
+        ellipse(ctx, 0, 24, w * .55, 9); setc(ctx, hx('#FF7A8A')); ctx.fill()
         ctx.restore(); ctx.restore()
         return
-    # neutral / smile / focus
-    for (x, y), k in zip(ex, scale):
+    if expr == 'evil':
+        # narrow glowing eyes, hard brows, a thin cruel smile with fangs
+        for (x, y, k), sg in zip(ex, sgns):
+            ex_, ey_ = cx + x, cy + y
+            ctx.save(); ctx.translate(ex_, ey_); ctx.scale(eye_scale, eye_scale)
+            glow(ctx, 0, 0, 30, LIME1, .55)
+            ctx.move_to(-15 * k * sg, -2); ctx.curve_to(-6 * k * sg, -12, 8 * k * sg, -12, 16 * k * sg, -8)
+            ctx.curve_to(8 * k * sg, 6, -6 * k * sg, 6, -15 * k * sg, -2); ctx.close_path()
+            setc(ctx, hx('#F4FFD6')); ctx.fill_preserve(); ctx.set_line_width(3); setc(ctx, OUTLINE); ctx.stroke()
+            ellipse(ctx, 2 * sg, -2, 5, 7); setc(ctx, LIME1); ctx.fill()
+            ellipse(ctx, 2 * sg, -2, 1.6, 6); setc(ctx, OUTLINE); ctx.fill()
+            ctx.restore()
+            ctx.set_line_width(6); setc(ctx, OUTLINE); ctx.set_line_cap(cairo.LINE_CAP_ROUND)
+            ctx.move_to(ex_ - 8 * k * sg, ey_ - 14); ctx.line_to(ex_ + 20 * k * sg, ey_ - 30); ctx.stroke()
+        ctx.set_line_width(3.5); setc(ctx, OUTLINE)
+        ctx.move_to(cx + mx - 24, cy + 26); ctx.curve_to(cx + mx - 8, cy + 36, cx + mx + 10, cy + 34, cx + mx + 26, cy + 20); ctx.stroke()
+        for fx_ in (-10, 8):
+            ctx.move_to(cx + mx + fx_ - 3, cy + 31); ctx.line_to(cx + mx + fx_, cy + 40); ctx.line_to(cx + mx + fx_ + 3, cy + 31); ctx.close_path()
+            setc(ctx, (1, 1, 1, 1)); ctx.fill()
+        return
+    if expr == 'hero':
+        for (x, y, k), sg in zip(ex, sgns):
+            anime_eye(cx + x, cy + y, k, sg, narrow=1.0)
+        # hard brows angled down to the nose
+        ctx.set_line_width(6); setc(ctx, ink); ctx.set_line_cap(cairo.LINE_CAP_ROUND)
+        for (x, y, k), sg in zip(ex, sgns):
+            ctx.move_to(cx + x - 6 * k * sg, cy + y - 22); ctx.line_to(cx + x + 16 * k * sg, cy + y - 32); ctx.stroke()
+        # confident half grin
+        ctx.set_line_width(3.5); ctx.move_to(cx + mx - 14, cy + 30); ctx.curve_to(cx + mx - 4, cy + 36, cx + mx + 8, cy + 34, cx + mx + 16, cy + 24); ctx.stroke()
+        ctx.move_to(cx + mx + 2, cy + 33); ctx.line_to(cx + mx + 12, cy + 29); ctx.line_to(cx + mx + 10, cy + 33); ctx.close_path(); setc(ctx, (1, 1, 1, 1)); ctx.fill()
+        return
+    # neutral / smile
+    for (x, y, k), sg in zip(ex, sgns):
         if blink > .5:
-            ctx.set_line_width(4); setc(ctx, ink); ctx.move_to(cx + x - 10 * k, cy + y); ctx.line_to(cx + x + 10 * k, cy + y); ctx.stroke()
+            ctx.set_line_width(4); setc(ctx, ink); ctx.move_to(cx + x - 12 * k, cy + y + 2); ctx.curve_to(cx + x - 4, cy + y + 7, cx + x + 4, cy + y + 7, cx + x + 12 * k, cy + y + 2); ctx.stroke()
             continue
-        ellipse(ctx, cx + x, cy + y, 11 * k, 14); setc(ctx, (1, 1, 1, 1)); ctx.fill_preserve()
-        ctx.set_line_width(3); setc(ctx, ink); ctx.stroke()
-        circle(ctx, cx + x + lx * 4 + (2 if view == 'side' else 0), cy + y + 1 + ly * 4, 6); setc(ctx, ink); ctx.fill()
-        circle(ctx, cx + x + lx * 4 + 3, cy + y - 2 + ly * 4, 2); setc(ctx, (1, 1, 1, 1)); ctx.fill()
-    ctx.set_line_width(4); setc(ctx, ink); ctx.set_line_cap(cairo.LINE_CAP_ROUND)
+        anime_eye(cx + x, cy + y, k, sg)
+    ctx.set_line_width(3); setc(ctx, ink)
+    for (x, y, k), sg in zip(ex, sgns):
+        ctx.move_to(cx + x - 10 * k, cy + y - 30); ctx.line_to(cx + x + 10 * k, cy + y - 32); ctx.stroke()
+    line(ctx, cx + mx + (4 if view == 'side' else 0), cy + 14, cx + mx + (7 if view == 'side' else 2), cy + 17, 2.5, shade(skin, .6))
+    ctx.set_line_width(3.5); setc(ctx, ink); ctx.set_line_cap(cairo.LINE_CAP_ROUND)
     if expr == 'smile':
-        ctx.arc(cx + mx, cy + 14, 14, math.pi * .15, math.pi * .85); ctx.stroke()
+        ctx.arc(cx + mx, cy + 22, 11, math.pi * .15, math.pi * .85); ctx.stroke()
     else:
-        ctx.arc(cx + mx, cy + 18, 9, math.pi * .25, math.pi * .75); ctx.stroke()
+        ctx.arc(cx + mx, cy + 26, 6, math.pi * .25, math.pi * .75); ctx.stroke()
 
 def person(ctx, x, y, s=1.0, facing='right', walk=None, expr='neutral', t=0.0, look=(0, 0),
-           arms=None, phone=None, look_cfg=GUEST, dance=None, bob=0.0, lean=0.0, blink=0.0, alpha=1.0):
+           arms=None, phone=None, look_cfg=None, dance=None, bob=0.0, lean=0.0, blink=0.0, alpha=1.0,
+           stance=None, wind=1.0):
     """
     Cartoon person, feet at (x,y), ~300px tall at s=1.
     facing: 'front' | 'back' | 'right' | 'left'
@@ -321,7 +400,7 @@ def person(ctx, x, y, s=1.0, facing='right', walk=None, expr='neutral', t=0.0, l
           front view: 'l','r' with + meaning outward is handled by caller.
     phone: None | 'near' | 'far' | 'l' | 'r' — which hand holds a phone. 'pocket' hides it.
     """
-    L = look_cfg
+    L = look_cfg or GUEST
     if alpha < 1: ctx.push_group()
     ctx.save(); ctx.translate(x, y)
     mirror = facing == 'left'
@@ -345,6 +424,22 @@ def person(ctx, x, y, s=1.0, facing='right', walk=None, expr='neutral', t=0.0, l
         ctx.move_to(-40, sh_y - 10); ctx.curve_to(-75, -60, -70, -20, -60, -18)
         ctx.line_to(60, -18); ctx.curve_to(70, -20, 75, -60, 40, sh_y - 10); ctx.close_path()
         setc(ctx, hx('#9E1B32')); ctx.fill_preserve(); ctx.set_line_width(4); setc(ctx, OUTLINE); ctx.stroke()
+    if cost == 'ninja' and view != 'back':
+        ninja_scarf_tail(ctx, -6 if view == 'side' else -20, sh_y - 8, t, wind, side=(view == 'side'))
+        # katana on the back: the hilt rises over the right shoulder
+        hx0, hy0 = (-22, sh_y + 40) if view == 'side' else (18, sh_y + 30)
+        hx1, hy1 = (-2, sh_y - 64) if view == 'side' else (52, sh_y - 66)
+        line(ctx, hx0, hy0, hx1, hy1, 15, OUTLINE); line(ctx, hx0, hy0, hx1, hy1, 10, hx('#2A2030'))
+        tx, ty = lerp(hx0, hx1, .62), lerp(hy0, hy1, .62)
+        ellipse(ctx, tx, ty, 13, 6); setc(ctx, hx('#C9A04A')); ctx.fill()
+        line(ctx, tx, ty, hx1, hy1, 11, hx('#3A2E5A'))
+        for k in range(4):
+            q = .66 + k * .085
+            line(ctx, lerp(hx0, hx1, q) - 5, lerp(hy0, hy1, q), lerp(hx0, hx1, q) + 5, lerp(hy0, hy1, q) - 2, 2.5, hx('#E9E2CF'))
+    if cost == 'unicorn' and view == 'side':
+        for i, c in enumerate(RAINBOW):
+            ctx.save(); ctx.translate(-34, -110 + i * 4); ctx.rotate(math.radians(-30 - i * 8 + math.sin(t * 5 + i) * 6))
+            ellipse(ctx, -26, 0, 30, 7); setc(ctx, c); ctx.fill(); ctx.restore()
 
     # legs
     if cost == 'witch':
@@ -358,6 +453,11 @@ def person(ctx, x, y, s=1.0, facing='right', walk=None, expr='neutral', t=0.0, l
         ctx.set_line_cap(cairo.LINE_CAP_ROUND)
         ctx.set_line_width(29); setc(ctx, OUTLINE); ctx.move_to(ox, y0); ctx.line_to(fx, fy); ctx.stroke()
         ctx.set_line_width(24); setc(ctx, c); ctx.move_to(ox, y0); ctx.line_to(fx, fy); ctx.stroke()
+        if cost == 'ninja':
+            ax, ay = lerp(ox, fx, .58), lerp(y0, fy, .58); bx, by_ = lerp(ox, fx, .9), lerp(y0, fy, .9)
+            ctx.set_line_width(25); setc(ctx, hx('#C9CCD8')); ctx.move_to(ax, ay); ctx.line_to(bx, by_); ctx.stroke()
+            for q in (.66, .74, .82):
+                line(ctx, lerp(ox, fx, q) - 11, lerp(y0, fy, q) - 2, lerp(ox, fx, q) + 11, lerp(y0, fy, q) + 3, 2, hx('#8A8EA0'))
         fwd = 14 if view == 'side' else 0
         ellipse(ctx, fx + fwd, fy + 6, 22 if view == 'side' else 17, 11); setc(ctx, OUTLINE); ctx.fill()
         ellipse(ctx, fx + fwd, fy + 5, 19 if view == 'side' else 14, 8.5); setc(ctx, L['shoe']); ctx.fill()
@@ -367,6 +467,8 @@ def person(ctx, x, y, s=1.0, facing='right', walk=None, expr='neutral', t=0.0, l
         la, ra = sw * 28, -sw * 28
     else:
         la, ra = 8, -8
+    if stance is not None:
+        la, ra = stance
     if view == 'side':
         leg(0, ra, shade(pants, .75)); leg(0, la, pants)
     else:
@@ -407,6 +509,42 @@ def person(ctx, x, y, s=1.0, facing='right', walk=None, expr='neutral', t=0.0, l
     else:
         rrect(ctx, -tw - 2.5, sh_y - 14 - 2.5, 2 * tw + 5, (hip_y + 10) - (sh_y - 14) + 5, 24); setc(ctx, OUTLINE); ctx.fill()
         rrect(ctx, -tw, sh_y - 14, 2 * tw, (hip_y + 10) - (sh_y - 14), 22); setc(ctx, top); ctx.fill()
+        # cel shading: one hard-edged shadow down the far side
+        ctx.save(); rrect(ctx, -tw, sh_y - 14, 2 * tw, (hip_y + 10) - (sh_y - 14), 22); ctx.clip()
+        ctx.move_to(tw * .3, sh_y - 20); ctx.line_to(tw + 4, sh_y - 20); ctx.line_to(tw + 4, hip_y + 12); ctx.line_to(tw * .05, hip_y + 12); ctx.close_path()
+        setc(ctx, (0, 0, 0, .16)); ctx.fill(); ctx.restore()
+        if cost == 'ninja':
+            if view != 'back':
+                cx0 = 10 if view == 'side' else 0
+                ctx.move_to(cx0 - 30, sh_y - 12); ctx.line_to(cx0 + 4, sh_y + 48); ctx.line_to(cx0 + 30, sh_y - 12); ctx.close_path(); setc(ctx, hx('#141A30')); ctx.fill()
+                line(ctx, cx0 - 30, sh_y - 12, cx0 + 6, sh_y + 52, 6, hx('#3A4470')); line(ctx, cx0 + 30, sh_y - 12, cx0 - 2, sh_y + 46, 6, hx('#3A4470'))
+            else:
+                # the sword across the back
+                line(ctx, -38, -96, 30, sh_y - 30, 14, OUTLINE); line(ctx, -38, -96, 30, sh_y - 30, 9, hx('#2A2030'))
+                line(ctx, 30, sh_y - 30, 50, sh_y - 66, 10, hx('#3A2E5A'))
+            # purple sash
+            rrect(ctx, -tw - 1, hip_y - 14, 2 * tw + 2, 20, 6); setc(ctx, ACC); ctx.fill()
+            rrect(ctx, -tw - 1, hip_y - 14, 2 * tw + 2, 6, 3); setc(ctx, shade(ACC, 1.25)); ctx.fill()
+            if view != 'back':
+                kx = (-tw + 6) if view == 'front' else (-tw + 2)
+                ctx.move_to(kx, hip_y - 4); ctx.line_to(kx - 18, hip_y + 34); ctx.line_to(kx - 4, hip_y + 30); ctx.line_to(kx + 6, hip_y + 4); ctx.close_path()
+                setc(ctx, shade(ACC, .85)); ctx.fill()
+        elif cost == 'unicorn':
+            ellipse(ctx, 0 if view != 'side' else 8, -125, tw * .62, 34); setc(ctx, hx('#FFE6F4')); ctx.fill()
+            if view != 'back':
+                cols = (-14, 14) if view == 'front' else (18,)
+                for cxb in cols:
+                    for k in range(3):
+                        circle(ctx, cxb, sh_y + 14 + k * 22, 4.5); setc(ctx, hx('#E2B23C')); ctx.fill()
+                        circle(ctx, cxb - 1.5, sh_y + 12.5 + k * 22, 1.6); setc(ctx, (1, 1, 1, .8)); ctx.fill()
+                # gold epaulettes, bellhop style
+                if view == 'front':
+                    for sx_ in (-tw + 4, tw - 4):
+                        rrect(ctx, sx_ - 14, sh_y - 16, 28, 9, 4); setc(ctx, hx('#E2B23C')); ctx.fill()
+            else:
+                for i, c in enumerate(RAINBOW):
+                    ctx.save(); ctx.translate(0, -104); ctx.rotate(math.radians(180 + (i - 2.5) * 9 + math.sin(t * 5 + i) * 5))
+                    ellipse(ctx, 0, -26, 7, 30); setc(ctx, c); ctx.fill(); ctx.restore()
         if cost is None:
             # hoodie details
             if view == 'front':
@@ -463,6 +601,13 @@ def person(ctx, x, y, s=1.0, facing='right', walk=None, expr='neutral', t=0.0, l
     else:
         circle(ctx, hcx, head_y, hr + 2.5); setc(ctx, OUTLINE); ctx.fill()
         circle(ctx, hcx, head_y, hr); setc(ctx, skin if cost != 'skeleton' else hx('#F2F2EA')); ctx.fill()
+        if cost not in ('skeleton', 'mummy'):
+            ctx.save(); circle(ctx, hcx, head_y, hr); ctx.clip()
+            ctx.rectangle(hcx - hr, head_y - hr, 2 * hr, 2 * hr); circle(ctx, hcx - 14, head_y - 12, hr + 2)
+            ctx.set_fill_rule(cairo.FILL_RULE_EVEN_ODD); setc(ctx, shade(skin, .86)); ctx.fill(); ctx.set_fill_rule(cairo.FILL_RULE_WINDING)
+            ctx.restore()
+        if cost == 'unicorn':
+            unicorn_hood(ctx, hcx, head_y, hr, view, t, layer='back')
         # ears
         if view == 'front':
             for ex_ in (-hr + 2, hr - 2):
@@ -499,6 +644,8 @@ def person(ctx, x, y, s=1.0, facing='right', walk=None, expr='neutral', t=0.0, l
             ctx.line_to(hcx + hr - 14, head_y + 60); ctx.curve_to(hcx + hr - 4, head_y - 10, hcx + 20, head_y - 34, hcx - 10, head_y - 30)
             ctx.curve_to(hcx - 30, head_y - 20, hcx - hr + 10, head_y + 10, hcx - hr + 14, head_y + 60); ctx.close_path()
             setc(ctx, L['hair']); ctx.fill_preserve(); ctx.set_line_width(3); setc(ctx, OUTLINE); ctx.stroke(); ctx.restore()
+        elif hs == 'spiky' and cost not in ('mummy', 'skeleton'):
+            spiky_hair(ctx, hcx, head_y, hr, view, L['hair'], t, wind)
         elif hs == 'slick':
             ctx.save(); circle(ctx, hcx, head_y, hr); ctx.clip()
             ctx.move_to(hcx - hr - 4, head_y - 4); ctx.curve_to(hcx - hr, head_y - hr - 20, hcx + hr, head_y - hr - 20, hcx + hr + 4, head_y - 4)
@@ -513,11 +660,22 @@ def person(ctx, x, y, s=1.0, facing='right', walk=None, expr='neutral', t=0.0, l
                     line(ctx, hcx - 22 + i * 9, head_y + 32, hcx - 22 + i * 9, head_y + 42, 2.5, OUTLINE)
                 line(ctx, hcx - 26, head_y + 37, hcx + 26, head_y + 37, 2.5, OUTLINE)
             else:
-                face(ctx, hcx, head_y, view, expr, t, look=look, blink=blink, skin=skin)
+                face(ctx, hcx, head_y, view, expr, t, look=look, blink=blink, skin=skin, iris=L.get('iris'))
                 if cost == 'vampire':
                     for fx_ in (-7, 7):
                         ctx.move_to(hcx + (30 if view == 'side' else 0) + fx_ - 3, head_y + 22); ctx.line_to(hcx + (30 if view == 'side' else 0) + fx_, head_y + 32)
                         ctx.line_to(hcx + (30 if view == 'side' else 0) + fx_ + 3, head_y + 22); ctx.close_path(); setc(ctx, (1, 1, 1, 1)); ctx.fill()
+    if cost == 'ninja':
+        ninja_headband(ctx, hcx, head_y, hr, view, t, wind)
+        if view != 'back':
+            # scarf wrapped at the neck, in front of the chin line
+            ellipse(ctx, 0 if view == 'front' else 4, sh_y - 12, 44 if view == 'front' else 36, 16); setc(ctx, OUTLINE); ctx.fill()
+            ellipse(ctx, 0 if view == 'front' else 4, sh_y - 13, 41 if view == 'front' else 33, 13); setc(ctx, ACC); ctx.fill()
+            ellipse(ctx, -8, sh_y - 17, 20, 4); setc(ctx, shade(ACC, 1.3)); ctx.fill()
+        else:
+            ninja_scarf_tail(ctx, 0, sh_y - 10, t, wind, side=False, back=True)
+    if cost == 'unicorn':
+        unicorn_hood(ctx, hcx, head_y, hr, view, t, layer='front')
     if cost == 'witch':
         ctx.save(); ctx.translate(hcx, head_y - hr + 14); ctx.rotate(math.radians(-8))
         ellipse(ctx, 0, 0, 82, 16); setc(ctx, OUTLINE); ctx.fill()
@@ -538,7 +696,7 @@ def person(ctx, x, y, s=1.0, facing='right', walk=None, expr='neutral', t=0.0, l
     if view == 'side':
         a_near = arm_angles('near', (sw * 25, sw * 25 + 10))
         if dance is not None: a_near = (160 - math.sin(dance) * 25, 150 - math.sin(dance) * 25)
-        hand_pos['near'] = _limb(ctx, 4, sh_y + 6, a_near[0], a_near[1], 50, 46, 22, top if cost != 'vampire' else hx('#1A1020'), hand=skin)
+        hand_pos['near'] = _limb(ctx, 4, sh_y + 6, a_near[0], a_near[1], 50, 46, 22, top if cost != 'vampire' else hx('#1A1020'), hand=L.get('hand', skin))
         if phone == 'near': draw_phone_small(ctx, hand_pos['near'][0] + 8, hand_pos['near'][1] - 12, 8)
     else:
         if dance is not None:
@@ -548,14 +706,229 @@ def person(ctx, x, y, s=1.0, facing='right', walk=None, expr='neutral', t=0.0, l
             al = arm_angles('l', (-12 - sw * 8, -6))
             ar = arm_angles('r', (12 + sw * 8, 6))
         armc = top if cost != 'vampire' else hx('#1A1020')
-        hand_pos['l'] = _limb(ctx, -tw + 6, sh_y + 6, al[0], al[1], 50, 46, 22, armc, hand=skin)
-        hand_pos['r'] = _limb(ctx, tw - 6, sh_y + 6, ar[0], ar[1], 50, 46, 22, armc, hand=skin)
+        hand_pos['l'] = _limb(ctx, -tw + 6, sh_y + 6, al[0], al[1], 50, 46, 22, armc, hand=L.get('hand', skin))
+        hand_pos['r'] = _limb(ctx, tw - 6, sh_y + 6, ar[0], ar[1], 50, 46, 22, armc, hand=L.get('hand', skin))
         if phone in ('l', 'r'):
             hp = hand_pos[phone]; draw_phone_small(ctx, hp[0], hp[1] - 14, 0, back=(view == 'front'))
     ctx.restore()
     if alpha < 1:
         ctx.pop_group_to_source(); ctx.paint_with_alpha(alpha)
     return hand_pos
+
+
+def ninja_scarf_tail(ctx, x, y, t, wind=1.0, side=False, back=False):
+    """the long purple scarf streaming behind the hero; wind 0..2"""
+    n = 9; L_ = 150 + 70 * wind
+    pts = []
+    for i in range(n + 1):
+        q = i / n
+        if back:
+            px = x + math.sin(t * 6 + q * 5) * 14 * q * wind
+            py = y + q * L_ * .75
+        else:
+            px = x - q * L_ * (1.0 if side else .55)
+            py = y + q * (30 if side else 70) + math.sin(t * 7 - q * 6) * 16 * q * (0.4 + wind * .6)
+        w = 13 * (1 - q * .55)
+        pts.append((px, py, w))
+    ctx.move_to(pts[0][0], pts[0][1] - pts[0][2])
+    for (px, py, w) in pts: ctx.line_to(px, py - w)
+    for (px, py, w) in reversed(pts): ctx.line_to(px, py + w)
+    ctx.close_path()
+    setc(ctx, OUTLINE); ctx.set_line_width(5); ctx.stroke_preserve(); setc(ctx, ACC); ctx.fill()
+    ctx.set_line_width(3); setc(ctx, shade(ACC, 1.3))
+    ctx.move_to(pts[0][0], pts[0][1] - pts[0][2] * .4)
+    for (px, py, w) in pts: ctx.line_to(px, py - w * .4)
+    ctx.stroke()
+
+def spiky_hair(ctx, hcx, head_y, hr, view, col, t, wind=1.0):
+    """anime hero hair: swept-back spikes, a fringe that stops above the eyes, one shine band"""
+    back = -1 if view == 'side' else 0
+    ctx.save()
+    # crown spikes
+    n = 9
+    ctx.move_to(hcx - hr * .95, head_y - 4)
+    for i in range(n + 1):
+        th = math.radians(200 - i * (220 / n))
+        r = hr * (1.55 if i % 2 else .98) + (8 * math.sin(t * 9 + i) * .15 * wind if i % 2 else 0)
+        sweep = (14 if i % 2 else 0) * (1 if back == 0 else 1.6)
+        px = hcx + math.cos(th) * r - (sweep if back else (sweep * .2 * (1 if i < n / 2 else -1)))
+        py = head_y - math.sin(th) * r
+        ctx.line_to(px, py)
+    ctx.line_to(hcx + hr * .95, head_y - 4)
+    ctx.close_path()
+    setc(ctx, OUTLINE); ctx.set_line_width(6); ctx.stroke_preserve(); setc(ctx, col); ctx.fill()
+    if view != 'back':
+        # fringe over the forehead, clear of the eyes
+        ox = 8 if view == 'side' else 0
+        ctx.move_to(hcx - hr + 2 + ox, head_y - 30)
+        tips = [(-40, -12), (-24, -22), (-10, -6), (6, -20), (20, -10), (36, -22), (48, -14)]
+        for (tx, ty) in tips:
+            ctx.line_to(hcx + tx + ox, head_y + ty)
+            ctx.line_to(hcx + tx + 7 + ox, head_y - 34)
+        ctx.line_to(hcx + hr - 2 + ox, head_y - 30); ctx.line_to(hcx + hr, head_y - 50); ctx.line_to(hcx - hr, head_y - 50); ctx.close_path()
+        setc(ctx, col); ctx.fill()
+    else:
+        circle(ctx, hcx, head_y - 4, hr + 3); setc(ctx, col); ctx.fill()
+    # shine band
+    ctx.set_line_width(7); setc(ctx, hx('#4D5EA8', .9)); ctx.set_line_cap(cairo.LINE_CAP_ROUND)
+    ctx.arc(hcx - 4, head_y - 8, hr * .8, math.radians(205), math.radians(245)); ctx.stroke()
+    ctx.arc(hcx - 4, head_y - 8, hr * .8, math.radians(262), math.radians(282)); ctx.stroke()
+    ctx.restore()
+
+def ninja_headband(ctx, hcx, head_y, hr, view, t, wind=1.0):
+    by = head_y - 36
+    ctx.save(); circle(ctx, hcx, head_y, hr + 4); ctx.clip()
+    ctx.rectangle(hcx - hr - 6, by - 8, 2 * hr + 12, 16); setc(ctx, hx('#2E3760')); ctx.fill()
+    line(ctx, hcx - hr, by - 7, hcx + hr, by - 7, 2, hx('#4A568A'))
+    ctx.restore()
+    if view != 'back':
+        px = hcx + (20 if view == 'side' else 0)
+        rrect(ctx, px - 19, by - 10, 38, 20, 4); setc(ctx, OUTLINE); ctx.fill()
+        ctx.set_source(lingrad(0, by - 9, 0, by + 9, [(0, hx('#E8ECF4')), (1, hx('#9AA2B8'))])); rrect(ctx, px - 17, by - 8, 34, 16, 3); ctx.fill()
+        # the ghost from the logo, engraved
+        ctx.move_to(px - 6, by + 5); ctx.curve_to(px - 7, by - 6, px + 7, by - 6, px + 6, by + 5); ctx.line_to(px + 3, by + 3); ctx.line_to(px, by + 5); ctx.line_to(px - 3, by + 3); ctx.close_path()
+        setc(ctx, hx('#5A6278')); ctx.fill()
+        circle(ctx, px - 2, by - 1, 1.2); circle(ctx, px + 2, by - 1, 1.2); setc(ctx, hx('#E8ECF4')); ctx.fill()
+    # the two tails behind the head
+    tx = hcx - hr + (2 if view != 'side' else -2)
+    for k, off in enumerate((-4, 6)):
+        ctx.move_to(tx, by + off)
+        for i in range(1, 7):
+            q = i / 6
+            ctx.line_to(tx - q * (60 + 30 * wind), by + off + q * (22 + k * 12) + math.sin(t * 8 - q * 5 + k) * 7 * q * wind)
+        ctx.set_line_width(9 - k * 2); setc(ctx, hx('#2E3760')); ctx.stroke()
+
+def unicorn_hood(ctx, hcx, head_y, hr, view, t, layer='front'):
+    hood = hx('#FFF4FB')
+    if layer == 'back':
+        # the hood behind the head, and the mane down the back
+        circle(ctx, hcx - (6 if view == 'side' else 0), head_y - 4, hr + 12); setc(ctx, OUTLINE); ctx.fill()
+        circle(ctx, hcx - (6 if view == 'side' else 0), head_y - 4, hr + 9); setc(ctx, hood); ctx.fill()
+        if view != 'front':
+            for i, c in enumerate(RAINBOW):
+                ctx.save(); ctx.translate(hcx - (hr * .7 if view == 'side' else (i - 2.5) * 14), head_y - hr * .6 + i * 14)
+                ctx.rotate(math.radians(-40 + math.sin(t * 6 + i) * 6))
+                ellipse(ctx, -14, 0, 22, 9); setc(ctx, c); ctx.fill(); ctx.restore()
+        return
+    # front layer: hood brim around the face, ears, horn, mane fringe, bellhop cap
+    ox = 6 if view == 'side' else 0
+    ctx.save()
+    ctx.arc(hcx + ox, head_y + 6, hr + 9, math.pi * 1.0, math.pi * 2.0)
+    ctx.arc_negative(hcx + ox, head_y + 10, hr - 6, math.pi * 2.0, math.pi * 1.0); ctx.close_path()
+    setc(ctx, OUTLINE); ctx.set_line_width(4); ctx.stroke_preserve(); setc(ctx, hood); ctx.fill()
+    ctx.restore()
+    # mane fringe
+    for i, c in enumerate(RAINBOW[:4]):
+        ellipse(ctx, hcx + ox - 26 + i * 14, head_y - hr + 14, 11, 9); setc(ctx, c); ctx.fill()
+    # ears
+    for sgn in ((-1, 1) if view == 'front' else (-1,)):
+        ex_ = hcx + ox + sgn * (hr * .78)
+        ctx.move_to(ex_ - 12, head_y - hr + 8); ctx.line_to(ex_ + sgn * 8, head_y - hr - 30); ctx.line_to(ex_ + 14, head_y - hr + 10); ctx.close_path()
+        setc(ctx, OUTLINE); ctx.set_line_width(4); ctx.stroke_preserve(); setc(ctx, hood); ctx.fill()
+        ctx.move_to(ex_ - 5, head_y - hr + 4); ctx.line_to(ex_ + sgn * 6, head_y - hr - 18); ctx.line_to(ex_ + 7, head_y - hr + 6); ctx.close_path()
+        setc(ctx, hx('#FFB3D6')); ctx.fill()
+    # golden spiral horn
+    hb = (hcx + ox + (10 if view == 'side' else 0), head_y - hr - 2)
+    ctx.move_to(hb[0] - 13, hb[1]); ctx.line_to(hb[0] + (14 if view == 'side' else 4), hb[1] - 66); ctx.line_to(hb[0] + 13, hb[1]); ctx.close_path()
+    setc(ctx, OUTLINE); ctx.set_line_width(4); ctx.stroke_preserve()
+    ctx.set_source(lingrad(hb[0] - 13, 0, hb[0] + 13, 0, [(0, hx('#FFE9A8')), (.5, hx('#F2C24A')), (1, hx('#C9952A'))])); ctx.fill()
+    tip = (hb[0] + (14 if view == 'side' else 4), hb[1] - 66)
+    for k in range(1, 5):
+        q = k / 5
+        x0 = lerp(hb[0] - 13, tip[0], q); x1 = lerp(hb[0] + 13, tip[0], q); yy = lerp(hb[1], tip[1], q)
+        line(ctx, x0, yy + 4, x1, yy - 3, 2.5, hx('#B07E1E'))
+    sp = .5 + .5 * math.sin(t * 4)
+    sparkle(ctx, tip[0] + 4, tip[1] - 2, 10 * sp + 3, hx('#FFFFFF'), .9)
+    # bellhop pillbox cap, tipped to one side
+    ctx.save(); ctx.translate(hcx + ox - hr * .55, head_y - hr - 4); ctx.rotate(math.radians(-14))
+    rrect(ctx, -22, -24, 44, 26, 6); setc(ctx, OUTLINE); ctx.set_line_width(4); ctx.stroke_preserve(); setc(ctx, hx('#C8233C')); ctx.fill()
+    ctx.rectangle(-22, -6, 44, 7); setc(ctx, hx('#E2B23C')); ctx.fill()
+    ellipse(ctx, 0, -24, 22, 5); setc(ctx, hx('#E0384F')); ctx.fill()
+    ctx.restore()
+    # bow tie
+    if view == 'front':
+        by = head_y + hr + 14
+        ctx.move_to(hcx, by); ctx.line_to(hcx - 18, by - 10); ctx.line_to(hcx - 18, by + 10); ctx.close_path()
+        ctx.move_to(hcx, by); ctx.line_to(hcx + 18, by - 10); ctx.line_to(hcx + 18, by + 10); ctx.close_path()
+        setc(ctx, hx('#C8233C')); ctx.fill(); circle(ctx, hcx, by, 5); ctx.fill()
+
+# ── action-anime effects ───────────────────────────────────────────────────
+def sparkle(ctx, x, y, r, c=(1, 1, 1, 1), a=1.0, rot=0.0):
+    if r <= 0 or a <= 0: return
+    ctx.save(); ctx.translate(x, y); ctx.rotate(rot)
+    ctx.move_to(0, -r)
+    for k in range(4):
+        ang = k * math.pi / 2
+        ctx.curve_to(math.sin(ang) * r * .12, -math.cos(ang) * r * .12, math.sin(ang + math.pi / 4) * r * .12, -math.cos(ang + math.pi / 4) * r * .12,
+                     math.sin(ang + math.pi / 2) * r, -math.cos(ang + math.pi / 2) * r)
+    ctx.close_path(); setc(ctx, c, a); ctx.fill()
+    ctx.restore()
+
+def radial_lines(ctx, cx, cy, r_in, r_out, n, seed, c, a=1.0, wmax=16):
+    """anime focus lines: thin wedges from outside the frame toward a centre; re-randomised every frame"""
+    rnd = random.Random(int(seed * 30))
+    setc(ctx, c, a)
+    for _ in range(n):
+        ang = rnd.uniform(0, math.tau)
+        ri = r_in * rnd.uniform(.85, 1.5)
+        w = rnd.uniform(.004, .022) * (wmax / 16)
+        ctx.move_to(cx + math.cos(ang) * ri, cy + math.sin(ang) * ri)
+        ctx.line_to(cx + math.cos(ang - w) * r_out, cy + math.sin(ang - w) * r_out)
+        ctx.line_to(cx + math.cos(ang + w) * r_out, cy + math.sin(ang + w) * r_out)
+        ctx.close_path()
+    ctx.fill()
+
+def impact_frame(ctx, cx, cy, seed, a=1.0, c0=None, c1=None, lines=(1, 1, 1, 1)):
+    """the hero-moment background: brand gradient burst with white focus lines"""
+    if a <= 0: return
+    c0 = c0 or ACC; c1 = c1 or ACC2
+    g = cairo.RadialGradient(cx, cy, 40, cx, cy, 1300)
+    g.add_color_stop_rgba(0, 1, 1, 1, a); g.add_color_stop_rgba(.12, c1[0], c1[1], c1[2], a)
+    g.add_color_stop_rgba(.5, c0[0], c0[1], c0[2], a); g.add_color_stop_rgba(1, .05, .03, .14, a)
+    ctx.set_source(g); ctx.paint()
+    radial_lines(ctx, cx, cy, 260, 1600, 90, seed, lines, .55 * a)
+
+def motion_lines(ctx, x0, y0, x1, y1, n, seed, c=(1, 1, 1, 1), a=.5, direction=1):
+    """horizontal speed streaks inside a box; direction -1 trails to the left"""
+    rnd = random.Random(int(seed * 30) + 7)
+    for _ in range(n):
+        y = rnd.uniform(y0, y1); ln = rnd.uniform(.25, 1) * (x1 - x0); x = rnd.uniform(x0, x1 - ln)
+        line(ctx, x, y, x + ln, y, rnd.uniform(1.5, 4), c if a >= 1 else (c[0], c[1], c[2], a * rnd.uniform(.4, 1)))
+
+def magic_circle(ctx, cx, cy, r, t, c=None, a=1.0):
+    c = c or LIME1
+    if a <= 0: return
+    ctx.save(); ctx.translate(cx, cy)
+    glow(ctx, 0, 0, r * 1.5, c, .35 * a)
+    for k, (rr, wdt, sp) in enumerate(((1.0, 3, .6), (.82, 2, -1.0), (.55, 2, 1.4))):
+        ctx.save(); ctx.rotate(t * sp)
+        ctx.set_line_width(wdt); setc(ctx, c, .9 * a); circle(ctx, 0, 0, r * rr); ctx.stroke()
+        for j in range(12 if k == 0 else 8):
+            ang = j / (12 if k == 0 else 8) * math.tau
+            ctx.save(); ctx.rotate(ang); ctx.translate(r * rr * (.9 if k == 0 else 1.0), 0)
+            if k == 0: rrect(ctx, -3, -6, 6, 12, 2)
+            else: circle(ctx, 0, 0, 3.2)
+            setc(ctx, c, .9 * a); ctx.fill(); ctx.restore()
+        ctx.restore()
+    ctx.save(); ctx.rotate(-t * .4)
+    ctx.set_line_width(2); setc(ctx, c, .8 * a)
+    for j in range(6):
+        a0 = j / 6 * math.tau; a1 = (j + 2) / 6 * math.tau
+        ctx.move_to(math.cos(a0) * r * .82, math.sin(a0) * r * .82); ctx.line_to(math.cos(a1) * r * .82, math.sin(a1) * r * .82)
+    ctx.stroke(); ctx.restore()
+    ctx.restore()
+
+def exclaim(ctx, x, y, s, a=1.0, t=0.0):
+    """the anime surprise mark over a head"""
+    if a <= 0: return
+    ctx.save(); ctx.translate(x, y); ctx.scale(s, s); ctx.rotate(.12)
+    for k in range(3):
+        ang = math.radians(-60 + k * 30)
+        line(ctx, math.cos(ang) * 46, math.sin(ang) * 46 - 40, math.cos(ang) * 64, math.sin(ang) * 64 - 40, 4, (1, .9, .3, a))
+    ctx.move_to(-9, -70); ctx.line_to(9, -70); ctx.line_to(5, -18); ctx.line_to(-5, -18); ctx.close_path()
+    circle(ctx, 0, -2, 7)
+    setc(ctx, OUTLINE, a); ctx.set_line_width(6); ctx.stroke_preserve(); setc(ctx, (1, .86, .25, a)); ctx.fill()
+    ctx.restore()
 
 def sheet_ghost(ctx, x, y, s, t, seed=0, expr='happy', alpha=1.0, look=0.0, arms_up=0.0):
     """kawaii child ghost (nod to Ben's Cute Ghost puppet): big eyes, rosy cheeks, flat shading"""
@@ -738,7 +1111,14 @@ def screen_pass(ctx, t):
     text(ctx, 'Show this at the door', 195, 758, (1, 1, 1, 1), 'c', size=17, bold=True)
     rrect(ctx, 130, 822, 130, 5, 3); setc(ctx, INK, .8); ctx.fill()
 
-def screen_scanner(ctx, t, scan=0.0, confirmed=0.0, show_check=False, check_k=1.0, label=None):
+def _phone_in_view(ctx):
+    rrect(ctx, -84, -150, 168, 300, 24); setc(ctx, hx('#2A2E38')); ctx.fill()
+    rrect(ctx, -78, -144, 156, 288, 20); setc(ctx, BG); ctx.fill()
+    rrect(ctx, -62, -76, 124, 124, 8); setc(ctx, (1, 1, 1, 1)); ctx.fill()
+    draw_qr(ctx, -54, -68, 108)
+    draw_logo(ctx, -52, -118, 34); font(ctx, 'Irish Grover', 15); setc(ctx, INK); ctx.move_to(-32, -112); ctx.show_text('IsHaunted')
+
+def screen_scanner(ctx, t, scan=0.0, confirmed=0.0, show_check=False, check_k=1.0, label=None, subject='phone'):
     """door helper's scanner (receptionist). scan: 0..1 sweep progress; confirmed: 0..1 tint"""
     status_bar(ctx); app_bar(ctx, big=True)
     text(ctx, 'Door check-in', 24, 200, LINK, size=15, bold=True)
@@ -752,12 +1132,19 @@ def screen_scanner(ctx, t, scan=0.0, confirmed=0.0, show_check=False, check_k=1.
     glow(ctx, vx + vw * .7, vy + 40, 160, hx('#FFB86B'), .25)
     # guest phone seen through camera
     ctx.save(); ctx.translate(vx + vw / 2, vy + vh / 2 + 10); ctx.rotate(-.05)
-    rrect(ctx, -84, -150, 168, 300, 24); setc(ctx, hx('#2A2E38')); ctx.fill()
-    rrect(ctx, -78, -144, 156, 288, 20); setc(ctx, BG); ctx.fill()
-    rrect(ctx, -62, -76, 124, 124, 8); setc(ctx, (1, 1, 1, 1)); ctx.fill()
-    draw_qr(ctx, -54, -68, 108)
-    draw_logo(ctx, -52, -118, 34); font(ctx, 'Irish Grover', 15); setc(ctx, INK); ctx.move_to(-32, -112); ctx.show_text('IsHaunted')
-    ctx.restore()
+    if subject == 'scroll':
+        from figure import scroll as _scroll
+        _scroll(ctx, 0, -53, 260, 382, t)
+        ctx.restore()
+    else:
+        _phone_in_view(ctx)
+        ctx.restore()
+    if False:
+      rrect(ctx, -84, -150, 168, 300, 24); setc(ctx, hx('#2A2E38')); ctx.fill()
+      rrect(ctx, -78, -144, 156, 288, 20); setc(ctx, BG); ctx.fill()
+      rrect(ctx, -62, -76, 124, 124, 8); setc(ctx, (1, 1, 1, 1)); ctx.fill()
+      draw_qr(ctx, -54, -68, 108)
+      draw_logo(ctx, -52, -118, 34); font(ctx, 'Irish Grover', 15); setc(ctx, INK); ctx.move_to(-32, -112); ctx.show_text('IsHaunted')
     # scan line
     if confirmed < .5:
         sy = vy + 60 + (vh - 120) * (0.5 + 0.5 * math.sin(t * 5))
