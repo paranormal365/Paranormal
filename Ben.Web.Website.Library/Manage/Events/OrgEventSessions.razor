@@ -83,7 +83,7 @@
                             <select class="form-select" id="session-date" @bind="_form.DateKey">
                                 @foreach (var night in programme.Nights)
                                 {
-                                    <option value="@night.ToString("yyyy-MM-dd")">@night.ToString("ddd MM/dd/yyyy")</option>
+                                    <option value="@night.ToString("yyyy-MM-dd")">@night.ToShortDayDate()</option>
                                 }
                             </select>
                         </div>
@@ -154,7 +154,7 @@
             }
             @foreach (var night in programme.Sessions.GroupBy(s => VenueClock.Local(s.StartsAtUtc, programme.TimeZoneId).Date).OrderBy(g => g.Key))
             {
-                <h2 class="h6 text-secondary text-uppercase small mt-3 mb-2">@night.Key.ToString("dddd MM/dd/yyyy")</h2>
+                <h2 class="h6 text-secondary text-uppercase small mt-3 mb-2">@night.Key.ToFullDayDate()</h2>
                 <div class="list-group mb-2">
                     @foreach (var session in night)
                     {

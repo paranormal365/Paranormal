@@ -165,4 +165,25 @@ public class DateTimeViewerExtensionsTests
 
         Assert.Equal("09/14/2026 03:00 PM", start.ToDisplaySpan(end));
     }
+
+    /// <summary>
+    /// The short weekday date for tight spots (Ben, 2026-10-05: "Or you could use mm/dd/yy instead mm/dd/yyyy"):
+    /// "Say yes to Thu 11/19/2026 – Fri 11/20/2026" ran off a phone's card.
+    /// </summary>
+    [Fact]
+    public void ToShortDaySpan_IsMonthFirstWithATwoDigitYear()
+    {
+        var thu = new DateTime(2026, 11, 19);
+        var fri = new DateTime(2026, 11, 20);
+
+        Assert.Equal("Thu 11/19/26", thu.ToShortDayDate());
+        Assert.Equal("Thu 11/19/26", thu.ToShortDaySpan(thu));
+        Assert.Equal("Thu 11/19/26 – Fri 11/20/26", thu.ToShortDaySpan(fri));
+    }
+
+    [Fact]
+    public void ToFullDayDate_SpellsTheWeekdayAndKeepsTheYear()
+    {
+        Assert.Equal("Thursday 11/19/2026", new DateTime(2026, 11, 19).ToFullDayDate());
+    }
 }

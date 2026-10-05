@@ -64,7 +64,7 @@
 
                 @if (Current(d) is { } current)
                 {
-                    <h2 class="h5 d-none d-print-block">@current.NightDate.ToString("dddd MM/dd/yyyy") · @current.Title</h2>
+                    <h2 class="h5 d-none d-print-block">@current.NightDate.ToFullDayDate() · @current.Title</h2>
 
                     <div class="d-flex flex-wrap gap-2 align-items-end mb-3 d-print-none">
                         @if (Others(d).Count > 0)

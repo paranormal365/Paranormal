@@ -61,7 +61,7 @@
                     <div class="card mb-3" id="@($"menus-night-{thisNight.Id}")">
                         <div class="card-header d-flex justify-content-between align-items-center gap-2 flex-wrap">
                             <span class="fw-semibold">
-                                @thisNight.Date.ToString("dddd MM/dd/yyyy")
+                                @thisNight.Date.ToFullDayDate()
                                 @if (thisNight.Title is { Length: > 0 } title)
                                 {
                                     <span class="text-secondary fw-normal">· @title</span>

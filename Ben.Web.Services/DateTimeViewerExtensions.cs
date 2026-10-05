@@ -153,6 +153,21 @@ public static class DateTimeViewerExtensions
     public const string MediumDatePattern = "MMM d, yyyy";
 
     /// <summary>
+    /// A weekday and a short date: <c>Thu 11/19/26</c>. For the tight spots that show a day or a run of
+    /// nights — a button, a table cell, a picker, a line under an event's name — where the four-digit
+    /// year pushed "Say yes to Thu 11/19/2026 – Fri 11/20/2026" off a phone's card (Ben, 2026-10-05:
+    /// "Or you could use mm/dd/yy instead mm/dd/yyyy"). Headings that spell the weekday out, and
+    /// letters, keep the full year.
+    /// </summary>
+    public const string ShortDayDatePattern = "ddd MM/dd/yy";
+
+    /// <summary>
+    /// The weekday spelled out, then the date: <c>Thursday 11/19/2026</c>. For a night's heading, where
+    /// there is room for it.
+    /// </summary>
+    public const string FullDayDatePattern = "dddd MM/dd/yyyy";
+
+    /// <summary>
     /// The date pattern wrapped for a Telerik <c>DisplayFormat</c>, which wants <c>{0:...}</c>.
     /// </summary>
     /// <remarks>
@@ -265,6 +280,20 @@ public static class DateTimeViewerExtensions
             _ => $"{start} – {end.ToDisplayDateTime()}",
         };
     }
+
+    /// <summary><c>Thu 11/19/26</c> — see <see cref="ShortDayDatePattern"/>.</summary>
+    public static string ToShortDayDate(this DateTime day) =>
+        day.ToString(ShortDayDatePattern, System.Globalization.CultureInfo.InvariantCulture);
+
+    /// <summary><c>Thursday 11/19/2026</c> — see <see cref="FullDayDatePattern"/>.</summary>
+    public static string ToFullDayDate(this DateTime day) =>
+        day.ToString(FullDayDatePattern, System.Globalization.CultureInfo.InvariantCulture);
+
+    /// <summary>
+    /// <c>Thu 11/19/26</c> for one day, <c>Thu 11/19/26 – Fri 11/20/26</c> for a run of them.
+    /// </summary>
+    public static string ToShortDaySpan(this DateTime first, DateTime last) =>
+        first.Date == last.Date ? first.ToShortDayDate() : $"{first.ToShortDayDate()} – {last.ToShortDayDate()}";
 
     /// <summary>Nullable overloads, so call sites keep their own placeholder for "not set".</summary>
     public static string? ToDisplayDate(this DateTime? local) => local?.ToDisplayDate();

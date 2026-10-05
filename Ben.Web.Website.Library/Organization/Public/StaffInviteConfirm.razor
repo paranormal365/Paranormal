@@ -191,6 +191,6 @@
 
     private static string When(HostedEventStaffInviteRecord invite)
         => invite.StartsOn.Date == invite.EndsOn.Date
-            ? invite.StartsOn.ToString("dddd MM/dd/yyyy")
+            ? invite.StartsOn.ToFullDayDate()
             : $"{invite.StartsOn:MM/dd/yyyy} – {invite.EndsOn:MM/dd/yyyy}";
 }
