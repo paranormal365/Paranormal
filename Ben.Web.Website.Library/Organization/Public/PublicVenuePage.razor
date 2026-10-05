@@ -116,7 +116,7 @@
                         <a class="list-group-item list-group-item-action" href="@ev.Url">
                             <div class="fw-semibold">@ev.Name</div>
                             <div class="small text-secondary">
-                                @(ev.StartsOn.Date == ev.EndsOn.Date ? ev.StartsOn.ToString("ddd MM/dd/yyyy") : $"{ev.StartsOn:ddd MM/dd/yyyy} – {ev.EndsOn:ddd MM/dd/yyyy}")
+                                @ev.StartsOn.ToShortDaySpan(ev.EndsOn)
                                 · @ev.OrganizerName
                             </div>
                         </a>

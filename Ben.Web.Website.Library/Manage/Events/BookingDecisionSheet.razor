@@ -80,7 +80,7 @@
                     <div class="mb-2">
                         <label class="form-label small mb-1"
                                for="@($"sheet-night-{thisNight.HostedEventNightId}")">
-                            @thisNight.Date.ToString("dddd MM/dd/yyyy")
+                            @thisNight.Date.ToFullDayDate()
                         </label>
                         <select id="@($"sheet-night-{thisNight.HostedEventNightId}")"
                                 class="form-select"

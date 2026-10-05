@@ -328,7 +328,7 @@
     private static string Nights(VenueRequestRecord r) => Span(r.FromDate, r.ToDate);
 
     private static string Span(DateTime from, DateTime to)
-        => from.Date == to.Date ? from.ToString("ddd MM/dd/yyyy") : $"{from:ddd MM/dd/yyyy} – {to:ddd MM/dd/yyyy}";
+        => from.ToShortDaySpan(to);
 
     private static string Lent(VenueGrantRecord g)
     {

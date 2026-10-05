@@ -190,7 +190,7 @@
 
     private static string When(MyHostedEventBookingRecord booking)
         => booking.StartsOn.Date == booking.EndsOn.Date
-            ? booking.StartsOn.ToString("dddd MM/dd/yyyy")
+            ? booking.StartsOn.ToFullDayDate()
             : $"{booking.StartsOn:MM/dd/yyyy} – {booking.EndsOn:MM/dd/yyyy}";
 
     private static string What(MyHostedEventBookingRecord booking)

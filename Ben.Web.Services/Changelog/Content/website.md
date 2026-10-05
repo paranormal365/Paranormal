@@ -37,6 +37,9 @@ day-by-day account of building it would say nothing to anyone using it now.
 - Venues can keep as many photos as they like on their venue page, write as much as they want about
   their building and house rules, and add sections of their own — ghost hunt weekends, dining, shows —
   in the order they choose.
+- On a phone, the "Say yes to …" button on a venue's hosting requests no longer runs off its card, and
+  dates beside a short weekday read "Thu 11/19/26" wherever space is tight — the requests page, the venue
+  page, your event pass, and an event's nights.
 
 ## 2026-10-02 · 2.14.0
 

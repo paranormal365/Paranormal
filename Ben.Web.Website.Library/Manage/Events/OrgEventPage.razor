@@ -507,7 +507,7 @@
                                         var row = night;
                                         var edit = _nights[row.Id];
                                         <tr>
-                                            <td class="text-nowrap">@row.Date.ToString("ddd MM/dd/yyyy")</td>
+                                            <td class="text-nowrap">@row.Date.ToShortDayDate()</td>
                                             <td>
                                                 <input class="form-control form-control-sm"
                                                        placeholder="@row.Date.ToString("dddd")"

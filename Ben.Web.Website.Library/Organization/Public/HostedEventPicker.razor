@@ -280,7 +280,7 @@
 
     private string Where()
         => Plan.Nights.FirstOrDefault(n => n.Id == _night) is { } night
-            ? night.Date.ToString("dddd MM/dd/yyyy")
+            ? night.Date.ToFullDayDate()
             : Hosted.Name;
 
     // ── holding them ─────────────────────────────────────────────────────────

@@ -107,7 +107,7 @@
                         @foreach (var night in pass.Nights)
                         {
                             <li>
-                                <strong>@night.Date.ToString("ddd MM/dd/yyyy")</strong>
+                                <strong>@night.Date.ToShortDayDate()</strong>
                                 @if (night.UnitName is { Length: > 0 } where)
                                 {
                                     <text> · @where</text>

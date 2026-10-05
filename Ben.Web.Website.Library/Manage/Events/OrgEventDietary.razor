@@ -113,7 +113,7 @@
                 @foreach (var (night, record) in _perNight)
                 {
                     <div class="kitchen-page">
-                        <DietarySheet Heading="@night.Date.ToString("dddd MM/dd/yyyy")"
+                        <DietarySheet Heading="@night.Date.ToFullDayDate()"
                                       Record="record" Event="_event" />
                     </div>
                 }
@@ -209,6 +209,6 @@
 
     private string Heading()
         => _night is { } id && _event?.Nights.FirstOrDefault(n => n.Id == id) is { } night
-            ? night.Date.ToString("dddd MM/dd/yyyy")
+            ? night.Date.ToFullDayDate()
             : _event?.Name ?? "The whole event";
 }
