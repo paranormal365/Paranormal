@@ -87,9 +87,10 @@
         }
     </ol>
     <div class="pitch__apps">
-        <a class="btn btn-primary" href="@SiteOptions.Value.AppStoreUrl" target="_blank" rel="noopener"
-           data-testid="home-app-store">
-            <BenIcon Name="smartphone" /> Get the iPhone &amp; iPad app
+        @* The store link itself lives in the app's own feature further down (HomeAppFeature), with
+           Apple's badge; this points there rather than being a second, plainer way out. *@
+        <a class="btn btn-primary" href="#the-app">
+            <BenIcon Name="smartphone" /> See the iPhone &amp; iPad app
         </a>
         <a href="/help/the-mobile-apps">How the app works with the site →</a>
     </div>

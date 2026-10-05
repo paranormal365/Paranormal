@@ -24,6 +24,7 @@ public sealed class AmericanSpellingTests
         "enrolment", "authorise", "authorised", "summarise", "summarised", "optimise", "travelled",
         "travelling", "realise", "realised", "judgement", "acknowledgement", "analyse", "defence",
         "apologise", "whilst", "amongst", "learnt", "sanitise", "sanitised", "modelled",
+        "car park", "car parks",
     ];
 
     private static readonly Regex Word = new(

@@ -424,7 +424,7 @@ the **Equipment** permission, and so does seeing serial numbers.
 
 Each piece tracks who is holding it, when it was last serviced, whether it is currently faulty, and
 its photos.
-**Held by** can be set by hand: kit gets passed over in a car park without anyone opening the app,
+**Held by** can be set by hand: kit gets passed over in a parking lot without anyone opening the app,
 and the record should still be able to tell the truth. A holder has to be an active member.
 
 **History** on a piece opens two things: the full account of everything that has happened to it —
@@ -1530,7 +1530,7 @@ you whether to send somebody to the desk, wait, or turn them away:
 - a booking not yet confirmed says so, rather than pretending the code is fake.
 
 **Scanning the same party twice is not refused.** You are told when they first arrived and left to
-decide — a door that turned people away for walking back in from the car park would be a worse
+decide — a door that turned people away for walking back in from the parking lot would be a worse
 door.
 
 #### Replacing a pass
@@ -1898,7 +1898,7 @@ red from green.
 ### Writing to your guests
 
 **Write to your guests**, at the bottom of the booking board, sends one letter to everybody with a
-place: *the car park is closed, use the church lot*, *doors open at eight, not seven*, *bring a coat*.
+place: *the parking lot is closed, use the church lot*, *doors open at eight, not seven*, *bring a coat*.
 It is for what everybody needs to know. Anything about one party belongs on that party.
 
 ![Writing to everybody with a place](help-media:organization-administration/event-write-to-guests.png)

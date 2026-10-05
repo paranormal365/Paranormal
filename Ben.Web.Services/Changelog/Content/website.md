@@ -22,6 +22,14 @@ it carry no number.
 The history before 2026-08-22 is summarized rather than listed: the site was not yet open, and a
 day-by-day account of building it would say nothing to anyone using it now.
 
+## 2026-10-05 · 2.15.0
+
+- The home page has a section for the iPhone and iPad app: what it does, its own screens, Apple's
+  App Store badge, and a QR code to scan from a computer. A link near the top takes you straight to it.
+- A new six-page app guide shows what the app does on its own screens, and the home page and the help
+  link to it.
+- The site says "parking lot" everywhere it talks about parking.
+
 ## 2026-10-02 · 2.14.0
 
 - An event's page names the right clock: a November event read in October said "Times are CDT"

@@ -188,6 +188,16 @@ whatever it found — so run `Capture_TheFeed` first, or turn the flag on by han
 skips itself and says so.
 
 
+## The app guide
+
+- **`docs/IsHaunted-App-Guide.pdf`**, also at `Ben.Web.Website/wwwroot/guides/IsHaunted-App-Guide.pdf`: six
+  pages for somebody deciding whether to install the app, in the flyers' style (10/05/2026). It is linked
+  from the home page's app section and the help. It is NOT the developer handover document
+  (`IsHaunted-iOS-iPhone.pdf`).
+- Built by `python3 docs/ads/build-app-guide.py --png`. Its claims come from the help article
+  `the-mobile-apps.md`; keep them in step. Apple's badge and QR code live in
+  `Ben.Web.Website/wwwroot/static/images/app/`, as Apple supplied them.
+
 ## Hosted Events brochure and the advertisements
 
 - **`docs/IsHaunted-Hosted-Events.pdf`** — an eight-page brochure for hosted events and the iPhone app.
