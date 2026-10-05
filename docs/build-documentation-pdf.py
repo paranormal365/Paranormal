@@ -173,118 +173,44 @@ for name, items in sections:
   {d['html']}
 </section>""")
 
-CSS = """
-@page { size: A4; margin: 20mm 18mm 18mm; }
-@page { @bottom-center { content: counter(page); } }
+import sys as _sys
+_sys.path.insert(0, str(pathlib.Path(__file__).parent))
+import site_doc_style  # the website's look (10/05/2026)
 
-* { box-sizing: border-box; }
-html { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
-body {
-  font-family: "Charter", "Iowan Old Style", Georgia, serif;
-  font-size: 10.5pt; line-height: 1.55; color: #1a1a1a; margin: 0;
-}
-h1, h2, h3, .doc-kicker, .toc-aud, .cover-meta, th {
-  font-family: "Helvetica Neue", Helvetica, Arial, sans-serif;
-}
-
-/* ── Screenshots ───────────────────────────────────────────────────── */
-/* Captured at 2x on a 1440px viewport, so an unconstrained image prints far wider than the page.
-   The border matters in print as much as on screen: these are dark screenshots on white paper,
-   and without an edge they bleed into the margin. */
-.doc img {
-  display: block; max-width: 100%; height: auto;
-  margin: 10px 0 4px; border: 1px solid #d5d1e0; border-radius: 3px;
-  /* A screenshot split across a page break is unreadable in a printed manual. */
-  page-break-inside: avoid;
-}
+# The site's look, plus this document's own pieces: the contents and each article's header.
+CSS = site_doc_style.css(str(pathlib.Path(__file__).parent)) + """
+/* ── Screenshots ─────────────────────────────────────────────────────── */
+.doc img { display: block; margin: .12in auto .05in; }
 /* The italic line an author puts under an image is its caption. */
-.doc img + em, .doc p > img + em {
-  display: block; margin-bottom: 14px; font-style: normal;
-  font-size: 9pt; color: #666;
-}
-
-/* ── Cover ─────────────────────────────────────────────────────────── */
-.cover { height: 247mm; display: flex; flex-direction: column; page-break-after: always; }
-.cover-top { flex: 1; display: flex; flex-direction: column; justify-content: center; }
-.cover-rule { width: 54px; height: 4px; border-radius: 2px; background: #5B3DF5;
-  background-image: linear-gradient(120deg, #5B3DF5, #0891A6); margin-bottom: 26px; }
-.cover h1 { font-size: 40pt; line-height: 1.05; margin: 0 0 10px; letter-spacing: -0.02em; }
-.cover .lede { font-size: 14pt; color: #444; margin: 0 0 34px; max-width: 118mm; line-height: 1.45; }
-.cover-meta { font-size: 9.5pt; color: #666; letter-spacing: 0.04em; text-transform: uppercase; }
-.cover-meta div { margin-bottom: 5px; }
-.status {
-  border: 1px solid #d8d3ea; background: #f7f5fd; border-radius: 4px;
-  padding: 14px 18px; font-size: 9.5pt; line-height: 1.5; color: #332b52;
-}
-.status strong { display: block; margin-bottom: 4px; font-family: "Helvetica Neue", sans-serif; }
+.doc img + em, .doc p > img + em { display: block; margin-bottom: .16in; font-style: normal;
+  font-size: 8.4pt; color: var(--faint); text-align: center; }
 
 /* ── Contents ──────────────────────────────────────────────────────── */
-.contents { page-break-after: always; }
-.contents h2 { font-size: 20pt; margin: 0 0 22px; }
+.contents { break-after: page; page-break-after: always; }
+.contents h2 { font-size: 24pt; margin: 0 0 .22in; }
 .toc { list-style: none; padding: 0; margin: 0; }
-.toc-section {
-  font-family: "Helvetica Neue", sans-serif; font-size: 8.5pt; font-weight: 700;
-  letter-spacing: 0.09em; text-transform: uppercase; color: #5B3DF5;
-  margin: 22px 0 8px; padding-bottom: 5px; border-bottom: 1px solid #e6e2f2;
-}
+.toc-section { font-size: 7.8pt; font-weight: 700; letter-spacing: .18em; text-transform: uppercase; color: var(--accent2);
+  margin: .24in 0 .08in; padding-bottom: .05in; border-bottom: 1px solid var(--line); }
 .toc-section:first-child { margin-top: 0; }
-/* The section header is uppercase; its nested list must not inherit that — the first
-   render turned every document title and summary into shouting. */
-.toc ul {
-  list-style: none; padding: 0; margin: 0;
-  text-transform: none; letter-spacing: normal; font-weight: 400; color: #1a1a1a;
-}
-.toc ul li { margin: 0 0 11px; }
-.toc a { text-decoration: none; color: #1a1a1a; display: flex; align-items: baseline; gap: 10px; }
-.toc-title { font-size: 11.5pt; font-weight: 600; font-family: "Helvetica Neue", sans-serif; }
-.toc-aud { font-size: 8pt; color: #888; margin-left: auto; white-space: nowrap; }
-.toc-summary { font-size: 9.5pt; color: #555; margin-top: 1px; }
+/* The section header is uppercase; its nested list must not inherit that. */
+.toc ul { list-style: none; padding: 0; margin: 0; text-transform: none; letter-spacing: normal; font-weight: 400; }
+.toc ul li { margin: 0 0 .1in; }
+.toc a { color: var(--ink); display: flex; align-items: baseline; gap: .1in; }
+.toc-title { font-size: 11pt; font-weight: 650; }
+.toc-aud { font-size: 7.6pt; color: var(--faint); margin-left: auto; white-space: nowrap; }
+.toc-summary { font-size: 9pt; color: var(--muted); margin-top: 1px; }
 
-/* ── Documents ─────────────────────────────────────────────────────── */
-.doc { page-break-before: always; }
-.doc-head { border-bottom: 2px solid #1a1a1a; padding-bottom: 14px; margin-bottom: 22px; }
-.doc-kicker {
-  font-size: 8.5pt; font-weight: 700; letter-spacing: 0.09em;
-  text-transform: uppercase; color: #5B3DF5; margin-bottom: 7px;
-}
-.doc h1 { font-size: 25pt; margin: 0 0 7px; letter-spacing: -0.015em; }
-.doc-summary { font-size: 11.5pt; color: #444; margin: 0 0 9px; }
-.doc-aud { font-size: 9pt; color: #777; }
-
-.doc h2 {
-  font-size: 13.5pt; margin: 26px 0 9px; padding-top: 3px;
-  page-break-after: avoid;
-}
-.doc h3 { font-size: 11.5pt; margin: 20px 0 7px; page-break-after: avoid; }
-p { margin: 0 0 11px; }
-ul, ol { margin: 0 0 12px; padding-left: 20px; }
-li { margin-bottom: 5px; }
-li > ul, li > ol { margin-top: 5px; }
-strong { font-weight: 700; }
-code {
-  font-family: "SF Mono", Menlo, monospace; font-size: 9pt;
-  background: #f2f0f7; padding: 1px 4px; border-radius: 3px;
-}
-blockquote {
-  margin: 0 0 12px; padding: 9px 15px; border-left: 3px solid #c4bce0;
-  background: #f9f8fc; color: #3d3550; font-style: italic;
-}
-blockquote p:last-child { margin-bottom: 0; }
-
-table {
-  width: 100%; border-collapse: collapse; margin: 0 0 14px;
-  font-size: 9.5pt; page-break-inside: avoid;
-}
-th {
-  text-align: left; padding: 7px 9px; background: #f2f0f7;
-  border-bottom: 1.5px solid #c4bce0; font-size: 8.5pt;
-  text-transform: uppercase; letter-spacing: 0.05em;
-}
-td { padding: 7px 9px; border-bottom: 1px solid #e8e5ef; vertical-align: top; }
-tr:last-child td { border-bottom: none; }
-
-/* Keep a heading with what follows it wherever the renderer allows. */
-h1, h2, h3 { break-after: avoid-page; }
+/* ── Each article opens like a page on the site ───────────────────── */
+.doc { break-before: page; page-break-before: always; }
+.doc-head { position: relative; margin: 0 0 .26in; padding: .26in .3in .24in; border-radius: .2in; overflow: hidden;
+  background: radial-gradient(120% 140% at 100% 0%, rgba(124,92,255,.28), transparent 60%),
+              radial-gradient(90% 120% at 0% 100%, rgba(34,211,238,.14), transparent 60%), var(--surface);
+  border: 1px solid var(--line); }
+.doc-head::before { content: ""; position: absolute; inset: 0 0 auto 0; height: 3px; background: var(--grad); }
+.doc-kicker { font-size: 7.8pt; font-weight: 700; letter-spacing: .2em; text-transform: uppercase; color: var(--accent2); margin-bottom: .06in; }
+.doc h1 { font-size: 26pt; margin: 0 0 .06in; }
+.doc-summary { font-size: 11pt; color: var(--body); margin: 0 0 .06in; }
+.doc-aud { font-size: 8.4pt; color: var(--muted); }
 """
 
 doc = f"""<!doctype html>
@@ -293,25 +219,15 @@ doc = f"""<!doctype html>
 <style>{CSS}</style></head>
 <body>
 
-<div class="cover">
-  <div class="cover-top">
-    <div class="cover-rule"></div>
-    <h1>IsHaunted.com</h1>
-    <p class="lede">The complete product documentation — every screen, rule and safeguard,
-      written for the people who use it.</p>
-    <div class="cover-meta">
-      <div>Product Documentation</div>
-      <div>{len(docs)} documents &middot; {len(sections)} sections</div>
-      <div>{today}</div>
-    </div>
-  </div>
-  <div class="status">
-    <strong>About this document</strong>
-    This is the in-product help, reproduced in full and unaltered — the same text the
-    application serves to its users. It describes the software as built. It contains no
-    business, market or financial information, and no usage figures.
-  </div>
-</div>
+{site_doc_style.cover(str(pathlib.Path(__file__).parent), kicker="Product documentation",
+    title_html='Everything <span class="accent-text">IsHaunted</span> does.',
+    lede="The complete product documentation — every screen, rule and safeguard, written for the people who use it.",
+    photo="i3-walking-to-house.jpg",
+    facts=[("Documents", str(len(docs))), ("Sections", str(len(sections))), ("Updated", datetime.date.today().strftime("%m/%d/%Y"))],
+    about_html="<b>About this document.</b> This is the in-product help, reproduced in full and unaltered — the same "
+               "text the application serves to its users. It describes the software as built. It contains no business, "
+               "market or financial information, and no usage figures.",
+    foot_right="Product documentation")}
 
 <div class="contents">
   <h2>Contents</h2>
