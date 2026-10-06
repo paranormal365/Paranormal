@@ -7,13 +7,13 @@ from scenes import *
 S = {}
 def scenes():
     if not S:
-        S[1] = Scene1(); S[2] = Scene2(); S[3] = Scene3()
+        S[1] = Scene1(); S[2] = Scene2(); S['2b'] = Scene2b(); S[3] = Scene3()
         S[4] = Scene4(S[3]); S[5] = Scene5(S[3]); S[6] = Scene6()
     return S
 
 def render_scene(n, gt):
     s, c = new_surface(); setc(c, BG); c.paint()
-    local = gt - {1: T1, 2: T2, 3: T3, 4: T4, 5: T5, 6: T6}[n]
+    local = gt - {1: T1, 2: T2, '2b': T2B, 3: T3, 4: T4, 5: T5, 6: T6}[n]
     scenes()[n].draw(c, local, gt)
     return s
 
@@ -27,12 +27,16 @@ def frame(gt):
         put(render_scene(1, gt))
     elif gt < T2:
         put(render_scene(1, gt)); put(render_scene(2, gt), ease(seg(gt, T2 - .3, T2)))
-    elif gt < T3:
+    elif gt < T2B:
         put(render_scene(2, gt))
+    elif gt < T3 - .15:
+        put(render_scene('2b', gt))
+        fa = 1 - ease(seg(gt, T2B, T2B + .35))
+        if fa > 0: setc(c, hx('#FFF1D0', fa)); c.paint()
+    elif gt < T3:
+        put(render_scene('2b', gt)); put(render_scene(3, gt), ease(seg(gt, T3 - .15, T3)))
     elif gt < T4 - .35:
         put(render_scene(3, gt))
-        fa = 1 - ease(seg(gt, T3, T3 + .4))
-        if fa > 0: setc(c, hx('#FFF1D0', fa)); c.paint()
     elif gt < T4:
         put(render_scene(3, gt)); put(render_scene(4, gt), ease(seg(gt, T4 - .35, T4)))
     elif gt < T5:

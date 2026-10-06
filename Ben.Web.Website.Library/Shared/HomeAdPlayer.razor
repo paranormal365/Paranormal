@@ -24,26 +24,25 @@
     M = sound.
 
     All of it runs in the browser (HomeAdPlayer.razor.js): no round trip to the circuit per hover.
-    Files: /static/video/ishaunted-ad-{1080,720}.mp4 and ishaunted-ad-poster.jpg (the end card).
-    Until the 1080p file is in wwwroot the section renders nothing at all, so the page never shows
-    an empty frame; it appears on its own once the files are deployed.
+    Files: /static/video/ads/<id>-{hd,sd}.mp4 and <id>-poster.jpg, one set per ad (see AdIds below). With no
+    ad files in wwwroot the section renders nothing at all, so the page never shows an empty frame.
 *@
 
 @if (_hasVideo)
 {
     <section class="ad-player" data-testid="home-ad">
         <div class="ad-player__card">
-            <div class="ben-kicker">Thirty seconds</div>
-            <h2 class="ad-player__title">From the driveway <span class="ben-accent-text">to the dance floor.</span></h2>
+            <div class="ben-kicker">Short films</div>
+            <h2 class="ad-player__title">Haunted, <span class="ben-accent-text">in under a minute.</span></h2>
             <p class="ad-player__lede">
-                A guest, a pass on their phone, and a front desk with a scanner. One scan, one guest
-                confirmed, and the door opens on the party.
+                A ninja who arrives by dragon, a wizard who checks for EVPs, a guest with a pass on their phone.
+                A different one each time, and when one ends the next picks itself.
             </p>
 
             <div class="ad-player__frame" @ref="_frame" tabindex="0" role="button"
                  aria-label="@(SiteOptions.Value.Name) ad. Press Enter to pause or play, M for sound." data-state="loading">
-                <video @ref="_video" class="ad-player__video" muted loop playsinline preload="none"
-                       poster="/static/video/ishaunted-ad-poster.jpg" aria-hidden="true"></video>
+                <video @ref="_video" class="ad-player__video" muted playsinline preload="none"
+                       poster="@_ads[_start].Poster" aria-hidden="true"></video>
 
                 <span class="ad-player__play" aria-hidden="true"><BenIcon Name="play" /></span>
 
@@ -64,8 +63,22 @@
     private bool _disposed;
     private bool _hasVideo;
 
-    protected override void OnInitialized() =>
-        _hasVideo = Env.WebRootFileProvider.GetFileInfo("static/video/ishaunted-ad-1080.mp4").Exists;
+    // The playlist (Ben, 10/06/2026): every ad with a static/video/ads/<id>-hd.mp4 in wwwroot is in the
+    // rotation (each also has -sd.mp4 for narrow screens and -poster.jpg). The page starts on a random one;
+    // the module picks a random different one each time an ad ends. Add an id here to add an ad.
+    private static readonly string[] AdIds = { "anime", "wizard", "cartoon" };
+    private sealed record Ad(string Hd, string Sd, string Poster);
+    private readonly List<Ad> _ads = new();
+    private int _start;
+
+    protected override void OnInitialized()
+    {
+        foreach (var id in AdIds)
+            if (Env.WebRootFileProvider.GetFileInfo($"static/video/ads/{id}-hd.mp4").Exists)
+                _ads.Add(new Ad($"/static/video/ads/{id}-hd.mp4", $"/static/video/ads/{id}-sd.mp4", $"/static/video/ads/{id}-poster.jpg"));
+        _hasVideo = _ads.Count > 0;
+        if (_hasVideo) _start = Random.Shared.Next(_ads.Count);
+    }
 
     protected override async Task OnAfterRenderAsync(bool firstRender)
     {
@@ -75,7 +88,7 @@
             _module = await JS.InvokeAsync<IJSObjectReference>(
                 "import", "/_content/Ben.Web.Website.Library/Shared/HomeAdPlayer.razor.js");
             if (_disposed) return;
-            await _module.InvokeVoidAsync("init", _frame, _video);
+            await _module.InvokeVoidAsync("init", _frame, _video, _ads, _start);
         }
         catch (Exception e) when (e is JSException or JSDisconnectedException or TaskCanceledException or ObjectDisposedException)
         {

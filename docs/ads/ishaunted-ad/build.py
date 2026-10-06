@@ -12,9 +12,9 @@ It reads the logo from wwwroot (static/images/is-haunted-logo.svg) and the palet
 tokens copied into common.py, and writes:
 
     build/IsHaunted-Ad-30s.mp4                              the master (1080p, CRF 18)
-    Ben.Web.Website/wwwroot/static/video/ishaunted-ad-1080.mp4   what Home plays on wide screens
-    Ben.Web.Website/wwwroot/static/video/ishaunted-ad-720.mp4    ...and on narrow ones
-    Ben.Web.Website/wwwroot/static/video/ishaunted-ad-poster.jpg the end card, before it loads
+    Ben.Web.Website/wwwroot/static/video/ads/anime-hd.mp4   what Home plays on wide screens
+    Ben.Web.Website/wwwroot/static/video/ads/anime-sd.mp4    ...and on narrow ones
+    Ben.Web.Website/wwwroot/static/video/ads/anime-poster.jpg the end card, before it loads
 
 The QR code on the pass in the ad is real and points at https://ishaunted.com/pass/HM-31OCT-0047,
 which is not a pass. Change QR data in common.py if it should go somewhere useful.
@@ -31,7 +31,7 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 REPO = os.path.abspath(os.path.join(HERE, '..', '..', '..'))
 BUILD = os.environ.setdefault('AD_BUILD', os.path.join(HERE, 'build'))
 WWW = os.path.join(REPO, 'Ben.Web.Website', 'wwwroot')
-OUT = os.path.join(WWW, 'static', 'video')
+OUT = os.path.join(WWW, 'static', 'video', 'ads')
 FFMPEG = os.environ.setdefault('FFMPEG', shutil.which('ffmpeg') or '/opt/homebrew/bin/ffmpeg')
 PY = sys.executable
 
@@ -127,12 +127,12 @@ def main():
     step('web copies -> wwwroot/static/video')
     run(FFMPEG, '-y', '-loglevel', 'error', '-i', master, '-c:v', 'libx264', '-preset', 'slow', '-crf', '23',
         '-profile:v', 'high', '-pix_fmt', 'yuv420p', '-c:a', 'aac', '-b:a', '128k', '-movflags', '+faststart',
-        os.path.join(OUT, 'ishaunted-ad-1080.mp4'))
+        os.path.join(OUT, 'anime-hd.mp4'))
     run(FFMPEG, '-y', '-loglevel', 'error', '-i', master, '-vf', 'scale=1280:720', '-c:v', 'libx264', '-preset', 'slow',
         '-crf', '24', '-profile:v', 'high', '-pix_fmt', 'yuv420p', '-c:a', 'aac', '-b:a', '112k', '-movflags', '+faststart',
-        os.path.join(OUT, 'ishaunted-ad-720.mp4'))
+        os.path.join(OUT, 'anime-sd.mp4'))
     run(FFMPEG, '-y', '-loglevel', 'error', '-ss', '29.6', '-i', master, '-frames:v', '1', '-vf', 'scale=1280:720',
-        '-q:v', '3', os.path.join(OUT, 'ishaunted-ad-poster.jpg'))
+        '-q:v', '3', os.path.join(OUT, 'anime-poster.jpg'))
     for f in sorted(os.listdir(OUT)):
         print(f'   {f}  {os.path.getsize(os.path.join(OUT, f)) / 1e6:.1f} MB')
     print(f'\ndone in {time.time() - t0:.0f}s')

@@ -3,9 +3,12 @@ import cairo
 from PIL import Image, ImageFilter
 from common import *
 from common import _limb
+from figure import figure, POSES, OUTFITS, P, walk, conga, blend, weapon, scroll
+from dragon import dragon
 
 # ── global timeline (seconds) ───────────────────────────────────────────────
-T1, T2, T3, T4, T5, T6, T7, TEND = 0.0, 5.5, 9.0, 14.0, 17.0, 21.0, 25.5, 30.0
+T1, T2, T3, T4, T5, T6, T7, TEND = 0.0, 5.5, 10.0, 14.0, 17.0, 21.0, 25.5, 30.0
+T2B = 7.8   # inside the foyer: the window, and only now the ghosts
 
 def cam(ctx, z, fx, fy, k=None):
     """zoom by z keeping world point (fx,fy) moving toward screen centre by k (default tied to z)"""
@@ -211,87 +214,159 @@ class Scene1:
         self.fogB = fog_texture(2400, 360, 2, 22, 90)
         self.bats = [(-.2, 120, 1.0), (.3, 190, .8), (.9, 90, .7)]
 
-    def car_x(self, t):
-        return lerp(-320, 600, ease_out(seg(t, .2, 2.4)))
+    # ── the dragon's flight, and the hero's leap ──────────────────────────────
+    DS = .72                      # dragon scale
+    LAND = (1000, 985)            # where the hero lands, in front of the walkway
+    HS = .62                      # the hero's scale on the ground
+
+    def dragon_state(self, t):
+        if t < 1.7:
+            p = ease_out(seg(t, 0, 1.7))
+            x = lerp(-520, 820, p); y = lerp(150, 470, p) + math.sin(p * math.pi) * -40
+            return x, y, lerp(14, -4, p), 0.0
+        if t < 2.62:
+            return 820 + math.sin(t * 2) * 8, 470 + math.sin(t * 4.5) * 12, -4, 0.0
+        p = ease_in(seg(t, 2.62, 4.2))
+        return lerp(820, 2500, p), lerp(470, -320, p), lerp(-4, -24, seg(t, 2.62, 3.2)), self.chirp(t)
+
+    # the car-alarm gag: as the hero leaps off he arms it, chirp-chirp, hazard lights in its eyes
+    CHIRPS = (2.64, 2.90)
+    def chirp(self, t):
+        return max(math.sin(clamp((t - c) / .18) * math.pi) if c <= t <= c + .18 else 0.0 for c in self.CHIRPS)
+
+    def seat(self, t):
+        x, y, h, _ = self.dragon_state(min(t, 2.62))
+        sx, sy = 30, -52 + 150 * .89 - 150 * .89
+        r = math.radians(h)
+        return x + self.DS * (math.cos(r) * sx - math.sin(r) * sy), y + self.DS * (math.sin(r) * sx + math.cos(r) * sy)
+
+    def leap_p(self, t):
+        if t < 2.85: return .45 * ease_out(seg(t, 2.62, 2.85))
+        if t < 3.3: return lerp(.45, .55, seg(t, 2.85, 3.3))          # the slow-motion hang
+        return lerp(.55, 1.0, ease_in(seg(t, 3.3, 3.45)))
+
+    def hero_state(self, t):
+        """x, y (feet), scale, pose, view, expr, mode"""
+        if t < 2.62:
+            return None
+        if t < 3.45:
+            sx, sy = self.seat(2.62)
+            p = self.leap_p(t)
+            x = lerp(sx, self.LAND[0], p); y = lerp(sy + 40, self.LAND[1], p) - 330 * 4 * p * (1 - p)
+            mode = 'hero_air' if 2.85 <= t < 3.3 else 'leap'
+            return x, y, self.HS, None, 'front' if mode == 'hero_air' else 'side', 'hero', mode
+        if t < 4.9:
+            k = ease(seg(t, 3.9, 4.35))
+            pose = blend(POSES['landing'], POSES['guard'], k)
+            return self.LAND[0], self.LAND[1], self.HS, pose, 'front', 'hero', 'ground'
+        p = ease_in(seg(t, 4.9, 5.5)) * .7 + seg(t, 4.9, 5.5) * .3
+        return lerp(self.LAND[0], 1140, p), lerp(self.LAND[1], 862, p), lerp(self.HS, .42, p), walk(t * 20, run=True, lean=8), 'side', 'hero', 'dash'
+
+    def camera(self, t):
+        keys = [(0, 1.0, 960, 560), (1.55, 1.0, 960, 560), (1.95, 2.8, 0, 0), (2.55, 2.9, 0, 0),
+                (2.9, 2.4, 0, 0), (3.3, 2.3, 0, 0), (3.5, 1.85, 0, 0), (4.6, 1.45, 0, 0), (5.2, 1.0, 960, 560), (5.5, 1.0, 960, 560)]
+        # focus on whatever matters at that moment
+        def focus(tt):
+            if tt < 2.62:
+                sx, sy = self.seat(tt); return sx, sy - 40
+            hs = self.hero_state(tt)
+            return hs[0], hs[1] - 150 * hs[2]
+        for i in range(len(keys) - 1):
+            t0, z0, _, _ = keys[i]; t1, z1, _, _ = keys[i + 1]
+            if t0 <= t <= t1:
+                q = ease(seg(t, t0, t1))
+                z = lerp(z0, z1, q)
+                fx, fy = focus(t)
+                w = clamp((z - 1) / 1.0)
+                return z, lerp(960, fx, w), lerp(560, fy, w), w
+        return 1.0, 960, 560, 0
 
     def draw(self, ctx, t, gt):
-        # camera: gentle push + snap zoom on the fear look
-        px, py, ps, facing, walk, expr = self.guest_state(t)
-        z = lerp(1.0, 1.06, ease(seg(t, 0, 5.5)))
-        zk = ease(seg(t, 3.95, 4.18)) * (1 - ease(seg(t, 4.75, 5.0)))
-        head = (px, py - 258 * ps)
+        z, fx, fy, w = self.camera(t)
+        shake = 0.0
+        if 3.45 <= t < 3.7: shake = (1 - seg(t, 3.45, 3.7)) * 14
+        if 2.85 <= t < 2.95: shake = (1 - seg(t, 2.85, 2.95)) * 10
         ctx.save()
-        cam(ctx, z + zk * 1.7, lerp(960, head[0], ease(zk)), lerp(560, head[1], ease(zk)), k=ease(zk) * .97 + (1 - ease(zk)) * .05)
+        ctx.translate(math.sin(gt * 97) * shake, math.cos(gt * 83) * shake * .6)
+        cam(ctx, z, fx, fy, k=w * .97)
         paint_cached(ctx, self.bg, self.k)
-        # window flicker
-        for i, (x, y, w, h) in enumerate(S1_LIT):
+        for i, (x, y, ww, hh) in enumerate(S1_LIT):
             a = .55 + .25 * noise1(gt * 2.2, i * 3.1) + (.25 if i == 0 else 0)
-            window(ctx, x, y, w, h, clamp(a), arch=True)
-            glow(ctx, x + w / 2, y + h / 2, 90, hx('#FFC266'), .18 * a)
-        # ghost in attic window
-        ga = ease(seg(t, 1.2, 1.8)) * (1 - ease(seg(t, 3.4, 3.9)))
+            window(ctx, x, y, ww, hh, clamp(a), arch=True)
+            glow(ctx, x + ww / 2, y + hh / 2, 90, hx('#FFC266'), .18 * a)
+        ga = ease(seg(t, .6, 1.2)) * (1 - ease(seg(t, 3.0, 3.5)))
         if ga > 0:
             ctx.save(); circle(ctx, 1140, 448, 31); ctx.clip()
             glow(ctx, 1140, 448, 60, hx('#B8F5C8'), .5 * ga)
             sheet_ghost(ctx, 1140 + math.sin(gt * 2) * 4, 470, .45, gt, alpha=ga * .9, expr='o')
             ctx.restore()
-        # bats across the moon
-        for (ph, y0, s) in self.bats:
+        for (ph, y0, s_) in self.bats:
             bx = ((t * .22 + ph) % 1.4) * 2200 - 200
             by = y0 + math.sin(t * 2 + ph * 9) * 30
             flap = math.sin(gt * 22 + ph * 5)
-            ctx.save(); ctx.translate(bx, by); ctx.scale(s, s)
+            ctx.save(); ctx.translate(bx, by); ctx.scale(s_, s_)
             ctx.move_to(0, 0); ctx.curve_to(-14, -10 - flap * 12, -30, -6 - flap * 16, -40, -2 - flap * 18)
             ctx.curve_to(-30, 2, -22, 4, -14, 2); ctx.curve_to(-8, 6, -4, 4, 0, 8)
             ctx.curve_to(4, 4, 8, 6, 14, 2); ctx.curve_to(22, 4, 30, 2, 40, -2 - flap * 18)
             ctx.curve_to(30, -6 - flap * 16, 14, -10 - flap * 12, 0, 0); setc(ctx, hx('#05060A')); ctx.fill(); ctx.restore()
-        # fog behind car
         self.fog(ctx, self.fogA, 560, gt * 26, .85)
-        # car
-        cx = self.car_x(t)
-        moving = 0 < seg(t, .2, 2.4) < 1
-        bounce = (math.sin(gt * 24) * 1.5 if moving else 0) + 4 * math.sin(seg(t, 2.4, 2.8) * math.pi * 2) * (1 - seg(t, 2.4, 2.8))
-        cs = .78
-        # headlight beam
-        hlx, hly = cx + 160 * cs, 915 - 52 * cs - bounce * cs
-        ctx.save(); ctx.set_operator(cairo.OPERATOR_ADD)
-        ctx.move_to(hlx, hly - 6); ctx.line_to(hlx + 760, hly - 120); ctx.line_to(hlx + 760, hly + 110); ctx.close_path()
-        ctx.set_source(lingrad(hlx, 0, hlx + 760, 0, [(0, hx('#FFF2C4', .35)), (1, hx('#FFF2C4', 0))])); ctx.fill()
-        glow(ctx, hlx, hly, 40, hx('#FFF6D0'), .7)
-        ctx.restore()
-        door = ease(seg(t, 2.6, 2.85)) * (1 - ease(seg(t, 3.1, 3.25)))
-        car(ctx, cx, 915, cs, (cx + 320) / (34 * cs), bounce=bounce, driver=t < 2.75)
-        # guest
-        if t >= 2.7:
-            a = ease(seg(t, 2.7, 2.95))
-            arms = None; phone = 'near'
-            if facing == 'front':
-                shake = math.sin(gt * 70) * 2.5 * (1 if expr == 'fear' else 0)
-                arms = {'l': (-25, -15), 'r': (35, 150)}
-                person(ctx, px + shake, py, ps, 'front', expr=expr, t=gt, phone='r', arms=arms, alpha=a)
-            else:
-                person(ctx, px, py, ps, facing, walk=walk, expr='neutral', t=gt, phone=phone if facing == 'right' else None,
-                       arms={'near': (40 + (walk and math.sin(walk) * 8 or 0), 140)} if facing == 'right' else None, alpha=a)
-        car_door(ctx, cx, 915, cs, door)
-        # foreground fog
+
+        N = OUTFITS['ninja']
+        # the dragon, with the hero aboard until he leaps
+        dx, dy, dh, roar = self.dragon_state(t)
+        if dx < 2700:
+            flap = gt * (9 if t < 1.7 else (6 if t < 2.62 else 11))
+            if t < 1.7:
+                motion_lines(ctx, dx - 760, dy - 140, dx - 260, dy + 80, 14, gt, (1, 1, 1, 1), .35)
+            def rider(c, sx, sy):
+                if t >= 2.62: return
+                if t < 1.95:
+                    figure(c, sx, sy + 150 * .89, .89, P(lt=-80, lk=10, rt=-70, rk=20, la=60, lf=80, ra=70, rf=90, lean=14, air=True),
+                           N, gt, 'side', 'neutral', look=(1, .3), wind=2)
+                else:
+                    sc = t > 2.05 and t < 2.48
+                    pose = P(lt=-70, lk=-10, rt=70, rk=10, la=-30, lf=-160, ra=30, rf=160, lean=-4, air=True) if sc else \
+                           P(lt=-70, lk=-10, rt=70, rk=10, la=-60, lf=-30, ra=60, rf=30, air=True, tilt=-6)
+                    figure(c, sx + math.sin(gt * 70) * (2 if sc else 0), sy + 150 * .89, .89, pose, N, gt, 'front',
+                           'fear' if sc else 'hero', wind=1.5)
+            dragon(ctx, dx, dy, self.DS, gt, flap, heading=dh, roar=roar, rider=rider, flash=self.chirp(t))
+        # the hero after the leap
+        hs = self.hero_state(t)
+        if hs and hs[6] != 'hero_air':
+            hx_, hy_, hsc, pose, view, expr, mode = hs
+            if mode == 'leap':
+                motion_lines(ctx, hx_ - 220, hy_ - 200 * hsc, hx_ - 30, hy_ - 20, 10, gt, hx('#C7B8FF'), .6)
+                figure(ctx, hx_, hy_, hsc, dict(POSES['leap'], air=True), N, gt, 'side', expr, wind=2.4)
+            elif mode == 'ground':
+                land = seg(t, 3.45, 4.1)
+                if land < 1:
+                    # the shockwave and dust where he hit
+                    for k in range(3):
+                        rr = (land * 260 + k * 30) * hsc * 1.6
+                        ellipse(ctx, hx_, hy_ + 4, rr, rr * .22); ctx.set_line_width(6 * (1 - land)); setc(ctx, (1, 1, 1, .5 * (1 - land))); ctx.stroke()
+                    for k in range(10):
+                        ang = k / 10 * math.pi
+                        d = land * 180 * hsc * 1.6
+                        circle(ctx, hx_ + math.cos(ang) * d * 1.6, hy_ - math.sin(ang) * d * .35, 18 * (1 - land) + 4); setc(ctx, hx('#9AA0AE', .5 * (1 - land))); ctx.fill()
+                figure(ctx, hx_, hy_, hsc, pose, N, gt, view, expr, wind=1.6, glint=math.sin(clamp(seg(t, 4.35, 4.65)) * math.pi))
+            elif mode == 'dash':
+                motion_lines(ctx, hx_ - 320 * hsc * 2, hy_ - 300 * hsc, hx_ - 40 * hsc, hy_ - 30 * hsc, 14, gt, hx('#C7B8FF'), .7, -1)
+                for k, aa in ((3, .16), (2, .26), (1, .4)):
+                    figure(ctx, hx_ - k * 40 * hsc * 2, hy_ + k * 6, hsc, pose, N, gt, view, expr, wind=2.4, alpha=aa)
+                figure(ctx, hx_, hy_, hsc, pose, N, gt, view, expr, wind=2.4)
         self.fog(ctx, self.fogB, 770, -gt * 40, .75)
+        # the hero moment, mid-air: impact frame, slow motion, blade drawn
+        ia = ease(seg(t, 2.85, 2.88)) * (1 - ease(seg(t, 3.22, 3.3)))
+        if hs and ia > 0:
+            hx_, hy_, hsc = hs[0], hs[1], hs[2]
+            impact_frame(ctx, hx_, hy_ - 150 * hsc, gt, ia)
+            figure(ctx, hx_, hy_, hsc, dict(POSES['hero'], air=True), N, gt, 'front', 'hero', wind=2.6,
+                   glint=math.sin(clamp(seg(t, 2.95, 3.2)) * math.pi))
+        if 2.85 <= t < 2.9:
+            setc(ctx, (1, 1, 1, .85 * (1 - seg(t, 2.85, 2.9)))); ctx.paint()
         ctx.restore()
-        # vignette
         g = cairo.RadialGradient(W / 2, H / 2, H * .4, W / 2, H / 2, H * 1.05)
         g.add_color_stop_rgba(0, 0, 0, 0, 0); g.add_color_stop_rgba(1, 0, 0, 0, .65); ctx.set_source(g); ctx.paint()
-
-    def guest_state(self, t):
-        cx = self.car_x(t)
-        ps = .5
-        if t < 3.0:
-            return cx + 26, 930 - 18 * (1 - ease(seg(t, 2.7, 2.95))), ps, 'right', None, 'neutral'
-        if t < 3.9:
-            p = ease(seg(t, 3.0, 3.9))
-            return lerp(cx + 26, 900, p), lerp(930, 905, p), ps, 'right', t * 9, 'neutral'
-        if t < 4.85:
-            return 900, 905, ps, 'front', None, 'fear' if t > 3.98 else 'neutral'
-        p = seg(t, 4.85, 5.6)
-        return lerp(900, 1140, p), lerp(905, 862, p), lerp(ps, .42, p), 'back', t * 9, 'neutral'
 
     def fog(self, ctx, tex, y, off, a):
         w = tex.get_width()
@@ -432,43 +507,31 @@ class Scene2:
         self.behind = make_cache(bw, self.k)
 
     def guest(self, t):
-        if t < 2.0:
-            p = ease_out(seg(t, 0, 2.0)) if t > 0 else 0
-            x = lerp(-220, 960, seg(t, 0, 2.0) * .55 + p * .45)
-            return x, 995, 1.3, 'right', t * 8.5
-        if t < 2.3:
-            return 960, 995, 1.3, 'back', None
-        p = ease(seg(t, 2.3, 3.2))
-        return 960, lerp(995, 880, p), lerp(1.3, 1.0, p), 'back', t * 8.5
+        """porch: walk up (0-1.25), wait while the bellhop opens up, walk in (1.5-2.2)"""
+        if t < 1.25:
+            p = ease_out(seg(t, 0, 1.25))
+            return lerp(-220, 900, p), 995, 1.3, 'right', t * 9
+        if t < 1.5:
+            return 900, 995, 1.3, 'back', None
+        p = ease(seg(t, 1.5, 2.2))
+        return lerp(900, 950, p), lerp(995, 880, p), lerp(1.3, 1.0, p), 'back', t * 9
 
     def draw(self, ctx, t, gt):
         ctx.save()
-        z = lerp(1.0, 1.05, ease(seg(t, 0, 3.5)))
+        z = lerp(1.0, 1.05, ease(seg(t, 0, 2.3)))
         cam(ctx, z, 960, 600, k=.0)
-        # behind the dark window: forest + kids playing
+        # the dark window: just trees and the moon. Nothing in it yet.
         paint_cached(ctx, self.behind, self.k)
         x, y, w, h = WIN_R
-        ctx.save(); arch_path(ctx, x, y, w, h); ctx.clip()
-        for i in range(3):
-            ph = gt * 1.6 + i * 2.1
-            gx = x + w / 2 + math.cos(ph) * 70
-            gy = y + h - 120 + math.sin(ph * 2) * 18 - abs(math.sin(gt * 4 + i)) * 20
-            sheet_ghost(ctx, gx, gy, .42 + .06 * math.sin(ph), gt, seed=i * 3, look=-math.sin(ph), arms_up=.6 + .4 * math.sin(gt * 5 + i), alpha=.92)
-        # one peeks from behind a tree
-        pk = .5 + .5 * math.sin(gt * 1.3)
-        sheet_ghost(ctx, x + 50 + pk * 26, y + h - 170, .3, gt, seed=9, look=1, alpha=.85)
-        ctx.restore()
         setc(ctx, hx('#1E3A6A', .18)); arch_path(ctx, x, y, w, h); ctx.fill()
         # candle window (left)
         x, y, w, h = WIN_L
         ctx.save(); arch_path(ctx, x, y, w, h); ctx.clip()
         ctx.set_source(lingrad(0, y, 0, y + h, [(0, hx('#3A1A12')), (1, hx('#5A2A16'))])); ctx.paint()
         glow(ctx, x + w / 2, y + h - 90, 260, hx('#FF9C3A'), .45 + .1 * noise1(gt * 6, 1))
-        # curtains
         for sx in (x, x + w):
             ctx.move_to(sx, y); ctx.curve_to(sx + (60 if sx == x else -60), y + h * .4, sx + (20 if sx == x else -20), y + h * .7, sx, y + h)
             ctx.line_to(sx, y); setc(ctx, hx('#6A1420')); ctx.fill()
-        # candelabra
         cx_ = x + w / 2; base = y + h - 30
         rrect(ctx, cx_ - 30, base - 10, 60, 14, 4); setc(ctx, hx('#B88A3A')); ctx.fill()
         line(ctx, cx_, base - 10, cx_, base - 90, 8, hx('#B88A3A'))
@@ -477,55 +540,170 @@ class Scene2:
             candle(ctx, cx_ + dx_, base - (96 if dx_ == 0 else 80), 54 if dx_ == 0 else 44, gt, i * 2.7)
         ctx.restore()
         setc(ctx, (1, 1, 1, .05)); arch_path(ctx, x, y, w, h); ctx.fill()
-        # door opening + interior light
+        # the doorway: warm light inside, the bellhop opening up
         dx, dy, dw, dh = DOOR
-        op = ease(seg(t, 1.75, 2.35))
+        op = ease(seg(t, 1.0, 1.45))
         ctx.save()
         ctx.rectangle(dx, dy, dw, dh); ctx.move_to(dx, dy); ctx.arc(dx + dw / 2, dy, dw / 2, math.pi, 0); ctx.close_path(); ctx.clip()
         ctx.set_source(lingrad(0, dy - 130, 0, dy + dh, [(0, hx('#FFE9B8')), (1, hx('#E7A055'))])); ctx.paint()
         glow(ctx, dx + dw / 2, dy + 120, 260, hx('#FFFFFF'), .6)
-        # fanlight muntins
         ctx.set_line_width(5); setc(ctx, hx('#6E6458'))
         for k in range(7):
             a = math.pi + k / 6 * math.pi
             ctx.move_to(dx + dw / 2, dy); ctx.line_to(dx + dw / 2 + math.cos(a) * dw, dy + math.sin(a) * dw); ctx.stroke()
         line(ctx, dx, dy, dx + dw, dy, 8, hx('#6E6458'))
-        # guest inside the doorway
-        px, py, ps, facing, walk = self.guest(t)
-        inside = t > 2.55
+        if op > 0:
+            # the unicorn bellhop, a sweep of the arm: this way
+            sweep = ease_out_back(seg(t, 1.2, 1.55), 1.6)
+            ba = clamp(op * 1.4)
+            figure(ctx, dx + dw - 76, dy + dh - 2, .92, blend(POSES['attention'], POSES['flourish'], sweep), OUTFITS['unicorn'], gt,
+                   'front', 'smile', look=(-1, .2), alpha=ba, glint=math.sin(clamp(seg(t, 1.45, 1.75)) * math.pi))
+            for i in range(6):
+                q = (gt * .7 + i / 6) % 1
+                sparkle(ctx, dx + dw - 150 + math.sin(i * 2.3) * 70, dy + dh - 260 - q * 160, 9 * (1 - q) + 3, hx('#FFF6C8'), (1 - q) * sweep)
+        px, py, ps, facing, wph = self.guest(t)
+        inside = t > 1.85
         if inside:
-            a = 1 - ease(seg(t, 2.8, 3.3))
-            person(ctx, px, py, ps, 'back', walk=walk, t=gt, alpha=a)
+            a = 1 - ease(seg(t, 2.0, 2.3))
+            figure(ctx, px, py, ps * .96, walk(wph or 0), OUTFITS['ninja'], gt, 'back', alpha=a)
         # door panel swinging inward (hinge on the left)
         dwv = dw * math.cos(op * math.pi * .46)
         persp = op * 26
         ctx.move_to(dx, dy); ctx.line_to(dx + dwv, dy + persp); ctx.line_to(dx + dwv, dy + dh - persp * .4); ctx.line_to(dx, dy + dh); ctx.close_path()
         ctx.set_source(lingrad(dx, 0, dx + dw, 0, [(0, hx('#5A2626')), (1, shade(hx('#5A2626'), lerp(1, .55, op)))])); ctx.fill()
-        ctx.save(); ctx.translate(dx, dy); ctx.scale(dwv / dw, 1)
+        ctx.save(); ctx.translate(dx, dy); ctx.scale(max(dwv, 1) / dw, 1)
         for (px_, py_, pw_, ph_) in ((28, 40, 88, 140), (144, 40, 88, 140), (28, 220, 88, 140), (144, 220, 88, 140), (28, 400, 88, 120), (144, 400, 88, 120)):
             rrect(ctx, px_, py_, pw_, ph_, 6); setc(ctx, hx('#3E1818')); ctx.fill()
             rrect(ctx, px_ + 8, py_ + 8, pw_ - 16, ph_ - 16, 4); setc(ctx, hx('#6A2E2E')); ctx.fill()
         circle(ctx, 230, 300, 11); setc(ctx, hx('#D9B25A')); ctx.fill()
-        # brass knocker ring
         ctx.set_line_width(6); setc(ctx, hx('#D9B25A')); circle(ctx, 130, 200, 22); ctx.stroke()
         circle(ctx, 130, 176, 9); setc(ctx, hx('#D9B25A')); ctx.fill()
         ctx.restore()
         ctx.restore()
         paint_cached(ctx, self.wall, self.k)
-        # jack-o-lanterns on the porch
         jack(ctx, 650, 935, .9, gt, 1); jack(ctx, 1300, 945, .75, gt, 2)
-        # guest on the porch
         if not inside:
-            ph_ = 'near' if facing == 'right' else None
-            person(ctx, px, py, ps, facing, walk=walk, t=gt, expr='neutral', look=(1, 1),
-                   arms={'near': (25, 140)} if facing == 'right' else None, phone=ph_)
             if facing == 'right':
-                # phone glow on the face
-                glow(ctx, px + 80 * ps, py - 175 * ps, 110 * ps, hx('#8E7CFF'), .3)
-        # bloom into the house
-        bl = ease(seg(t, 2.9, 3.5))
+                figure(ctx, px, py, ps * .96, walk(wph), OUTFITS['ninja'], gt, 'side', 'hero', look=(1, 0), wind=1.4)
+            else:
+                figure(ctx, px, py, ps * .96, POSES['guard'], OUTFITS['ninja'], gt, 'back', wind=1.2)
+        bl = ease(seg(t, 1.9, 2.3))
         if bl > 0:
             glow(ctx, 960, 600, 300 + bl * 1500, hx('#FFF1D0'), bl)
+        ctx.restore()
+        g = cairo.RadialGradient(W / 2, H / 2, H * .45, W / 2, H / 2, H * 1.05)
+        g.add_color_stop_rgba(0, 0, 0, 0, 0); g.add_color_stop_rgba(1, 0, 0, 0, .55); ctx.set_source(g); ctx.paint()
+
+# ════════════════════════════════════════════════════════════════════════════
+# SCENE 2b — inside the foyer. Only now, looking out the window, the ghost kids.
+# ════════════════════════════════════════════════════════════════════════════
+FWIN = (700, 170, 520, 560)   # the big arched window, x y w h
+
+def s2b_room(c):
+    c.set_source(lingrad(0, 0, 0, 880, [(0, hx('#24141F')), (1, hx('#3A2030'))])); c.rectangle(0, 0, W, 880); c.fill()
+    # panelling
+    for x in range(0, W, 160):
+        rrect(c, x + 14, 520, 132, 330, 6); c.set_line_width(4); setc(c, hx('#4A2A38')); c.stroke()
+    line(c, 0, 500, W, 500, 10, hx('#4A2A38'))
+    for x in (380, 1540):
+        glow(c, x, 360, 520, hx('#FFC777'), .32)
+    # floor
+    c.set_source(lingrad(0, 880, 0, H, [(0, hx('#3A2418')), (1, hx('#1A0F0A'))])); c.rectangle(0, 880, W, 200); c.fill()
+    for i in range(-16, 17):
+        line(c, 960 + i * 80, 880, 960 + i * 190, H, 2, hx('#000', .35))
+    c.move_to(-50, H); c.line_to(600, 900); c.line_to(1320, 900); c.line_to(1970, H); c.close_path(); setc(c, hx('#5A1626', .55)); c.fill()
+    # cut the window
+    x, y, w, h = FWIN
+    c.save(); c.set_operator(cairo.OPERATOR_CLEAR); arch_path(c, x, y, w, h); c.fill(); c.restore()
+    arch_path(c, x - 26, y - 26, w + 52, h + 52); arch_path(c, x, y, w, h)
+    c.set_fill_rule(cairo.FILL_RULE_EVEN_ODD); setc(c, hx('#5E4A40')); c.fill(); c.set_fill_rule(cairo.FILL_RULE_WINDING)
+    c.rectangle(x - 50, y + h + 18, w + 100, 26); setc(c, hx('#6E584A')); c.fill()
+    for k in (1, 2):
+        line(c, x + w * k / 3, y + 20, x + w * k / 3, y + h, 6, hx('#5E4A40'))
+    line(c, x, y + h * .45, x + w, y + h * .45, 6, hx('#5E4A40'))
+    # heavy curtains, tied back
+    for sx, sg in ((x - 26, 1), (x + w + 26, -1)):
+        c.move_to(sx - sg * 90, y - 60); c.line_to(sx + sg * 40, y - 60)
+        c.curve_to(sx + sg * 10, y + h * .45, sx + sg * 70, y + h * .6, sx + sg * 30, y + h + 40)
+        c.line_to(sx - sg * 90, y + h + 40); c.close_path(); setc(c, hx('#6A1420')); c.fill()
+        rrect(c, sx + sg * 10 - 18, y + h * .55, 36, 12, 5); setc(c, hx('#C9A04A')); c.fill()
+    # sconces
+    for sx in (380, 1540):
+        rrect(c, sx - 8, 330, 16, 70, 5); setc(c, hx('#2A2016')); c.fill()
+        candle(c, sx, 330, 40, 0, sx)
+    cobweb(c, 0, 0, 200, 1, 1, .35); cobweb(c, W, 0, 200, -1, 1, .35)
+    # a coat stand and a little table with a lamp, for depth
+    line(c, 200, 880, 200, 560, 10, hx('#2A1810')); line(c, 170, 590, 230, 590, 8, hx('#2A1810'))
+    rrect(c, 1600, 760, 160, 18, 4); setc(c, hx('#2A1810')); c.fill(); line(c, 1620, 778, 1620, 880, 8, hx('#2A1810')); line(c, 1740, 778, 1740, 880, 8, hx('#2A1810'))
+
+def s2b_outside(c):
+    x, y, w, h = FWIN
+    c.set_source(lingrad(0, y, 0, y + h, [(0, hx('#0A1030')), (1, hx('#1E2E52'))])); c.rectangle(x - 40, y - 40, w + 80, h + 80); c.fill()
+    glow(c, x + w * .72, y + 110, 220, hx('#CFE0FF'), .5)
+    circle(c, x + w * .72, y + 110, 40); setc(c, hx('#F6F1DA')); c.fill()
+    rnd = random.Random(11)
+    for i in range(9):
+        pine(c, x - 30 + i * 70 + rnd.uniform(-14, 14), y + h - 90 - rnd.uniform(0, 50), rnd.uniform(220, 360), 60, hx('#0A1124'))
+    c.rectangle(x - 40, y + h - 100, w + 80, 160); setc(c, hx('#0E1A2C')); c.fill()
+
+class Scene2b:
+    TREE = (FWIN[0] + FWIN[2] * .52, FWIN[1] + 300)
+    def __init__(self):
+        self.k = 1.25
+        self.room = make_cache(s2b_room, self.k)
+        self.out = make_cache(s2b_outside, self.k)
+
+    def draw(self, ctx, t, gt):
+        x, y, w, h = FWIN
+        ctx.save()
+        cam(ctx, lerp(1.0, 1.06, ease(seg(t, 0, 2.2))), 960, 520, k=0)
+        paint_cached(ctx, self.out, self.k)
+        # the ghost kids: they appear once he is inside and we can see out
+        ga = ease(seg(t, .35, .8))
+        ctx.save(); arch_path(ctx, x, y, w, h); ctx.clip()
+        tx, ty = self.TREE
+        for i in range(3):
+            ph = gt * 1.7 + i * 2.1
+            gx = tx + math.cos(ph) * 120
+            gy = ty + math.sin(ph * 2) * 14 - abs(math.sin(gt * 4 + i)) * 22
+            gs = .62 + .06 * math.sin(ph)
+            if ga > .05:
+                ctx.save(); ctx.push_group()
+                weapon(ctx, 'toysword', gx + (54 if i % 2 else -54) * gs, gy - 4 * gs, (-40 if i % 2 else 220) + math.sin(gt * 9 + i) * 35, gt, s=gs * 1.4)
+                ctx.pop_group_to_source(); ctx.paint_with_alpha(ga); ctx.restore()
+            sheet_ghost(ctx, gx, gy, gs, gt, seed=i * 3, look=-math.sin(ph), arms_up=.6 + .4 * math.sin(gt * 5 + i), alpha=.92 * ga)
+        # one peeks out from a trunk and waves at the camera
+        pk = ease(seg(t, .9, 1.2))
+        sheet_ghost(ctx, x + 70 + pk * 34, y + 260, .46, gt, seed=9, look=1, arms_up=.4 + .6 * abs(math.sin(gt * 9)) * pk, alpha=.9 * ga)
+        glow(ctx, tx, ty, 260, hx('#B8F5C8'), .12 * ga)
+        ctx.restore()
+        setc(ctx, hx('#3A5A9A', .14)); arch_path(ctx, x, y, w, h); ctx.fill()
+        # a streak of reflection on the glass
+        ctx.save(); arch_path(ctx, x, y, w, h); ctx.clip()
+        ctx.move_to(x + 40, y + h); ctx.line_to(x + 140, y); ctx.line_to(x + 190, y); ctx.line_to(x + 90, y + h); ctx.close_path(); setc(ctx, (1, 1, 1, .05)); ctx.fill()
+        ctx.restore()
+        paint_cached(ctx, self.room, self.k)
+        # candle flames on the sconces
+        for sx in (380, 1540):
+            candle(ctx, sx, 330, 40, gt, sx)
+        # the bellhop leads, the hero follows; he stops for a double take at the window
+        stop = 1.0 <= t < 1.6
+        bx = lerp(560, 1520, ease(seg(t, 0, 1.0)) * .45 + ease(seg(t, 1.55, 2.2)) * .55)
+        hxp = lerp(180, 1180, ease(seg(t, 0, 1.0)) * .45 + ease(seg(t, 1.6, 2.2)) * .55)
+        U = OUTFITS['unicorn']; Nj = OUTFITS['ninja']
+        if stop:
+            figure(ctx, bx, 990, 1.12, POSES['attention'], U, gt, 'side', 'smile', mirror=True)
+        else:
+            figure(ctx, bx, 990, 1.12, walk(gt * 8.5), U, gt, 'side', 'smile', wind=1.2)
+        if stop:
+            # startled, then the blade comes half out: guard
+            k = ease_out_back(seg(t, 1.22, 1.38), 1.8)
+            pose = blend(POSES['scared'], dict(POSES['guard'], weapon_ang=-30), k) if t >= 1.22 else POSES['scared']
+            figure(ctx, hxp, 1000, 1.2, pose, Nj, gt, 'front', 'fear' if t < 1.25 else 'hero', look=(.4, -1), wind=1.6,
+                   glint=math.sin(clamp(seg(t, 1.35, 1.6)) * math.pi))
+            exclaim(ctx, hxp + 60, 1000 - 390 * 1.2, 1.1, ease_out_back(seg(t, 1.02, 1.15), 2.5) * (1 - seg(t, 1.35, 1.5)))
+        else:
+            figure(ctx, hxp, 1000, 1.2, walk(gt * 9), Nj, gt, 'side', 'hero', wind=1.4)
         ctx.restore()
         g = cairo.RadialGradient(W / 2, H / 2, H * .45, W / 2, H / 2, H * 1.05)
         g.add_color_stop_rgba(0, 0, 0, 0, 0); g.add_color_stop_rgba(1, 0, 0, 0, .55); ctx.set_source(g); ctx.paint()
@@ -534,7 +712,9 @@ class Scene2:
 # SCENE 3 — reception
 # ════════════════════════════════════════════════════════════════════════════
 DESK = (640, 620, 680, 280)
-FR_SKIN = hx('#8DB36A')
+FR_SKIN = hx('#B9A9D8')   # the sorcerer's pale violet hands (long dark nails)
+ROBE = hx('#3A1A58')
+NINJA_GLOVE = hx('#2A2F48')
 
 def s3_room(c):
     c.set_source(lingrad(0, 0, 0, 860, [(0, hx('#2A1428')), (1, hx('#4A2440'))])); c.rectangle(0, 0, W, 860); c.fill()
@@ -686,68 +866,111 @@ VAMP = dict(GUEST, skin=hx('#E8E4F0'), hair=hx('#14101C'), top=hx('#1A1020'), pa
 WITCH = dict(GUEST, skin=hx('#D9A07E'), hair=hx('#E0662A'), top=hx('#5B2A86'), pants=hx('#222'), shoe=hx('#111'), hair_style='long', costume='witch')
 
 class Scene3:
+    """reception: the sorcerer's reveal, the couple leaves en garde, the hero presents his scroll"""
+    HX, HY, HSC = 540, 990, 1.22
     def __init__(self):
         self.k = 1.25
         self.room = make_cache(s3_room, self.k)
         self.desk = make_cache(s3_desk, self.k)
 
-    def guest(self, t):
-        if t < 2.4:
-            p = seg(t, .2, 2.4)
-            return lerp(-200, 520, ease_out(p) * .5 + p * .5), 990, 1.25, (t * 8.5 if p < 1 else None)
-        return 520, 990, 1.25, None
+    def hero(self, t):
+        if t < 2.0:
+            p = seg(t, .55, 2.0)
+            return lerp(-220, self.HX, ease_out(p) * .5 + p * .5), walk(t * 9), p < 1
+        k = ease_out_back(seg(t, 2.0, 2.35), 1.4)
+        return self.HX, blend(POSES['stand'], POSES['present'], k), False
 
-    def phone_out(self, t):
-        return ease(seg(t, 2.4, 2.9))
+    def scroll_at(self, J):
+        """centre of the scroll between the hands, in figure space"""
+        a, b = J['lwr'], J['rwr']
+        return (a[0] + b[0]) / 2 + 14, (a[1] + b[1]) / 2 - 20
 
-    def phone_pos(self, t):
-        px, py, ps, _ = self.guest(t)
-        out = self.phone_out(t)
-        a1 = lerp(30, 88, out); a2 = lerp(130, 92, out)
-        r1, r2 = math.radians(a1), math.radians(a2)
-        hx_ = 4 + math.sin(r1) * 50 + math.sin(r2) * 46
-        hy_ = -177 + math.cos(r1) * 50 + math.cos(r2) * 46
-        return px + hx_ * ps, py - 7 * 0 + hy_ * ps, (a1, a2)
+    def scroll_world(self, t):
+        x, pose, _ = self.hero(t)
+        from figure import solve
+        J = solve(pose, 'side')
+        cx, cy = self.scroll_at(J)
+        return x + cx * self.HSC, self.HY + cy * self.HSC
 
     def draw(self, ctx, t, gt):
         ctx.save()
-        zk = ease(seg(t, 3.7, 5.0))
-        fx, fy, _ = self.phone_pos(t)
-        cam(ctx, lerp(1.0, 4.2, ease_in(zk)), lerp(960, fx, zk), lerp(540, fy - 30, zk), k=zk)
+        # camera: open tight on the villain, pull back, later push into the scroll
+        rev = 1 - ease(seg(t, .55, 1.05))
+        zk = ease(seg(t, 2.95, 4.0))
+        fx, fy = self.scroll_world(t)
+        if zk > 0:
+            cam(ctx, lerp(1.0, 4.2, ease_in(zk)), lerp(960, fx, zk), lerp(540, fy, zk), k=zk)
+        else:
+            cam(ctx, 1.0 + rev * 1.6, lerp(960, 985, rev), lerp(540, 300, rev), k=rev * .95)
         paint_cached(ctx, self.room, self.k)
-        # portrait eyes follow the guest
-        px, py, ps, walk = self.guest(t)
-        lk = clamp((px - 340) / 600, -1, 1)
+        hxp, hpose, walking = self.hero(t)
+        lk = clamp((hxp - 340) / 600, -1, 1)
         for ex_ in (318, 362):
             ellipse(ctx, ex_, 322, 9, 6); setc(ctx, (1, 1, 1, .9)); ctx.fill()
             circle(ctx, ex_ + lk * 4, 323, 3.5); setc(ctx, OUTLINE); ctx.fill()
-        # chandelier
         cx_, cy_ = 960, 70
         line(ctx, cx_, 0, cx_, cy_, 4, hx('#2A2016'))
         ctx.set_line_width(6); setc(ctx, hx('#B88A3A')); ellipse(ctx, cx_, cy_ + 30, 160, 26); ctx.stroke()
         for i in range(7):
-            xx = cx_ - 150 + i * 50
-            candle(ctx, xx, cy_ + 30 - (6 if i % 2 else 0), 30, gt, i * 1.9)
-        # receptionist
-        look = 0.6 if t < 1.6 else lerp(.6, -1.0, ease(seg(t, 1.6, 2.1)))
-        blink = 1 if (gt % 3.1) < .12 else 0
-        wave = ease(seg(t, .1, .4)) * (1 - ease(seg(t, 1.3, 1.6)))
-        frank(ctx, 970, 640, 1.0, gt, look=look, phone_k=ease(seg(t, 2.8, 3.6)), wave=wave, blink=blink)
+            candle(ctx, cx_ - 150 + i * 50, cy_ + 30 - (6 if i % 2 else 0), 30, gt, i * 1.9)
+        # the villain reveal: dark focus lines and the orb flaring
+        ra = ease(seg(t, 0, .08)) * (1 - ease(seg(t, .45, .7)))
+        if ra > 0:
+            g = cairo.RadialGradient(985, 330, 60, 985, 330, 1100)
+            g.add_color_stop_rgba(0, .55, .9, .3, .5 * ra); g.add_color_stop_rgba(.25, .2, .05, .35, .85 * ra); g.add_color_stop_rgba(1, .02, .0, .05, .95 * ra)
+            ctx.set_source(g); ctx.paint()
+            radial_lines(ctx, 985, 330, 220, 1500, 80, gt, (0, 0, 0, 1), .7 * ra)
+        So = OUTFITS['sorcerer']
+        So = dict(So, weapon_hand='r')
+        if t < .6:
+            spose = dict(POSES['villain'], weapon_ang=-62)
+        elif t < 2.2:
+            spose = blend(dict(POSES['villain'], weapon_ang=-62), dict(POSES['villain_lean'], weapon_ang=-92, ra=12, rf=-6), ease(seg(t, .6, 1.0)))
+        else:
+            aim = P(la=-58, lf=-82, ra=12, rf=-6, lean=-8, tilt=-10, weapon_ang=-92)
+            spose = blend(dict(POSES['villain_lean'], weapon_ang=-92, ra=12, rf=-6), aim, ease_out_back(seg(t, 2.2, 2.75), 1.3))
+        slook = (1.0, .2) if t < 1.6 else (-1.0, .4)
+        def phone_in_hand(c, J):
+            if t < 2.25: return
+            w = J['lwr']
+            c.save(); c.translate(w[0] - 8, w[1] + 4); c.rotate(math.radians(-30))
+            rrect(c, -16, -30, 32, 60, 7); setc(c, OUTLINE); c.fill(); rrect(c, -13, -27, 26, 54, 6); setc(c, hx('#2A3040')); c.fill()
+            circle(c, -5, -18, 4); setc(c, hx('#05070A')); c.fill()
+            c.restore()
+            circle(c, w[0], w[1], 10); setc(c, OUTLINE); c.fill(); circle(c, w[0], w[1], 7.5); setc(c, So['hand']); c.fill()
+        figure(ctx, 985, 830, 1.72, spose, So, gt, 'front', 'evil', look=slook, held=phone_in_hand, wind=.8,
+               glint=math.sin(clamp(seg(t, .1, .5)) * math.pi))
+        if ra > 0:
+            # green lightning off the orb
+            rnd = random.Random(int(gt * 30))
+            ctx.set_line_width(3); setc(ctx, LIME1, .9 * ra)
+            for k in range(4):
+                x0, y0 = 1180, 150
+                ctx.move_to(x0, y0)
+                for j in range(6):
+                    x0 += rnd.uniform(-60, 60); y0 += rnd.uniform(-40, 50); ctx.line_to(x0, y0)
+                ctx.stroke()
         paint_cached(ctx, self.desk, self.k)
         candle(ctx, 1260, 618, 40, gt, 7)
-        # the couple heads off to the party
-        for i, L in enumerate((VAMP, WITCH)):
-            bx = 1420 + i * 120
-            if t < .3:
-                person(ctx, bx, 985, 1.2, 'left', expr='smile', t=gt, look_cfg=L)
+        # the bellhop at attention, lance up
+        figure(ctx, 1700, 975, 1.12, POSES['attention'], OUTFITS['unicorn'], gt, 'front', 'smile', look=(-1, 0))
+        # the couple: en garde for a beat, then off to the party
+        for i, name in enumerate(('vampire', 'witch')):
+            bx = 1370 + i * 130
+            if t < .5:
+                pose = dict(POSES['guard'], weapon_ang=-40) if name == 'vampire' else POSES['flourish']
+                figure(ctx, bx, 985, 1.15, pose, OUTFITS[name], gt, 'front', 'evil' if name == 'vampire' else 'smile', look=(-1, 0))
             else:
-                cx2 = bx + (t - .3) * 520
-                if cx2 < 2200:
-                    person(ctx, cx2, 985, 1.2, 'right', walk=gt * 8.5 + i, expr='smile', t=gt, look_cfg=L)
-        # our guest
-        _, _, (a1, a2) = self.phone_pos(t)
-        person(ctx, px, py, ps, 'right', walk=walk, t=gt, expr='smile' if t > 2.6 else 'neutral', look=(1, -.4),
-               arms={'near': (a1, a2)}, phone='near')
+                cx2 = bx + (t - .5) * 560
+                if cx2 < 2300:
+                    figure(ctx, cx2, 985, 1.15, walk(gt * 8.5 + i), OUTFITS[name], gt, 'side', 'smile')
+        # the hero, presenting the scroll with both hands
+        def held_scroll(c, J):
+            if walking: return
+            sx_, sy_ = self.scroll_at(J)
+            unroll = ease(seg(t, 2.05, 2.45))
+            scroll(c, sx_, sy_, 70, 190, gt, unroll=unroll, detail=False)
+        figure(ctx, hxp, self.HY, self.HSC, hpose, OUTFITS['ninja'], gt, 'side', 'hero', look=(1, -.3), wind=1.2, held=held_scroll)
         ctx.restore()
         g = cairo.RadialGradient(W / 2, H / 2, H * .45, W / 2, H / 2, H * 1.05)
         g.add_color_stop_rgba(0, 0, 0, 0, 0); g.add_color_stop_rgba(1, 0, 0, 0, .5); ctx.set_source(g); ctx.paint()
@@ -808,7 +1031,7 @@ class Scene4:
         s, c = new_surface()
         x, y, w, a = 1560, 250, 300, -.55
         h = w * SH / SW
-        grip_back(c, x, y, w, h, FR_SKIN, hx("#1C1A26"), ang=a, side="right", scale=1.3, stitches=True, sleeve_dir=(1, -.2))
+        grip_back(c, x, y, w, h, FR_SKIN, ROBE, ang=a, side="right", scale=1.3, stitches=False, sleeve_dir=(1, -.2))
         phone_frame(c, x, y, w, ang=a, back=True)
         grip_front(c, x, y, w, h, FR_SKIN, ang=a, side='right', scale=1.3)
         self.rphone = blur_surf(s, 4)
@@ -822,16 +1045,18 @@ class Scene4:
         glow(ctx, cx, cy, 700, hx('#7C5CFF'), .22)
         h = w * SH / SW
         ang = -.05 + math.sin(gt * 1.3) * .01
-        grip_back(ctx, cx, cy, w, h, SKIN, HOODIE, ang=ang, side='left', sleeve_dir=(-.35, 1))
-        phone_frame(ctx, cx, cy, w, ang=ang, screen=screen_pass, t=gt)
-        grip_front(ctx, cx, cy, w, h, SKIN, ang=ang, side='left')
+        # the papyrus pass, held up in both gloved fists
+        sw_, sh_ = 420, 616
+        ninja_fists(ctx, cx, cy, sw_, sh_, ang, behind=True)
+        scroll(ctx, cx, cy, sw_, sh_, gt, ang=ang)
+        ninja_fists(ctx, cx, cy, sw_, sh_, ang, behind=False)
         # autofocus box over the QR
         if 1.1 < t < 2.1:
             a = .8 * (1 - seg(t, 1.6, 2.1))
             pulse = 1 + .08 * (1 - seg(t, 1.1, 1.35))
             ctx.save(); ctx.translate(cx, cy); ctx.rotate(ang); ctx.translate(-cx, -cy)
-            x0, y0, kx, ky = screen_to_world(cx, cy, w, 195, 444)
-            bw = 300 * kx * pulse
+            x0, y0 = cx, cy + 102; kx = 1.2
+            bw = 245 * pulse
             ctx.set_line_width(4); setc(ctx, hx('#FFD25A', a)); ctx.set_line_cap(cairo.LINE_CAP_ROUND)
             for (dx, dy) in ((-1, -1), (1, -1), (-1, 1), (1, 1)):
                 px, py = x0 + dx * bw / 2, y0 + dy * bw / 2
@@ -839,9 +1064,39 @@ class Scene4:
             ctx.restore()
         ctx.restore()
         dx = lerp(300, 0, ease_out(seg(t, 0, .9))); dy = lerp(-240, 0, ease_out(seg(t, 0, .9)))
-        ctx.save(); ctx.translate(dx + math.sin(gt * 2) * 4, dy + math.cos(gt * 1.7) * 3)
+        ox, oy = dx + math.sin(gt * 2) * 4, dy + math.cos(gt * 1.7) * 3
+        ctx.save(); ctx.translate(ox, oy)
         ctx.set_source_surface(self.rphone, 0, 0); ctx.paint()
         ctx.restore()
+        # the sorcerer's scanning spell: a magic circle on the lens, a beam onto the QR
+        ma = ease(seg(t, .7, 1.1))
+        lx, ly = 1375 + ox, 74 + oy
+        if ma > 0:
+            qx, qy = self.P[0], self.P[1] + 102
+            ctx.save(); ctx.set_operator(cairo.OPERATOR_ADD)
+            ctx.move_to(lx - 30, ly + 10); ctx.line_to(qx - 110, qy - 110); ctx.line_to(qx + 110, qy + 110); ctx.line_to(lx + 30, ly - 10); ctx.close_path()
+            ctx.set_source(lingrad(lx, ly, qx, qy, [(0, hx('#C3EF52', .35 * ma)), (1, hx('#C3EF52', .08 * ma))])); ctx.fill()
+            ctx.restore()
+            magic_circle(ctx, lx, ly, 70 + 8 * math.sin(gt * 4), gt, LIME1, ma)
+
+def ninja_fists(ctx, cx, cy, w, h, ang, behind=False):
+    """the hero's gloved fists on the scroll's lower roller, sleeves rising from the bottom of frame"""
+    ctx.save(); ctx.translate(cx, cy); ctx.rotate(ang)
+    for sg in (-1, 1):
+        fx, fy = sg * (w / 2 - 30), h / 2 + 4
+        if behind:
+            ctx.move_to(fx - 46, fy + 10); ctx.line_to(fx - 70 + sg * 40, H); ctx.line_to(fx + 90 + sg * 40, H); ctx.line_to(fx + 46, fy + 10); ctx.close_path()
+            setc(ctx, OUTLINE); ctx.set_line_width(6); ctx.stroke_preserve(); setc(ctx, hx('#232A4A')); ctx.fill()
+            rrect(ctx, fx - 50, fy + 30, 100, 44, 10); setc(ctx, hx('#7E8498')); ctx.fill()
+            for k in range(3):
+                line(ctx, fx - 46, fy + 38 + k * 12, fx + 46, fy + 42 + k * 12, 2.5, hx('#5A6074'))
+        else:
+            rrect(ctx, fx - 40, fy - 30, 80, 60, 24); setc(ctx, OUTLINE); ctx.fill()
+            rrect(ctx, fx - 36, fy - 26, 72, 52, 21); setc(ctx, NINJA_GLOVE); ctx.fill()
+            for k in range(3):
+                line(ctx, fx - 24 + k * 18, fy - 24, fx - 24 + k * 18, fy - 8, 3, hx('#14182A'))
+            ellipse(ctx, fx - 14, fy - 14, 10, 5); setc(ctx, (1, 1, 1, .15)); ctx.fill()
+    ctx.restore()
 
 class Scene5:
     def __init__(self, s3):
@@ -854,10 +1109,9 @@ class Scene5:
         self.bg = blur_surf(s, 20)
         # guest phone, far away + blurred (bottom-left)
         s, c = new_surface()
-        gw = 230; gh = gw * SH / SW
-        grip_back(c, 280, 870, gw, gh, SKIN, HOODIE, ang=.12, side='left', scale=.55, sleeve_dir=(-.3, 1))
-        phone_frame(c, 280, 870, gw, ang=.12, screen=screen_pass)
-        grip_front(c, 280, 870, gw, gh, SKIN, ang=.12, side='left', scale=.55)
+        ninja_fists(c, 280, 820, 210, 308, .12, behind=True)
+        scroll(c, 280, 820, 210, 308, 0, ang=.12)
+        ninja_fists(c, 280, 820, 210, 308, .12, behind=False)
         self.gphone = blur_surf(s, 9)
         self.P = (1010, 520, 420)   # receptionist phone centre + width
 
@@ -878,8 +1132,13 @@ class Scene5:
         conf = ease(seg(t, lock, lock + .25))
         land = lock + 1.05
         landed = t >= land
-        grip_back(ctx, cx, cy, w, h, FR_SKIN, hx('#1C1A26'), side='right', scale=1.0, stitches=True, sleeve_dir=(.3, 1))
-        phone_frame(ctx, cx, cy, w, screen=lambda c, tt: screen_scanner(c, tt, confirmed=conf, show_check=landed, label=ease(seg(t, land, land + .35)),
+        # the impact burst behind the phone as the check pops
+        ib = math.sin(clamp(seg(t, lock + .05, land + .25)) * math.pi)
+        if ib > 0:
+            radial_lines(ctx, cx, cy - 40, 260, 1500, 70, gt, LIME1, .45 * ib)
+            radial_lines(ctx, cx, cy - 40, 300, 1500, 50, gt + .5, (1, 1, 1, 1), .35 * ib)
+        grip_back(ctx, cx, cy, w, h, FR_SKIN, ROBE, side='right', scale=1.0, stitches=False, sleeve_dir=(.3, 1))
+        phone_frame(ctx, cx, cy, w, screen=lambda c, tt: screen_scanner(c, tt, confirmed=conf, show_check=landed, label=ease(seg(t, land, land + .35)), subject='scroll',
                                                                            check_k=1 + .12 * math.sin(clamp((t - land) / .35) * math.pi) * (1 - clamp((t - land) / .35))), t=gt)
         grip_front(ctx, cx, cy, w, h, FR_SKIN, side='right', scale=1.0)
         # capture flash
@@ -974,38 +1233,50 @@ def s6_wall(c):
     font(c, 'Irish Grover', 48); setc(c, hx('#F28A1C')); tw = text_w(c, 'Masquerade Ball'); c.move_to(x + w / 2 - tw / 2, y - 98); c.show_text('Masquerade Ball')
 
 class Scene6:
+    """the party: a conga line looping through the doorway, led by the bellhop; the hero joins the end"""
+    LINE = ['unicorn', 'vampire', 'witch', 'knight', 'pirate', 'valkyrie', 'reaper', 'samurai', 'mummy']
+    C, RX, RY, DU = (1140, 800), 300, 46, .085
     def __init__(self):
         self.k = 1.25
         self.wall = make_cache(s6_wall, self.k)
-        mummy = dict(GUEST, skin=hx('#D8CFB8'), top=hx('#D8CFB8'), pants=hx('#D8CFB8'), shoe=hx('#B8AE96'), hair_style='none', costume='mummy')
-        pump = dict(GUEST, top=hx('#2F6B3A'), pants=hx('#222'), shoe=hx('#111'), costume='pumpkin', hair_style='none')
-        skel = dict(GUEST, top=hx('#15151C'), pants=hx('#15151C'), shoe=hx('#111'), costume='skeleton', hair_style='none')
-        cat = dict(GUEST, top=hx('#1A1620'), pants=hx('#1A1620'), hair=hx('#1A1620'), costume='cat', skin=hx('#C68E6B'))
-        # (x, feet y, scale, look, phase, layer) layer 0 behind guest, 1 in front
-        self.dancers = [
-            (990, 760, .42, VAMP, 0.0, 0), (1090, 770, .44, mummy, 1.3, 0), (1285, 765, .43, WITCH, 2.2, 0),
-            (1205, 800, .5, pump, 0.7, 0), (1330, 815, .48, cat, 3.1, 0),
-            (1000, 850, .56, skel, 1.9, 1), (1255, 862, .54, 'ghost', 2.6, 1)]
 
-    def guest(self, t):
-        # returns x, feet y, scale, facing, walk, expr, inside, dance
+    def U(self, gt): return gt * .16
+
+    def slot(self, u):
+        ang = 2 * math.pi * u
+        x = self.C[0] + self.RX * math.cos(ang); y = self.C[1] + self.RY * math.sin(ang)
+        return x, y, .6 + .08 * math.sin(ang), math.sin(ang) > 0, math.sin(ang)
+
+    def conga_pose(self, gt, leader=False):
+        ph = gt * 2 * math.pi * (124 / 60) / 4
+        p = conga(ph)
+        p['la'], p['lf'] = 168, 176          # the far hand holds the weapon high
+        p['weapon_ang'] = -96
+        if leader:
+            p['ra'], p['rf'] = 150, 170
+        return p
+
+    def hero(self, t, gt):
+        """x, y, scale, pose, view, expr, inside, mirror"""
         if t < 1.8:
-            return 560, 1016, 2.0, 'front', None, 'huge', False, None
+            k = ease_out_back(seg(t, .45, .8), 1.8)
+            return 560, 1030, 1.75, blend(POSES['stand'], POSES['triumph'], k), 'front', 'huge', False, False
         if t < 3.4:
             p = ease(seg(t, 1.8, 3.4))
-            return lerp(560, 1135, p), lerp(1016, 820, p), lerp(2.0, .5, p ** .8), 'back', t * 9, 'huge', p > .93, None
-        return 1135, 820, .5, 'front', None, 'huge', True, (t - 3.4) * 7.5
+            return lerp(560, 1135, p), lerp(1030, 835, p), lerp(1.75, .5, p ** .8), walk(t * 9), 'back', 'huge', p > .95, False
+        sx, sy, ss, front, _ = self.slot(self.U(gt) - len(self.LINE) * self.DU)
+        k = ease(seg(t, 3.4, 3.9))
+        x = lerp(1135, sx, k); y = lerp(835, sy, k); sc = lerp(.55, ss, k)
+        return x, y, sc, self.conga_pose(gt), 'side', 'huge', True, front
 
-    def party(self, ctx, t, gt, guest_inside_fn=None):
+    def party(self, ctx, t, gt, hero_fn):
         x, y, w, h = PD
         ctx.save(); ctx.rectangle(x - 80, y, w + 160, h); ctx.clip()
         ctx.set_source(lingrad(0, y, 0, y + h, [(0, hx('#3A1650')), (.6, hx('#7A2A3A')), (1, hx('#C2622A'))])); ctx.paint()
-        # roving coloured spots
         for i, col in enumerate(('#7C5CFF', '#22D3EE', '#F28A1C', '#C3EF52')):
             sx = x + w / 2 + math.sin(gt * (1.3 + i * .4) + i * 2) * w * .45
             sy = y + h * .45 + math.cos(gt * (1.1 + i * .3) + i) * h * .3
             glow(ctx, sx, sy, 170, hx(col), .45)
-        # string lights
         for row in range(3):
             yy = y + 40 + row * 50
             for k in range(14):
@@ -1014,46 +1285,49 @@ class Scene6:
                 on = .6 + .4 * math.sin(gt * 6 + k * 1.3 + row)
                 col = ('#FFD25A', '#F28A1C', '#A78BFA')[(k + row) % 3]
                 glow(ctx, lx, ly, 20, hx(col), on * .8); circle(ctx, lx, ly, 4.5); setc(ctx, hx(col)); ctx.fill()
-        # floor
         ctx.rectangle(x - 80, y + h - 140, w + 160, 140); ctx.set_source(lingrad(0, y + h - 140, 0, y + h, [(0, hx('#2A1420')), (1, hx('#4A2418'))])); ctx.fill()
-        # table of jack-o-lanterns at the back
-        rrect(ctx, x + 20, y + h - 210, 160, 16, 4); setc(ctx, hx('#2A1810')); ctx.fill()
-        jack(ctx, x + 60, y + h - 210, .45, gt, 3); jack(ctx, x + 130, y + h - 210, .38, gt, 4)
-        beat = gt * 2 * math.pi * (124 / 60) / 2
-        for (dx_, dy_, s, L, ph, layer) in self.dancers:
-            if layer: continue
-            self.dancer(ctx, dx_, dy_, s, L, beat + ph, gt)
-        if guest_inside_fn: guest_inside_fn()
-        for (dx_, dy_, s, L, ph, layer) in self.dancers:
-            if not layer: continue
-            self.dancer(ctx, dx_, dy_, s, L, beat + ph, gt)
+        rrect(ctx, x + 20, y + h - 230, 160, 16, 4); setc(ctx, hx('#2A1810')); ctx.fill()
+        jack(ctx, x + 60, y + h - 230, .45, gt, 3); jack(ctx, x + 130, y + h - 230, .38, gt, 4)
+        # the line, back half first, then the front half, by depth
+        U = self.U(gt)
+        items = []
+        for i, name in enumerate(self.LINE):
+            sx, sy, ss, front, sn = self.slot(U - i * self.DU)
+            items.append((sy, 'd', name, sx, sy, ss, front, i == 0))
+        items.append((None, 'h'))
+        def depth(it):
+            if it[1] == 'h':
+                hs = self.hero(t, gt); return hs[1] if hs[6] else -1e9
+            return it[0]
+        for it in sorted(items, key=depth):
+            if it[1] == 'h':
+                hero_fn(); continue
+            _, _, name, sx, sy, ss, front, leader = it
+            Ou = dict(OUTFITS[name], weapon_hand='l', second=None)
+            figure(ctx, sx, sy, ss, self.conga_pose(gt, leader), Ou, gt, 'side', 'smile' if name not in ('vampire',) else 'evil',
+                   mirror=front, wind=1.2)
         ctx.restore()
 
-    def dancer(self, ctx, x, y, s, L, ph, gt):
-        if L == 'ghost':
-            sheet_ghost(ctx, x, y - 70 * s - abs(math.sin(ph)) * 20, s * 1.6, gt, seed=4, arms_up=.5 + .5 * math.sin(ph))
-            return
-        person(ctx, x + math.sin(ph * .5) * 10, y, s, 'front', expr='smile', t=gt, look_cfg=L, dance=ph)
-
     def draw(self, ctx, t, gt):
-        px, py, ps, facing, walk, expr, inside, dance = self.guest(t)
-        def gin():
+        hx_, hy_, hs_, hpose, hview, hexpr, inside, hmirror = self.hero(t, gt)
+        Nj = OUTFITS['ninja']
+        def hero_inside():
             if inside:
-                person(ctx, px, py, ps, facing, walk=walk, expr=expr, t=gt, dance=dance * 1.0 if dance is not None else None)
+                figure(ctx, hx_, hy_, hs_, hpose, Nj, gt, hview, hexpr, mirror=hmirror, wind=1.2)
         ctx.save()
         z = lerp(1.0, 1.04, ease(seg(t, 0, 4.5)))
         cam(ctx, z, 960, 540, k=0)
-        self.party(ctx, t, gt, gin)
+        self.party(ctx, t, gt, hero_inside)
         paint_cached(ctx, self.wall, self.k)
         if not inside:
-            if facing == 'front':
-                jump = abs(math.sin(seg(t, .2, 1.0) * math.pi * 2)) * 18 * (1 - seg(t, .2, 1.0))
-                pocket = ease(seg(t, 1.2, 1.7))
-                ar = (lerp(30, 8, pocket), lerp(150, 10, pocket))
-                person(ctx, px, py - jump, ps, 'front', expr='huge', t=gt, phone='r' if pocket < .8 else None,
-                       arms={'r': ar, 'l': (-14, -8)})
+            if hview == 'front':
+                tri = ease(seg(t, .45, .8))
+                if tri > 0 and t < 1.4:
+                    radial_lines(ctx, hx_, hy_ - 300 * hs_, 300, 1400, 60, gt, (1, .9, .5, 1), .25 * tri * (1 - seg(t, 1.1, 1.4)))
+                figure(ctx, hx_, hy_, hs_, hpose, Nj, gt, 'front', 'huge', wind=1.4,
+                       glint=math.sin(clamp(seg(t, .7, 1.1)) * math.pi))
             else:
-                person(ctx, px, py, ps, 'back', walk=walk, t=gt)
+                figure(ctx, hx_, hy_, hs_, hpose, Nj, gt, 'back', wind=1.2)
         ctx.restore()
         g = cairo.RadialGradient(W / 2, H / 2, H * .45, W / 2, H / 2, H * 1.05)
         g.add_color_stop_rgba(0, 0, 0, 0, 0); g.add_color_stop_rgba(1, 0, 0, 0, .45); ctx.set_source(g); ctx.paint()

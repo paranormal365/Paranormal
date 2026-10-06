@@ -5,10 +5,6 @@
 // without one). Until then the badge says "Click for sound" and that first click turns sound on.
 // After that, a click pauses / plays. Touch (no hover): a tap toggles sound; if paused, a tap plays.
 
-const SOURCES = [
-    { maxWidth: 900, src: '/static/video/ishaunted-ad-720.mp4' },
-    { maxWidth: Infinity, src: '/static/video/ishaunted-ad-1080.mp4' },
-];
 
 const players = new WeakMap();
 
@@ -23,8 +19,12 @@ function hasBeenActive() {
     return ua ? ua.hasBeenActive : interactions > 0;
 }
 
-export function init(frame, video) {
+// The playlist (10/06/2026): ads = [{ hd, sd, poster }], start = the one the server picked (its poster is
+// already showing). When an ad ends, the next is a random different one.
+export function init(frame, video, ads, start) {
     if (!frame || !video || players.has(frame)) return;
+    ads = (ads || []).filter(a => a && a.hd);
+    if (!ads.length) return;
 
     const reduceMotion = matchMedia('(prefers-reduced-motion: reduce)').matches;
     const touch = matchMedia('(hover: none)').matches;
@@ -39,6 +39,8 @@ export function init(frame, video) {
         touchSound: false,         // touch: the tap toggle
         keySound: false,           // keyboard: the M toggle
         listeners: [],
+        ads,
+        i: Math.min(Math.max(start | 0, 0), ads.length - 1),
         observers: [],
     };
     players.set(frame, s);
@@ -52,7 +54,9 @@ export function init(frame, video) {
         if (s.loaded) return;
         s.loaded = true;
         const px = (frame.clientWidth || window.innerWidth) * Math.min(window.devicePixelRatio || 1, 2);
-        video.src = SOURCES.find(x => px <= x.maxWidth).src;
+        const ad = s.ads[s.i];
+        video.poster = ad.poster;
+        video.src = px <= 900 ? (ad.sd || ad.hd) : ad.hd;
         video.preload = 'auto';
         video.load();
     }
@@ -168,6 +172,16 @@ export function init(frame, video) {
         }
     });
     on(video, 'playing', () => { frame.dataset.state = 'ready'; render(); });
+    // One finished: on to a random different one (or the same again, if it is the only one).
+    on(video, 'ended', () => {
+        if (s.ads.length > 1) {
+            let n;
+            do { n = Math.floor(Math.random() * s.ads.length); } while (n === s.i);
+            s.i = n;
+        }
+        s.loaded = false;
+        apply();
+    });
     on(video, 'volumechange', render);
 
     render();
