@@ -147,6 +147,15 @@ def roar(d=1.0):
     out = bp(src, 300, 900) * 1.2 + bp(src, 1000, 2400) * .6 + lp(src, 250) * .8
     return np.tanh(out * 2) * env(len(t), .06, .4) * (1 + .3 * np.sin(2 * np.pi * 28 * t))
 
+def alarm_chirp(d=.11):
+    """the dragon "roars" like a car alarm arming: one short electronic chirp. A piezo-style square tone
+    that blips up from 2.2 kHz to 2.9 kHz in the first 15 ms and holds, with a crisp on and off."""
+    t = tt(d)
+    f = np.where(t < .015, 2200 + 700 * (t / .015), 2900.0)
+    tone = np.sign(np.sin(2 * np.pi * np.cumsum(f) / SR))
+    tone = bp(tone, 1500, 7000)
+    return tone * np.minimum(1, t / .003) * np.minimum(1, (d - t) / .012)
+
 def thunder(d=3.0):
     t = tt(d); n = lp(rng.standard_normal(len(t)), 350, 4)
     return n * np.minimum(1, t / .08) * expdec(len(t), 1.2) * (1 + .5 * np.sin(2 * np.pi * 7 * t))
@@ -176,7 +185,7 @@ for k in range(2):
 # CUE B — the hero (2.85 - 5.5)
 # ════════════════════════════════════════════════════════════════════════════
 add(2.55, riser(.32), .45, 0)
-add(2.62, roar(1.1), .4, .4)
+add(2.64, alarm_chirp(), .32, .4); add(2.90, alarm_chirp(), .32, .4)
 add(2.85, taiko(1.6), 1.0, 0, 'mus'); add(2.85, boom(2.2), .8, 0, 'mus')
 add(2.85, cymbal(3.0), .35, .2, 'mus'); add(2.86, shing(1.4), .35, -.2)
 for i, ch in enumerate(([50, 54, 57, 62], [46, 50, 53, 58], [48, 52, 55, 60], [50, 54, 57, 62, 66])):

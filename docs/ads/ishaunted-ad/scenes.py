@@ -227,7 +227,12 @@ class Scene1:
         if t < 2.62:
             return 820 + math.sin(t * 2) * 8, 470 + math.sin(t * 4.5) * 12, -4, 0.0
         p = ease_in(seg(t, 2.62, 4.2))
-        return lerp(820, 2500, p), lerp(470, -320, p), lerp(-4, -24, seg(t, 2.62, 3.2)), ease(seg(t, 2.62, 2.8)) * (1 - ease(seg(t, 3.1, 3.4)))
+        return lerp(820, 2500, p), lerp(470, -320, p), lerp(-4, -24, seg(t, 2.62, 3.2)), self.chirp(t)
+
+    # the car-alarm gag: as the hero leaps off he arms it, chirp-chirp, hazard lights in its eyes
+    CHIRPS = (2.64, 2.90)
+    def chirp(self, t):
+        return max(math.sin(clamp((t - c) / .18) * math.pi) if c <= t <= c + .18 else 0.0 for c in self.CHIRPS)
 
     def seat(self, t):
         x, y, h, _ = self.dragon_state(min(t, 2.62))
@@ -324,7 +329,7 @@ class Scene1:
                            P(lt=-70, lk=-10, rt=70, rk=10, la=-60, lf=-30, ra=60, rf=30, air=True, tilt=-6)
                     figure(c, sx + math.sin(gt * 70) * (2 if sc else 0), sy + 150 * .89, .89, pose, N, gt, 'front',
                            'fear' if sc else 'hero', wind=1.5)
-            dragon(ctx, dx, dy, self.DS, gt, flap, heading=dh, roar=roar, rider=rider)
+            dragon(ctx, dx, dy, self.DS, gt, flap, heading=dh, roar=roar, rider=rider, flash=self.chirp(t))
         # the hero after the leap
         hs = self.hero_state(t)
         if hs and hs[6] != 'hero_air':
