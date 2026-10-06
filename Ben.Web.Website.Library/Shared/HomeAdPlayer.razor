@@ -35,7 +35,7 @@
             <div class="ben-kicker">Short films</div>
             <h2 class="ad-player__title">Haunted, <span class="ben-accent-text">in under a minute.</span></h2>
             <p class="ad-player__lede">
-                A ninja who arrives by dragon, a wizard who checks for EVPs, a guest with a pass on their phone.
+                A ninja who arrives by dragon, a wizard who checks for EVPs, a diver who finds pirate ghosts, a guest with a pass on their phone.
                 A different one each time, and when one ends the next picks itself.
             </p>
 
@@ -66,7 +66,7 @@
     // The playlist (Ben, 10/06/2026): every ad with a static/video/ads/<id>-hd.mp4 in wwwroot is in the
     // rotation (each also has -sd.mp4 for narrow screens and -poster.jpg). The page starts on a random one;
     // the module picks a random different one each time an ad ends. Add an id here to add an ad.
-    private static readonly string[] AdIds = { "anime", "wizard", "cartoon" };
+    private static readonly string[] AdIds = { "anime", "wizard", "cartoon", "underwater" };
     private sealed record Ad(string Hd, string Sd, string Poster);
     private readonly List<Ad> _ads = new();
     private int _start;
