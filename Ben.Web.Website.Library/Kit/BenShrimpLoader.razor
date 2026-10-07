@@ -1,0 +1,97 @@
+@*
+    BenShrimpLoader (Ben, 10/07/2026): the shrimp on its treadmill, in a circle, with a glowing ring spinning
+    round it. For specific places only (BenLoaderOverlay stays the everyday spinner). It shows that something
+    is busy, not how far along it is.
+
+    Same shape as BenLoaderOverlay:
+      - no ChildContent: a standalone loader in place of what is loading, while Visible
+      - with ChildContent: covers that content (a Telerik grid, a panel) while Visible, so nothing jumps
+    Size is a percentage of the full 200px, and never more than 100: 50 = 100px across.
+
+    The video is a seamless 79-frame loop, 400x400 (exactly sharp on high-density screens at the full 100%), built by
+    docs/ads/shrimp-loader. Under reduced motion the ring slows right down and the video's still frame shows.
+*@
+@if (ChildContent is not null)
+{
+    <div class="ben-shrimp-loader-host @Class">
+        @ChildContent
+        @if (Visible)
+        {
+            <div class="ben-shrimp-loader-cover" role="status" aria-live="polite">
+                @Loader
+            </div>
+        }
+    </div>
+}
+else if (Visible)
+{
+    <div class="ben-shrimp-loader-block @Class" role="status" aria-live="polite">
+        @Loader
+    </div>
+}
+
+@code {
+    private const string VideoUrl = "/_content/Ben.Web.Website.Library/kit/shrimp-loader.mp4";
+    private const string PosterUrl = "/_content/Ben.Web.Website.Library/kit/shrimp-loader-poster.jpg";
+
+    [Parameter] public bool Visible { get; set; } = true;
+
+    /// <summary>Content to cover while loading. Omit for a standalone loader.</summary>
+    [Parameter] public RenderFragment? ChildContent { get; set; }
+
+    /// <summary>How big, as a percentage of the full 200px. Kept between 20 and 100.</summary>
+    [Parameter] public int Size { get; set; } = 100;
+
+    /// <summary>Optional message under the loader. Also the screen-reader label.</summary>
+    [Parameter] public string? Text { get; set; }
+
+    /// <summary>The ring's colour.</summary>
+    [Parameter] public string RingColor { get; set; } = "#bc6000";
+
+    [Parameter] public string? Class { get; set; }
+
+    // SVG ids are page-wide: each loader gets its own, so two on one page never share a gradient or a glow.
+    private readonly string _id = "bsl" + Guid.NewGuid().ToString("N")[..8];
+
+    private string SizePx => (200.0 * Math.Clamp(Size, 20, 100) / 100.0).ToString("0.##", System.Globalization.CultureInfo.InvariantCulture) + "px";
+
+    private RenderFragment Loader => __builder =>
+    {
+        <div class="ben-shrimp-loader" style="--ben-shrimp-loader-size: @SizePx">
+            <div class="ben-shrimp-loader__disc">
+                <video class="ben-shrimp-loader__video" src="@VideoUrl" poster="@PosterUrl"
+                       autoplay loop muted playsinline preload="auto" aria-hidden="true"></video>
+                <img class="ben-shrimp-loader__still" src="@PosterUrl" alt="" aria-hidden="true" />
+                <svg class="ben-shrimp-loader__svg" viewBox="0 0 240 240" aria-hidden="true" focusable="false">
+                    <defs>
+                        @* the fading trail: solid at the head, gone at the tail *@
+                        <linearGradient id="@($"{_id}-trail")" x1="0%" y1="0%" x2="50%" y2="100%">
+                            <stop offset="0%" stop-color="@RingColor" stop-opacity="1" />
+                            <stop offset="70%" stop-color="@RingColor" stop-opacity="0.3" />
+                            <stop offset="100%" stop-color="@RingColor" stop-opacity="0" />
+                        </linearGradient>
+                        <filter id="@($"{_id}-glow")" x="-30%" y="-30%" width="160%" height="160%">
+                            <feGaussianBlur stdDeviation="3.5" result="blur" />
+                            <feMerge>
+                                <feMergeNode in="blur" />
+                                <feMergeNode in="blur" />
+                                <feMergeNode in="SourceGraphic" />
+                            </feMerge>
+                        </filter>
+                    </defs>
+                    <circle class="ben-shrimp-loader__track" cx="120" cy="120" r="102" />
+                    @* the arc spins inside a group, so the gradient turns with the stroke and does not jitter *@
+                    <g class="ben-shrimp-loader__spin">
+                        <circle class="ben-shrimp-loader__arc" cx="120" cy="120" r="102"
+                                stroke="url(#@($"{_id}-trail"))" filter="url(#@($"{_id}-glow"))" />
+                    </g>
+                </svg>
+            </div>
+            @if (!string.IsNullOrWhiteSpace(Text))
+            {
+                <div class="ben-shrimp-loader__text">@Text</div>
+            }
+            <span class="visually-hidden">@(Text ?? "Loading")</span>
+        </div>
+    };
+}
