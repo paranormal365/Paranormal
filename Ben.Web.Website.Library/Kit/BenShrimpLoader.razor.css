@@ -1,0 +1,107 @@
+/* Everything scales from one size (the Size parameter): the ring and its glow sit 10% outside the disc. */
+.ben-shrimp-loader {
+    --s: var(--ben-shrimp-loader-size, 200px);
+    display: inline-flex;
+    flex-direction: column;
+    align-items: center;
+    gap: calc(var(--s) * .08 + .25rem);
+}
+
+.ben-shrimp-loader__disc {
+    position: relative;
+    width: var(--s);
+    height: var(--s);
+    border-radius: 50%;
+    background-color: #000;
+    flex: none;
+}
+
+.ben-shrimp-loader__video,
+.ben-shrimp-loader__still {
+    display: block;
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    border-radius: 50%;
+}
+
+.ben-shrimp-loader__still {
+    display: none;
+}
+
+.ben-shrimp-loader__svg {
+    position: absolute;
+    top: -10%;
+    left: -10%;
+    width: 120%;
+    height: 120%;
+    overflow: visible;
+    pointer-events: none;
+}
+
+.ben-shrimp-loader__track {
+    fill: none;
+    stroke: rgba(255, 255, 255, .2);
+    stroke-width: 6;
+}
+
+.ben-shrimp-loader__spin {
+    transform-box: view-box;
+    transform-origin: 120px 120px;
+    animation: ben-shrimp-loader-spin 2s linear infinite;
+}
+
+.ben-shrimp-loader__arc {
+    fill: none;
+    stroke-width: 6;
+    stroke-linecap: round;
+    stroke-dasharray: 450 191;   /* 641 is the circumference at r=102: about 70% arc, 30% gap */
+}
+
+.ben-shrimp-loader__text {
+    font-size: .875rem;
+    color: var(--bs-secondary-color);
+    text-align: center;
+}
+
+@keyframes ben-shrimp-loader-spin {
+    to { transform: rotate(360deg); }
+}
+
+/* Standalone: centred in the space of whatever is loading. */
+.ben-shrimp-loader-block {
+    display: flex;
+    justify-content: center;
+    padding: 1.5rem 0;
+}
+
+/* Covering content: the content stays where it is, softened behind the loader. */
+.ben-shrimp-loader-host {
+    position: relative;
+}
+
+.ben-shrimp-loader-cover {
+    position: absolute;
+    inset: 0;
+    z-index: 5;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background-color: color-mix(in srgb, var(--bs-body-bg) 72%, transparent);
+    border-radius: inherit;
+}
+
+/* Reduced motion: the ring turns slowly and the shrimp holds still. */
+@media (prefers-reduced-motion: reduce) {
+    .ben-shrimp-loader__spin {
+        animation-duration: 8s;
+    }
+
+    .ben-shrimp-loader__video {
+        display: none;
+    }
+
+    .ben-shrimp-loader__still {
+        display: block;
+    }
+}

@@ -158,6 +158,21 @@ else
                 </div>
             </BenLoaderOverlay>
         </BenPanel>
+        <BenPanel Title="BenShrimpLoader" Subtitle="for specific places; Size is a percentage">
+            <div class="d-flex flex-wrap gap-2 mb-3">
+                <button class="btn btn-sm btn-outline-secondary" @onclick="() => _shrimpLoading = !_shrimpLoading">Toggle cover</button>
+            </div>
+            <div class="d-flex flex-wrap align-items-end gap-4 mb-3">
+                <BenShrimpLoader Size="40" />
+                <BenShrimpLoader Size="70" Text="Loading…" />
+                <BenShrimpLoader Size="100" Text="Summoning the grid…" />
+            </div>
+            <BenShrimpLoader Visible="_shrimpLoading" Size="60" Text="Loading…">
+                <div class="border rounded p-3" style="min-height: 12rem;">
+                    <p class="mb-0">Wrap a grid or a panel and it covers it while Visible, without moving anything.</p>
+                </div>
+            </BenShrimpLoader>
+        </BenPanel>
     </div>
 
     <div class="col-xl-6">
@@ -371,6 +386,7 @@ else
     private int _tab;
     private string _tabText = string.Empty;
     private bool _loading;
+    private bool _shrimpLoading = true;
     private bool _modal;
     private string _modalText = string.Empty;
     private bool _confirm;
