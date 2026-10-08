@@ -198,15 +198,40 @@ else
     }
     private bool _loading = true;
 
+    // ── Carried from the server render (PagesDoNotBlinkTests) ────────────────
+    // The server draws this page, then the live connection builds it again as a new component with
+    // none of the first one's data — so it showed its content, its spinner, and its content again.
+    // What the server fetched rides into the page ([PersistentState]) and is used once, for the
+    // address it was fetched for; every later load (Retry, a new address) asks the API.
+    [PersistentState] public OrgPublicHomeResponse? RenderedOrg { get; set; }
+    [PersistentState] public List<Ben.Service.Models.Entities.PublicTourListItem>? RenderedTours { get; set; }
+    [PersistentState] public string? RenderedFor { get; set; }
+
     protected override async Task OnParametersSetAsync()
     {
-        _loading = true;
-        StateHasChanged();
-        _org     = await AdminClient.GetPublicOrgAsync(UrlName);
-        // A group that runs none simply gets an empty list, so nothing needs to know in advance
-        // which kind of business this is.
-        _tours   = (await AdminClient.GetPublicToursAsync(UrlName)).Items;
-        _loading = false;
+        if (RenderedOrg is { } carried && RenderedFor == UrlName)
+        {
+            RenderedOrg = null;
+            _org     = carried;
+            _tours   = RenderedTours ?? [];
+            _loading = false;
+        }
+        else
+        {
+            _loading = true;
+            StateHasChanged();
+            _org     = await AdminClient.GetPublicOrgAsync(UrlName);
+            // A group that runs none simply gets an empty list, so nothing needs to know in advance
+            // which kind of business this is.
+            _tours   = (await AdminClient.GetPublicToursAsync(UrlName)).Items;
+            _loading = false;
+            if (!RendererInfo.IsInteractive && _org is not null && PrerenderCarry.Fits((_org, _tours)))
+            {
+                RenderedOrg = _org;
+                RenderedTours = [.. _tours];
+                RenderedFor = UrlName;
+            }
+        }
 
         // Arrived on an address the group has since changed. The page loads either way — an old
         // link must never simply die — but the browser is moved to the current address so that what

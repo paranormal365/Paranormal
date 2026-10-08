@@ -281,13 +281,30 @@
         await LoadBrowseAsync(1);   // a different filter is a different list, from the top
     }
 
+    // ── Carried from the server render (PagesDoNotBlinkTests) ────────────────
+    // The server draws this page, then the live connection builds it again as a new component with
+    // none of the first one's data — so it showed its content, its spinner, and its content again.
+    // What the server fetched rides into the page ([PersistentState]) and is used once, for the
+    // address it was fetched for; every later load (Retry, a new address) asks the API.
+    [PersistentState] public OrgBrowsePage? RenderedBrowse { get; set; }
+
     private async Task LoadBrowseAsync(int page)
     {
+        // Only the first page of the unfiltered list is ever drawn by the server.
+        if (RenderedBrowse is { } carried && page == 1 && !_toursOnly)
+        {
+            RenderedBrowse = null;
+            _browse = carried;
+            _browsing = false;
+            return;
+        }
+
         _browsing = true;
         StateHasChanged();
         // Anonymous endpoint — no AuthReady wait needed, and this page is reachable signed out.
         _browse = await AdminClient.BrowseOrganizationsAsync(page, BrowsePageSize, toursOnly: _toursOnly);
         _browsing = false;
+        if (!RendererInfo.IsInteractive && page == 1 && !_toursOnly && PrerenderCarry.Fits(_browse)) RenderedBrowse = _browse;
     }
 
     private async Task SearchAsync()

@@ -116,21 +116,51 @@ else
 
     protected override Task OnParametersSetAsync() => LoadAsync();
 
+    // ── Carried from the server render (PagesDoNotBlinkTests) ────────────────
+    // The server draws this page, then the live connection builds it again as a new component with
+    // none of the first one's data — so it showed its content, its spinner, and its content again.
+    // What the server fetched rides into the page ([PersistentState]) and is used once, for the
+    // address it was fetched for; every later load (Retry, a new address) asks the API.
+    [PersistentState] public OrgPublicHomeResponse? RenderedOrg { get; set; }
+    [PersistentState] public List<PublicCaseListItem>? RenderedCases { get; set; }
+    [PersistentState] public string? RenderedFor { get; set; }
+
     private async Task LoadAsync()
     {
+        if (RenderedCases is { } carried && RenderedFor == UrlName)
+        {
+            RenderedCases = null;
+            Show(RenderedOrg);
+            _casesResult = LoadResult<PublicCaseListItem>.Ok(carried);
+            _cases = _casesResult.Items;
+            _loading = false;
+            return;
+        }
+
         _loading = true;
         StateHasChanged();
 
         var org = await AdminClient.GetPublicOrgAsync(UrlName);
+        Show(org);
+        _casesResult = await AdminClient.GetPublicCasesAsync(UrlName);
+        _cases       = _casesResult.Items;
+
+        _loading = false;
+        if (!RendererInfo.IsInteractive && !_casesResult.Failed && PrerenderCarry.Fits((org, _cases)))
+        {
+            RenderedOrg = org;
+            RenderedCases = [.. _cases];
+            RenderedFor = UrlName;
+        }
+    }
+
+    private void Show(OrgPublicHomeResponse? org)
+    {
         _orgName = org?.OrgName;
         _logoUrl = org?.Logos.FirstOrDefault() is { } logo
             ? AdminClient.GetFileThumbnailUrl(logo.UploadFileId)
             : null;
         _navPages = org?.NavPages ?? [];
-        _casesResult = await AdminClient.GetPublicCasesAsync(UrlName);
-        _cases       = _casesResult.Items;
-
-        _loading = false;
     }
 
 }
