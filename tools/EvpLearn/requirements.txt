@@ -1,0 +1,7 @@
+# Item 242 phase 2 — the learning half. CPU only; the same list installs on the Windows server (Python 3.10+).
+torch>=2.8
+torchaudio>=2.8
+numpy>=2.0
+soundfile>=0.12
+onnx>=1.19
+onnxruntime>=1.19

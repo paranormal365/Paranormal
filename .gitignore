@@ -131,6 +131,14 @@ Ben.Data.WebApi/Models/nsfw/*.onnx
 # Working-copy-only secrets, e.g. the App Review demo password
 *.local.md
 
+# Item 242 lab: model files are downloaded, never committed; generated audio is scratch.
+tools/EvpLab/models/
+tools/EvpLab/out/
+tools/EvpLearn/.venv/
+tools/EvpLearn/data/
+tools/EvpLearn/runs/
+**/__pycache__/
+
 # The built documents under docs/ ARE tracked. They are outputs, and large ones, but they are
 # what a reader is handed — the product documentation, the six seat handovers, the two app guides
 # — and an output nobody can fetch from the repository is one nobody reads. `docs/*.pdf` was
