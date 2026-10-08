@@ -18,6 +18,7 @@ namespace Ben.Web.Playwright.Tests;
 /// </remarks>
 [TestFixture]
 [Category("Store")]
+[NonParallelizable]   // buys the seeded products, so their stock moves under the store tests reading it (10/08/2026)
 public class StoreCheckoutTests : BenTestBase
 {
     private static string Unique(string name) => $"{name} {Guid.NewGuid().ToString("N")[..6]}";

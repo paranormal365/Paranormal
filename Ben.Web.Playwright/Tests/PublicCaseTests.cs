@@ -9,6 +9,7 @@ namespace Ben.Web.Playwright.Tests;
 /// </summary>
 [TestFixture]
 [Category("PublicCase")]
+[NonParallelizable]   // votes on the seeded published case that other fixtures read and vote on (10/08/2026)
 public class PublicCaseTests : BenTestBase
 {
     // Seeded by DevelopmentDataSeeder

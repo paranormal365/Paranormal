@@ -23,8 +23,8 @@ namespace Ben.Web.Playwright.Tests;
 ///
 /// <para><b>And the page must be alive.</b> A page whose connection the server refused never
 /// blinks either — the store's first version of this test passed against exactly that. So each
-/// case also fails on a refused connection and proves the circuit answers, by typing into the
-/// sidebar's menu filter, which only the live page can act on.</para>
+/// case also fails on a refused connection and proves the circuit answers, by opening the header's
+/// cart, which only the live page can act on.</para>
 /// </remarks>
 [TestFixture]
 public class PagesDoNotBlinkTests : BenTestBase
@@ -58,11 +58,14 @@ public class PagesDoNotBlinkTests : BenTestBase
 
         Assert.That(dropped, Is.Empty, $"{path}: the server closed the live connection — the page is drawn but dead.");
 
-        // Alive: the sidebar's filter is a circuit round trip.
-        var home = Page.Locator("nav a[href='/']").First;
-        await Expect(home).ToBeVisibleAsync(new() { Timeout = 10_000 });
-        await FillAndConfirmAsync("#searchInput", "zzqq-no-such-menu-item");
-        await Expect(home).ToBeHiddenAsync(new() { Timeout = 10_000 });
+        // Alive: the header's cart opens through the live connection — its open state is a C# field,
+        // so only a page whose circuit answers can say aria-expanded="true". It was the sidebar's menu
+        // filter until the Signal layout (10/02) hid that sidebar and every case timed out typing into it.
+        var cart = Page.Locator("#nav-cart");
+        await Expect(cart).ToBeVisibleAsync(new() { Timeout = 10_000 });
+        await ClickUntilAsync(cart, Page.Locator("#nav-cart[aria-expanded='true']"));
+        await cart.ClickAsync();
+        await Expect(cart).ToHaveAttributeAsync("aria-expanded", "false", new() { Timeout = 10_000 });
 
         var ssrSpinner = await Page.EvaluateAsync<bool?>("window.__blink.ssrSpinner");
         var blinked = await Page.EvaluateAsync<bool>("window.__blink.blinked");

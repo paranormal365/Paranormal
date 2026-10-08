@@ -11,6 +11,7 @@ namespace Ben.Web.Playwright.Tests;
 /// </summary>
 [TestFixture]
 [Category("Store")]
+[NonParallelizable]   // reads the seeded products' stock, which the checkout tests are buying down (10/08/2026)
 public class StoreProductTests : BenTestBase
 {
     [Test]
