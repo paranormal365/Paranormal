@@ -13764,3 +13764,23 @@ Same as 242: a throwaway measurement outside the product, run on Ben's real reco
 talking. How often does the model match a known teammate correctly, how often does it wrongly match
 a stranger, and how short or whispered can a clip be before it gives up? Those numbers decide
 whether the feature is worth building and where the threshold sits.
+
+## 255. Browser tests that depend on what ran before them (OPEN — found 10/08/2026)
+
+Found merging everything on 10/08/2026 (`integration/2026-10-08`). Every test passed in at least one full
+run, but these fail or pass by order:
+
+- **Fail on master as well:** `The_store_group_is_in_the_administration_menu` (the store's rail group is
+  not there when it looks; `OpenAdministrationUntilAsync` now asks again on a fresh page, and it still
+  failed — the menu itself may have moved).
+- **Pass alone, fail after other fixtures in the same run:** `The_letters_screen_is_in_the_menu`,
+  `The_audio_editors_toolbar_wraps_and_uses_the_sites_icons`, `CaseDetail_AuthenticatedUser_SeesVoteButtons`.
+- **Four at a time (`feature/test-parallelism`, reverted out of master the same day):** fixtures signed in
+  as the same seeded account interfere — the admin menu found the browser on "Your groups", a stranger's
+  investigation request and two audio-editor tests failed, and which ones changed from run to run. Before
+  that branch comes back, each fixture that changes a person's own state (their open menu, their votes,
+  their banners) needs its own account or the [NonParallelizable] marker with what it shares.
+
+Fixed on the way: the blink test's liveness check (the Signal layout hid the sidebar filter it typed into),
+the phone room test (a "Work waiting" banner pushed the form below the fold), and three fixtures marked to
+run alone (store checkout and product stock, the seeded case's votes).
