@@ -9,6 +9,7 @@ namespace Ben.Web.Playwright.Tests;
 /// </summary>
 [TestFixture]
 [Category("HostedEvents")]
+[NonParallelizable]   // the one seeded hosted event: copies it
 public class EventCopyTests : BenTestBase
 {
     private const string RoomsEventId = "40000002-0000-0000-0000-000000000002";

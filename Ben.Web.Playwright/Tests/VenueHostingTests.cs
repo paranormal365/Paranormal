@@ -18,6 +18,7 @@ namespace Ben.Web.Playwright.Tests;
 /// </remarks>
 [TestFixture]
 [Category("HostedEvents")]
+[NonParallelizable]   // the one seeded venue's events
 public class VenueHostingTests : BenTestBase
 {
     private const string ThomasHouse = "40000002-0000-0000-0000-000000000001";

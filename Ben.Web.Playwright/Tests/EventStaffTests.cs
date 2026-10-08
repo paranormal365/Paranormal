@@ -17,6 +17,7 @@ namespace Ben.Web.Playwright.Tests;
 /// </remarks>
 [TestFixture]
 [Category("HostedEvents")]
+[NonParallelizable]   // the one seeded hosted event: adds and removes its staff
 public class EventStaffTests : BenTestBase
 {
     private const string RoomsEventId = "40000002-0000-0000-0000-000000000002";

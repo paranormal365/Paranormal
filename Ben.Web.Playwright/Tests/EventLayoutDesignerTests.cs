@@ -25,6 +25,7 @@ namespace Ben.Web.Playwright.Tests;
 /// </remarks>
 [TestFixture]
 [Category("HostedEvents")]
+[NonParallelizable]   // reads the one seeded hosted event's plan, which the seat fixtures take places on
 public class EventLayoutDesignerTests : BenTestBase
 {
     /// <summary>The seeded weekend in the hotel's rooms.</summary>

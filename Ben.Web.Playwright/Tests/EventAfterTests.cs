@@ -13,6 +13,7 @@ namespace Ben.Web.Playwright.Tests;
 /// </remarks>
 [TestFixture]
 [Category("HostedEvents")]
+[NonParallelizable]   // reads the one seeded hosted event, which the fixtures above rewrite
 public class EventAfterTests : BenTestBase
 {
     private const string RoomsEventId = "40000002-0000-0000-0000-000000000002";

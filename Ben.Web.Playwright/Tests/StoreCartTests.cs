@@ -15,6 +15,7 @@ namespace Ben.Web.Playwright.Tests;
 /// </remarks>
 [TestFixture]
 [Category("Store")]
+[NonParallelizable]   // turns the store's checkout off and back on: a site-wide switch
 public class StoreCartTests : BenTestBase
 {
     private static string Unique(string name) => $"{name} {Guid.NewGuid().ToString("N")[..6]}";

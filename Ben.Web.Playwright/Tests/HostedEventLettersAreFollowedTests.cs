@@ -30,6 +30,7 @@ namespace Ben.Web.Playwright.Tests;
 [TestFixture]
 [Category("Mail")]
 [Category("HostedEvents")]
+[NonParallelizable]   // the one seeded hosted event: books, confirms and follows its letters
 public class HostedEventLettersAreFollowedTests : BenTestBase
 {
     /// <summary>The seeded weekend in the rooms — sells day passes, so a host may invite by email.</summary>
