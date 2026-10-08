@@ -45,15 +45,10 @@ public class AdminStoreCatalogTests : BenTestBase
     [Description("Store is a group in the administration menu, with every store screen under it.")]
     public async Task The_store_group_is_in_the_administration_menu()
     {
-        await Page.GotoAsync($"{BaseUrl}/admin/dashboard");
-        await WaitForTheCircuitAsync();
-
         // In the rail: with the shop switched on, the bar has a "Store" of its own — the shop, not
         // its back office — and that one came first.
         var rail = Page.Locator(".app-rail");
-        await ClickUntilAsync(
-            Page.GetByRole(AriaRole.Link, new() { Name = "Administration", Exact = false }).First,
-            rail.GetByRole(AriaRole.Link, new() { Name = "Store", Exact = true }).First);
+        await OpenAdministrationUntilAsync(rail.GetByRole(AriaRole.Link, new() { Name = "Store", Exact = true }).First);
         await ClickUntilAsync(
             rail.GetByRole(AriaRole.Link, new() { Name = "Store", Exact = true }).First,
             rail.GetByRole(AriaRole.Link, new() { Name = "Store Settings", Exact = false }).First);

@@ -149,6 +149,17 @@ public class PlaceRoomsBookableTests : BenTestBase
         var bookable = Page.Locator("#room-bookable");
         if (IsPhone)
         {
+            // The layout is the subject, not how busy this account is: a "Work waiting" banner left by
+            // other fixtures' investigation requests pushed the form below the fold on a phone, and the
+            // test then failed or passed on what the database held (10/08/2026). Put away with its own
+            // buttons, the way a person would, before the page is looked at.
+            var waiting = Page.Locator("section.work-waiting button.btn-close");
+            for (var n = await waiting.CountAsync(); n > 0; n = await waiting.CountAsync())
+            {
+                await waiting.First.ClickAsync();
+                await Expect(waiting).ToHaveCountAsync(n - 1, new() { Timeout = 10_000 });
+            }
+
             // Decision 13, first half: on a phone the control that makes a room bookable is on
             // screen when the page opens, before anything has been scrolled or tapped. Asserted
             // BEFORE the form is touched — Playwright scrolls to whatever it fills, which would

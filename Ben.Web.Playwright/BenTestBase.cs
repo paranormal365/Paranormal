@@ -1562,6 +1562,35 @@ public abstract class BenTestBase : PageTest
     /// with a <c>&lt;!--Blazor:…--&gt;</c> comment and the circuit consumes those comments as it attaches them — none
     /// left means the components are live and any placeholder they show is already on the page.
     /// </remarks>
+    /// <summary>
+    /// Opens the administration menu from the dashboard until <paramref name="expected"/> is in it, on a fresh page each
+    /// time.
+    /// </summary>
+    /// <remarks>
+    /// The menu shows a group only while its site-wide switch is on, and the website holds a switch's answer for up to
+    /// thirty seconds. The fixtures that turn a switch off and back on run alone, but the next one to open the menu could
+    /// still be shown the old answer — the store's group missing, or "Groups &amp; Places" — and failed or passed on
+    /// which fixture ran before it (10/08/2026, four at a time). A fresh page asks again; the click alone never would.
+    /// </remarks>
+    protected async Task OpenAdministrationUntilAsync(ILocator expected, int attempts = 8)
+    {
+        for (var attempt = 1; ; attempt++)
+        {
+            await Page.GotoAsync($"{BaseUrl}/admin/dashboard");
+            await WaitForTheCircuitAsync();
+            await Page.GetByRole(AriaRole.Link, new() { Name = "Administration", Exact = false }).First.ClickAsync();
+            try
+            {
+                await Expect(expected).ToBeVisibleAsync(new() { Timeout = 5_000 });
+                return;
+            }
+            catch (PlaywrightException) when (attempt < attempts)
+            {
+                await Page.WaitForTimeoutAsync(5_000);
+            }
+        }
+    }
+
     protected Task WaitForTheCircuitAsync() => Page.WaitForFunctionAsync(@"() => {
         const comments = document.createTreeWalker(document, NodeFilter.SHOW_COMMENT);
         while (comments.nextNode()) if (comments.currentNode.data.startsWith('Blazor:')) return false;

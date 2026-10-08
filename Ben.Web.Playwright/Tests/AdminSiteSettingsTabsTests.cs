@@ -67,12 +67,7 @@ public class AdminSiteSettingsTabsTests : BenTestBase
     [Description("Email Templates is in the administration menu, under System.")]
     public async Task The_letters_screen_is_in_the_menu()
     {
-        await Page.GotoAsync($"{BaseUrl}/admin/dashboard");
-        await WaitForTheCircuitAsync();
-
-        await ClickUntilAsync(
-            Page.GetByRole(AriaRole.Link, new() { Name = "Administration", Exact = false }).First,
-            Page.GetByRole(AriaRole.Link, new() { Name = "System", Exact = true }).First);
+        await OpenAdministrationUntilAsync(Page.GetByRole(AriaRole.Link, new() { Name = "Groups & Places", Exact = true }).First);
 
         await ClickUntilAsync(
             Page.GetByRole(AriaRole.Link, new() { Name = "System", Exact = true }).First,
