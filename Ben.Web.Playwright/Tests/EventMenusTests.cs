@@ -23,7 +23,6 @@ namespace Ben.Web.Playwright.Tests;
 /// </remarks>
 [TestFixture]
 [Category("HostedEvents")]
-[NonParallelizable]   // the one seeded hosted event: rewrites its nights and their menus
 public class EventMenusTests : BenTestBase
 {
     /// <summary>The seeded weekend in the rooms — two nights, so a sitting has a night to be under.</summary>

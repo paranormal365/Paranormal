@@ -12,7 +12,6 @@ namespace Ben.Web.Playwright.Tests;
 /// </remarks>
 [TestFixture]
 [Category("HostedEvents")]
-[NonParallelizable]   // the one seeded hosted event: adds files to it
 public class EventFilesTests : BenTestBase
 {
     private const string RoomsEventId = "40000002-0000-0000-0000-000000000002";

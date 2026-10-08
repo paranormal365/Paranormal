@@ -13,7 +13,6 @@ namespace Ben.Web.Playwright.Tests;
 /// </remarks>
 [TestFixture]
 [Category("HostedEvents")]
-[NonParallelizable]   // the one seeded hosted event, from the administration side
 public class AdminEventOversightTests : BenTestBase
 {
     private const string RoomsEventId = "40000002-0000-0000-0000-000000000002";

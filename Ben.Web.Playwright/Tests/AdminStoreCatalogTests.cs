@@ -22,7 +22,6 @@ namespace Ben.Web.Playwright.Tests;
 /// </remarks>
 [TestFixture]
 [Category("Store")]
-[NonParallelizable]   // writes the one store-settings row; a concurrent write loses one of them
 public class AdminStoreCatalogTests : BenTestBase
 {
     [SetUp]

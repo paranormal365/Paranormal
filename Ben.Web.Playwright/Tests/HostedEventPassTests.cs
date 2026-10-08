@@ -18,7 +18,6 @@ namespace Ben.Web.Playwright.Tests;
 /// </remarks>
 [TestFixture]
 [Category("HostedEvents")]
-[NonParallelizable]   // the one seeded hosted event: issues and withdraws its passes
 public class HostedEventPassTests : BenTestBase
 {
     private const string SeatsEventId = "40000002-0000-0000-0000-000000000003";

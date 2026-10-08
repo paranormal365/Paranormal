@@ -18,7 +18,6 @@ namespace Ben.Web.Playwright.Tests;
 /// </remarks>
 [TestFixture]
 [Category("HostedEvents")]
-[NonParallelizable]   // the one seeded hosted event — [SetUp] clears the whole house before each test
 public class EventDoorTests : BenTestBase
 {
     private const string SeatsEventId = "40000002-0000-0000-0000-000000000003";

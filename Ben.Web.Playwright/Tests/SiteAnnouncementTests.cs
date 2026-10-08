@@ -11,7 +11,6 @@ namespace Ben.Web.Playwright.Tests;
 /// </summary>
 [TestFixture]
 [Category("SiteAnnouncement")]
-[NonParallelizable]   // a site-wide banner: every other page test would see it
 public class SiteAnnouncementTests : BenTestBase
 {
     private const string TestNotice = "E2E notice: the site is fine, this banner is a test.";

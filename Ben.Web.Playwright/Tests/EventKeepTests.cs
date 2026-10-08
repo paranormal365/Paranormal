@@ -9,7 +9,6 @@ namespace Ben.Web.Playwright.Tests;
 /// </summary>
 [TestFixture]
 [Category("HostedEvents")]
-[NonParallelizable]   // the one seeded hosted event: changes what it keeps
 public class EventKeepTests : BenTestBase
 {
     private const string RoomsEventId = "40000002-0000-0000-0000-000000000002";

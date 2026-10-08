@@ -18,7 +18,6 @@ namespace Ben.Web.Playwright.Tests;
 /// </remarks>
 [TestFixture]
 [Category("HostedEvents")]
-[NonParallelizable]   // the one seeded hosted event: books guests onto it
 public class HostedEventGuestTests : BenTestBase
 {
     /// <summary>The seeded weekend in the rooms — an Ask event, where places are asked for.</summary>

@@ -14,7 +14,6 @@ namespace Ben.Web.Playwright.Tests;
 /// </remarks>
 [TestFixture]
 [Category("SelfRegistrationSwitch")]
-[NonParallelizable]   // a site-wide switch: every other page test would see it
 public class SelfRegistrationSwitchTests : BenTestBase
 {
     private const string SettingLabel = "Allow groups to self-register";

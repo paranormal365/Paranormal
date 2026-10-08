@@ -62,36 +62,6 @@ cd /Users/ben/Source/Ben
 dotnet test Ben.Web.Playwright -p:IsTestProject=true --no-build -e BEN_BASE_URL=http://localhost:5078
 ```
 
-### How long it takes, and the workers that decide
-
-The suite runs **four tests at once**. `Ben.Web.Playwright/Parallelism.cs` holds the two assembly
-attributes that do it, and the reasoning; `scripts/run-e2e.sh` owns the number:
-
-```bash
-scripts/run-e2e.sh                 # four at a time (the default)
-scripts/run-e2e.sh --workers 6     # six
-scripts/run-e2e.sh --workers 1     # one at a time
-```
-
-`BEN_E2E_WORKERS` does the same thing for a shell that wants it set once.
-
-Three things are worth knowing before a failure is believed:
-
-1. **Reproduce it at `--workers 1` first.** A test that fails in a parallel run and passes alone is
-   usually not flaky — it shares something with another fixture, and the fix is `[NonParallelizable]`
-   on the fixture with a sentence saying what it shares.
-2. **Fixtures run against each other; the tests inside one do not.** A fixture that seeds in
-   `[OneTimeSetUp]` and depends on its own order keeps that order.
-3. **`[NonParallelizable]` is stronger than it sounds.** NUnit runs work in shifts and only one
-   shift is live, so a fixture carrying the marker runs with nothing else in flight at all. That is
-   why the site-wide switches (the store, the feed, the announcement banner) are safe.
-
-A run started by hand against hosts that `run-e2e.sh` did not start will collect **429s**, because
-it is the script that raises the API's per-address rate limits for the length of a run. `/login` is
-anonymous, so the limiter keys it by address, and the whole suite is one address at twenty a
-minute. A 429 reads as *Invalid email or password*, so it looks like a credentials problem in
-several unrelated fixtures at once.
-
 ### A single category
 ```bash
 dotnet test Ben.Web.Playwright -p:IsTestProject=true --no-build --filter TestCategory=Smoke

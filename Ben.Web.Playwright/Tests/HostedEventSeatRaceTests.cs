@@ -20,7 +20,6 @@ namespace Ben.Web.Playwright.Tests;
 /// </remarks>
 [TestFixture]
 [Category("HostedEvents")]
-[NonParallelizable]   // the one seeded hosted event: two callers race for the same place on purpose
 public class HostedEventSeatRaceTests : BenTestBase
 {
     /// <summary>The seeded 260-seat evening, which is a Pick event.</summary>

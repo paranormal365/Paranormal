@@ -17,7 +17,6 @@ namespace Ben.Web.Playwright.Tests;
 /// </remarks>
 [TestFixture]
 [Category("HostedEvents")]
-[NonParallelizable]   // reads the one seeded hosted event's seats, which the seat fixtures take
 public class EventReadOnlySeatTests : BenTestBase
 {
     private const string RoomsEventId = "40000002-0000-0000-0000-000000000002";

@@ -25,7 +25,6 @@ namespace Ben.Web.Playwright.Tests;
 /// </remarks>
 [TestFixture]
 [Category("FeatureFlags")]
-[NonParallelizable]   // a site-wide switch: every other page test would see it
 public class FeatureFlagTests : BenTestBase
 {
     private const string EquipmentSwitchId = "#sw-features\\.equipment";

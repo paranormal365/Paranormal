@@ -9,7 +9,6 @@ namespace Ben.Web.Playwright.Tests;
 /// </summary>
 [TestFixture]
 [Category("HostedEvents")]
-[NonParallelizable]   // the one seeded venue's events
 public class VenueMemoryTests : BenTestBase
 {
     private const string SeatsEventId = "40000002-0000-0000-0000-000000000003";

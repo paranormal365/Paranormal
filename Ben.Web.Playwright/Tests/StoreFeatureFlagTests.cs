@@ -9,7 +9,6 @@ namespace Ben.Web.Playwright.Tests;
 /// </summary>
 [TestFixture]
 [Category("Store")]
-[NonParallelizable]   // turns the store off and back on: a site-wide switch
 public class StoreFeatureFlagTests : BenTestBase
 {
     [Test]

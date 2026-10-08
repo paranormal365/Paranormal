@@ -19,32 +19,6 @@
 #    Filter one fixture with --Tests:StartGroupWizardTests, or a category with
 #    --TestCaseFilter:TestCategory=Smoke.
 #
-# PARALLELISM
-# -----------
-# Four tests run at once. Ben.Web.Playwright/Parallelism.cs carries the two assembly attributes
-# that make that happen — ParallelScope.Fixtures, so different fixtures run together and the tests
-# inside one stay in order — and the whole argument for it, including why four and not ten.
-#
-# scripts/run-e2e.sh is the way to run the suite, and it owns the number:
-#
-#   scripts/run-e2e.sh                 # four at a time
-#   scripts/run-e2e.sh --workers 6     # six
-#   scripts/run-e2e.sh --workers 1     # one at a time
-#
-# ALWAYS REPRODUCE A FAILURE AT --workers 1 BEFORE BELIEVING IT. A test that fails in a parallel
-# run and passes alone is not necessarily flaky: far more often it shares something with another
-# fixture — the one seeded case, the one seeded hosted event, a site-wide switch — and the fix is
-# [NonParallelizable] on the fixture WITH A SENTENCE saying what it shares, as the seventy-odd
-# fixtures that already carry it do.
-#
-# Running the suite by hand with vstest or dotnet test gets the compiled-in four. Override it with
-# `-- NUnit.NumberOfTestWorkers=N` after a bare -- on a dotnet test command line.
-#
-# A HAND RUN AGAINST A HOST THAT RUN-E2E.SH DID NOT START WILL COLLECT 429s. /login is anonymous,
-# so the limiter keys it by address and the whole suite is one address, at twenty a minute. The
-# script raises that for the length of a run; nothing else does. A 429 reads as "Invalid email or
-# password", so this looks like a credentials problem in several fixtures at once.
-#
 # ENVIRONMENT VARIABLES
 # ---------------------
 # BEN_BASE_URL              WebApp root URL          (default: http://localhost:5078)

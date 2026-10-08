@@ -9,7 +9,6 @@ namespace Ben.Web.Playwright.Tests;
 /// <remarks>Against the seeded rooms weekend. The tables this run makes, and the booking it may make, are removed.</remarks>
 [TestFixture]
 [Category("HostedEvents")]
-[NonParallelizable]   // the one seeded hosted event: lays its tables and clears them again
 public class EventDiningTests : BenTestBase
 {
     private const string RoomsEventId = "40000002-0000-0000-0000-000000000002";

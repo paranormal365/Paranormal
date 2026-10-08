@@ -18,7 +18,6 @@ namespace Ben.Web.Playwright.Tests;
 /// </remarks>
 [TestFixture]
 [Category("HostedEvents")]
-[NonParallelizable]   // the one seeded hosted event: holds and gives back its places
 public class HostedEventSeatPickerTests : BenTestBase
 {
     private const string SeatsEventId = "40000002-0000-0000-0000-000000000003";

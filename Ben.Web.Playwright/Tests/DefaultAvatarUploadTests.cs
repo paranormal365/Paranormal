@@ -10,7 +10,6 @@ namespace Ben.Web.Playwright.Tests;
 /// </summary>
 [TestFixture]
 [Category("DefaultAvatarUpload")]
-[NonParallelizable]   // a site-wide setting: the avatar every other page draws
 public class DefaultAvatarUploadTests : BenTestBase
 {
     /// <summary>A 1x1 transparent PNG, bytes inline so the test carries its own fixture.</summary>
