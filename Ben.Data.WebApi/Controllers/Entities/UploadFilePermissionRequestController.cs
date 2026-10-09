@@ -190,6 +190,12 @@ public sealed class UploadFilePermissionRequestController : BenControllerBase
             if (!isOrgAdmin) return Forbid();
         }
 
+        // Saying yes is the file's owner's to do, now that yes shares the file. A group's administrator could
+        // otherwise ask for somebody's private file on the group's behalf and approve their own request
+        // (site audit, 10/09/2026). They can still decline one.
+        if (body.RequestStatus == FilePermissionRequestStatus.Approved && !isFileOwnerOrSuperAdmin)
+            return Forbid();
+
         request.RequestStatus = body.RequestStatus;
         request.ReviewNotes = body.ReviewNotes;
         request.ReviewedByAppUserId = userId;

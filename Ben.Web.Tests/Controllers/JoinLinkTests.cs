@@ -297,4 +297,59 @@ public sealed class JoinLinkTests
         await using var read = await f.CreateDbContextAsync();
         Assert.False((await read.Organizations.FirstAsync(o => o.Id == orgId)).IsPersonal);
     }
+    // ── coming back ──────────────────────────────────────────────────────────
+
+    /// <summary>
+    /// A lapsed membership is revived through the link as an ordinary member. It used to come back as
+    /// it was, so a removed administrator opened the group's public join link and was an administrator
+    /// again, with every role and grant they had held (site audit, 10/09/2026). Only the group's
+    /// starting role survives.
+    /// </summary>
+    [Fact]
+    public async Task A_removed_administrator_who_uses_the_link_comes_back_as_an_ordinary_member()
+    {
+        var f = CreateFactory();
+        var (orgId, token) = await SeedAsync(f, plan: SubscriptionStatus.Active);
+        var now = DateTime.UtcNow;
+        var defaultRoleId = Guid.NewGuid();
+        var officerRoleId = Guid.NewGuid();
+        var membershipId  = Guid.NewGuid();
+
+        await using (var db = await f.CreateDbContextAsync())
+        {
+            var org = await db.Organizations.FirstAsync(o => o.Id == orgId);
+            org.DefaultMemberRoleId = defaultRoleId;
+            db.OrganizationRoles.Add(new OrganizationRole { Id = defaultRoleId, OrganizationId = orgId, Name = "Investigator", IsActive = true, DateCreated = now, CreatedByAppUserId = Founder });
+            db.OrganizationRoles.Add(new OrganizationRole { Id = officerRoleId, OrganizationId = orgId, Name = "Officer",      IsActive = true, DateCreated = now, CreatedByAppUserId = Founder });
+            db.OrganizationUserMemberships.Add(new OrganizationUserMembership
+            {
+                Id = membershipId, OrganizationId = orgId, AppUserId = Newcomer,
+                Role = OrganizationMemberRole.Administrator, IsActive = false,
+                DateCreated = now.AddMonths(-6), CreatedByAppUserId = Founder,
+            });
+            db.OrganizationRoleMemberships.Add(new OrganizationRoleMembership { Id = Guid.NewGuid(), OrganizationRoleId = officerRoleId, OrganizationUserMembershipId = membershipId, DateCreated = now, CreatedByAppUserId = Founder });
+            db.OrganizationRoleMemberships.Add(new OrganizationRoleMembership { Id = Guid.NewGuid(), OrganizationRoleId = defaultRoleId, OrganizationUserMembershipId = membershipId, DateCreated = now, CreatedByAppUserId = Founder });
+            db.OrganizationAccessGrants.Add(new OrganizationAccessGrant
+            {
+                Id = Guid.NewGuid(), OrganizationId = orgId, AppUserId = Newcomer,
+                TableName = OrganizationSecurityTable.Organization,
+                Actions = OrganizationSecurityAction.Create | OrganizationSecurityAction.Read,
+                DateCreated = now, CreatedByAppUserId = Founder,
+            });
+            await db.SaveChangesAsync();
+        }
+
+        Assert.IsType<OkObjectResult>((await Build(f, Newcomer).Accept(token, default)).Result);
+
+        await using var read = await f.CreateDbContextAsync();
+        var revived = await read.OrganizationUserMemberships.SingleAsync(m => m.OrganizationId == orgId && m.AppUserId == Newcomer);
+        Assert.Equal(membershipId, revived.Id);
+        Assert.True(revived.IsActive);
+        Assert.Equal(OrganizationMemberRole.Member, revived.Role);
+        var roles = await read.OrganizationRoleMemberships
+            .Where(rm => rm.OrganizationUserMembershipId == membershipId)
+            .Select(rm => rm.OrganizationRoleId).ToListAsync();
+        Assert.Equal([defaultRoleId], roles);
+        Assert.False(await read.OrganizationAccessGrants.AnyAsync(g => g.OrganizationId == orgId && g.AppUserId == Newcomer));
+    }
 }

@@ -291,6 +291,9 @@ public sealed partial class FieldSessionUploadController : BenControllerBase
             .Where(s => s.SubmittedByAppUserId == userId
                      && s.PositionResolved && s.Latitude != null && s.Longitude != null);
 
+        if (bounded && new[] { north!.Value, south!.Value, east!.Value, west!.Value }.Any(v => !double.IsFinite(v) || Math.Abs(v) > 180))
+            return BadRequest("Those bounds aren't on the map.");   // cast to decimal, they threw (site audit, 10/09/2026)
+
         if (bounded)
         {
             // Normalised, so a caller that hands the corners over in the other order — and map
@@ -696,6 +699,9 @@ public sealed partial class FieldSessionUploadController : BenControllerBase
 
         await ApplyRecordedByAsync(db, session, userId, recordedByAppUserId, recordedByName, ct);
 
+        // The document this one replaces, removed once the new one is saved.
+        Guid? replacedDocumentId = session.IsBundle ? null : session.DocumentUploadFileId;
+
         // Set on every submission, so choosing an investigation later is simply re-sending.
         session.InvestigationId = investigationId;
         session.DocumentUploadFileId = uploadFile.Id;
@@ -715,6 +721,24 @@ public sealed partial class FieldSessionUploadController : BenControllerBase
 
         await db.SaveChangesAsync(ct);
         await db.Entry(session).Collection(s => s.Files).LoadAsync(ct);
+
+        // The replaced document's row and bytes go. Kept, each resend left a row pointing at a document
+        // nothing used, counted toward the person's storage (site audit, 10/09/2026).
+        if (replacedDocumentId is Guid oldDocId && oldDocId != uploadFile.Id
+            && await db.UploadFiles.FirstOrDefaultAsync(f => f.Id == oldDocId, ct) is { } oldDoc)
+        {
+            var oldPath = oldDoc.StoragePath;
+            try
+            {
+                db.UploadFiles.Remove(oldDoc);
+                await db.SaveChangesAsync(ct);
+                if (!string.IsNullOrEmpty(oldPath)) await _fileStorage.DeleteAsync(oldPath, ct);
+            }
+            catch (Exception tidy) when (tidy is DbUpdateException or IOException)
+            {
+                _log.LogWarning(tidy, "The replaced session document {FileId} was left in place.", oldDocId);
+            }
+        }
 
         _log.LogInformation(
             "Field session {DeviceSessionId} uploaded to investigation {InvestigationId} "

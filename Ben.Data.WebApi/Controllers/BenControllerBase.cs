@@ -242,7 +242,7 @@ public abstract class BenControllerBase : ControllerBase
         }
         catch (Exception ex)
         {
-            HttpContext?.RequestServices
+            HttpContext?.RequestServices?
                 .GetService<ILogger<BenControllerBase>>()?
                 .LogError(ex, "Audit log write failed for {Path}", HttpContext?.Request?.Path.Value);
         }

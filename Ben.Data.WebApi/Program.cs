@@ -864,6 +864,20 @@ app.UseExceptionHandler(handler =>
             return;
         }
 
+        // Text longer than its column. About twenty-five fields across the API reached the database
+        // unchecked, and each answered 500 for what is the person's typing (site audit, 10/09/2026).
+        // Said back to them as a sentence, plain text, so the screens that show a server's reason show it.
+        if (feature?.Error is Microsoft.EntityFrameworkCore.DbUpdateException { InnerException: Microsoft.Data.SqlClient.SqlException sql }
+            && sql.Number is 2628 or 8152)
+        {
+            logger.LogInformation("Text too long for its column at {Path}: {Reason}", feature.Path, sql.Message);
+
+            context.Response.StatusCode  = 400;
+            context.Response.ContentType = "text/plain; charset=utf-8";
+            await context.Response.WriteAsync("Something you typed is longer than it can be. Please shorten it and try again.");
+            return;
+        }
+
         if (feature?.Error is not null)
         {
             logger.LogError(feature.Error,

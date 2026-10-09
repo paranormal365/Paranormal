@@ -45,6 +45,12 @@ public sealed class SearchController : ControllerBase
         [FromQuery] string? query = null,
         CancellationToken ct = default)
     {
+        // A position off the map is refused rather than cast to decimal, which threw for NaN or 1e30 and
+        // answered 500 (site audit, 10/09/2026).
+        if (!double.IsFinite(lat) || !double.IsFinite(lon) || Math.Abs(lat) > 90 || Math.Abs(lon) > 180
+            || !double.IsFinite(radiusMiles))
+            return BadRequest("That position isn't on the map.");
+
         var clampedRadius = Math.Clamp(radiusMiles, 0.1, 100);
 
         await using var db = await _db.CreateDbContextAsync(ct);

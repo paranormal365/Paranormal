@@ -139,13 +139,14 @@ public sealed class OrganizationMembershipRequestController : ControllerBase
         return Ok(requests.Select(_mapper.Map<OrganizationMembershipRequestRecord>).ToList());
     }
 
+    /// <summary>When a group's "may not apply again" began to be enforced (site audit, 10/09/2026).</summary>
+    internal static readonly DateTime ReapplyRuleEnforcedFrom = new(2026, 10, 10, 0, 0, 0, DateTimeKind.Utc);
+
     // ── POST /api/organizations/{orgId}/membership-requests ─────────────────
     /// <summary>
     /// Submits a membership application. The organization must have IsAcceptingApplications = true.
     /// A user can only have one active (Pending) request per organization.
     /// </summary>
-    /// <summary>When a group's "may not apply again" began to be enforced (site audit, 10/09/2026).</summary>
-    internal static readonly DateTime ReapplyRuleEnforcedFrom = new(2026, 10, 10, 0, 0, 0, DateTimeKind.Utc);
 
     [HttpPost]
     public async Task<ActionResult<OrganizationMembershipRequestRecord>> Apply(

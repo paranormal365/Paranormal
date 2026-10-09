@@ -291,6 +291,29 @@ public class UploadFilePermissionRequestControllerTests
         Assert.Equal(callerId, record.RequestedByAppUserId);
     }
 
+    /// <summary>
+    /// Approving a group's request now shares the file with that group, so asking on a group's
+    /// behalf is for the group's own members. Anybody could name any group (site audit, 10/09/2026).
+    /// </summary>
+    [Fact]
+    public async Task Asking_for_a_file_on_behalf_of_a_group_you_are_not_in_is_forbidden()
+    {
+        var factory  = CreateFactory();
+        var ownerId  = Guid.NewGuid();
+        var fileId   = await SeedFileAsync(factory, ownerId);
+        var orgId    = Guid.NewGuid();
+        var callerId = Guid.NewGuid();
+        await AddMembershipAsync(factory, orgId, Guid.NewGuid());                       // somebody else's group
+        await AddMembershipAsync(factory, orgId, callerId, OrganizationMemberRole.Member, isActive: false);
+
+        var result = await Build(factory, callerId).Submit(fileId,
+            new SubmitRequestBody(orgId, FilePermissionType.Use, "for my group"), default);
+
+        Assert.IsType<ForbidResult>(result.Result);
+        await using var db = await factory.CreateDbContextAsync();
+        Assert.False(await db.UploadFilePermissionRequests.AnyAsync(r => r.UploadFileId == fileId));
+    }
+
     // ── Review ────────────────────────────────────────────────────────────────
 
     [Fact]
@@ -312,8 +335,10 @@ public class UploadFilePermissionRequestControllerTests
     }
 
     [Fact]
-    public async Task Review_OrgAdmin_OfRequestsOrg_Succeeds()
+    public async Task Review_OrgAdmin_OfRequestsOrg_may_decline_but_not_approve()
     {
+        // Approving shares the file, so it is the owner's to do: an administrator of the asking group could
+        // otherwise request somebody's private file and approve it themselves (site audit, 10/09/2026).
         var factory = CreateFactory();
         var ownerId = Guid.NewGuid();
         var fileId  = await SeedFileAsync(factory, ownerId);
@@ -321,12 +346,49 @@ public class UploadFilePermissionRequestControllerTests
         var adminId = Guid.NewGuid();
         await AddMembershipAsync(factory, orgId, adminId);
         var reqId = await SeedRequestAsync(factory, fileId, Guid.NewGuid(), organizationId: orgId);
-        var ctrl  = Build(factory, adminId);
 
-        var result = await ctrl.Review(reqId,
+        var approve = await Build(factory, adminId).Review(reqId,
             new ReviewRequestBody(FilePermissionRequestStatus.Approved, null), default);
+        Assert.IsType<ForbidResult>(approve.Result);
+        await using (var db = await factory.CreateDbContextAsync())
+            Assert.False(await db.UploadFileOrganizationShares.AnyAsync(sh => sh.UploadFileId == fileId));
+
+        var decline = await Build(factory, adminId).Review(reqId,
+            new ReviewRequestBody(FilePermissionRequestStatus.Denied, null), default);
+        Assert.IsType<OkObjectResult>(decline.Result);
+    }
+
+    /// <summary>
+    /// Approving a group's request to use a file changed the request's status and granted nothing:
+    /// the group still could not use the file (site audit, 10/09/2026). Approval now shares the file
+    /// with the group, to its members unless public display was asked for.
+    /// </summary>
+    [Theory]
+    [InlineData(FilePermissionType.Use, FileShareVisibility.OrgMembers)]
+    [InlineData(FilePermissionType.Use | FilePermissionType.Display, FileShareVisibility.Public)]
+    public async Task Approving_a_groups_request_shares_the_file_with_that_group(
+        FilePermissionType asked, FileShareVisibility expected)
+    {
+        var factory = CreateFactory();
+        var ownerId = Guid.NewGuid();
+        var fileId  = await SeedFileAsync(factory, ownerId);
+        var orgId   = Guid.NewGuid();
+        var reqId   = await SeedRequestAsync(factory, fileId, Guid.NewGuid(), organizationId: orgId);
+        await using (var db = await factory.CreateDbContextAsync())
+        {
+            (await db.UploadFilePermissionRequests.SingleAsync(r => r.Id == reqId)).PermissionType = asked;
+            await db.SaveChangesAsync();
+        }
+
+        var result = await Build(factory, ownerId).Review(reqId,
+            new ReviewRequestBody(FilePermissionRequestStatus.Approved, "yes"), default);
 
         Assert.IsType<OkObjectResult>(result.Result);
+        await using var read = await factory.CreateDbContextAsync();
+        var share = await read.UploadFileOrganizationShares.SingleAsync(sh => sh.UploadFileId == fileId);
+        Assert.Equal(orgId, share.OrganizationId);
+        Assert.True(share.IsActive);
+        Assert.Equal(expected, share.Visibility);
     }
 
     [Fact]

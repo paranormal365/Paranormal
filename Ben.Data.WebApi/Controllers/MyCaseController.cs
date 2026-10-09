@@ -278,6 +278,11 @@ public sealed class MyCaseController : BenControllerBase
             DateCreated        = DateTime.UtcNow,
             CreatedByAppUserId = userId,
         };
+        // The tags are checked before anything is saved. Checked after, a bad tag answered 400 for an entry
+        // that had been saved, and the client's retry saved it again (site audit, 10/09/2026).
+        if (!await ExperienceTypesExistAsync(db, request.ExperienceTypeIds, ct))
+            return BadRequest("One or more experience types do not exist.");
+
         db.CaseTimelineEntries.Add(entry);
         await db.SaveChangesAsync(ct);
 
@@ -314,6 +319,9 @@ public sealed class MyCaseController : BenControllerBase
         if (entry is null || before is null) return NotFound();
         if (!await IsCaseClient(db, caseId, userId, ct)) return Forbid();
 
+        if (request.ExperienceTypeIds is not null && !await ExperienceTypesExistAsync(db, request.ExperienceTypeIds, ct))
+            return BadRequest("One or more experience types do not exist.");
+
         entry.EventDateTime      = request.EventDateTime;
         entry.Title              = request.Title?.Trim();
         entry.Body               = Entities.CaseController.CleanDescription(request.Body, _sanitizer);
@@ -346,6 +354,23 @@ public sealed class MyCaseController : BenControllerBase
     /// Replace-not-merge because the picker submits the full selection — unticking a tag has to
     /// be able to remove it.
     /// </remarks>
+    /// <summary>A visit's time as people at the place read it: in the investigation's zone, else its case's, else its group's.</summary>
+    internal static async Task<string> VisitTimeAsync(BenDataContext db, Guid investigationId, DateTime utc, CancellationToken ct)
+    {
+        var chain = await db.Investigations.AsNoTracking().Where(i => i.Id == investigationId)
+            .Select(i => new[] { i.TimeZoneId, i.Case != null ? i.Case.TimeZoneId : null, i.Organization.TimeZoneId })
+            .FirstOrDefaultAsync(ct) ?? [];
+        var zone = Ben.Data.Common.Helpers.Zones.Find(chain);
+        return $"{Ben.Data.Common.Helpers.Zones.ToZone(utc, zone):MMM d, yyyy h:mm tt} {Ben.Data.Common.Helpers.Zones.Abbreviation(zone, utc)}";
+    }
+
+    private static async Task<bool> ExperienceTypesExistAsync(
+        BenDataContext db, IReadOnlyList<Guid>? typeIds, CancellationToken ct)
+    {
+        var wanted = (typeIds ?? []).Distinct().ToList();
+        return wanted.Count == 0 || await db.ExperienceTypes.CountAsync(t => wanted.Contains(t.Id), ct) == wanted.Count;
+    }
+
     private static async Task<bool> ApplyExperienceTagsAsync(
         BenDataContext db, Guid entryId, IReadOnlyList<Guid>? typeIds, CancellationToken ct)
     {
@@ -1423,7 +1448,8 @@ public sealed class MyCaseController : BenControllerBase
         db.CaseMessages.Add(new Ben.Data.Source.Entities.CaseMessage
         {
             Id = Guid.NewGuid(), CaseId = caseId, AuthorAppUserId = userId,
-            Body = $"The client has canceled the investigation scheduled for {investigation.ScheduledDateTime.ToLocalTime():MMM d, yyyy h:mm tt}.",
+            // In the visit's own time. ToLocalTime gave the server's clock (site audit, 10/09/2026).
+            Body = $"The client has canceled the investigation scheduled for {await VisitTimeAsync(db, invId, investigation.ScheduledDateTime, ct)}.",
             SenderSide = Ben.Data.Common.Enums.CaseMessageSide.Client,
             IsReadByClient = true, IsReadByOrg = false,
             DateCreated = DateTime.UtcNow, CreatedByAppUserId = userId,

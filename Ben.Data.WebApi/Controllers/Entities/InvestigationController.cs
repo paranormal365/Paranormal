@@ -366,7 +366,7 @@ public sealed class InvestigationController : BenControllerBase
         db.CaseMessages.Add(new Ben.Data.Source.Entities.CaseMessage
         {
             Id = Guid.NewGuid(), CaseId = caseId, AuthorAppUserId = userId,
-            Body = $"The investigation scheduled for {investigation.ScheduledDateTime.ToLocalTime():MMM d, yyyy h:mm tt} has been canceled by the organization.",
+            Body = $"The investigation scheduled for {await MyCaseController.VisitTimeAsync(db, investigation.Id, investigation.ScheduledDateTime, ct)} has been canceled by the organization.",
             SenderSide = Ben.Data.Common.Enums.CaseMessageSide.Organization,
             IsReadByClient = false, IsReadByOrg = true,
             DateCreated = DateTime.UtcNow, CreatedByAppUserId = userId,

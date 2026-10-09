@@ -79,6 +79,15 @@
                 }
                 else
                 {
+                    @if (_subscription.GraceUntilUtc is { } graceUntil)
+                    {
+                        <div class="alert alert-warning py-2" id="billing-grace" role="status">
+                            <strong>The renewal payment didn't go through.</strong>
+                            Your plan continues until @graceUntil.ToViewerLocalTime(UserState).ToDisplayDate() while we try
+                            again each day. Check the card you pay with; if the payment still hasn't gone through by then,
+                            the plan ends.
+                        </div>
+                    }
                     <div class="row">
                         <div class="col-md-3"><div class="text-secondary small">Plan</div>
                             <strong>@(_subscription.TierName ?? "—")</strong></div>

@@ -185,6 +185,73 @@ public class OrganizationMembershipRequestControllerTests
         Assert.Single(pending);
     }
 
+    // ── "May not apply again" (site audit, 10/09/2026) ───────────────────────
+
+    /// <summary>Puts a denied application from <paramref name="applicantId"/> on the group's books.</summary>
+    private static async Task SeedDenialAsync(
+        IDbContextFactory<BenDataContext> factory, Guid orgId, Guid applicantId, Guid adminId,
+        bool canReapply, DateTime deniedAt)
+    {
+        await using var db = await factory.CreateDbContextAsync();
+        db.OrganizationMembershipRequests.Add(new OrganizationMembershipRequest
+        {
+            Id = Guid.NewGuid(), OrganizationId = orgId, AppUserId = applicantId,
+            Status = OrganizationMembershipRequestStatus.Denied, CanReapply = canReapply,
+            DateCreated = deniedAt.AddDays(-1), CreatedByAppUserId = applicantId,
+            DateUpdated = deniedAt, UpdatedByAppUserId = adminId,
+        });
+        await db.SaveChangesAsync();
+    }
+
+    /// <summary>
+    /// A group that declined somebody and said they may not apply again was saved and never read,
+    /// so the declined applicant could apply again at once (site audit, 10/09/2026). A denial made
+    /// since the rule was enforced is honored.
+    /// </summary>
+    [Fact]
+    public async Task Applying_again_after_a_denial_that_said_not_to_is_refused()
+    {
+        var (factory, orgId, applicantId, adminId) = await SeedAsync();
+        await SeedDenialAsync(factory, orgId, applicantId, adminId, canReapply: false,
+            deniedAt: OrganizationMembershipRequestController.ReapplyRuleEnforcedFrom.AddHours(1));
+
+        var result = await Build(factory, applicantId).Apply(orgId, new ApplyForMembershipRequest("Again"), default);
+
+        Assert.IsType<ConflictObjectResult>(result.Result);
+        await using var db = await factory.CreateDbContextAsync();
+        Assert.False(await db.OrganizationMembershipRequests.AnyAsync(r => r.OrganizationId == orgId
+            && r.Status == OrganizationMembershipRequestStatus.Pending));
+    }
+
+    /// <summary>
+    /// The box used to start unticked and do nothing, so a denial from before the rule was enforced
+    /// says "no" without anybody having chosen it. Those are not held against the applicant.
+    /// </summary>
+    [Fact]
+    public async Task Applying_again_after_an_older_denial_that_said_not_to_is_allowed()
+    {
+        var (factory, orgId, applicantId, adminId) = await SeedAsync();
+        await SeedDenialAsync(factory, orgId, applicantId, adminId, canReapply: false,
+            deniedAt: OrganizationMembershipRequestController.ReapplyRuleEnforcedFrom.AddDays(-1));
+
+        var result = await Build(factory, applicantId).Apply(orgId, new ApplyForMembershipRequest("Again"), default);
+
+        Assert.IsType<CreatedAtActionResult>(result.Result);
+    }
+
+    /// <summary>A denial that allowed reapplying lets the applicant apply again.</summary>
+    [Fact]
+    public async Task Applying_again_after_a_denial_that_allowed_it_is_allowed()
+    {
+        var (factory, orgId, applicantId, adminId) = await SeedAsync();
+        await SeedDenialAsync(factory, orgId, applicantId, adminId, canReapply: true,
+            deniedAt: OrganizationMembershipRequestController.ReapplyRuleEnforcedFrom.AddHours(1));
+
+        var result = await Build(factory, applicantId).Apply(orgId, new ApplyForMembershipRequest("Again"), default);
+
+        Assert.IsType<CreatedAtActionResult>(result.Result);
+    }
+
     // ── Respond (accept) ──────────────────────────────────────────────────────
 
     [Fact]

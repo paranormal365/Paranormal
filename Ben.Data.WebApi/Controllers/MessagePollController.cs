@@ -22,12 +22,42 @@ public sealed class MessagePollController : BenControllerBase
 
     public MessagePollController(IDbContextFactory<BenDataContext> db) { _db = db; }
 
+    /// <summary>
+    /// Whether this person can see the post the poll belongs to.
+    /// </summary>
+    /// <remarks>
+    /// A poll was answered and read by its id alone, so one on a hidden or scheduled post, or on a group's own
+    /// board, could be read and voted on by anybody holding the id (site audit, 10/09/2026). A public post
+    /// counts while the feed shows it; anything else is for the group's members and the author.
+    /// </remarks>
+    private static async Task<bool> MayReachAsync(BenDataContext db, Guid pollId, Guid userId, CancellationToken ct)
+    {
+        var now = DateTime.UtcNow;
+        var post = await db.MessagePolls.AsNoTracking().Where(p => p.Id == pollId)
+            .Select(p => new
+            {
+                p.OrgMessage.ChannelType, p.OrgMessage.OrganizationId, p.OrgMessage.AuthorAppUserId,
+                p.OrgMessage.HiddenUtc, p.OrgMessage.ScheduledForUtc, p.OrgMessage.ExpiresUtc,
+            })
+            .FirstOrDefaultAsync(ct);
+        if (post is null) return false;
+        if (userId != Guid.Empty && post.AuthorAppUserId == userId) return true;
+        if (post.HiddenUtc is not null || post.ExpiresUtc <= now) return false;
+
+        if (post.ChannelType == Ben.Data.Common.Enums.OrgMessageChannel.PublicFeed)
+            return post.ScheduledForUtc is null || post.ScheduledForUtc <= now;
+
+        return userId != Guid.Empty && await db.OrganizationUserMemberships.AsNoTracking()
+            .AnyAsync(m => m.OrganizationId == post.OrganizationId && m.AppUserId == userId && m.IsActive, ct);
+    }
+
     /// <summary>How a poll stands, with this reader's own answer when they have one.</summary>
     [HttpGet]
     [AllowAnonymous]
     public async Task<ActionResult<MessagePollRecord>> Get(Guid pollId, CancellationToken ct)
     {
         await using var db = await _db.CreateDbContextAsync(ct);
+        if (!await MayReachAsync(db, pollId, GetCurrentUserId(), ct)) return NotFound();
         var record = await ReadAsync(db, pollId, GetCurrentUserId(), ct);
         return record is null ? NotFound() : Ok(record);
     }
@@ -51,6 +81,7 @@ public sealed class MessagePollController : BenControllerBase
         if (userId == Guid.Empty) return Unauthorized();
 
         await using var db = await _db.CreateDbContextAsync(ct);
+        if (!await MayReachAsync(db, pollId, userId, ct)) return NotFound();
 
         var poll = await db.MessagePolls
             .Include(p => p.Options)

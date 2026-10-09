@@ -577,6 +577,32 @@ public class CaseControllerTests
         Assert.Equal("The Westside Family", dto.Title);
     }
 
+    /// <summary>
+    /// Only the group's own application status was asked, so a group that had declined could still
+    /// open a case holding the home address of somebody who had since withdrawn the request
+    /// (site audit, 10/09/2026). Accepting a withdrawn request is refused and opens no case.
+    /// </summary>
+    [Fact]
+    public async Task Accepting_a_request_the_client_withdrew_is_refused()
+    {
+        var (factory, orgId, userId) = await SeedAsync();
+        var clientId = Guid.NewGuid();
+
+        await using var db = await factory.CreateDbContextAsync();
+        db.Users.Add(new AppUser { Id = clientId, UserName = "w@t.com", NormalizedUserName = "W@T.COM", Email = "w@t.com", NormalizedEmail = "W@T.COM", DateCreated = DateTime.UtcNow });
+        var req = new ClientRequest { Id = Guid.NewGuid(), AppUserId = clientId, City = "Nashville", State = "TN", ZipCode = "37201", Country = "US", StreetAddress1 = "1 Main", Description = "Haunting", Status = ClientRequestStatus.Withdrawn, DateCreated = DateTime.UtcNow, CreatedByAppUserId = clientId };
+        db.ClientRequests.Add(req);
+        db.ClientRequestOrganizations.Add(new ClientRequestOrganization { Id = Guid.NewGuid(), ClientRequestId = req.Id, OrganizationId = orgId, Status = ClientOrgRequestStatus.Rejected, DateApplied = DateTime.UtcNow, DateCreated = DateTime.UtcNow, CreatedByAppUserId = clientId });
+        await db.SaveChangesAsync();
+
+        var result = await Build(factory, userId).AcceptClientRequest(
+            orgId, req.Id, new AcceptClientRequestAsCaseRequest(null, null), default);
+
+        Assert.IsType<BadRequestObjectResult>(result.Result);
+        await using var db2 = await factory.CreateDbContextAsync();
+        Assert.False(await db2.Cases.AnyAsync(c => c.OrganizationId == orgId));
+    }
+
     // ── GetClientRequest (C1) ─────────────────────────────────────────────────
 
     /// <summary>Seeds a client request with optional attachments and a case pointing at it.</summary>

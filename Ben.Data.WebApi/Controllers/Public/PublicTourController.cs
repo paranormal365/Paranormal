@@ -396,7 +396,10 @@ public sealed class PublicTourController : BenControllerBase
         }
 
         (double Lat, double Lon)? from = null;
-        if (lat is double la && lon is double lo)
+        // A position off the map is ignored rather than cast to decimal, which threw for NaN or 1e30
+        // (site audit, 10/09/2026).
+        if (lat is double la && lon is double lo && double.IsFinite(la) && double.IsFinite(lo)
+            && Math.Abs(la) <= 90 && Math.Abs(lo) <= 180 && double.IsFinite(radiusMiles))
         {
             var radius = Math.Clamp(radiusMiles, 0.1, 100);
             var latDelta = radius / 69.0;
