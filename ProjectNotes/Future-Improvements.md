@@ -13802,7 +13802,7 @@ section (`CmsSectionTypes.Offered`); existing ones still render and can be edite
 properly — contact details from the group's public addresses/emails/phones/links, a gallery from public
 files, a roster from members who have agreed to be listed — would bring them back into the picker.
 
-## 257. Audit entries compared across two different shapes (OPEN — found 10/09/2026)
+## 257. Audit entries compared across two different shapes (CLOSED 10/09/2026 — fix/audit-shapes-257)
 
 `AuditChangeTracker.GetChanges` refuses a before and after of different types. The CMS section reorder
 (anonymous `{}` vs the request) and the draft publish (anonymous vs the page entity) did that, and because
@@ -13816,4 +13816,10 @@ Closed the same day. `CmsGroupSections` resolves all three on every read: contac
 public switch and each address's display mode; gallery files only when public; members only with the member's
 own consent (`OrganizationUserMembership.ShowOnPublicPages`, set from Profile → About; migration
 `MemberPublicListing`). The editor has a public-file picker with ordering and an everyone/chosen roster.
+
+Closed the same day. A scan of all 84 `LogUpdateAsync` calls found four pairs of a hand-made snapshot against
+the entity (MyEquipment update and retire, OrganizationEquipment retire, EquipmentCheckout decisions) and one of
+two list types (AdminAppUser roles). All now compare like with like. Lists (roles, equipment shared-with, the CMS
+section order) are recorded as text, because the audit keeps simple values only and a list recorded nothing.
+`AuditShapesWriteTests` runs the real audit service and fails without the fix.
 

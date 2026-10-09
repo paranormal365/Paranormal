@@ -211,7 +211,10 @@ public sealed class AdminAppUserController : AdminEntityControllerBase<AppUser, 
             .ToList();
 
         _ = TryAuditAsync(_auditLog.LogUpdateAsync("AppUserRoles", id,
-            new { Roles = before }, new { Roles = after }, GetCurrentUserId(), AppSources.WebApi));
+            // Text both sides: before is an IList and after a List, two different shapes, and a list records
+            // nothing anyway (backlog 257).
+            new { Roles = string.Join(", ", before.OrderBy(r => r)) }, new { Roles = string.Join(", ", after) },
+            GetCurrentUserId(), AppSources.WebApi));
 
         return Ok(new AppUserRolesAdminRecord(id, after));
     }

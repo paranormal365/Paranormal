@@ -139,7 +139,7 @@ public sealed class CmsSectionController : OrgCmsControllerBase
         var sections = await db.CmsSections
             .Where(s => s.OrganizationPageId == pageId)
             .ToListAsync(ct);
-        var before = new { Order = sections.OrderBy(s => s.SortOrder).Select(s => s.Id).ToList() };
+        var before = new { Order = string.Join(", ", sections.OrderBy(s => s.SortOrder).Select(s => s.Id)) };
 
         for (var i = 0; i < request.OrderedSectionIds.Count; i++)
         {
@@ -151,7 +151,7 @@ public sealed class CmsSectionController : OrgCmsControllerBase
         // Before and after are the same shape: the audit compares them field by field and throws on two
         // different types. It used to be given `new { }` and the request, so every reorder was saved and then
         // answered 500 — which the page editor's arrows ignored, and the Ordering window would not (10/09/2026).
-        var after = new { Order = sections.OrderBy(s => s.SortOrder).Select(s => s.Id).ToList() };
+        var after = new { Order = string.Join(", ", sections.OrderBy(s => s.SortOrder).Select(s => s.Id)) };
         _ = TryAuditAsync(_auditLog.LogUpdateAsync("CmsSectionReorder", pageId, before, after, userId.Value, AppSources.WebApi));
         return NoContent();
     }

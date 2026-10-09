@@ -320,7 +320,8 @@ public sealed class OrganizationEquipmentController : BenControllerBase
         entity.DateUpdated        = DateTime.UtcNow;
         entity.UpdatedByAppUserId = userId;
         await db.SaveChangesAsync(ct);
-        _ = TryAuditAsync(_auditLog.LogUpdateAsync(nameof(EquipmentItem), id, before, entity, userId, Ben.Data.Common.Constants.AppSources.WebApi));
+        // The same shape both sides: the audit compares like with like (backlog 257).
+        _ = TryAuditAsync(_auditLog.LogUpdateAsync(nameof(EquipmentItem), id, before, new { entity.IsRetired }, userId, Ben.Data.Common.Constants.AppSources.WebApi));
 
         return NoContent();
     }

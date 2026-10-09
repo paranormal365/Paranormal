@@ -160,7 +160,12 @@ public sealed class MyEquipmentController : BenControllerBase
         entity.DateUpdated        = DateTime.UtcNow;
         entity.UpdatedByAppUserId = userId;
         await db.SaveChangesAsync(ct);
-        _ = TryAuditAsync(_auditLog.LogUpdateAsync(nameof(EquipmentItem), entity.Id, beforeSnapshot, entity, userId, Ben.Data.Common.Constants.AppSources.WebApi));
+        // The same shape both sides: the audit compares like with like (backlog 257).
+        _ = TryAuditAsync(_auditLog.LogUpdateAsync(nameof(EquipmentItem), entity.Id, beforeSnapshot, new
+        {
+            entity.DisplayName, entity.SerialNumber, entity.AcquisitionDate, entity.Notes,
+            entity.EquipmentModelId, entity.IncludeInGlobalCatalog, entity.LoanAudience,
+        }, userId, Ben.Data.Common.Constants.AppSources.WebApi));
 
         await db.Entry(entity.EquipmentModel).Reference(m => m.EquipmentBrand).LoadAsync(ct);
         await db.Entry(entity.EquipmentModel).Reference(m => m.EquipmentCategory).LoadAsync(ct);
@@ -211,7 +216,7 @@ public sealed class MyEquipmentController : BenControllerBase
         entity.DateUpdated        = DateTime.UtcNow;
         entity.UpdatedByAppUserId = userId;
         await db.SaveChangesAsync(ct);
-        _ = TryAuditAsync(_auditLog.LogUpdateAsync(nameof(EquipmentItem), id, before, entity, userId, Ben.Data.Common.Constants.AppSources.WebApi));
+        _ = TryAuditAsync(_auditLog.LogUpdateAsync(nameof(EquipmentItem), id, before, new { entity.IsRetired }, userId, Ben.Data.Common.Constants.AppSources.WebApi));
 
         return NoContent();
     }
@@ -519,8 +524,9 @@ public sealed class MyEquipmentController : BenControllerBase
 
         await db.SaveChangesAsync(ct);
         _ = TryAuditAsync(_auditLog.LogUpdateAsync(nameof(EquipmentItem), id,
-            new { SharedWith = existing.Select(s => s.OrganizationId).ToList() },
-            new { SharedWith = requested },
+            // Text, not lists: the audit records simple values only, and a list compares as nothing.
+            new { SharedWith = string.Join(", ", existing.Select(s => s.OrganizationId).OrderBy(g => g)) },
+            new { SharedWith = string.Join(", ", requested.OrderBy(g => g)) },
             userId, Ben.Data.Common.Constants.AppSources.WebApi));
 
         return await GetShares(id, ct);
