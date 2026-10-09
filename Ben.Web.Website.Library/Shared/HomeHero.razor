@@ -118,11 +118,11 @@
                                 @if (org.IsWithinRange)
                                 {
                                     <span class="text-success fw-semibold">✓ Within range</span>
-                                    <span> · @(org.DistanceFromSearchMiles.ToString("F1")) mi</span>
+                                    <span> · within @(org.DistanceFromSearchMiles.ToString("0")) mi</span>
                                 }
                                 else
                                 {
-                                    <span>@(org.DistanceFromSearchMiles.ToString("F1")) mi away</span>
+                                    <span>Within @(org.DistanceFromSearchMiles.ToString("0")) mi</span>
                                 }
                             </p>
                         </div>

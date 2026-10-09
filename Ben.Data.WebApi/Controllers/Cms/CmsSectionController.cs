@@ -101,6 +101,11 @@ public sealed class CmsSectionController : OrgCmsControllerBase
             return Forbid();
 
         await using var db = await DbFactory.CreateDbContextAsync(ct);
+        // The page must be this group's, as Create, Reorder and the reads already asked. Update and Delete
+        // checked only that the section was on the page, so an editor in one group could rewrite another
+        // group's public page (site audit, 10/09/2026).
+        if (!await db.OrganizationPages.AnyAsync(p => p.Id == pageId && p.OrganizationId == orgId, ct))
+            return NotFound();
         var before = await db.CmsSections.AsNoTracking()
             .FirstOrDefaultAsync(s => s.Id == sectionId && s.OrganizationPageId == pageId, ct);
         if (before is null) return NotFound();
@@ -206,6 +211,8 @@ public sealed class CmsSectionController : OrgCmsControllerBase
             return Forbid();
 
         await using var db = await DbFactory.CreateDbContextAsync(ct);
+        if (!await db.OrganizationPages.AnyAsync(p => p.Id == pageId && p.OrganizationId == orgId, ct))
+            return NotFound();
         var section = await db.CmsSections
             .FirstOrDefaultAsync(s => s.Id == sectionId && s.OrganizationPageId == pageId, ct);
         if (section is null) return NotFound();

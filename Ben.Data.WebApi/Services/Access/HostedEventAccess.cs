@@ -120,14 +120,14 @@ public sealed class HostedEventAccess
     public Task<bool> CanReadBookingsAsync(
         Guid userId, Guid orgId, Guid eventId, BenDataContext db, CancellationToken ct)
         => OrAsTheVenueAsync(
-               OrAsStaffAsync(CanReadBookingsAsync(userId, orgId, ct),
+               OrAsStaffAsync(OfThisGroupsEventAsync(CanReadBookingsAsync(userId, orgId, ct), orgId, eventId, db, ct),
                               userId, eventId, db, s => s.SeesBookings || s.Decides, ct),
                userId, eventId, db, OrganizationSecurityTable.EventBooking, OrganizationSecurityAction.Read, ct);
 
     /// <summary>Decide this event's bookings, as a member OR as somebody helping at it.</summary>
     public Task<bool> CanDecideBookingsAsync(
         Guid userId, Guid orgId, Guid eventId, BenDataContext db, CancellationToken ct)
-        => OrAsStaffAsync(CanDecideBookingsAsync(userId, orgId, ct),
+        => OrAsStaffAsync(OfThisGroupsEventAsync(CanDecideBookingsAsync(userId, orgId, ct), orgId, eventId, db, ct),
                           userId, eventId, db, s => s.Decides, ct);
 
     /// <summary>
@@ -140,20 +140,20 @@ public sealed class HostedEventAccess
     public Task<bool> CanRunTheDoorAsync(
         Guid userId, Guid orgId, Guid eventId, BenDataContext db, CancellationToken ct)
         => OrAsTheVenueAsync(
-               OrAsStaffAsync(CanRunTheDoorAsync(userId, orgId, ct),
+               OrAsStaffAsync(OfThisGroupsEventAsync(CanRunTheDoorAsync(userId, orgId, ct), orgId, eventId, db, ct),
                               userId, eventId, db, s => s.RunsTheDoor, ct),
                userId, eventId, db, OrganizationSecurityTable.EventCheckIn, OrganizationSecurityAction.Create, ct);
 
     /// <summary>Read and write this event's menus, as a member OR as somebody helping at it.</summary>
     public Task<bool> CanEditMenusAsync(
         Guid userId, Guid orgId, Guid eventId, BenDataContext db, CancellationToken ct)
-        => OrAsStaffAsync(CanEditEventAsync(userId, orgId, ct),
+        => OrAsStaffAsync(OfThisGroupsEventAsync(CanEditEventAsync(userId, orgId, ct), orgId, eventId, db, ct),
                           userId, eventId, db, s => s.SeesMenus, ct);
 
     /// <summary>Add, change and remove this event's files, as a member OR as somebody helping with its files (phase 11).</summary>
     public Task<bool> CanManageFilesAsync(
         Guid userId, Guid orgId, Guid eventId, BenDataContext db, CancellationToken ct)
-        => OrAsStaffAsync(CanEditEventAsync(userId, orgId, ct),
+        => OrAsStaffAsync(OfThisGroupsEventAsync(CanEditEventAsync(userId, orgId, ct), orgId, eventId, db, ct),
                           userId, eventId, db, s => s.SeesFiles, ct);
 
     /// <summary>Say who is helping at this event: the group's own people only, never staff.</summary>
@@ -176,6 +176,20 @@ public sealed class HostedEventAccess
     /// so: it has no <c>AppUserId</c>, and nobody's id is null. Anything past its expiry is out
     /// too, so a token that was never clicked stops being an open door.</para>
     /// </remarks>
+    /// <summary>
+    /// A right in the group counts for this event only when the event is the group's.
+    /// </summary>
+    /// <remarks>
+    /// The group's right was asked about the group in the address, and the event was then found by its
+    /// own id. So somebody who decides bookings in one group could cancel or turn down another group's
+    /// guests by naming that group's event (site audit, 10/09/2026). Staff and the venue are already tied
+    /// to the event itself.
+    /// </remarks>
+    private static async Task<bool> OfThisGroupsEventAsync(
+        Task<bool> asAMember, Guid orgId, Guid eventId, BenDataContext db, CancellationToken ct)
+        => await asAMember
+        && await db.HostedEvents.AsNoTracking().AnyAsync(e => e.Id == eventId && e.OrganizationId == orgId, ct);
+
     private async Task<bool> OrAsStaffAsync(
         Task<bool> asAMember, Guid userId, Guid eventId, BenDataContext db,
         Func<Source.Entities.HostedEventStaff, bool> grants, CancellationToken ct)

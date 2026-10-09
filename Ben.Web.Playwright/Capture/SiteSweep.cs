@@ -223,6 +223,43 @@ public sealed class SiteSweep : BenTestBase
         return trimmed.Length > 120 ? trimmed[..120] + "…" : trimmed;
     }
 
+    /// <summary>
+    /// A picture of the page for a person to look at, with <c>BEN_SWEEP_SHOTS=1</c> (10/09/2026 site audit).
+    /// </summary>
+    /// <remarks>
+    /// The checks find shapes that are always wrong; an awkward page is usually none of them. Three seats
+    /// are photographed, because between them they reach every screen: a group's owner, the site admin on
+    /// the admin pages, and a visitor on a phone.
+    /// </remarks>
+    private async Task ShootAsync(string who, string url)
+    {
+        if (Environment.GetEnvironmentVariable("BEN_SWEEP_SHOTS") != "1") return;
+        var wanted = who switch
+        {
+            "a group's owner" => !url.StartsWith("/admin", StringComparison.Ordinal),
+            "the site admin" => url.StartsWith("/admin", StringComparison.Ordinal),
+            "a visitor on a phone" => true,
+            _ => false,
+        };
+        if (!wanted) return;
+
+        static string Slug(string s) => new string(s.Select(c => char.IsLetterOrDigit(c) ? c : '-').ToArray()).Trim('-');
+        var folder = Path.Combine(OutRoot, "shots", Slug(who));
+        Directory.CreateDirectory(folder);
+        var name = Slug(url);
+        if (name.Length == 0) name = "home";
+        if (name.Length > 120) name = name[..120];
+        try
+        {
+            await Page.ScreenshotAsync(new()
+            {
+                Path = Path.Combine(folder, name + ".jpg"), FullPage = true, Type = ScreenshotType.Jpeg, Quality = 55,
+                Timeout = 15_000,
+            });
+        }
+        catch (Exception ex) { TestContext.Out.WriteLine($"no picture of {url}: {ex.Message.Split('\n')[0]}"); }
+    }
+
     /// <summary>Opens one URL as whoever is currently signed in, and writes down what happened.</summary>
     private async Task VisitAsync(string who, string url)
     {
@@ -291,6 +328,8 @@ public sealed class SiteSweep : BenTestBase
         {
             _found.Add(new(who, url, "could not be read", ex.Message.Split('\n')[0].Trim()));
         }
+
+        await ShootAsync(who, url);
 
         // The two nobody has ever looked at.
         foreach (var e in _consoleErrors.Distinct().Take(4))

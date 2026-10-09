@@ -198,8 +198,23 @@ public sealed class AccountRegistrationController : ControllerBase
         if (user is null) return Ok(new ConfirmEmailResponse(false, "That link is not valid."));
 
         if (user.EmailConfirmed)
-            return Ok(new ConfirmEmailResponse(true, "Your email is already confirmed.",
-                user.Handle, await WhatIsWaitingAsync(user.Id, ct)));
+        {
+            // Their name and what they are waiting on go only to somebody holding the real link. Asked
+            // with any code at all, this told anybody who knew a person's id which groups they had asked
+            // to investigate their home (site audit, 10/09/2026).
+            var holdsTheLink = false;
+            try
+            {
+                var code = Encoding.UTF8.GetString(WebEncoders.Base64UrlDecode(request.Code));
+                holdsTheLink = await _userManager.VerifyUserTokenAsync(user,
+                    _userManager.Options.Tokens.EmailConfirmationTokenProvider,
+                    UserManager<AppUser>.ConfirmEmailTokenPurpose, code);
+            }
+            catch (FormatException) { }
+            return Ok(holdsTheLink
+                ? new ConfirmEmailResponse(true, "Your email is already confirmed.", user.Handle, await WhatIsWaitingAsync(user.Id, ct))
+                : new ConfirmEmailResponse(true, "Your email is already confirmed."));
+        }
 
         string token;
         try

@@ -37,6 +37,9 @@ public sealed class CaseNoteController : BenControllerBase
     {
         if (!await IsOrgMemberAsync(orgId, ct)) return Forbid();
         await using var db = await _db.CreateDbContextAsync(ct);
+        // The case must be this group's: without it, rights in one group reached another group's
+        // case notes and files by naming its case (site audit, 10/09/2026).
+        if (!await CaseOrgAccess.CaseBelongsToOrgAsync(db, caseId, orgId, ct)) return NotFound();
         var notes = await db.CaseNotes.AsNoTracking()
             .Include(n => n.AuthorAppUser)
             .Where(n => n.CaseId == caseId)
@@ -87,6 +90,9 @@ public sealed class CaseNoteController : BenControllerBase
         if (!await MayAsync(orgId, Ben.Data.Common.Enums.OrganizationSecurityAction.Update, ct)) return Forbid();
         var userId = GetCurrentUserId();
         await using var db = await _db.CreateDbContextAsync(ct);
+        // The case must be this group's: without it, rights in one group reached another group's
+        // case notes and files by naming its case (site audit, 10/09/2026).
+        if (!await CaseOrgAccess.CaseBelongsToOrgAsync(db, caseId, orgId, ct)) return NotFound();
         var note = await db.CaseNotes.Include(n => n.AuthorAppUser)
             .FirstOrDefaultAsync(n => n.Id == noteId && n.CaseId == caseId, ct);
         if (note is null) return NotFound();
@@ -112,6 +118,9 @@ public sealed class CaseNoteController : BenControllerBase
         if (!await MayAsync(orgId, Ben.Data.Common.Enums.OrganizationSecurityAction.Delete, ct)) return Forbid();
         var userId = GetCurrentUserId();
         await using var db = await _db.CreateDbContextAsync(ct);
+        // The case must be this group's: without it, rights in one group reached another group's
+        // case notes and files by naming its case (site audit, 10/09/2026).
+        if (!await CaseOrgAccess.CaseBelongsToOrgAsync(db, caseId, orgId, ct)) return NotFound();
         var note = await db.CaseNotes
             .FirstOrDefaultAsync(n => n.Id == noteId && n.CaseId == caseId, ct);
         if (note is null) return NotFound();

@@ -53,6 +53,9 @@ public sealed class CaseFileController : BenControllerBase
         var userId = GetCurrentUserId();
         await using var db = await _db.CreateDbContextAsync(ct);
         if (!await IsOrgMember(db, orgId, userId, ct)) return Forbid();
+        // The case must be this group's: without it, rights in one group reached another group's
+        // case files by naming its case (site audit, 10/09/2026).
+        if (!await Services.Access.CaseOrgAccess.CaseBelongsToOrgAsync(db, caseId, orgId, ct)) return NotFound();
 
         var files = await db.CaseFiles.AsNoTracking()
             .Include(f => f.UploadFile)
@@ -236,6 +239,9 @@ public sealed class CaseFileController : BenControllerBase
         var userId = GetCurrentUserId();
         await using var db = await _db.CreateDbContextAsync(ct);
         if (!await MayAsync(orgId, Ben.Data.Common.Enums.OrganizationSecurityAction.Delete, ct)) return Forbid();
+        // The case must be this group's: without it, rights in one group reached another group's
+        // case files by naming its case (site audit, 10/09/2026).
+        if (!await Services.Access.CaseOrgAccess.CaseBelongsToOrgAsync(db, caseId, orgId, ct)) return NotFound();
 
         var caseFile = await db.CaseFiles.FirstOrDefaultAsync(f => f.Id == caseFileId && f.CaseId == caseId, ct);
         if (caseFile is null) return NotFound();

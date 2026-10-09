@@ -77,12 +77,28 @@
             @if (_pendingMove is not null)
             {
                 <hr />
-                <p class="mb-2">
-                    You've asked <strong>@_pendingMove.ToOrganizationName</strong> to take this
-                    case — waiting for their answer.
-                </p>
-                <button type="button" class="btn btn-outline-secondary btn-sm" disabled="@_moveBusy"
-                        @onclick="WithdrawMoveAsync">Withdraw the request</button>
+                @if (_isPrimaryClient)
+                {
+                    <p class="mb-2">
+                        You've asked <strong>@_pendingMove.ToOrganizationName</strong> to take this
+                        case — waiting for their answer.
+                    </p>
+                    <button type="button" class="btn btn-outline-secondary btn-sm" disabled="@_moveBusy"
+                            @onclick="WithdrawMoveAsync">Withdraw the request</button>
+                }
+                else
+                {
+                    <p class="mb-0">
+                        <strong>@_pendingMove.ToOrganizationName</strong> has been asked to take this
+                        case — waiting for their answer.
+                    </p>
+                }
+            }
+            else if (!_isPrimaryClient)
+            {
+                @* Moving the case is the decision of the person who asked for the investigation. *@
+                <hr />
+                <p class="mb-0">The person who asked for this investigation can move the case to a different organization.</p>
             }
             else if (!_showMoveForm)
             {

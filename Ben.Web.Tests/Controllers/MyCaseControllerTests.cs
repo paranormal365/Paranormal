@@ -437,7 +437,9 @@ public class MyCaseControllerTests
         Assert.IsType<OkObjectResult>(result.Result);
 
         await using var db2 = await factory.CreateDbContextAsync();
-        Assert.True(await db2.Investigations.AnyAsync(i => i.CaseId == caseId));
+        var created = await db2.Investigations.SingleAsync(i => i.CaseId == caseId);
+        // The group is a required column of its own; in-memory never enforced it, SQL Server refused the row.
+        Assert.Equal(orgId, created.OrganizationId);
         var updated = await db2.InvestigationScheduleProposals.FindAsync(proposalId);
         Assert.Equal(ScheduleProposalStatus.AcceptedByClient, updated!.Status);
     }

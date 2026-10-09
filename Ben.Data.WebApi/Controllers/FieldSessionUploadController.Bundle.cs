@@ -54,6 +54,15 @@ public sealed partial class FieldSessionUploadController
 
         await using var db = await _db.CreateDbContextAsync(ct);
 
+        // A session already filed with a group stays where it was filed. See HeldLinksAsync.
+        if (await HeldLinksAsync(db, userId, deviceSessionId, ct) is { } held)
+        {
+            investigationId = held.InvestigationId;
+            orgCalendarEventId = held.OrgCalendarEventId;
+            hostedEventId = held.HostedEventId;
+            fieldLaunchId = held.FieldLaunchId;
+        }
+
         // Where it goes: an investigation, a tour date or event, a hosted event, or wherever the
         // lead's launch it was joined from points. An investigation that is not the sender's to
         // write to is answered as absent — whether somebody else's exists is not for probing.

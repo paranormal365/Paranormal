@@ -95,6 +95,15 @@ public sealed class NotificationSummaryController : BenControllerBase
                                    Count = g.Count(), Oldest = g.Min(x => (DateTime?)x.DateCreated) })
                 .ToListAsync(ct);
 
+        // A message counts only for somebody who may read the group's cases. The fallback above lets
+        // every member see a case with no contact and no manager, which counted private client case
+        // titles for members with no case access, whose click was then refused (site audit, 10/09/2026).
+        var readsCases = new Dictionary<Guid, bool>();
+        foreach (var orgId in caseMessageGroups.Select(g => g.OrgId).Distinct())
+            readsCases[orgId] = myAdminOrgIds.Contains(orgId)
+                || await _security.HasAccessAsync(userId, orgId, OrganizationSecurityTable.Case, OrganizationSecurityAction.Read, ct);
+        caseMessageGroups = caseMessageGroups.Where(g => readsCases[g.OrgId]).ToList();
+
         // Names in one small lookup, joined in memory — EF will not translate a grouped join
         // into a record constructor, and two clean queries beat one untranslatable clever one.
         var namedOrgIds = orgMessageGroups.Select(g => g.OrgId)

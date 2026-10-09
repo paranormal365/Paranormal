@@ -178,7 +178,8 @@ public sealed class HostedEventUncoveredEndpointTests
         var board = Assert.IsType<HostedEventBookingBoardRecord>(Assert.IsType<OkObjectResult>(
             (await Board(sqlite, HostId).GetBoard(OrgId, EventId, default)).Result).Value);
         Assert.Contains(board.Bookings, b => b.PartySize == 2);
-        Assert.IsType<NotFoundResult>((await Board(sqlite, HostId).GetBoard(OtherOrgId, EventId, default)).Result);
+        // Under another group's address the host is refused: their right is to this group's events only.
+        Assert.True((await Board(sqlite, HostId).GetBoard(OtherOrgId, EventId, default)).Result is NotFoundResult or ForbidResult);
     }
 
     [Fact]

@@ -95,6 +95,9 @@ public sealed class CmsPagePermissionController : OrgCmsControllerBase
             return BadRequest("At least one action must be specified. Use DELETE to remove a permission.");
 
         await using var db = await DbFactory.CreateDbContextAsync(ct);
+        // The page must be this group's (site audit, 10/09/2026): the permission was found by page alone.
+        if (!await db.OrganizationPages.AnyAsync(p => p.Id == pageId && p.OrganizationId == orgId, ct))
+            return NotFound();
         var before = await db.CmsPagePermissions.AsNoTracking()
             .FirstOrDefaultAsync(p => p.Id == permissionId && p.OrganizationPageId == pageId, ct);
         if (before is null) return NotFound();
@@ -120,6 +123,9 @@ public sealed class CmsPagePermissionController : OrgCmsControllerBase
             return Forbid();
 
         await using var db = await DbFactory.CreateDbContextAsync(ct);
+        // The page must be this group's (site audit, 10/09/2026): the permission was found by page alone.
+        if (!await db.OrganizationPages.AnyAsync(p => p.Id == pageId && p.OrganizationId == orgId, ct))
+            return NotFound();
         var perm = await db.CmsPagePermissions
             .FirstOrDefaultAsync(p => p.Id == permissionId && p.OrganizationPageId == pageId, ct);
         if (perm is null) return NotFound();

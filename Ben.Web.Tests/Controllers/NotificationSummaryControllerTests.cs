@@ -36,9 +36,12 @@ public class NotificationSummaryControllerTests
     }
 
     private static NotificationSummaryController Build(
-        IDbContextFactory<BenDataContext> factory, Guid? userId)
+        IDbContextFactory<BenDataContext> factory, Guid? userId, bool readsCases = true)
     {
-        var ctrl = new NotificationSummaryController(factory, new Mock<IOrganizationSecurityService>().Object);
+        var security = new Mock<IOrganizationSecurityService>();
+        security.Setup(s => s.HasAccessAsync(It.IsAny<Guid>(), It.IsAny<Guid>(), OrganizationSecurityTable.Case,
+                OrganizationSecurityAction.Read, It.IsAny<CancellationToken>())).ReturnsAsync(readsCases);
+        var ctrl = new NotificationSummaryController(factory, security.Object);
         var claims = userId.HasValue
             ? new ClaimsPrincipal(new ClaimsIdentity([
                 new Claim(ClaimTypes.NameIdentifier, userId.Value.ToString())
@@ -208,6 +211,31 @@ public class NotificationSummaryControllerTests
 
         Assert.Equal(1, summary.CaseMessagesAsOrgMember.Count);
         Assert.Equal(Older, summary.CaseMessagesAsOrgMember.OldestUnreadUtc);
+    }
+
+    /// <summary>
+    /// A member who may not read the group's cases was counted every client message on a case with no
+    /// contact and no manager, with its title, and then refused the click (site audit, 10/09/2026).
+    /// </summary>
+    [Fact]
+    public async Task CaseMessagesAsOrgMember_skips_a_member_who_may_not_read_cases()
+    {
+        var factory = CreateFactory();
+        var me      = Guid.NewGuid();
+        var myOrg   = Guid.NewGuid();
+        await using (var db = await factory.CreateDbContextAsync())
+        {
+            db.OrganizationUserMemberships.Add(new OrganizationUserMembership
+            {
+                Id = Guid.NewGuid(), OrganizationId = myOrg, AppUserId = me, IsActive = true,
+                DateCreated = Older, CreatedByAppUserId = me,
+            });
+            db.CaseMessages.Add(NewCaseMessage(AddCase(db, myOrg), CaseMessageSide.Client, isReadByOrg: false, at: Older));
+            await db.SaveChangesAsync();
+        }
+
+        var ok = Assert.IsType<OkObjectResult>((await Build(factory, me, readsCases: false).GetSummary(default)).Result);
+        Assert.Equal(0, Assert.IsType<NotificationSummaryResponse>(ok.Value).CaseMessagesAsOrgMember.Count);
     }
 
     [Fact]

@@ -44,6 +44,13 @@ public static class InvestigationAccess
             .FirstOrDefaultAsync(ct);
         if (investigation is null) return false;
 
+        // Every route in below is somebody acting for the group, so it lasts only while they are in it.
+        // The creator, the case manager and the lead kept their say after leaving or being removed, and
+        // that say opens join codes and Field Kit launches (site audit, 10/09/2026).
+        if (!await db.OrganizationUserMemberships.AsNoTracking().AnyAsync(m =>
+                m.OrganizationId == investigation.OrganizationId && m.AppUserId == userId && m.IsActive, ct))
+            return false;
+
         // Whoever scheduled it. The commonest case by far, and checked first so the ordinary path
         // costs one query.
         if (investigation.CreatedByAppUserId == userId) return true;

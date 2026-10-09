@@ -268,13 +268,37 @@ public class OrgMessageControllerTests
     public async Task GetById_PublicFeedMessage_AnyoneCanView()
     {
         var (factory, orgId, senderId, _) = await SeedAsync();
-        var sender = Build(factory, senderId);
-        var msgId = ((OrgMessageRecord)((CreatedAtActionResult)(await sender.Send(orgId, new SendOrgMessageRequest(OrgMessageChannel.PublicFeed, null, "Public post", false, null, null, []), default)).Result!).Value!).Id;
+        // Public posts are made through the feed, so the post is written as the feed would write it.
+        var msgId = Guid.NewGuid();
+        await using (var seed = await factory.CreateDbContextAsync())
+        {
+            seed.OrgMessages.Add(new OrgMessage
+            {
+                Id = msgId, OrganizationId = orgId, AuthorAppUserId = senderId, ChannelType = OrgMessageChannel.PublicFeed,
+                Body = "Public post", IsPublic = true, DateCreated = DateTime.UtcNow, CreatedByAppUserId = senderId,
+            });
+            await seed.SaveChangesAsync();
+        }
 
         var outsider = Build(factory, Guid.NewGuid());
         var result = await outsider.GetById(orgId, msgId, default);
 
         Assert.IsType<OkObjectResult>(result.Result);
+    }
+
+    /// <summary>
+    /// The group's message board could publish to the public feed by naming the channel, past everything
+    /// the feed asks of a post (site audit, 10/09/2026).
+    /// </summary>
+    [Fact]
+    public async Task Send_refuses_the_public_feed_channel()
+    {
+        var (factory, orgId, senderId, _) = await SeedAsync();
+        var result = await Build(factory, senderId).Send(orgId,
+            new SendOrgMessageRequest(OrgMessageChannel.PublicFeed, null, "Public post", false, null, null, []), default);
+        Assert.IsType<BadRequestObjectResult>(result.Result);
+        await using var db = await factory.CreateDbContextAsync();
+        Assert.False(await db.OrgMessages.AnyAsync(m => m.ChannelType == OrgMessageChannel.PublicFeed));
     }
 
     // ── Belonging to the group ───────────────────────────────────────────────

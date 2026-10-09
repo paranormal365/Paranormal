@@ -388,7 +388,9 @@ public sealed class InvestigationController : BenControllerBase
         if (!await CaseOrgAccess.CaseBelongsToOrgAsync(db, caseId, orgId, ct)) return NotFound();
         var attendees = await db.InvestigationAttendees.AsNoTracking()
             .Include(a => a.AppUser)
-            .Where(a => a.InvestigationId == id)
+            // Tied to the case in the address, which is this group's; the investigation id alone
+            // returned any group's roster (site audit, 10/09/2026).
+            .Where(a => a.InvestigationId == id && a.Investigation.CaseId == caseId)
             .ToListAsync(ct);
         return Ok(_mapper.Map<IEnumerable<InvestigationAttendeeRecord>>(attendees));
     }
@@ -429,7 +431,7 @@ public sealed class InvestigationController : BenControllerBase
         await using var db = await _db.CreateDbContextAsync(ct);
         if (!await CaseOrgAccess.CaseBelongsToOrgAsync(db, caseId, orgId, ct)) return NotFound();
         var attendee = await db.InvestigationAttendees
-            .FirstOrDefaultAsync(a => a.Id == attendeeId && a.InvestigationId == id, ct);
+            .FirstOrDefaultAsync(a => a.Id == attendeeId && a.InvestigationId == id && a.Investigation.CaseId == caseId, ct);
         if (attendee is null) return NotFound();
 
         // Two different rights meet on this one endpoint. Answering your own invitation is yours
@@ -477,7 +479,7 @@ public sealed class InvestigationController : BenControllerBase
         await using var db = await _db.CreateDbContextAsync(ct);
         if (!await CaseOrgAccess.CaseBelongsToOrgAsync(db, caseId, orgId, ct)) return NotFound();
         var attendee = await db.InvestigationAttendees
-            .FirstOrDefaultAsync(a => a.Id == attendeeId && a.InvestigationId == id, ct);
+            .FirstOrDefaultAsync(a => a.Id == attendeeId && a.InvestigationId == id && a.Investigation.CaseId == caseId, ct);
         if (attendee is null) return NotFound();
         if (!await CanManageAsync(id, ct)) return Forbid();
 
@@ -598,15 +600,24 @@ public sealed class EvidenceVoteController : BenControllerBase
         var userId = GetCurrentUserIdOrThrow();
         await using var db = await _db.CreateDbContextAsync(ct);
 
-        var isOrgMember = User.IsInRole(RoleNames.SuperAdmin)
+        var isSuperAdmin = User.IsInRole(RoleNames.SuperAdmin);
+        var isOrgMember = isSuperAdmin
             || await db.OrganizationUserMemberships.AnyAsync(m => m.AppUserId == userId && m.IsActive, ct);
         if (!isOrgMember) return Forbid();
 
+        // Who voted, and what they wrote, is shown only to the groups involved: the case's group and
+        // each voter's group. Belonging to any group at all used to be enough to read every voter on
+        // any file (site audit, 10/09/2026). Everybody else has the counts from the summary.
+        var myGroups = db.OrganizationUserMemberships
+            .Where(m => m.AppUserId == userId && m.IsActive).Select(m => m.OrganizationId);
         var votes = await db.EvidenceVotes.AsNoTracking()
             .Include(v => v.VoterAppUser)
             .Include(v => v.VoterOrganization)
             .Include(v => v.Case)
             .Where(v => v.UploadFileId == uploadFileId)
+            .Where(v => isSuperAdmin || v.VoterAppUserId == userId
+                     || (v.Case != null && myGroups.Contains(v.Case.OrganizationId))
+                     || (v.VoterOrganizationId != null && myGroups.Contains(v.VoterOrganizationId.Value)))
             .OrderByDescending(v => v.DateVoted)
             .ToListAsync(ct);
         return Ok(_mapper.Map<IEnumerable<EvidenceVoteRecord>>(votes));

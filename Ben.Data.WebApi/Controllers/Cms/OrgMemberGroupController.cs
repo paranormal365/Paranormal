@@ -194,6 +194,9 @@ public sealed class OrgMemberGroupController : OrgCmsControllerBase
             return Forbid();
 
         await using var db = await DbFactory.CreateDbContextAsync(ct);
+        // The member group must be this group's, as every other action here asks (site audit, 10/09/2026).
+        if (!await db.OrgMemberGroups.AnyAsync(g => g.Id == groupId && g.OrganizationId == orgId, ct))
+            return NotFound();
         var gm = await db.OrgMemberGroupMemberships
             .FirstOrDefaultAsync(m => m.Id == membershipId && m.OrgMemberGroupId == groupId, ct);
         if (gm is null) return NotFound();

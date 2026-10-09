@@ -863,6 +863,17 @@ public sealed class UploadFileController : BenControllerBase
         return Ok(_mapper.Map<UploadFileRecord>(entity));
     }
 
+    /// <summary>The served type and extension of an edited picture, from its first bytes; null when it is not one.</summary>
+    internal static (string ContentType, string Extension)? EditedImageType(ReadOnlySpan<byte> head)
+    {
+        if (!Ben.Data.Common.Helpers.ImageSignature.IsBrowserDisplayable(head)) return null;
+        if (head.StartsWith(new byte[] { 0xFF, 0xD8, 0xFF })) return ("image/jpeg", ".jpg");
+        if (head.StartsWith(new byte[] { 0x89, 0x50, 0x4E, 0x47 })) return ("image/png", ".png");
+        if (head.StartsWith("GIF8"u8)) return ("image/gif", ".gif");
+        if (head.Length >= 12 && head[8..12].SequenceEqual("WEBP"u8)) return ("image/webp", ".webp");
+        return null;
+    }
+
     // POST /api/upload-files/{id}/save-as-version — saves edited image bytes as a new UploadFile linked to original
     [HttpPost("{id:guid}/save-as-version")]
     [DisableRequestSizeLimit]
@@ -881,7 +892,17 @@ public sealed class UploadFileController : BenControllerBase
         if (!await FileAudienceAccess.CanManageFileAsync(db, parent, userId, User.IsInRole(RoleNames.SuperAdmin), cancellationToken))
             return Forbid();
 
-        var storedName  = $"{Guid.NewGuid()}{Path.GetExtension(file.FileName)}";
+        // An edited version is a picture the editor drew, so it must be one: its type is read from its first
+        // bytes, never from the name or type the browser sent. Taken on trust, an SVG carrying a script was
+        // stored and then served inline from the API's own address (site audit, 10/09/2026).
+        var head = new byte[Ben.Data.Common.Helpers.ImageSignature.BytesNeeded];
+        int headRead;
+        await using (var peek = file.OpenReadStream())
+            headRead = await peek.ReadAtLeastAsync(head, head.Length, throwOnEndOfStream: false, cancellationToken);
+        if (EditedImageType(head.AsSpan(0, headRead)) is not var (contentType, extension))
+            return BadRequest("An edited version has to be a PNG, JPEG, WebP or GIF picture.");
+
+        var storedName  = $"{Guid.NewGuid()}{extension}";
         var storagePath = _fileStorage.UserFilePath(userId, storedName);
 
         await _fileStorage.WriteFormFileAsync(storagePath, file, cancellationToken);
@@ -891,10 +912,10 @@ public sealed class UploadFileController : BenControllerBase
             Id                 = Guid.NewGuid(),
             UploadFileTypeId   = parent.UploadFileTypeId,
             AppUserId          = userId,
-            FileName           = Path.GetFileNameWithoutExtension(parent.FileName) + "-edited" + Path.GetExtension(file.FileName),
+            FileName           = Path.GetFileNameWithoutExtension(parent.FileName) + "-edited" + extension,
             StoredFileName     = storedName,
             StoragePath        = storagePath,
-            ContentType        = file.ContentType,
+            ContentType        = contentType,
             FileSize           = file.Length,
             IsPublic           = false,
             IsEditedVersion    = true,

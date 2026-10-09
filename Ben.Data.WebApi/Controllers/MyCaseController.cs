@@ -508,10 +508,13 @@ public sealed class MyCaseController : BenControllerBase
         var slot = proposal.Slots.FirstOrDefault(s => s.Id == request.SlotId);
         if (slot is null) return BadRequest("Slot not found in this proposal.");
 
-        // Auto-create the Investigation
+        // The group is a column of its own, not read through the case, so it is copied here. It was
+        // left out, and the database refused the row: every client's "Accept" answered 500 (site audit,
+        // 10/09/2026). The staff-side Convert had already been fixed the same way.
+        var orgId = await db.Cases.Where(c => c.Id == caseId).Select(c => c.OrganizationId).FirstAsync(ct);
         var investigation = new Ben.Data.Source.Entities.Investigation
         {
-            Id = Guid.NewGuid(), CaseId = caseId,
+            Id = Guid.NewGuid(), OrganizationId = orgId, CaseId = caseId,
             Title = "Scheduled Investigation",
             ScheduledDateTime = slot.StartDateTime,
             EndDateTime = slot.EndDateTime,
@@ -772,6 +775,14 @@ public sealed class MyCaseController : BenControllerBase
         return Ok(ToRecord(msg));
     }
 
+    /// <summary>
+    /// The person whose request opened the case. Moving the case to another group, and the consent to
+    /// share its history that goes with it, is theirs alone; a co-client could do both until the site
+    /// audit of 10/09/2026, while every other primary-only action already asked this.
+    /// </summary>
+    private static Task<bool> IsPrimaryClient(Ben.Data.Source.Context.BenDataContext db, Guid caseId, Guid userId, CancellationToken ct)
+        => db.Cases.AnyAsync(c => c.Id == caseId && c.ClientRequest != null && c.ClientRequest.AppUserId == userId, ct);
+
     // ── Reassignment of a paused case (item 84) ───────────────────────────────
 
     public sealed record ReassignCaseRequest(
@@ -799,7 +810,7 @@ public sealed class MyCaseController : BenControllerBase
         if (userId == Guid.Empty) return Unauthorized();
 
         await using var db = await _db.CreateDbContextAsync(ct);
-        if (!await IsCaseClient(db, caseId, userId, ct)) return NotFound();
+        if (!await IsPrimaryClient(db, caseId, userId, ct)) return NotFound();
 
         var c = await db.Cases.FirstOrDefaultAsync(x => x.Id == caseId, ct);
         if (c is null) return NotFound();
@@ -880,7 +891,7 @@ public sealed class MyCaseController : BenControllerBase
         if (userId == Guid.Empty) return Unauthorized();
 
         await using var db = await _db.CreateDbContextAsync(ct);
-        if (!await IsCaseClient(db, caseId, userId, ct)) return NotFound();
+        if (!await IsPrimaryClient(db, caseId, userId, ct)) return NotFound();
 
         var pending = await db.CaseTransferLogs.FirstOrDefaultAsync(l =>
             l.CaseId == caseId && l.Status == CaseTransferStatus.Pending && l.ProposedByClient, ct);

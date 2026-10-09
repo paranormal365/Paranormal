@@ -269,7 +269,7 @@
                             {
                                 <div class="col-12 col-md-6 col-lg-4">
                                     <OrgCard Name="@org.OrgName" UrlName="@org.OrgUrlName">
-                                        <MetaLine>@org.DistanceMiles.ToString("F1") mi away</MetaLine>
+                                        <MetaLine>@(org.Latitude is null ? $"Within {org.DistanceMiles:0} mi" : $"{org.DistanceMiles:F1} mi away")</MetaLine>
                                     </OrgCard>
                                 </div>
                             }

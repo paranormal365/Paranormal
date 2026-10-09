@@ -28,6 +28,24 @@ public sealed class OrganizationRoleController : OrgCmsControllerBase
 
     // ── Roles CRUD ────────────────────────────────────────────────────────────
 
+    /// <summary>
+    /// Creating roles, setting what they allow, and putting people in them is for the group's owners and
+    /// administrators (and the site admin).
+    /// </summary>
+    /// <remarks>
+    /// It used to need only the right to edit the group's details, which the Secretary role has. A secretary
+    /// could build a role allowing everything and join it (site audit, 10/09/2026). Reading roles still
+    /// follows the ordinary permission.
+    /// </remarks>
+    private async Task<bool> MayShapeRolesAsync(Guid userId, Guid orgId, CancellationToken ct)
+    {
+        if (User.IsInRole(Ben.Data.Common.Constants.RoleNames.SuperAdmin)) return true;
+        await using var db = await DbFactory.CreateDbContextAsync(ct);
+        return await db.OrganizationUserMemberships.AsNoTracking().AnyAsync(m =>
+            m.OrganizationId == orgId && m.AppUserId == userId && m.IsActive
+            && (m.Role == OrganizationMemberRole.Owner || m.Role == OrganizationMemberRole.Administrator), ct);
+    }
+
     [HttpGet]
     public async Task<ActionResult<IEnumerable<OrganizationRoleRecord>>> GetAll(
         Guid orgId, CancellationToken ct)
@@ -69,7 +87,7 @@ public sealed class OrganizationRoleController : OrgCmsControllerBase
     {
         var userId = GetCurrentUserId();
         if (userId is null) return Unauthorized();
-        if (!await IsCmsAuthorizedAsync(userId.Value, orgId, OrganizationSecurityTable.Organization, OrganizationSecurityAction.Update, ct))
+        if (!await MayShapeRolesAsync(userId.Value, orgId, ct))
             return Forbid();
 
         if (string.IsNullOrWhiteSpace(request.Name)) return BadRequest("Name is required.");
@@ -98,7 +116,7 @@ public sealed class OrganizationRoleController : OrgCmsControllerBase
     {
         var userId = GetCurrentUserId();
         if (userId is null) return Unauthorized();
-        if (!await IsCmsAuthorizedAsync(userId.Value, orgId, OrganizationSecurityTable.Organization, OrganizationSecurityAction.Update, ct))
+        if (!await MayShapeRolesAsync(userId.Value, orgId, ct))
             return Forbid();
 
         if (string.IsNullOrWhiteSpace(request.Name)) return BadRequest("Name is required.");
@@ -128,7 +146,7 @@ public sealed class OrganizationRoleController : OrgCmsControllerBase
     {
         var userId = GetCurrentUserId();
         if (userId is null) return Unauthorized();
-        if (!await IsCmsAuthorizedAsync(userId.Value, orgId, OrganizationSecurityTable.Organization, OrganizationSecurityAction.Update, ct))
+        if (!await MayShapeRolesAsync(userId.Value, orgId, ct))
             return Forbid();
 
         await using var db = await DbFactory.CreateDbContextAsync(ct);
@@ -172,7 +190,7 @@ public sealed class OrganizationRoleController : OrgCmsControllerBase
     {
         var userId = GetCurrentUserId();
         if (userId is null) return Unauthorized();
-        if (!await IsCmsAuthorizedAsync(userId.Value, orgId, OrganizationSecurityTable.Organization, OrganizationSecurityAction.Update, ct))
+        if (!await MayShapeRolesAsync(userId.Value, orgId, ct))
             return Forbid();
 
         await using var db = await DbFactory.CreateDbContextAsync(ct);
@@ -277,7 +295,7 @@ public sealed class OrganizationRoleController : OrgCmsControllerBase
     {
         var userId = GetCurrentUserId();
         if (userId is null) return Unauthorized();
-        if (!await IsCmsAuthorizedAsync(userId.Value, orgId, OrganizationSecurityTable.Organization, OrganizationSecurityAction.Update, ct))
+        if (!await MayShapeRolesAsync(userId.Value, orgId, ct))
             return Forbid();
 
         await using var db = await DbFactory.CreateDbContextAsync(ct);
@@ -316,7 +334,7 @@ public sealed class OrganizationRoleController : OrgCmsControllerBase
     {
         var userId = GetCurrentUserId();
         if (userId is null) return Unauthorized();
-        if (!await IsCmsAuthorizedAsync(userId.Value, orgId, OrganizationSecurityTable.Organization, OrganizationSecurityAction.Update, ct))
+        if (!await MayShapeRolesAsync(userId.Value, orgId, ct))
             return Forbid();
 
         await using var db = await DbFactory.CreateDbContextAsync(ct);

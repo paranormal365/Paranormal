@@ -415,7 +415,7 @@
                 </BenTab>
             }
 
-            @if (_canManageRoles)
+            @if (_canEditRoles)
             {
                 <BenTab Title="Roles" Id="roles">
                     <OrgRolesManager OrgId="@OrgId" />
@@ -480,6 +480,7 @@
     private OrganizationAdminRecord? _org;
     private bool   _canEdit;
     private bool   _canManageRoles;
+    private bool   _canEditRoles;
     private bool   _isMember;
     private MyOrgPermissionsItem? _myPerms;
     private bool   _isOwnerOrSuperAdmin;
@@ -645,7 +646,12 @@
                 _rosterUnavailable = members.Failed;
                 _isOwnerOrSuperAdmin = members.Items.Any(m =>
                     m.AppUserId == UserState.UserId.Value && m.Role == OrganizationMemberRole.Owner);
+                // Roles hand out rights, so only the people who hold all of them shape roles: the same
+                // rule the server keeps (site audit, 10/09/2026).
+                _canEditRoles = members.Items.Any(m => m.AppUserId == UserState.UserId.Value
+                    && m.Role is OrganizationMemberRole.Owner or OrganizationMemberRole.Administrator);
             }
+            if (UserState.IsSuperAdmin) _canEditRoles = true;
 
             if (_canManageRoles)
                 await ReloadClientReachAsync();

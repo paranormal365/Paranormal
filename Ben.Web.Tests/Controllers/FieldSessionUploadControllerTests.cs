@@ -715,6 +715,60 @@ public sealed class FieldSessionUploadControllerTests
         else Assert.IsType<NotFoundResult>(result.Result);
     }
 
+    /// <summary>
+    /// An open investigation lets anybody send a session of their own. It never let them into somebody
+    /// else's: a file re-sent at the same path replaces the one there (site audit, 10/09/2026).
+    /// </summary>
+    [Fact]
+    public async Task Nobody_but_the_sender_can_replace_a_file_in_a_session()
+    {
+        var factory = await SeedAsync();
+        await using (var db = await factory.CreateDbContextAsync())
+        {
+            var investigation = await db.Investigations.SingleAsync(i => i.Id == InvestigationId);
+            investigation.Visibility = InvestigationVisibility.Public;
+            await db.SaveChangesAsync();
+        }
+
+        var submitted = await Build(factory, AttendeeId).SubmitDocument(
+            Document(ValidDocument()), Guid.NewGuid(), InvestigationId, AttendeeId, "An Attendee", default);
+        var session = Assert.IsType<FieldSessionRecord>(Assert.IsType<OkObjectResult>(submitted.Result).Value);
+        var mine = Assert.IsType<FieldSessionFileRecord>(Assert.IsType<OkObjectResult>((await Build(factory, AttendeeId)
+            .SubmitFile(session.Id, Upload(M4a(5), "clip.m4a", "audio/mp4"), "media/audio-001.m4a", null, default)).Result).Value);
+
+        var theirs = await Build(factory, StrangerId).SubmitFile(
+            session.Id, Upload(M4a(9), "clip.m4a", "audio/mp4"), "media/audio-001.m4a", null, default);
+        Assert.IsType<NotFoundResult>(theirs.Result);
+
+        await using (var db = await factory.CreateDbContextAsync())
+        {
+            var row = await db.FieldSessionUploadFiles.SingleAsync(f => f.Id == mine.Id);
+            Assert.Equal(AttendeeId, (await db.UploadFiles.SingleAsync(u => u.Id == row.UploadFileId)).AppUserId);
+        }
+    }
+
+    /// <summary>
+    /// Re-sending a session with nothing chosen used to unfile it, and an unfiled session can be deleted
+    /// by its sender, so a group's evidence could be removed in two steps (site audit, 10/09/2026).
+    /// </summary>
+    [Fact]
+    public async Task Sending_a_filed_session_again_with_nothing_chosen_keeps_it_filed()
+    {
+        var factory = await SeedAsync();
+        var device = Guid.NewGuid();
+        var first = await Build(factory, AttendeeId).SubmitDocument(
+            Document(ValidDocument()), device, InvestigationId, AttendeeId, "An Attendee", default);
+        var session = Assert.IsType<FieldSessionRecord>(Assert.IsType<OkObjectResult>(first.Result).Value);
+
+        var again = await Build(factory, AttendeeId).SubmitDocument(
+            Document(ValidDocument()), device, null, AttendeeId, "An Attendee", default);
+        Assert.IsType<OkObjectResult>(again.Result);
+
+        await using (var db = await factory.CreateDbContextAsync())
+            Assert.Equal(InvestigationId, (await db.FieldSessionUploads.SingleAsync(s => s.Id == session.Id)).InvestigationId);
+        Assert.IsType<ConflictObjectResult>(await Build(factory, AttendeeId).DeleteSession(session.Id, default));
+    }
+
     [Fact]
     public async Task A_group_only_investigation_still_turns_a_stranger_away()
     {

@@ -105,7 +105,7 @@ public class VideoProjectControllerTests
         });
         db.OrganizationUserMemberships.Add(new OrganizationUserMembership
         {
-            Id = Guid.NewGuid(), OrganizationId = orgId, AppUserId = userId,
+            Id = Guid.NewGuid(), IsActive = true, OrganizationId = orgId, AppUserId = userId,
             DateCreated = DateTime.UtcNow, CreatedByAppUserId = userId
         });
         await db.SaveChangesAsync();
@@ -191,7 +191,7 @@ public class VideoProjectControllerTests
         {
             db.OrganizationUserMemberships.Add(new OrganizationUserMembership
             {
-                Id = Guid.NewGuid(), OrganizationId = orgId, AppUserId = colleagueId,
+                Id = Guid.NewGuid(), IsActive = true, OrganizationId = orgId, AppUserId = colleagueId,
                 DateCreated = DateTime.UtcNow, CreatedByAppUserId = colleagueId
             });
             db.VideoProjects.Add(new VideoProject
@@ -237,7 +237,7 @@ public class VideoProjectControllerTests
         {
             db.OrganizationUserMemberships.Add(new OrganizationUserMembership
             {
-                Id = Guid.NewGuid(), OrganizationId = orgId, AppUserId = colleagueId,
+                Id = Guid.NewGuid(), IsActive = true, OrganizationId = orgId, AppUserId = colleagueId,
                 DateCreated = DateTime.UtcNow, CreatedByAppUserId = colleagueId
             });
             db.VideoProjects.Add(new VideoProject
@@ -314,7 +314,7 @@ public class VideoProjectControllerTests
         {
             db.OrganizationUserMemberships.Add(new OrganizationUserMembership
             {
-                Id = Guid.NewGuid(), OrganizationId = orgId, AppUserId = colleagueId,
+                Id = Guid.NewGuid(), IsActive = true, OrganizationId = orgId, AppUserId = colleagueId,
                 DateCreated = DateTime.UtcNow, CreatedByAppUserId = colleagueId
             });
             db.VideoProjects.Add(new VideoProject
@@ -347,7 +347,7 @@ public class VideoProjectControllerTests
         {
             db.OrganizationUserMemberships.Add(new OrganizationUserMembership
             {
-                Id = Guid.NewGuid(), OrganizationId = orgId, AppUserId = colleagueId,
+                Id = Guid.NewGuid(), IsActive = true, OrganizationId = orgId, AppUserId = colleagueId,
                 DateCreated = DateTime.UtcNow, CreatedByAppUserId = colleagueId
             });
             db.VideoProjects.Add(new VideoProject
