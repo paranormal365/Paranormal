@@ -14,3 +14,12 @@ export function currentHtml(host) {
     copy.querySelectorAll('img.ProseMirror-separator').forEach(img => img.remove())
     return copy.innerHTML
 }
+
+// The words selected inside this editor, or '' when the selection is somewhere else or empty. Read when a toolbar
+// button opens a window — after that, the browser's focus is in the window and the selection may follow it.
+export function selectedText(host) {
+    const editable = host?.querySelector('.ProseMirror')
+    const sel = window.getSelection()
+    if (!editable || !sel || sel.rangeCount === 0 || sel.isCollapsed) return ''
+    return editable.contains(sel.getRangeAt(0).commonAncestorContainer) ? sel.toString() : ''
+}

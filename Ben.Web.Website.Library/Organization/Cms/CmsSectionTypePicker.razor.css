@@ -1,0 +1,41 @@
+/* The section kinds as cards: a sketch, a name and a sentence each. Four across on a wide screen,
+   two on a phone. */
+.cms-type-picker {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(11.5rem, 1fr));
+    gap: .6rem;
+}
+
+.cms-type-picker__card {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: .35rem;
+    padding: .6rem;
+    text-align: start;
+    color: var(--bs-body-color);
+    background: var(--bs-body-bg);
+    border: 1px solid var(--bs-border-color);
+    border-radius: .75rem;
+    transition: border-color .15s ease, box-shadow .15s ease;
+}
+
+.cms-type-picker__card:hover { border-color: rgba(var(--bs-primary-rgb), .55); }
+
+.cms-type-picker__card:focus-visible {
+    outline: 2px solid var(--bs-primary);
+    outline-offset: 2px;
+}
+
+.cms-type-picker__card--on {
+    border-color: var(--bs-primary);
+    box-shadow: 0 0 0 2px rgba(var(--bs-primary-rgb), .35);
+}
+
+.cms-type-picker__label { font-weight: 650; font-size: .9rem; }
+
+.cms-type-picker__what { font-size: .78rem; color: var(--bs-secondary-color); line-height: 1.35; }
+
+@media (prefers-reduced-motion: reduce) {
+    .cms-type-picker__card { transition: none; }
+}

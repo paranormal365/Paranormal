@@ -6,229 +6,230 @@ audience: Everyone
 order: 45
 ---
 
-The **Feed** is the short-form public side of the site: anyone signed in can post, and everyone
-signed in can read. It is where you say what you found last night, rather than write it up.
+The **Feed** is the site's place for short public posts. Anyone signed in can post, and everyone
+signed in can read. It's where you share what you found last night, without writing it all up.
 
-Long pieces do not belong here — a post is at most 1,000 characters on purpose.
+Long pieces don't belong here: a post can be at most 1,000 characters.
 
 ![The feed, with a post carrying a tag and a mention](/help/media/the-feed/feed.png)
-*A post. **#EVP** and **@sarahmitchell** became links on their own — you only typed them.*
+*A post. **#EVP** and **@sarahmitchell** turned into links automatically — you only had to type them.*
 
 ## Writing a post
 
-Type in the box at the top of the feed and press **Post**. Plain text, no formatting: the point is
-that a post is quick to write and quick to read.
+Type in the box at the top of the feed and press **Post**. Posts are plain text with no formatting,
+so they're quick to write and quick to read.
 
 ### Mentioning somebody
 
-Write **@** followed by their name — `@sarahmitchell`. If it matches somebody, their name becomes a
-link and they are told they were mentioned. If it matches nobody, it stays as ordinary text, which
-is how you can see a typo did not reach anyone.
+Type **@** followed by the person's name, like `@sarahmitchell`. If it matches someone, their name
+becomes a link and they're notified that you mentioned them. If it doesn't match anyone, it stays as
+plain text, which makes a typo easy to spot.
 
-An **@name** is the permanent one somebody chose when they made their account, not their display
-name. So a mention keeps pointing at the right person even after they change how their name is
-shown.
+An **@name** is the permanent name someone picked when they created their account, not their
+display name. So a mention still points to the right person even if they later change how their
+name is shown.
 
-An email address in a post is not a mention. `ben@example.com` stays an email address.
+An email address in a post isn't treated as a mention. `ben@example.com` stays an email address.
 
 ### Tagging a post
 
-Write **#** followed by a word — `#evp`, `#bellwitch`. The tag becomes a link to everything else
-carrying it.
+Type **#** followed by a word, like `#evp` or `#bellwitch`. The tag becomes a link to every other
+post that uses it.
 
 ![A tag page](/help/media/the-feed/tag-page.png)
-*Clicking a tag opens everything carrying it. The address is shareable.*
+*Clicking a tag shows every post that uses it. You can share the page's address.*
 
-Capitals do not matter: `#EVP`, `#evp` and `#Evp` are one tag, so they all gather in the same place.
-Tags cannot start with a number, because `#1` and `#2026` are almost always a list or a year rather
-than a subject.
+Capitalization doesn't matter: `#EVP`, `#evp` and `#Evp` are the same tag, so they all show up
+together. Tags can't start with a number, because `#1` and `#2026` are almost always a list number
+or a year, not a subject.
 
 ### Saying what a post shows
 
-When you attach a photo or video, the composer offers a **category** — the same list of experience
+When you attach a photo or video, you can choose a **category** from the same list of experience
 types used everywhere else on the site (Apparition, Voices / Whispering, EMF Spike, and so on).
-It is always optional, and a plain chat post does not need one.
+It's always optional, and a text-only post doesn't need one.
 
-Picking one does two things: the category appears as a small label on your post that readers can
-click to see everything else of its kind, and it tells the site what your footage claims to be.
-If the site's own measurements disagree — a clip tagged as voices that carries no audio track, for
-instance — **you, and only you**, will see a gentle note on your post offering to change the
-category. Nothing is blocked and nobody else sees the note; an honest mislabel is not misconduct,
-and changing it is one click. Posts whose content clearly does not match their label rank a little
-lower in **For You** until it is sorted out.
+Choosing a category does two things. It adds a small label to your post that readers can click to
+see other posts of the same kind, and it tells the site what your footage is supposed to show. If
+the site's own checks disagree — for example, a clip labeled as voices that has no audio track —
+**you, and only you**, will see a gentle note on your post suggesting a different category. Nothing
+is blocked and nobody else sees the note. An honest mislabel isn't treated as misconduct, and
+fixing it takes one click. Until it's fixed, a post whose content clearly doesn't match its label
+ranks a little lower in **For You**.
 
 ### Posting straight from the video editor
 
-When you export a finished video in the editor, **Post to the feed** appears beside "Upload to
-server" and "Save to my machine" (if you're someone who may post at all). A render made from a
-case names that case before anything goes public, and footage from a **private engagement**
-requires an explicit confirmation — the client was promised privacy, and publishing any of it is
-a deliberate, recorded choice.
+When you export a finished video in the editor, a **Post to the feed** option appears next to
+"Upload to server" and "Save to my machine" (as long as you're allowed to post). If the video was
+made from a case, you'll see which case before anything goes public. Footage from a
+**private engagement** needs an extra confirmation: the client was promised privacy, so publishing
+any of it has to be a deliberate choice, and that choice is recorded.
 
-The group that worked the case decides separately whether the post carries **their** name: until
-they claim it, the post is credited to you alone. A claimed post wears the group's name, a link
-to their page, and a **Group verified** badge — the group vouching that the footage is what it
-says. **Moderator reviewed** appears when a site moderator personally cleared the video. Both
-badges lift a post's standing in **For You**.
+The group that worked the case decides separately whether the post carries **their** name. Until
+they claim it, the post is credited only to you. A claimed post shows the group's name, a link to
+their page, and a **Group verified** badge, which means the group vouches that the footage is what
+it says it is. **Moderator reviewed** appears when a site moderator has personally checked and
+approved the video. Both badges help a post rank higher in **For You**.
 
 ## Posting about a place
 
-A public location's own page has the same box on it, under **Posts about this place**. What you
-write there is an ordinary post that also belongs to that place: it appears on the place's page, on
-the feed, and anywhere else the post is read, with **at {the place}** under it linking back.
+A public location's page has the same posting box, under **Posts about this place**. A post you
+write there is an ordinary post that's also linked to that place. It appears on the place's page,
+in the feed, and anywhere else the post shows up, with **at {the place}** underneath linking back
+to the place.
 
-Two things are different about that box, both on purpose:
+That box works differently in two ways, both on purpose:
 
-- **Anybody signed in may use it.** Posting on the feed's front page is for people who belong here —
-  members of a group, and clients whose case is being worked — because a voice in the site's
-  conversation is what belonging buys. A public location's record is the opposite errand. It is a
-  shared account of somewhere anyone can visit, and the visitor who went on the evening tour and
-  photographed something is exactly who it is for.
-- **Private residences have no box at all.** Publishing what happens inside somebody's home is
-  theirs to agree to, and there is no way to ask them yet. So a home's page takes no posts.
+- **Anybody signed in may use it.** Posting on the main feed is for people who belong to the site —
+  members of a group, and clients whose case is being worked. A public location's page is
+  different. It's a shared record of somewhere anyone can visit, and the visitor who went on the
+  evening tour and photographed something is exactly who it's for.
+- **Private residences have no box at all.** Posting about what happens inside someone's home needs
+  their permission, and there's no way to ask for it yet. So a home's page doesn't accept posts.
 
 ![Posting about a place](/help/media/the-feed/place-posts.png)
-*The same box, on a public location's own page. What you write there says **at** the place wherever
-it is read.*
+*The same box, on a public location's page. Posts written here show **at** the place wherever
+they're read.*
 
-Everything else is the same as any other post: photos and videos go through the same check, reports
+Everything else works like any other post: photos and videos go through the same check, reporting
 and hiding work the same way, and replies belong to the thread rather than to the place. **See all
-posts about this place** opens the whole list at its own address, which is shareable.
+posts about this place** opens the full list on its own page, which you can share.
 
 ## The tools under the box
 
 ![The composer's row of tools, with the poll open](/help/media/the-feed/composer-tools.png)
-*A poll being written. Every tool in the row is an icon that names itself when you hover over it.*
+*Writing a poll. Hover over any icon in the row to see its name.*
 
-Under the writing box is a row of small buttons. None of them carries a word — hover over one and it
-tells you what it is.
+Under the writing box is a row of small icon buttons with no labels. Hover over one to see what it
+is.
 
 | Tool | What it does |
 |---|---|
-| **Photo or video** | Attaches one file to the post. Photos and videos only, and one per post. |
-| **GIF** | Opens a picker of GIFs from Giphy. Choosing one puts its address in your post, and it plays where the post appears. |
+| **Photo or video** | Attaches a photo or video to the post. Only one file per post. |
+| **GIF** | Opens a GIF picker from Giphy. Choosing one adds its address to your post, and the GIF plays wherever the post appears. |
 | **Poll** | Opens the poll writer described below. |
-| **Emoji** | A short list of the marks people actually use. Whatever your keyboard can type works too. |
+| **Emoji** | A short list of the emoji people use most. Anything your keyboard can type works too. |
 | **Schedule** | Picks a time for the post to appear. |
-| **Location** | Tags where you are writing from. |
+| **Location** | Adds where you're posting from. |
 
 ### Writing a poll
 
-A poll is a question and **between two and six answers**. Add an answer with **Add an answer** and
-remove one with the **×** beside it; the last two cannot be removed, because a question with one
-answer is not a question.
+A poll has a question and **between two and six answers**. Use **Add an answer** to add one, and
+the **×** next to an answer to remove it. You can't remove the last two, because a poll needs at
+least two answers.
 
-**Closes** decides how long it runs — 6 hours, a day, 3 days, a week, or never. Tick **Let people
-pick more than one** if several answers can be true at once.
+**Closes** sets how long the poll runs: 6 hours, a day, 3 days, a week, or never. Check **Let
+people pick more than one** if more than one answer can be true.
 
-Answers left blank are simply dropped when you post, so four boxes with two filled in becomes a
-two-answer poll. The whole poll goes away again with the **×** at its top corner.
+Blank answers are dropped when you post, so if you fill in two of four boxes, you get a two-answer
+poll. To remove the whole poll, use the **×** in its top corner.
 
 ![A poll on a post, answered](/help/media/the-feed/poll.png)
-*Answered. The bar sits behind the words rather than beside them, so a long answer is not squeezed
-into half the width to make room for a number.*
+*An answered poll. The bar sits behind each answer instead of beside it, so long answers get the
+full width.*
 
-Anyone signed in can answer a poll, one answer each unless it takes more, and pressing your own
-answer again takes it back. Counts are shown to everybody from the start rather than hidden until
-you vote — they are public either way, and hiding them only makes the honest reader guess. The
-number under a poll counts **people**, not answers, so a poll that takes several answers still says
-how many were there.
+Anyone signed in can answer a poll. You get one answer unless the poll allows more, and pressing
+your answer again takes it back. Everyone can see the counts from the start, not just after
+voting — the counts are public anyway, and hiding them only leaves people guessing. The number under
+a poll counts **people**, not answers, so a poll that allows several answers still shows how many
+people took part.
 
 ### Scheduling a post
 
-Pick a date and time and the post waits for it. The time is **your own clock**, wherever you are
-standing — you never have to work out what that is somewhere else.
+Pick a date and time, and the post waits until then. The time is on **your own clock**, wherever
+you are, so you never have to work out a time zone.
 
-Until its hour comes, **only you** can see it, marked *Goes up …* with two ways out: **Post it now**
-puts it up immediately, and **Cancel it** takes it back. Nobody else has seen it, so calling one
-back leaves nothing behind.
+Until it goes up, **only you** can see it. It's marked *Goes up …* and gives you two options:
+**Post it now** publishes it right away, and **Cancel it** takes it back. Since nobody else has
+seen it yet, canceling leaves no trace.
 
 ### Saying where you are
 
-The **location** tool asks your browser where you are, turns it into the name of the place, and puts
-*said at …* under your post with a small mark that opens the spot in Maps. It is asked for every
-time and never taken quietly, and **Remove** takes it off before you post.
+The **location** tool asks your browser where you are, turns that into a place name, and adds
+*said at …* under your post, with a small icon that opens the spot in Maps. It asks every time and
+never uses your location without asking. Press **Remove** to take it off before you post.
 
 ## Links in a post
 
-A web address you type stays part of the sentence you typed it in, and gets a small card under the
-post showing where it goes.
+A web address you type stays in your sentence where you typed it, and a small card under the post
+shows where it leads.
 
 ![A post carrying a link, with the card under it](/help/media/the-feed/link-preview.png)
-*The address stays in the sentence. The card under it says where it goes.*
+*The address stays in the sentence. The card underneath shows where it leads.*
 
-Cards are built for addresses **on this site** — a case, a tour, an event or a group — out of
-records we already hold, which is why a card stays correct after something is renamed. This site
-never goes and reads somebody else's page to make a card, so a link elsewhere gets a plainer one
-naming the site it belongs to and nothing more.
+Full cards are made for addresses **on this site** — a case, a tour, an event or a group — using
+information the site already has, so the card stays correct even if something is renamed later.
+The site never visits other websites to build a card, so a link to another site gets a simpler
+card that just names that site.
 
 ## Promoted cards
 
-Every eighth spot in the main feed carries a card instead of a post — alternating between a
-group promoting itself (always marked **Promoted**) and the site's own pointer to the group
-finder. If you choose **Show groups near you** on a promoted card, your browser asks your
-permission and the cards re-order nearest-first. Your location is used for that one ordering
-and is never stored — leave, and it's forgotten.
+Every eighth spot in the main feed shows a card instead of a post. The cards take turns between a
+group promoting itself (always marked **Promoted**) and the site's own link to the group finder.
+If you choose **Show groups near you** on a promoted card, your browser asks for permission to use
+your location, and the cards are re-sorted with the nearest first. Your location is used only for
+that sorting and is never stored — it's forgotten as soon as you leave.
 
 ## Reading
 
 | | |
 |---|---|
 | **All posts** | Everything, newest first. |
-| **Following** | Only people you follow — plus your own posts, so you can see what you just wrote. |
-| **Mentions** | Posts that name you with your **@name** — and posts whose replies do. The bell's *Mentions* row opens this. |
+| **Following** | Only people you follow, plus your own posts so you can see what you just wrote. |
+| **Mentions** | Posts that mention your **@name**, and posts with replies that do. The *Mentions* row in the bell opens this. |
 
-Click a post's reply count to open it and read the replies. Opening a post is what clears a
-"mentioned you" badge from your **Feed** menu entry, so nothing disappears before you have seen it.
+Click a post's reply count to open it and read the replies. The "mentioned you" badge on your
+**Feed** menu item clears only when you open the post, so it never disappears before you've seen it.
 
-While the page is open it quietly checks for newer posts; a **"new posts"** button appears when
-there are some, and clicking it brings them in without losing your place. The site's home page
-also shows a small taste of the feed's current top posts — the front door on the front page.
+While the page is open, it checks for newer posts in the background. When there are some, a
+**"new posts"** button appears; click it to load them without losing your place. The site's home
+page also shows a few of the feed's current top posts.
 
 ## When a group's session starts
 
-A guide, an organizer or an investigation lead can start the night for everybody from the app.
-Their card says so, and offers **Open in the app** — joining is done on a phone, in Field Kit,
-where the recording happens. On a phone with the app, the button opens it there; the app itself
-also lists it under **Happening now**.
+A guide, organizer or investigation lead can start a session for everyone from the app. When they
+do, a card in the feed says so and offers **Open in the app**. You join in Field Kit on your phone,
+since that's where the recording happens. On a phone with the app, the button opens the session
+there, and the app also lists it under **Happening now**.
 
 ![A card saying the group's session has started](/help/media/the-feed/launch-card.png)
 
-For a public tour or event the card is in everybody's feed. For anything private it is shown only
-to the people it was for. Either way it goes six hours after the thing ends.
+For a public tour or event, the card shows up in everyone's feed. For anything private, only the
+people it's meant for see it. Either way, the card goes away six hours after the tour or event ends.
 
 ## Following
 
-Press **Follow** beside somebody's name on a post, or on their feed page. It is one-directional and
-nobody is asked: following changes what you are shown, not what you are allowed to see. Everything
-in the feed is public to signed-in people either way.
+Press **Follow** next to someone's name on a post, or on their feed page. Following is one-way, and
+the other person isn't asked. It changes what you're shown, not what you're allowed to see —
+everything in the feed is visible to signed-in people either way.
 
-Press it again to stop.
+Press it again to unfollow.
 
 ## Reporting a post
 
-If a post should not be here, press **Report** on it. An administrator sees it and decides.
+If a post shouldn't be here, press **Report** on it. An administrator reviews it and decides what
+to do.
 
-Two things worth knowing:
+Two things to know:
 
-- **Reporting does not hide anything**, and neither does a lot of people reporting the same post.
-  A person makes that decision, so a group who dislike somebody cannot remove their posts between
-  them.
-- **You can report a post once.** Pressing it again changes nothing, and the button says
-  *Reported* afterwards so you know it registered.
+- **Reporting does not hide anything**, even when lots of people report the same post. A person
+  makes that decision, so a group of people who dislike someone can't get their posts removed by
+  ganging up on them.
+- **You can report a post once.** Pressing it again does nothing, and the button changes to
+  *Reported* so you know it worked.
 
-You cannot report your own post.
+You can't report your own post.
 
 ## Taking down your own post
 
-Your own posts and replies carry a **Delete** button (in the app, it is in the post's **…** menu).
-You are asked once more — *Delete this post?* — because there is no undo. A deleted post comes off
-the feed for everybody at once, and **its replies go with it**: a reply under a post nobody can open
-has nothing left to answer. Deleting a reply of yours leaves the post it answered alone.
+Your own posts and replies have a **Delete** button (in the app, it's in the post's **…** menu).
+You're asked to confirm — *Delete this post?* — because it can't be undone. A deleted post
+disappears from the feed for everyone right away, and **its replies go with it**, since there's no
+post left for them to answer. Deleting one of your replies doesn't affect the post it answered.
 
-Nobody else can delete your post. If a post of somebody else's should go, report it.
+Nobody else can delete your post. If someone else's post should come down, report it.
 
 ## If the feed is not there
 
-The whole feed can be switched off for the site by an administrator, in which case the menu entry
-and its pages are simply not there. That is a decision for whoever runs the site, not a fault.
+An administrator can turn off the feed for the whole site. When that happens, the menu item and the
+feed's pages simply don't appear. That's a choice made by whoever runs the site, not an error.

@@ -29,12 +29,29 @@ public interface IBenCmsClient
     Task<(CmsPageDetail? Result, string? Error)> UpdateCmsPageAsync(Guid orgId, Guid pageId, CmsUpdatePageRequest request, CancellationToken token = default);
     Task<bool> DeleteCmsPageAsync(Guid orgId, Guid pageId, CancellationToken token = default);
 
+    /// <summary>
+    /// Moves a page in the group's menu: under <paramref name="parentPageId"/> (null for the top level),
+    /// at <paramref name="index"/> among the pages there. Hands back the page list as it now stands,
+    /// or the server's sentence when the place is refused (too deep, or under one of its own pages).
+    /// </summary>
+    Task<(IReadOnlyList<CmsPageListItem>? Pages, string? Error)> MoveCmsPageAsync(
+        Guid orgId, Guid pageId, Guid? parentPageId, int index, CancellationToken token = default);
+
+    /// <summary>Every page with its sections, in menu order — what the Ordering window draws.</summary>
+    Task<LoadResult<CmsOutlinePage>> GetCmsOutlineAsync(Guid orgId, CancellationToken token = default);
+
     // ── CMS Sections ──────────────────────────────────────────────────────────
 
     Task<CmsSectionRecord?> CreateCmsSectionAsync(Guid orgId, Guid pageId, CmsCreateSectionRequest request, CancellationToken token = default);
     Task<CmsSectionRecord?> UpdateCmsSectionAsync(Guid orgId, Guid pageId, Guid sectionId, CmsUpdateSectionRequest request, CancellationToken token = default);
     Task<bool> ReorderCmsSectionsAsync(Guid orgId, Guid pageId, IList<Guid> orderedIds, CancellationToken token = default);
     Task<bool> DeleteCmsSectionAsync(Guid orgId, Guid pageId, Guid sectionId, CancellationToken token = default);
+
+    /// <summary>
+    /// A section as it stands in the editor, cleaned and resolved the way the public page will show
+    /// it — without saving it. Null when the server refused or could not be reached.
+    /// </summary>
+    Task<OrgPublicSectionItem?> PreviewCmsSectionAsync(Guid orgId, Guid pageId, CmsCreateSectionRequest request, CancellationToken token = default);
 
     // ── CMS Page Permissions ──────────────────────────────────────────────────
 

@@ -1,0 +1,165 @@
+@namespace Ben.Web.Website.Library.Organization.Cms
+
+@*
+    Where a page sits in the group's menu, chosen on a tree (Ben, 10/09/2026): the group's pages as a
+    visitor's menu has them, with this page marked. Drag it to another place, or use the arrows. It
+    replaces a Sort Order number and a Parent Page drop-down, which together made somebody imagine the
+    tree rather than look at it.
+
+    Only this page moves; the rest are there to place it among. What hangs under it moves with it. The
+    depth rule is CmsPageTree's, the same one the server enforces, so a drop the server would refuse is
+    refused here with the same sentence.
+
+    The choice goes to the caller through ValueChanged; nothing is saved here. The page dialog and the
+    page editor save it with the rest of the form.
+*@
+
+<div class="cms-placer" id="@Id">
+    <TelerikTreeView Data="@_nodes"
+                     Draggable="true"
+                     OnDragStart="@OnDragStart"
+                     OnDrop="@OnDropAsync"
+                     ExpandedItems="@_expanded"
+                     ExpandedItemsChanged="@((IEnumerable<object> items) => _expanded = items)"
+                     AriaLabel="Where this page sits in your menu">
+        <TreeViewBindings>
+            <TreeViewBinding>
+                <ItemTemplate>
+                    @{ var node = (CmsTreeNode)context; }
+                    <span class="cms-tree-node @(node.IsCurrent ? "cms-tree-node--current" : "")"
+                          data-node-id="@node.Id" data-current="@(node.IsCurrent ? "true" : null)">
+                        @if (node.IsCurrent)
+                        {
+                            <BenIcon Name="move" Class="cms-tree-node__grip" />
+                        }
+                        <BenIcon Name="file-text" />
+                        <span>@node.Text</span>
+                        @if (node.IsCurrent)
+                        {
+                            <span class="badge bg-primary ms-1">This page</span>
+                        }
+                    </span>
+                </ItemTemplate>
+            </TreeViewBinding>
+        </TreeViewBindings>
+    </TelerikTreeView>
+
+    <div class="cms-placer__moves" role="group" aria-label="Move this page">
+        <button type="button" class="btn btn-outline-secondary btn-sm" title="Earlier in the menu" id="@($"{Id}-up")"
+                disabled="@(Nudged(CmsSiteTree.Nudge.Up) is null)" @onclick="@(() => NudgeAsync(CmsSiteTree.Nudge.Up))">
+            <BenIcon Name="arrow-up" /><span class="visually-hidden">Earlier in the menu</span>
+        </button>
+        <button type="button" class="btn btn-outline-secondary btn-sm" title="Later in the menu" id="@($"{Id}-down")"
+                disabled="@(Nudged(CmsSiteTree.Nudge.Down) is null)" @onclick="@(() => NudgeAsync(CmsSiteTree.Nudge.Down))">
+            <BenIcon Name="arrow-down" /><span class="visually-hidden">Later in the menu</span>
+        </button>
+        <button type="button" class="btn btn-outline-secondary btn-sm" title="Up a level" id="@($"{Id}-out")"
+                disabled="@(Nudged(CmsSiteTree.Nudge.Out) is null)" @onclick="@(() => NudgeAsync(CmsSiteTree.Nudge.Out))">
+            <BenIcon Name="arrow-left" /><span class="visually-hidden">Up a level</span>
+        </button>
+        <button type="button" class="btn btn-outline-secondary btn-sm" title="Under the page above it" id="@($"{Id}-in")"
+                disabled="@(Nudged(CmsSiteTree.Nudge.In) is null)" @onclick="@(() => NudgeAsync(CmsSiteTree.Nudge.In))">
+            <BenIcon Name="arrow-right" /><span class="visually-hidden">Under the page above it</span>
+        </button>
+    </div>
+
+    @if (_refusal is not null)
+    {
+        <div class="alert alert-warning py-1 px-2 mt-2 mb-0 small" role="status">@_refusal</div>
+    }
+</div>
+
+@code {
+    /// <summary>The group's pages (drafts excluded), as the page list returns them.</summary>
+    [Parameter, EditorRequired] public IReadOnlyList<CmsPageListItem> Pages { get; set; } = [];
+
+    /// <summary>The page being placed; null for one not created yet.</summary>
+    [Parameter] public Guid? PageId { get; set; }
+
+    /// <summary>What to call a page not created yet — what has been typed as its title so far.</summary>
+    [Parameter] public string? NewTitle { get; set; }
+
+    /// <summary>Where the page goes. Null: where it is now, or last at the top level for a new page.</summary>
+    [Parameter] public CmsSiteTree.Placement? Value { get; set; }
+    [Parameter] public EventCallback<CmsSiteTree.Placement> ValueChanged { get; set; }
+
+    /// <summary>The element id, so a page with two placers (never today) could tell them apart.</summary>
+    [Parameter] public string Id { get; set; } = "cms-placer";
+
+    /// <summary>The id the page not yet created goes by in the tree.</summary>
+    private static readonly Guid NewPageId = new("00000000-0000-0000-0000-00000000c0de");
+
+    private List<CmsSiteTree.Page> _pages = [];
+    private List<CmsTreeNode> _nodes = [];
+    private IEnumerable<object> _expanded = [];
+    private string? _refusal;
+
+    private Guid Current => PageId ?? NewPageId;
+
+    protected override void OnParametersSet()
+    {
+        var stored = Pages.Select(p => new CmsSiteTree.Page(p.Id, p.ParentPageId, p.SortOrder, p.PageTitle)).ToList();
+        if (PageId is null)
+            stored.Add(new(NewPageId, null, int.MaxValue, string.IsNullOrWhiteSpace(NewTitle) ? "New page" : NewTitle.Trim()));
+        else if (stored.All(p => p.Id != PageId))
+            return;   // the list has not arrived yet
+
+        _pages = Value is { } chosen ? CmsSiteTree.Apply(stored, Current, chosen) : stored;
+        Rebuild();
+    }
+
+    private void Rebuild()
+    {
+        _nodes = [.. CmsSiteTree.InMenuOrder(_pages).Select(x => new CmsTreeNode
+        {
+            Id = x.Page.Id,
+            ParentId = x.Page.ParentPageId,
+            Text = x.Page.Title,
+            HasChildren = _pages.Any(p => p.ParentPageId == x.Page.Id),
+            IsCurrent = x.Page.Id == Current,
+            Depth = x.Depth,
+        })];
+        // Everything open: the point is to see the whole menu at once.
+        _expanded = [.. _nodes.Where(n => n.HasChildren)];
+    }
+
+    private CmsSiteTree.Placement? Nudged(CmsSiteTree.Nudge nudge)
+        => _pages.Any(p => p.Id == Current) ? CmsSiteTree.Nudged(_pages, Current, nudge) : null;
+
+    private Task NudgeAsync(CmsSiteTree.Nudge nudge)
+        => Nudged(nudge) is { } to ? MoveAsync(to) : Task.CompletedTask;
+
+    private void OnDragStart(TreeViewDragStartEventArgs args)
+    {
+        // Only this page moves; the others are what it is placed among.
+        if (args.Item is not CmsTreeNode { IsCurrent: true }) args.IsCancelled = true;
+    }
+
+    private async Task OnDropAsync(TreeViewDropEventArgs args)
+    {
+        if (args.Item is not CmsTreeNode { IsCurrent: true } || args.DestinationItem is not CmsTreeNode target
+            || target.Id == Current || args.DropPosition is not { } position)
+            return;
+
+        var place = position switch
+        {
+            Telerik.Blazor.TreeViewDropPosition.Before => CmsSiteTree.DropPlace.Before,
+            Telerik.Blazor.TreeViewDropPosition.After => CmsSiteTree.DropPlace.After,
+            _ => CmsSiteTree.DropPlace.Over,
+        };
+        await MoveAsync(CmsSiteTree.WhereDropped(_pages, Current, target.Id, place));
+    }
+
+    private async Task MoveAsync(CmsSiteTree.Placement to)
+    {
+        if (CmsSiteTree.WhyNot(_pages, Current, to.ParentPageId) is string refused)
+        {
+            _refusal = refused;
+            return;
+        }
+        _refusal = null;
+        _pages = CmsSiteTree.Apply(_pages, Current, to);
+        Rebuild();
+        await ValueChanged.InvokeAsync(CmsSiteTree.PlacementOf(_pages, Current));
+    }
+}

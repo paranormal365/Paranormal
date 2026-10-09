@@ -166,7 +166,8 @@ public sealed record OrgPublicPageResponse(
     IReadOnlyList<OrgPublicNavItem> NavPages);
 
 public sealed record OrgPublicLogoItem(Guid LogoId, Guid UploadFileId, string? AltText, int SortOrder);
-public sealed record OrgPublicPageItem(Guid Id, string PageTitle, string UrlName, bool IsHome, IReadOnlyList<OrgPublicSectionItem> Sections);
+/// <param name="IntroHtml">The page's Summary / Intro, cleaned; shown above its sections. Null or empty when there is none.</param>
+public sealed record OrgPublicPageItem(Guid Id, string PageTitle, string UrlName, bool IsHome, IReadOnlyList<OrgPublicSectionItem> Sections, string? IntroHtml = null);
 public sealed record OrgPublicSectionItem(Guid Id, CmsSectionType SectionType, string? Title, string ContentJson, int SortOrder);
 public sealed record OrgPublicNavItem(Guid Id, string PageTitle, string UrlName, Guid? ParentPageId, int SortOrder);
 
@@ -245,6 +246,14 @@ public sealed record CmsPageDetail(
 /// later leaves this page alone.
 /// </param>
 public sealed record CmsCreatePageRequest(string PageTitle, string UrlName, string? PageHtml, bool IsPublic, Guid? ParentPageId, int SortOrder, Guid? FromTemplateId = null);
+/// <summary>A page in the Ordering window's tree (GET …/pages/outline).</summary>
+public sealed record CmsOutlinePage(
+    Guid Id, Guid? ParentPageId, string PageTitle, string UrlName, int SortOrder,
+    bool IsPublished, bool IsPublic, IReadOnlyList<CmsOutlineSection> Sections);
+
+/// <summary>A section under its page in the Ordering window's tree.</summary>
+public sealed record CmsOutlineSection(Guid Id, CmsSectionType SectionType, string? Title, int SortOrder, bool IsActive);
+
 public sealed record CmsUpdatePageRequest(string PageTitle, string UrlName, string? PageHtml, bool IsPublished, bool IsPublic, Guid? ParentPageId, int SortOrder);
 public sealed record CmsCreateSectionRequest(CmsSectionType SectionType, string? Title, string ContentJson, int SortOrder, bool IsActive);
 public sealed record CmsUpdateSectionRequest(string? Title, string ContentJson, bool IsActive);

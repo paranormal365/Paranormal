@@ -90,6 +90,44 @@ public class PersonaDocCaptureTests : BenTestBase
             $"/organizations/{Id("orgId")}/tours/{Id("tourId")}/dates/{Id("tourDateId")}");
     }
 
+    /// <summary>
+    /// The owner's website editor (10/09/2026): the page list in menu order, the Ordering window, the section
+    /// kinds as pictures, and the visitor's menu with pages under pages. Run on its own so the rest of the
+    /// owner's screens need not be re-taken; new numbers, after 5f.
+    /// </summary>
+    [Test]
+    [Description("Captures the owner's website editor screens. Set BEN_PERSONA=owner.")]
+    public async Task CaptureWebsiteEditor()
+    {
+        if (Persona != "owner") Assert.Ignore("Set BEN_PERSONA=owner.");
+
+        await Page.SetViewportSizeAsync(1440, 900);
+        await Page.EmulateMediaAsync(new() { ColorScheme = ColorScheme.Dark });
+        var orgId = await OrgIdBySlugAsync("benco");
+        var token = await SuperAdminTokenAsync();
+        Assert.That(token, Is.Not.Null);
+        var site = await Ben.Web.Playwright.Capture.CmsSampleSite.EnsureAsync(ApiUrl, token!, orgId);
+
+        await LoginAsync(UserEmail, UserPassword);
+        await VisitAsync("5g-website-pages", $"/organizations/{orgId}/cms");
+
+        await SkipAnyTourAsync();
+        var dialog = Page.Locator(".modal.show");
+        await ClickUntilAsync(Page.Locator("#cms-ordering-open"), dialog.Locator("#cms-ordering-tree"));
+        await Page.SetViewportSizeAsync(1440, 1500);
+        await ShotAsync("5h-website-ordering");
+        await dialog.Locator("#cms-ordering-done").ClickAsync();
+
+        await Page.GotoAsync($"{BaseUrl}/organizations/{orgId}/cms/pages/{site["about-us"]}");
+        await WaitUntilLoadedAsync();
+        await ClickUntilAsync(Page.Locator("#cms-add-section"), Page.Locator("#cms-section-editor"));
+        await Page.Locator("#cms-section-type-picker [data-section-type=RichText]").ClickAsync();
+        await ShotAsync("5i-website-section-kinds");
+        await Page.SetViewportSizeAsync(1440, 900);
+
+        await VisitAsync("5j-website-visitor-menu", "/o/benco/our-team");
+    }
+
     [Test]
     [Description("Captures one persona's view of the site. Set BEN_PERSONA.")]
     public async Task CaptureThisPersona()

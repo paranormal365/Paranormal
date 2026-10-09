@@ -6,27 +6,26 @@ audience: OrganizationAdministrator
 order: 60
 ---
 
-Visible to owners and administrators of a group. Managers and members work cases but do not
-configure the group itself.
+This page is for owners and administrators of a group. Managers and members work on cases, but
+they don't configure the group itself.
 
 **Where the tabs are.** On a computer, a group's sections — Details, Members, Cases, Settings and
-the rest — are the **menu card on the left** while you are anywhere inside the group, with
-**← Your groups** at the top. On a phone they are **tabs** along the top of the group's page. They
-are the same sections either way, offered by the same rules, and this guide calls them tabs. Open
-one of the group's events and the card becomes that event's own menu, with the group's name at the
-top to take you back.
+the rest — appear in the **menu card on the left** whenever you are inside the group, with
+**← Your groups** at the top. On a phone they are **tabs** along the top of the group's page. The
+sections and who can see them are the same either way, and this guide calls them tabs. When you
+open one of the group's events, the card switches to that event's own menu, with the group's name
+at the top to take you back.
 
 ## Group settings
 
-Everything a group can configure lives on the **Settings** tab, and there is a lot of it: billing,
+Everything a group can configure is on the **Settings** tab, and there is a lot of it: billing,
 promotion, feed attribution, address display, media privacy, the kind of group you are, walking
-tours, the role new members start on, calendar event types, member titles, investigation duties
+tours, the role new members start with, calendar event types, member titles, investigation duties
 and the duty eligibility matrix.
 
-The row of buttons at the top of the tab jumps to each of those in turn. Nothing is hidden behind
-them — the whole page is still one page you can read top to bottom — they are there so you can
-find out in one glance whether the thing you came to change is on this screen, and go straight to
-it if it is.
+The row of buttons at the top of the tab jumps to each of those sections. They don't hide
+anything — it is still one page you can read from top to bottom — but they let you see at a glance
+whether the setting you want is on this screen, and jump straight to it.
 
 The group's **Edit** screen — the button beside the group's name, not the Settings tab — holds its
 public identity: name, URL, contact details, and two switches worth understanding.
@@ -41,18 +40,18 @@ punctuation are refused, and a handful of words the site uses itself are reserve
 
 No two groups can share an address, and **you can change yours whenever you like**. When you do:
 
-- **The old address keeps working.** Every link anyone has already shared still opens your pages —
-  visitors are simply moved along to the new address, so what they copy next is the current one.
-- **The old address stays yours.** No other group can take it later, even years on. Pointing
-  somebody's saved link at a different group would be worse than the link not working at all.
+- **The old address keeps working.** Any link people have already shared still opens your pages.
+  Visitors are sent on to the new address, so the next link they copy is the current one.
+- **The old address stays yours.** No other group can ever take it, so a saved link will never
+  lead someone to a different group.
 
-So changing your address is safe. Changing it often is still worth avoiding, because the address is
-what people remember.
+So changing your address is safe. Still, try not to change it often, because the address is what
+people remember.
 
-**Let clients see members' private photos** is one half of a two-key rule. Turning it on shares
-nothing by itself; it only permits members who have *also* opted in on their own profile. This is
-deliberate: a group cannot volunteer its members' faces, and a member cannot overrule a group that
-has decided its people stay unidentified to clients.
+**Let clients see members' private photos** needs agreement from both sides. Turning it on doesn't
+share anything by itself; it only allows photos from members who have *also* opted in on their own
+profile. A group can't share its members' faces without their say, and a member can't override a
+group that has decided to keep its people anonymous to clients.
 
 ## Members and roles
 
@@ -60,10 +59,9 @@ has decided its people stay unidentified to clients.
 *Members and their roles. Roles decide what each person may do inside the group.*
 
 **People who have left do not appear here.** When somebody closes their account, or has it closed
-for them, they drop off this list straight away — there is nothing useful left to do with the row,
-since a closed account cannot be given a role, invited, or asked to do anything. Everything they
-recorded for the group stays exactly where it was, signed "A former member", so the group's record
-of its own work is unaffected.
+for them, they drop off this list right away, since a closed account can't be given a role,
+invited, or asked to do anything. Everything they recorded for the group stays where it was,
+signed "A former member", so your group's records stay complete.
 
 | Role | Typically |
 |---|---|
@@ -73,128 +71,127 @@ of its own work is unaffected.
 | Member | Works cases and attends investigations. |
 | Viewer | Reads without changing anything. |
 
-A **Viewer** reads and never changes anything, whatever roles or permissions they are given: roles can widen what they
-may *see*, never what they may do. They can read the calendar and the group's messages, but cannot add, move or delete an
-event, send a message, schedule or change an investigation, add to a timeline, or vote on a request. To let somebody
-contribute, make them a Member.
+A **Viewer** can read but never change anything, whatever roles or permissions they are given:
+roles can widen what they can *see*, never what they can do. They can read the calendar and the
+group's messages, but they can't add, move or delete an event, send a message, schedule or change
+an investigation, add to a timeline, or vote on a request. To let somebody contribute, make them a
+Member.
 
 ## The roles every group starts with
 
 Every group begins with seven ready-made roles — **Case Manager Role, Equipment Manager Role,
-CMS Manager Role, Client Manager Role, Content Manager Role, Historian Role, Secretary Role** —
-each a starting point you can edit, rename, or delete like any role you build yourself. The
-"Role" suffix is deliberate: member *titles* (the ladder below) say how senior somebody is,
-roles say what they may do, and the naming keeps the two impossible to confuse.
+CMS Manager Role, Client Manager Role, Content Manager Role, Historian Role, Secretary Role**.
+Each is a starting point you can edit, rename, or delete, just like a role you build yourself.
+Their names end in "Role" so they are never confused with member *titles* (the ladder below):
+a title says how senior somebody is, and a role says what they can do.
 
-Every group also has an **Investigator Role** — read the group's cases and investigations — which
-is the one an ordinary member needs to do anything at all.
+Every group also has an **Investigator Role**, which lets a member read the group's cases and
+investigations. An ordinary member needs it to do anything at all.
 
 ## What new members start with
 
-**Settings → New members start as** decides which role somebody is given the moment they join,
-whether you added them yourself or accepted their application. A new group starts on
-**Investigator Role**, which is what lets a member open the cases they are put on.
+**Settings → New members start as** decides which role somebody gets the moment they join,
+whether you added them yourself or accepted their application. A new group starts with
+**Investigator Role**, which is what lets a member open the cases they are assigned to.
 
-This matters more than it sounds. A membership rank alone opens nothing below Administrator: a
-Manager, Member or Viewer with no role can be named on a visit roster and see the group's cases
-listed on their desk, and every one of those links will refuse them. Owners and administrators
-are skipped, because their rank already opens everything.
+This matters more than it sounds. Below Administrator, a membership rank on its own opens nothing.
+A Manager, Member or Viewer with no role can be named on a visit roster and see the group's cases
+listed on their desk, but every one of those links will turn them away. Owners and administrators
+aren't affected, because their rank already opens everything.
 
-You can set it to **Nothing** and hand out roles yourself. Groups that existed before this
-setting arrived have it set to nothing, so nothing changed for them.
+You can set it to **Nothing** and hand out roles yourself. Groups created before this setting was
+added have it set to nothing, so nothing changed for them.
 
-Changing it applies to people who join **from then on**. It never reaches back into your existing
-roster — a setting that silently re-permissioned everybody would be a worse surprise than the one
-it prevents. To change what somebody already has, use their entry on the Members screen.
+A change applies only to people who join **from then on**. It never changes the roles of people
+already in your group. To change what an existing member has, use their entry on the Members
+screen.
 
 ## What role grants open today
 
-**Since the enforcement flip:** reading the group's cases and investigations follows role
-grants, not bare membership. Everyone who was already an ordinary member when the flip arrived
-holds the Investigator Role and noticed nothing; a member without any case-reading role no
-longer sees the Cases and Investigations tabs at all — the tabs and the server give the same
-answer. Owners and administrators always see everything.
+Reading the group's cases and investigations depends on role grants, not just membership.
+Existing ordinary members were given the Investigator Role, so nothing changed for them. A member
+without any role that lets them read cases doesn't see the Cases and Investigations tabs at all.
+Owners and administrators always see everything.
 
-Three of the role editor's sections started doing real work with the roles arc's Phase B:
-**Cases** (creating a case, and editing one you don't manage), **Client Requests** (accepting or
-declining what clients send in), and **Calendar** (event types, and managing other people's
-attendance). Each is strictly additive: owners and administrators keep everything they had, and
-a role grant now opens the same doors for the members who hold it. Nothing was taken from
-anyone — the grants only add. The remaining sections' grants become decisive as the later
-phases land; each section's own description says where it stands.
+Three sections of the role editor are now in effect: **Cases** (creating a case, and editing one
+you don't manage), **Client Requests** (accepting or declining what clients send in), and
+**Calendar** (event types, and managing other people's attendance). These grants only add
+access: owners and administrators keep everything they had, and members who hold the grant can
+now do the same things. Grants in the other sections will take effect later; each section's own
+description says whether it is in effect yet.
 
 ## Banners for work that blocks other people
 
 When a client's investigation request or a membership application is waiting on your group, a
-banner appears under the site-wide announcement on every page — for you and anyone else whose
-permissions let them open that queue, and for nobody else. Each banner names the group and the
-waiting count and links straight to the tab where you act. Dismissing one keeps it away for the
-rest of your session; a new arrival brings it back.
+banner appears under the site-wide announcement on every page. Only you and others whose
+permissions let them open that queue see it. Each banner names the group, shows how many items
+are waiting, and links straight to the tab where you deal with them. If you dismiss a banner, it
+stays hidden for the rest of your session, but it comes back when something new arrives.
 
 ## Having a plan, and not having one
 
-A group is free by **having no plan at all**, not by being on a free one. There is no such thing
-as a free group plan: an individual can be free, a group cannot.
+A group is free by **having no plan at all**, not by being on a free plan. There is no free
+group plan: an individual can be free, but a group can't.
 
-With no plan a group can do public work — public cases, public investigations, results anyone can
-read. A plan is what lets it work with other people, take private-residence and client cases, and
-keep its own sessions to itself.
+With no plan, a group can do public work — public cases, public investigations, and results
+anyone can read. A plan lets it work with other people, take private-residence and client cases,
+and keep its own sessions private.
 
-The price is set by how many members the group has, and the **Billing** screen under Settings shows
-the band you are in and what it costs. If the price list has no charge for a group your size, that
-screen says there is nothing to buy rather than offering you a plan for nothing.
+The price depends on how many members the group has. The **Billing** screen under Settings shows
+which band you are in and what it costs. If the price list has no charge for a group your size,
+that screen tells you there is nothing to buy, rather than offering you a plan for nothing.
 
 ### With no plan, work at a public place is public
 
-This is the bargain, and it is the same one the field archive has always made: what a free account
-records at a public location joins that location's own page, where anybody can read it. One group's
-night at a landmark is an anecdote. The same landmark recorded by eleven groups is a record worth
-having, and free accounts are what fill it.
+This is the trade-off, and it matches how the field archive has always worked: what a free account
+records at a public location appears on that location's own page, where anyone can read it. One
+group's night at a landmark is a single story. Records from eleven groups at the same landmark
+are worth having, and free accounts are what build them.
 
-So on a group with no plan:
+So for a group with no plan:
 
-- A case you open is **public from the start**, and the **Make Public** box on the Edit Case page
-  is ticked and cannot be unticked. The page says why, beside the box.
+- A case you open is **public from the start**. The **Make Public** box on the Edit Case page is
+  checked and can't be unchecked, and a note beside the box explains why.
 - A visit to a public location is shared with **everyone**, and the narrower sharing choices are
   not offered.
-- A session you publish to a place's archive cannot be taken back out.
+- A session you publish to a place's archive can't be removed later.
 
-**A private residence is never touched by any of this.** Somebody's home is client work, it belongs
-to the paid lane, and publishing what happens inside it is theirs to agree to. A missing
-subscription is not their consent.
+**None of this ever applies to a private residence.** Somebody's home is client work, which
+belongs to paid plans, and only the client can agree to publishing what happens there. Not having
+a plan doesn't count as their consent.
 
-A plan is what makes your work yours: you choose what to publish, you can narrow a visit's audience
-afterwards, and you can take a published session back out of the archive. **Nothing already private
-is changed by this.** A case that was private before your plan lapsed stays private, and you can go
-on saving it — the rule applies to new work, the same way the member limit never removes anybody
-already in your group.
+A plan gives you control of your work: you choose what to publish, you can narrow a visit's
+audience later, and you can remove a published session from the archive. **Nothing that is
+already private changes.** A case that was private before your plan lapsed stays private, and you
+can keep saving it. The rule applies only to new work, just as the member limit never removes
+anyone already in your group.
 
 ## Custom-role permissions and your plan
 
 Each subscription plan includes custom-role permissions for a set of areas — cases, calendar,
-files, and so on — and the **Pricing** page lists exactly which areas each plan includes, so
-what an upgrade buys is never a surprise. Most plans include everything; when yours excludes an
-area, the role editor says so rather than hiding it:
+files, and so on. The **Pricing** page lists exactly which areas each plan includes, so you know
+what an upgrade gets you. Most plans include everything. When yours leaves an area out, the role
+editor shows it rather than hiding it:
 
-- Sections the plan does not include are **grayed out with their toggles disabled**, under a
+- Sections your plan doesn't include are **grayed out with their toggles disabled**, under a
   note naming the areas and the plan.
-- **Nothing is deleted.** Grants you configured in an excluded area are kept exactly as you set
-  them — the note counts them — and apply again the moment a plan change includes the area. A
-  downgrade pauses; it never erases.
-- The rule holds server-side too: a save can change only the sections your plan includes, and
-  everything else is carried forward untouched.
+- **Nothing is deleted.** Grants you set up in an excluded area are kept exactly as they were —
+  the note shows how many — and they apply again as soon as a plan change includes that area. A
+  downgrade pauses them; it never erases them.
+- Saving works the same way: a save can change only the sections your plan includes, and
+  everything else is kept as it was.
 
-When an administrator changes what a plan includes, groups on that plan are told: newly included
-areas are announced right away, and removals arrive as a notice — before the renewal that
-applies them for paid groups. Owners and group administrators are unaffected by area
-exclusions, exactly as they are unaffected by role grants: they always hold every permission.
+When a site administrator changes what a plan includes, groups on that plan are told. Newly
+included areas are announced right away. Removals arrive as a notice, and for paid groups that
+notice comes before the renewal that applies them. Area exclusions never affect owners and group
+administrators, just as role grants don't: they always hold every permission.
 
 ## Member titles — the ladder
 
-Separate from roles, on purpose: a **title** says how senior somebody is in the group — a
-**role** says what they may do. The two never mix. Giving somebody a grander title changes
-nothing about what they can access, and a brand-new member with the right role can do things a
-ten-year veteran without it cannot.
+Titles are separate from roles. A **title** says how senior somebody is in the group; a **role**
+says what they can do. The two never mix. Giving somebody a grander title doesn't change what
+they can access, and a brand-new member with the right role can do things a ten-year veteran
+without it can't.
 
 Every group starts with the same five-rung ladder — **Probationary, Junior Investigator,
 Investigator, Senior Investigator, Lead Investigator** — and it is entirely yours to change:
@@ -209,71 +206,72 @@ earned per group.
 
 ## Investigation duties
 
-Under **Settings → Investigation duties** lives the list of jobs your group hands out per visit
-— every group starts with Lead Investigator, Equipment, Equipment Assist, Evidence Collection and
-Documentation, and the list is yours: rename, add, retire. A duty marked **one holder** (like the
-lead) can only be held by a single person per visit; assigning it to someone takes it from the
-previous holder.
+**Settings → Investigation duties** holds the list of jobs your group hands out for each visit.
+Every group starts with Lead Investigator, Equipment, Equipment Assist, Evidence Collection and
+Documentation, and you can rename them, add your own, or retire any of them. A duty marked **one
+holder** (like the lead) can be held by only one person per visit; assigning it to someone takes
+it away from the previous holder.
 
-Equipment comes as two jobs on purpose. Assisting with the gear is something a newer member can
-do long before they are the one running it, and one combined duty cannot say that.
+Equipment is split into two jobs because a newer member can help with the gear long before they
+are ready to run it.
 
 ## Who may hold which duty
 
-Under the duty list sits the grid: your titles across the top, your duties down the side. Tick the
-titles each duty is open to. A new group starts with this filled in — an Associate can document
-and assist with equipment, a Junior Investigator adds evidence collection, an Investigator runs
-the equipment, and the Lead Investigator duty is open to your two most senior rungs.
+Below the duty list is a grid, with your titles across the top and your duties down the side.
+Check the titles each duty is open to. A new group starts with this filled in: an Associate can
+handle documentation and assist with equipment, a Junior Investigator can also collect evidence,
+an Investigator can run the equipment, and the Lead Investigator duty is open to your two most
+senior titles.
 
-The ask stays deliberately soft. Whoever manages a visit can assign past it with an explicit
-*Assign anyway*, and the exception is marked on the assignment — the senior calls in sick and the
-capable junior steps up, and a hard wall would just send the group back to organizing by text
-message.
+The grid is a guideline, not a hard rule. Whoever manages a visit can override it by choosing
+*Assign anyway*, and the assignment is marked as an exception. If a senior member calls in sick, a
+capable junior can step up without the group falling back to organizing by text message.
 
-Two exceptions to that.
+There are two exceptions.
 
-**A duty that carries something under *On the night* takes an owner or administrator to assign
-past.** Handing somebody point of contact, or the right to hand out the other duties, is a
-different act from handing them a label, and the person given it could then make exceptions of
-their own. Whoever is running the visit can still assign it to anybody the duty is already open
-to; it is only the exception that needs the extra pair of hands.
+**Only an owner or administrator can override the grid for a duty that has something checked
+under *On the night*.** Making somebody the point of contact, or letting them hand out the other
+duties, gives them real authority, including the power to make exceptions of their own. Whoever is
+running the visit can still assign the duty to anyone the grid already allows; only overriding the
+grid needs an owner or administrator.
 
-**Tick *no exceptions* on the few duties where the title is a real qualification** rather than a
+**Check *no exceptions* on the few duties where the title is a real qualification** rather than a
 preference — certified equipment, or being the client's point of contact inside their home. Then
-nobody can assign past it on the night, not even an owner. The way to change it is to change this
-grid, which is a deliberate and visible act rather than a decision taken at nine o'clock at a site.
+nobody can override the grid during the visit, not even an owner. To change it, you change this
+grid, so the decision is deliberate and visible rather than made on the spot at a site.
 
-A duty whose row is untouched says so, and falls back to the older **minimum title** setting on
-the duty itself — "asks for Investigator or above". That is the single-threshold version of the
-same idea, and nothing changed for groups that were already using it.
+A duty whose row you haven't filled in says so, and uses the older **minimum title** setting on
+the duty itself instead — for example, "asks for Investigator or above". That setting works the
+same way with a single threshold, and it still works as before for groups already using it.
 
 ### On the night
 
-Two of the columns are not about who may hold the duty but about what holding it lets somebody do,
+Two of the columns aren't about who can hold the duty, but about what holding it lets somebody do,
 **for that one visit only**:
 
-- **Point of contact** — the person to call about this visit. It shows on the roster so the group,
-  and the client, can see who is answerable that night.
-- **Hands out duties** — may give and take back the other duties on this visit, without being able
-  to change anything else about it.
+- **Point of contact** — the person to call about this visit. It shows on the roster so the group
+  and the client can see who is responsible that night.
+- **Hands out duties** — can assign and remove the other duties on this visit, but can't change
+  anything else about it.
 
-Both end when the visit does. Duties still grant no standing permissions: what somebody may do in
-the group as a whole is decided by roles, under **Roles & permissions**, and a duty can only ever
-open a door that the roles left shut for this one night. It can never close one.
+Both end when the visit does. Duties never grant lasting permissions: what somebody can do in the
+group as a whole is decided by roles, under **Roles & permissions**. A duty can only add access the
+person's roles don't already give them, and only for that one visit. It can never take access
+away.
 
 ## The Investigations tab
 
-Every visit the group has run, mapped and listed, including ones that belong to no client case.
-It is visible to every member, not only administrators — knowing where the group has worked is
-ordinary team knowledge, not an administrative secret.
+This tab maps and lists every visit the group has run, including ones that aren't part of a client
+case. Every member can see it, not only administrators, because knowing where the group has worked
+is ordinary team knowledge.
 
 **Schedule an investigation** books a visit with no case behind it. What the group finds there is
 shared under the same rules as any other investigation.
 
 ## Who can change an investigation
 
-Being a member is enough to *read* an investigation and to answer for yourself — your own RSVP and
-your own arrival. Changing the record itself is narrower. Any one of these is enough:
+Any member can *read* an investigation and respond for themselves — their own RSVP and their own
+arrival. Fewer people can change the investigation itself. Any one of these is enough:
 
 - whoever scheduled it
 - the case manager, for a visit attached to a case
@@ -281,31 +279,31 @@ your own arrival. Changing the record itself is narrower. Any one of these is en
 - group owners and administrators
 - anyone the group has granted the **Investigation** permission under **Roles**
 
-That last one is the lever you have as an administrator. Grant a role the *Update* action on
-**Investigation**, give somebody that role, and they can edit any of the group's investigations
-without being made an administrator of everything else.
+That last option is the one you control as an administrator. Give a role the *Update* action on
+**Investigation**, assign somebody that role, and they can edit any of the group's investigations
+without becoming an administrator of everything else.
 
-**Leading a visit is not a rank.** It is set per investigation, in the **Lead** column of the
-investigation's team list, and it ends with that visit. One person leads at a time — naming a lead
-takes it from whoever held it — and the current lead can hand it on, which is what happens when
-somebody leaves halfway through the night. Somebody senior enough to lead every visit is better
-served by the permission above; somebody leading one Saturday is better served by the lead flag,
-which stops mattering on Sunday.
+**Leading a visit is not a rank.** It is set for each investigation, in the **Lead** column of the
+investigation's team list, and it ends with that visit. Only one person leads at a time — naming a
+new lead takes it from the old one — and the current lead can hand it over, for example when they
+have to leave partway through the night. For somebody senior enough to lead every visit, use the
+permission above. For somebody leading just one Saturday, use the lead flag, which no longer
+matters by Sunday.
 
 ## Guest codes
 
-**A phone on the night that isn't yours.** Some nights the people with the useful phones are not in your group. A walk-up at a tour, a
-homeowner's relative who came along, a volunteer somebody brought, a class on an open night. Their
-photographs and recordings used to be lost to you, because getting them in meant inviting them,
-waiting for an email, and adding them to something.
+**A phone on the night that isn't yours.** Some nights, the people with useful phones aren't in
+your group: someone who walks up during a tour, a homeowner's relative who came along, a volunteer
+somebody brought, a class on an open night. Without a guest code, getting their photos and
+recordings means inviting them, waiting for an email, and adding them to something.
 
 A **guest code** replaces all of that with a sheet you hold up.
 
-Open **Investigations**, find the visit, and press **Guest code**. You get a square code to scan
-and a short code — something like `H4KP-9RQT` — printed beside it. Show it on a tablet, hold up a
+Open **Investigations**, find the visit, and press **Guest code**. You get a square code to scan,
+with a short code — something like `H4KP-9RQT` — printed beside it. Show it on a tablet, hold up a
 phone, or print it and pin it to the gate.
 
-Anybody who scans it is asked to sign in, and then they are on tonight's investigation.
+Anyone who scans it is asked to sign in, and then they are part of tonight's investigation.
 
 ![The sheet a guide holds up](help-media:organization-administration/guest-code.png)
 
@@ -316,123 +314,124 @@ A guest code is not a way into your group. Somebody holding one can:
 - send you photographs, audio, video and readings against **this one investigation**
 - see what **they** sent
 
-They cannot see the case, the client, the address, what anybody else recorded, or anything at all
-once the night is over. Nothing they get expires into membership: when the code stops working, so
-does everything it gave them.
+They can't see the case, the client, the address, or what anyone else recorded, and they can't see
+anything at all once the night is over. A guest code never turns into membership: when the code
+stops working, so does everything it gave them.
 
 ### Ending the night, and stopping one person
 
-Two different buttons, on purpose.
+These are two different buttons.
 
-**New code** prints a fresh sheet and retires the last one — this is what you press when a sheet
-was left on a pub table. Everybody who already scanned the old one *keeps working*, because they
-are standing in the building and deleting their evening is not the remedy.
+**New code** prints a fresh sheet and retires the old one — use it when a sheet was left behind on
+a bar table. Everyone who already scanned the old code *keeps working*, because they are still
+there with you, and cutting them off isn't the fix.
 
 **End the night** stops the code and every pass it gave out, all at once.
 
-To stop **one** phone, use the cross beside that person in **Working tonight**. Everybody else
-carries on, and you do not have to reprint anything. What they already sent up stays — this stops
-them adding more, it does not erase what happened.
+To stop **one** phone, use the cross beside that person in **Working tonight**. Everyone else
+carries on, and you don't have to reprint anything. What they already sent stays — this stops them
+adding more, but it doesn't erase anything.
 
 ### If the code has run out
 
-A code stops working by itself after about half a day, and never lasts more than a day, whatever
-you ask for. A sheet that still opened something the following March would be worse than no sheet
-at all. Press **New code** and show the new one.
+A code stops working on its own after about half a day, and never lasts more than a day, whatever
+you set. That way an old sheet can't open anything months later. Press **New code** and show the
+new one.
 
 ### Somebody who has just installed the app
 
-The short code is there for exactly this. A phone that scans the square code without the app
-installed goes to the App Store, and the app it installs has no way of knowing what was scanned.
-So tell them to open the app, or go to the address on the sheet, and type the short code instead.
+This is what the short code is for. If someone scans the square code without the app installed,
+their phone goes to the App Store, and the newly installed app can't tell what was scanned. So ask
+them to open the app, or go to the address on the sheet, and type the short code instead.
 
 ## Being found by clients
 
 A client looking for help searches by where they are. Your group appears in that search only when
-all three of these are true, and the **Clients** tab beside Requests is where the first two live.
+all three of these are true. You'll find the first two on the **Clients** tab beside Requests.
 
-- **You are taking client cases.** New groups set this when they are created. A group that is not
-  taking cases is left out of client search entirely, which is the right answer when you only work
+- **You are taking client cases.** New groups set this when they are created. A group that isn't
+  taking cases is left out of client search entirely, which is what you want if you only work on
   your own investigations.
-- **You have an operating area.** A town or city and a radius. Without it the site has no way to
-  decide whether you are near anybody, so it cannot offer you to anyone.
-- **The group is listed.** Unlisted is on the **Edit** screen and keeps you out of search, browse
-  and nearby results — including client search.
+- **You have an operating area.** This is a town or city and a radius. Without it, the site can't
+  tell whether you are near anybody, so it can't suggest you to anyone.
+- **The group is listed.** The Unlisted setting is on the **Edit** screen. It keeps you out of
+  search, browse and nearby results — including client search.
 
 You can also choose whether to **accept clients outside your area**. Those clients still see you,
-below the groups whose area covers them.
+listed below the groups whose area covers them.
 
-If you are taking cases but one of the other two is missing, the group page says so at the top.
-That notice is the usual reason a group waits a long time for a first request.
+If you are taking cases but one of the other two is missing, a notice at the top of the group page
+tells you. That is the most common reason a group waits a long time for its first request.
 
 ## Incoming requests
 
 Client requests arrive under the group's **Requests**. Mark one as under review while you decide.
-Declining tells the client, and lets them send it elsewhere without rewriting it.
+If you decline, the client is told, and they can send the request to another group without
+rewriting it.
 
 ## The group calendar
 
 ![The group calendar](help-media:organization-administration/calendar.png)
-*The calendar carries investigations and the group's own events.*
+*The calendar shows investigations and the group's own events.*
 
-The group's **Calendar** holds meetings, training, anything with a time attached. Investigations
-are scheduled from the case they belong to, not here.
+The group's **Calendar** holds meetings, training, and anything else with a time attached.
+Investigations are scheduled from the case they belong to, not here.
 
-**Moving an event.** Drag an event to another day or time, or drag its end to make it longer or shorter. A line above the
-calendar says where it went, with **Undo**. A repeating event is moved from its editor instead, because dragging one date
-would move every date in the series. Deleting an event — with the ✕ on it or **Delete** in its editor — asks first.
+**Moving an event.** Drag an event to another day or time, or drag its end to make it longer or
+shorter. A line above the calendar tells you where it moved, with an **Undo** button. To move a
+repeating event, use its editor instead, because dragging one date would move every date in the
+series. Deleting an event — with the ✕ on it or **Delete** in its editor — asks you to confirm
+first.
 
-**Where it happens.** Type a free-text location, or pick one of the group's saved addresses. Prefer
-the saved address: it is stored as a reference rather than copied text, so correcting the address
-once corrects every event held there. A **meeting link** can sit alongside it — paste a Zoom, Teams
-or Meet join link, and a bare `zoom.us/j/123` is accepted as readily as the full URL.
+**Where it happens.** Type a location, or pick one of the group's saved addresses. A saved address
+is better: if you correct it once, every event held there is corrected too. You can also add a
+**meeting link** — paste a Zoom, Teams or Meet join link. A short link like `zoom.us/j/123` works
+just as well as the full URL.
 
 **Repeating events.** The **Repeats** list covers the usual patterns — daily, weekly, monthly, and
-so on. **Custom** takes an iCal rule directly (`FREQ=WEEKLY;BYDAY=TU`) for a pattern the list does
-not cover.
+so on. For a pattern the list doesn't cover, **Custom** accepts an iCal rule directly
+(`FREQ=WEEKLY;BYDAY=TU`).
 
-**Invites.** A public event is open to the whole group by definition, so invites appear only on a
-non-public one. Tick members from the list, or type an email address to invite somebody outside the
-group. That lookup only finds addresses their owner has published *and confirmed* on their own
-profile — never the private address someone signs in with. If an address does not resolve, the
-person either has no account or has not published that address; ask them rather than guessing at
-another spelling.
+**Invites.** A public event is already open to the whole group, so invites appear only on events
+that aren't public. Check members from the list, or type an email address to invite somebody
+outside the group. The lookup only finds addresses that people have published *and confirmed* on
+their own profile — never the private address they sign in with. If an address isn't found, the
+person either has no account or hasn't published that address. Ask them for the right one rather
+than guessing at another spelling.
 
-Invites are invitations, nothing more. Assigning work belongs to investigations, where it already
-exists.
+Invites are just invitations. To assign work, use investigations.
 
 ## Calendar event types
 
-Under **Settings**, *Calendar Event Types* is the list the calendar's **Type** dropdown offers —
-Investigation, Meeting, Training, whatever the group actually does. A group with no types can
-still create events; the events simply have no type.
+Under **Settings**, *Calendar Event Types* is the list of choices in the calendar's **Type**
+dropdown — Investigation, Meeting, Training, or whatever your group actually does. A group with no
+types can still create events; they just won't have a type.
 
-Each type carries a name, an optional color and icon, and a sort order that decides where it sits
-in the dropdown. Only owners and administrators can change the list.
+Each type has a name, an optional color and icon, and a sort order that sets its place in the
+dropdown. Only owners and administrators can change the list.
 
-Clear **Active** to retire a type. It disappears from the dropdown for new events but stays on the
-events that already use it — which is almost always what you want. Deleting one removes it from
-those events too, leaving their date and title untouched.
+Clear **Active** to retire a type. It disappears from the dropdown for new events but stays on
+events that already use it, which is almost always what you want. Deleting a type removes it from
+those events as well, but leaves their date and title as they are.
 
 ## The Equipment tab
 
-Two lists, because a group deals with two kinds of gear.
+There are two lists, because a group deals with two kinds of gear.
 
-**The group's gear** is equipment the group itself owns. Every member can see the list — what the
-group has is not a secret from the people who use it — but adding, editing and deleting it needs
-the **Equipment** permission, and so does seeing serial numbers.
+**The group's gear** is equipment the group itself owns. Every member can see the list, but adding,
+editing and deleting items needs the **Equipment** permission, and so does seeing serial numbers.
 
-Each piece tracks who is holding it, when it was last serviced, whether it is currently faulty, and
-its photos.
-**Held by** can be set by hand: kit gets passed over in a parking lot without anyone opening the app,
-and the record should still be able to tell the truth. A holder has to be an active member.
+Each piece tracks who has it, when it was last serviced, whether it is currently faulty, and its
+photos.
+**Held by** can be set by hand, because gear often changes hands in a parking lot without anyone
+opening the app. The holder must be an active member.
 
-**History** on a piece opens two things: the full account of everything that has happened to it —
-loans, requests for more time, service and faults, newest first — and the service log itself, where
-new entries are added.
+**History** on a piece opens two things: a full record of everything that has happened to it —
+loans, requests for more time, service and faults, newest first — and the service log, where you
+add new entries.
 
-The service log part is what you write to. Anyone can read it; adding an entry needs the
-Equipment permission. The entry type does real work rather than just labeling the note:
+Anyone can read the service log; adding an entry needs the Equipment permission. The entry type
+you choose also updates the item:
 
 | Entry | What it does to the item |
 |---|---|
@@ -443,52 +442,51 @@ Equipment permission. The entry type does real work rather than just labeling th
 The entry and its consequence are saved together, so the log never disagrees with the piece it
 describes. Entries are kept — fixing a fault does not erase the report of it.
 
-Once a piece has any loan or service history, deleting it is refused and you are asked to
-**retire** it instead — the button sits in the item editor. Retired gear drops out of borrowing,
-out of the public catalog and out of the group list, while everything that happened to it stays
-readable. You can put it back in service the same way. Destroying a serial-numbered asset would
-take the account of what happened to it along too.
+Once a piece has any loan or service history, you can't delete it; you are asked to **retire** it
+instead, using the button in the item editor. Retired gear is removed from borrowing, from the
+public catalog and from the group list, but its full history stays readable. You can put it back
+in service the same way. This keeps the record of a serial-numbered item from being lost.
 
 **Members' shared gear** is the second list: equipment members own personally and have chosen to
-show this group. It is read-only here — it belongs to its owner — and it needs no permission to
-read, because the sharing itself is the owner's decision, not the group's to gate. Serial numbers
-stay with owners even here.
+show this group. It is read-only here, because it belongs to its owner. No permission is needed to
+see it, since sharing it was the owner's choice. Serial numbers stay private to their owners, even
+here.
 
-The **Borrowing** column says whether a piece can be borrowed at all, which is a separate choice
+The **Borrowing** column says whether a piece can be borrowed at all. That is a separate choice
 from sharing it — a member can let the group know they own something without offering to lend it.
-Whether a particular piece is offered to the group or only lent personally is shown when you
-actually ask to borrow it, since that is the point at which the difference matters.
+Whether a piece is lent to the group or only to individuals is shown when you ask to borrow it.
 
 A shared piece disappears from this tab if its owner leaves the group. Their sharing choice is
-kept, so it comes back if they rejoin.
+saved, so it comes back if they rejoin.
 
 ## The two equipment permissions
 
-Under **Roles**, equipment has two entries, and the second sits underneath the first because it is
-narrower:
+Under **Roles**, equipment has two entries. The second is listed under the first because it covers
+less:
 
 - **Equipment** — manage what the group owns: add and edit gear, upload its photos, keep its
-  service log, set who is holding a piece, and see serial numbers. Read access to the list needs
-  nothing at all beyond membership.
+  service log, set who is holding a piece, and see serial numbers. Any member can view the list
+  without it.
 - **Equipment Checkouts** — run the loans desk: approve and deny borrowing requests, hand gear over
-  and receive it back. This is the "Equipment Management" job in item #55's own words.
+  and check it back in.
 
-They are separate so a group can hand someone the loans desk without also handing them the catalog.
-Deciding what the group buys and owns, and lending out what it already has, are different jobs and
-often different people. Granting **Equipment** does not grant **Equipment Checkouts**.
+They are separate so you can put someone in charge of loans without also putting them in charge of
+the catalog. Deciding what the group buys and owns, and lending out what it already has, are
+different jobs, often done by different people. Granting **Equipment** does not grant **Equipment
+Checkouts**.
 
-Neither permission has any say over a member's personal gear. A loan of somebody's own equipment is
-always approved by its owner.
+Neither permission covers a member's personal gear. A loan of somebody's own equipment is always
+approved by its owner.
 
 ## The Files tab
 
-The group's file library: upload directly, or pull in a member's own file with **Share from
-User**. That button opens a picker listing everything the group could take a copy of — files
-their owners have shared with your group first, then public files — with search, a type
-filter, and thumbnail or list views. Choosing one copies it into the group's library; shared
-files arrive **private by default**, and someone with publish permission approves them before
-they ever appear publicly. The original stays the owner's: only a file's owner can delete it,
-and a group removing its copy never touches the member's own file.
+This is the group's file library. Upload files directly, or bring in a member's own file with
+**Share from User**. That button opens a picker listing every file the group can copy — first the
+files their owners have shared with your group, then public files — with search, a type filter, and
+thumbnail or list views. Choosing one copies it into the group's library. Shared files arrive
+**private by default**, and someone with publish permission has to approve them before they appear
+publicly. The original still belongs to its owner: only the owner can delete it, and removing the
+group's copy never affects the member's own file.
 
 ### Editing a photo
 
@@ -501,8 +499,8 @@ screen, with the photo fitted to the space and its real size shown at the bottom
   again, and **100%** shows it pixel for pixel.
 - **Move around** a zoomed photo by dragging it with **Select**. With any other tool chosen, hold
   **Alt** and drag.
-- **Tools** each say what they do. The line above the photo says how to use the one that is chosen,
-  and it stays chosen until you pick another. **Ruler** measures in the photo's own pixels, and
+- **Tools** each say what they do. The line above the photo explains how to use the selected tool,
+  and it stays selected until you pick another. **Ruler** measures in the photo's own pixels, and
   **Redact** blacks out anything you drag over.
 - **Turn left** and **Turn right** turn the whole photo, along with anything you have drawn on it.
 - **Adjustments**, **Filter** and **Evidence Tools** are on the right. Everything you add is listed
@@ -521,299 +519,402 @@ who opens the editor is told the edit wasn't saved.
 
 ## Editing your public pages
 
-*The CMS editor has a built-in walkthrough — the **?** button beside New Page runs it any
-time, and it runs itself once for first-time editors.*
+*The CMS editor has a built-in walkthrough. The **?** button beside New Page runs it at any
+time, and it runs on its own the first time you edit.*
 
 ![The CMS page list](help-media:organization-administration/cms.png)
-*Your public pages. A page is not visible to anyone until you publish it.*
+*Your public pages, listed in the same order as your menu, with each page indented under the page
+it belongs to. Nobody can see a page until you publish it.*
 
-Pages you build under **CMS** appear on your group's public site. Two things control what visitors
-see, and they are different.
+Pages you build under **CMS** appear on your group's public site. Two separate things control what
+visitors see.
 
-**Published** decides whether the page exists for visitors at all. **Drafts** decide whether the
-edits you are making right now are visible while you make them.
+**Published** decides whether visitors can see the page at all. **Drafts** decide whether visitors
+see your edits while you are still making them.
+
+Every box in the editor has a short note under it explaining what it does: what the title is used
+for, where the address leads, or who a switch lets in.
+
+### Making a page
+
+**New Page** asks for a title. The title is used twice: as the heading at the top of the page and
+as the page's name in your site's menu. Type your own, or press **Ideas** for a list of pages
+groups like yours usually have — *About us*, *Our investigations*, *Ghost tours*, *History of the
+property*, *House rules* and more. An idea you already have a page for is grayed out.
+
+![Ideas for a page title](help-media:organization-administration/cms-title-ideas.png)
+*Ideas, grouped by what the page is about. Picking one fills in the title; you can still change it.*
+
+The page's address is filled in from the title as you type (*Our Team* becomes `our-team`) until
+you edit the address yourself. Once a page exists, renaming it doesn't change its address, so
+links people have saved keep working.
+
+**Summary / Intro** is a few sentences shown at the top of the page, under its title and above its
+sections.
+
+**Where it goes in your menu** shows all your pages as a tree, with the new one highlighted. Drag it
+where you want it, or use the arrows under the tree: up and down move it among the pages beside it,
+left takes it up a level, and right puts it under the page just above it.
+
+![A new page being placed in the menu](help-media:organization-administration/cms-new-page.png)
+*The new page placed under Ghost tours. Nothing moves until you press Save.*
+
+### How deep your menu goes
+
+Your menu has **three levels and no more**: a top-level page, a page under it, and a page under
+that. Top-level pages are the links across your site's menu. Open one that has pages under it, and
+those appear as a second row of links beneath the menu. Open one of those, and any pages under it
+appear in a third row. If a move would create a fourth level, it isn't allowed, and a message
+explains why — both in the tree and when you save.
+
+![The menu a visitor sees](help-media:organization-administration/cms-visitor-menu.png)
+*Our team sits under About us, and Our equipment under Our team. The page's intro comes first, then
+its sections.*
+
+### Ordering your whole site
+
+**Ordering**, beside **New Page**, opens your whole site as one tree: every page, and each page's
+sections under it.
+
+- **Drag a page** onto another page to put it under that page, or between two pages to put it
+  beside them. Pages can go anywhere the three-level limit allows.
+- **Drag a section** up or down to change its order on the page. A section can't be moved to
+  another page, because what it shows (a case's photos, an event) belongs to its page.
+- **Can't drag?** Click a row and use the arrows under the tree.
+
+Each move is saved as soon as you make it, and the line at the bottom confirms it. There is no Save
+button, only **Done**. You can hide the tips at the top with **Hide** and bring them back with
+**How this works**.
+
+![The Ordering window](help-media:organization-administration/cms-ordering.png)
+*Ordering: pages and their sections. Ghost tours is selected. It is already at the top level, so
+the arrow that would move it up a level is grayed out.*
+
+### Editing a page
+
+The **Sections** button on a page's row opens its editor. **Page Settings** holds the title,
+address, the two switches, and the same menu tree as the New Page window. Drag the page where you
+want it, then press **Save Settings**. To arrange everything at once, use **Ordering** instead.
+
+![A page's settings](help-media:organization-administration/cms-page-settings.png)
+*A page's settings, with this page highlighted in the menu tree.*
+
+**Summary / Intro** is a full editor. Two buttons at the end of its toolbar save you from hunting
+for things:
+
+- **Picture from your library** adds one of your group's pictures where the cursor is. Only public
+  pictures are offered, because a members-only picture would show up for you but appear broken to
+  every visitor.
+- **Link to one of your pages** lists your other pages. Select some words first to turn them into
+  the link, or just pick a page and its title is inserted as the link.
+
+The ordinary link button is still there for addresses on other sites. The same two buttons are on
+every **Text** section.
+
+![The intro's editor](help-media:organization-administration/cms-intro.png)
+*The last two toolbar buttons: a picture from your library, and a link to one of your pages.*
+
+### Adding a section
+
+**Add Section** opens the section form and scrolls it into view. Each kind of section is shown as a
+small picture of its layout, with a sentence on what it is for, so you can choose by how you want
+the page to look rather than by name.
+
+![Choosing a kind of section](help-media:organization-administration/cms-section-kinds.png)
+*The kinds of section as pictures. Below them: the section's heading, whether visitors see it, and
+its content.*
+
+When you have filled it in, **Preview** (just before **Cancel**) shows the section exactly as a
+visitor will see it, drawn the same way the public page draws it. Previewing doesn't save anything;
+close the preview and press **Save section** to keep it.
+
+![A section's preview](help-media:organization-administration/cms-section-preview.png)
+*The preview of a Text section, before it is saved.*
 
 ### Drafts
 
-Editing a page that is **not** published changes it directly. Nobody can see it, so there is nothing
-to protect.
+When you edit a page that is **not** published, your changes apply directly. Nobody else can see it
+yet, so there is nothing to protect.
 
-Editing a page that **is** published works differently. Open it and you will be offered **Work on a
-draft instead**. Take it, and your changes go into a copy — the live page carries on exactly as it
+A page that **is** published works differently. When you open it, you will be offered **Work on a
+draft instead**. If you accept, your changes go into a copy, and the live page stays exactly as it
 was until you press **Publish changes**. Until then, visitors see the old version, and you can
-**Discard draft** to throw the work away and leave the live page untouched.
+press **Discard draft** to throw your changes away and leave the live page as it is.
 
-A page has one draft at a time. If a colleague has already started one, you will see a note saying
-so with a link to open it, rather than being handed a second copy nobody knows about.
+A page has only one draft at a time. If a colleague has already started one, you'll see a note
+with a link to open it, so you don't end up with a second copy nobody knows about.
 
-Publishing keeps the page's address and its permissions — the live page is updated in place, not
-replaced, so nothing linking to it breaks.
+Publishing keeps the page's address and its permissions. The live page is updated rather than
+replaced, so links to it keep working.
 
 ### Page addresses
 
 A page's address is the last part of its web address — `/o/your-group/about`. Keep it short and
-lowercase; it is what people paste to each other.
+lowercase, since it is what people copy and share.
 
-A few words are used by the site itself — **cases** and **events** today, plus some held back for
-things coming later. A page can't use one, because it could never be opened: the site would show its
-own page at that address instead. If you try, you'll be told which word and offered a way round it —
-"our-cases" rather than "cases".
+A few words are reserved by the site itself — **cases** and **events** for now, plus some saved for
+future features. A page can't use one of them, because the site would show its own page at that
+address instead of yours. If you try, you'll be told which word is reserved and offered an
+alternative — "our-cases" rather than "cases".
 
-If you have an older page marked **Unreachable** in the list, that is one made before this check
-existed. Rename it and it will start working.
+If an older page is marked **Unreachable** in the list, it was made before the site checked for
+these words. Rename it and it will start working.
 
 ### Pictures on a page
 
-An **Image or banner** section takes a picture from your group's files — **Choose an image** opens
-the picker with everything shared with the group; search it or filter by visibility. If the image
-you pick is **members only**, the editor says so on the spot: the page will render the picture for
-you and show visitors a broken frame, because a public page cannot hand out a file its owner kept
-private. Pick a public image, or make that one public on its file page first.
+You can put a picture in a page's intro or in a Text section, using **Picture from your library**
+in the editor's toolbar, or across the full width of the page as an **Image or banner** section. A
+banner can also link somewhere: type an address, or pick one of your own pages from **Your pages**
+beside the box.
+
+An **Image or banner** section uses a picture from your group's files. **Choose an image** opens
+the picker with everything shared with the group, which you can search or filter by visibility. If
+the image you pick is **members only**, the editor warns you right away: you would see the picture
+on the page, but visitors would see a broken frame, because a public page can't show a file its
+owner has kept private. Pick a public image, or make that one public on its file page first.
 
 ### Seeing a page before it goes live
 
-**View as visitor** on the editor opens the saved page exactly as the public renderer draws it,
-published or not. That is the honest check: the side-by-side panel next to the editor follows what
-you are typing, but it draws its own approximation in half a column, so a page can look right there
-and wrong in reality.
+**View as visitor** in the editor opens the saved page exactly as the public sees it, whether it is
+published or not. This is the reliable check. The side-by-side panel next to the editor updates as
+you type, but it is only an approximation drawn in half the width, so a page can look right there
+and still look wrong on the real site.
 
-The preview also tells you if the page is not in the menu yet, which is the usual reason a
-freshly-published page seems to have vanished.
+The preview also tells you if the page isn't in the menu yet, which is the most common reason a
+newly published page seems to have disappeared.
 
 ## Reusing a page layout
 
-Built a write-up you want to do again? On the page's editing screen, **Save as a layout** keeps its
+Built a write-up you want to reuse? On the page's editing screen, **Save as a layout** saves its
 sections — their types, titles and current wording — as a named layout, for example *Investigation
 Results*.
 
-Next time you add a page, pick that layout under **Start from one of our layouts** and the new page
-arrives with those sections ready to fill in.
+The next time you add a page, pick that layout under **Start from one of our layouts**, and the new
+page starts with those sections ready to fill in.
 
 Two things worth knowing:
 
 - **The layout belongs to the group**, not to whoever saved it, so it stays when people come and go.
-- **The copy is yours.** Editing the layout later does not touch pages already made from it, and
-  editing one of those pages does not change the layout.
+- **Each copy is separate.** Editing the layout later doesn't change pages already made from it,
+  and editing one of those pages doesn't change the layout.
 
-Sections that point at a case or an investigation keep the *shape* but you will want to re-point the
-pickers — a layout reused for a different night should show that night's work.
+Sections that point to a case or an investigation keep their layout, but you'll want to choose the
+right case or investigation again in their pickers, so a layout reused for a different night shows
+that night's work.
 
 ## Putting your cases and investigations on a page
 
 Two section types — **Our investigations** and **Our cases** — let you show your own work on a
 public page. Pick which records to show, and answer two questions about each section.
 
-**Where it happened.** You can show the rough area, or nothing at all. There is no option to publish
-the exact address, whichever way you set it: the point shown on the map is the center of an area
-several miles across and cannot be traced back to a building. That is deliberate — a case is
-somebody's home, and a link outlives the page it was on.
+**Where it happened.** You can show the rough area, or nothing at all. There is no way to publish
+the exact address: the point shown on the map is the center of an area several miles across, and
+it can't be traced back to a building. This protects the people involved — a case is often
+somebody's home, and a shared link can stay around long after the page changes.
 
-**Who it was for.** Cases can show the client's chosen name. Only the alias the client picked, or
-the one your group set for them — a real name is never published here. If neither is set, the case
-appears with no name.
+**Who it was for.** Cases can show the client's chosen name — either the alias the client picked,
+or the one your group set for them. A real name is never published here. If neither is set, the
+case appears with no name.
 
-**Work that is not public yet** is flagged in the picker, and adding it asks you to confirm. Until
-you do, those records are left off the page entirely. Publishing a private investigation makes it
-readable by anyone who visits, including the person it is about.
+**Work that isn't public yet** is flagged in the picker, and adding it asks you to confirm. Until
+you confirm, those records are left off the page entirely. Publishing a private investigation lets
+anyone who visits read it, including the person it is about.
 
-You can only show your own group's work. Everything is looked up fresh each time somebody views the
-page, so if a client later asks to be unnamed, they disappear from pages you published months ago —
-you do not have to remember which ones.
+You can only show your own group's work. The page is rebuilt from current records each time
+somebody views it, so if a client later asks not to be named, their name disappears from pages you
+published months ago — you don't have to remember which ones.
 
-*On any case page, the **?** button beside Edit Case walks through exactly how a case goes
+*On any case page, the **?** button beside Edit Case walks you through exactly how a case goes
 public — the pseudonym, generalized addresses, and which media may appear.*
 
 ## Putting a case's photos on a page
 
-**Photos from a case** shows pictures and files taken from one of your own cases. Choose the case,
-then tick the files you want.
+**Photos from a case** shows pictures and files from one of your own cases. Choose the case, then
+check the files you want.
 
-**Only some of a case's files can be published, and this is not a setting you can change here.** A
-file appears in the picker when it is attached to a timeline entry marked **Public**, on a case that
-is itself public. Files on the case's **Files** tab never appear, whatever they are.
+**Only some of a case's files can be published, and you can't change that here.** A file appears
+in the picker only when it is attached to a timeline entry marked **Public**, on a case that is
+itself public. Files on the case's **Files** tab never appear, whatever they are.
 
-That is on purpose. There is exactly one way to publish a case file — put it on a public timeline
-entry — so there is one place to look when you want to know what is visible, and one place to change
-your mind. If a photo you want is missing from the picker, add it to a public timeline entry on the
-case first.
+Putting a file on a public timeline entry is the only way to publish it. That gives you one place
+to check what is visible, and one place to change your mind. If a photo you want is missing from
+the picker, add it to a public timeline entry on the case first.
 
 **Captions** are off unless you turn them on. A caption is the timeline entry's title, which is your
-group's own working description of what happened — useful to you, and sometimes more than you would
-choose to say to a visitor.
+group's own working description of what happened. That is useful to you, but it may say more than
+you want visitors to see.
 
-**The photos stay linked to the case rather than copied onto the page.** If somebody later makes that
-timeline entry private, or the case is unpublished, the photos come off every page that used them, by
-themselves. You do not have to remember which pages they were on. The same is true of the direct
-image links — a link copied out of the page stops working at the same moment.
+**The photos stay linked to the case rather than being copied onto the page.** If somebody later
+makes that timeline entry private, or the case is unpublished, the photos are removed from every
+page that used them automatically. You don't have to remember which pages they were on. Direct
+image links work the same way — a link copied from the page stops working at the same moment.
 
 ## Tours
 
-If you run ghost walks, a **tour** is the thing you sell and the thing your plan is priced on. The
-walk down Printers Alley is one tour whether you run it twice a year or four nights a week; a
-second walk down a different street is a second tour. **Administration → Tours** is where they
-live, and each one has its own page.
+If you run ghost walks, a **tour** is what you sell and what your plan is priced on. The walk down
+Printers Alley is one tour whether you run it twice a year or four nights a week; a walk down a
+different street is a second tour. You'll find them under **Administration → Tours**, and each one
+has its own page.
 
 Two things tell your tours apart. The **meeting point** is required and must be one of your own
-addresses, so it can be corrected in one place and every date follows. The **name** is what
-separates two tours that leave from the same corner, so it has to be different from your other
-tours — and it is what a guest will look for, so use what is on your leaflet.
+addresses, so you can correct it in one place and every date updates. The **name** tells apart two
+tours that start from the same corner, so it must be different from your other tours. It is also
+what guests will look for, so use the name on your flyer.
 
-A tour also carries how long it runs, how many people a date takes, its time zone, a line about
-how to reach you and how to pay, and a description. Nothing about money passes through this site:
-that line is where you tell your guests what to bring and what it costs.
+A tour also has a length, how many people each date can take, a time zone, a line about how to
+reach you and how to pay, and a description. No money passes through this site, so use that line
+to tell guests what to bring and what it costs.
 
 ![Your tours](help-media:organization-administration/tours.png)
 
-Opening one gives you everything about it on a page of its own — and a picker at the top for
-switching between them when you run more than one.
+Opening a tour shows everything about it on its own page, with a picker at the top to switch
+between tours if you run more than one.
 
 ![One tour](help-media:organization-administration/tour-details.png)
 
 ### Adding a tour, and what it costs
 
-Your plan covers one tour. Adding another is charged for the part of your current period that is
-left, on the card you already have on file, and after that every renewal counts the tours you are
-running. If there is no card on file the tour is still yours to run and simply gets counted at
-your next renewal. The Tours page tells you which of those is about to happen before you press
-the button.
+Your plan covers one tour. Each extra tour is charged for the rest of your current billing period,
+on the card you already have on file, and after that every renewal counts the tours you are
+running. If there is no card on file, you can still run the tour, and it is simply counted at your
+next renewal. The Tours page tells you which of these will happen before you press the button.
 
-**Retiring** a tour stops it taking new dates and drops it from your next renewal. It refunds
-nothing for the period you have already paid for, and it leaves everything the tour has already
-run exactly where it is. **Pausing** — turning off *Taking sign-ups* — is the lighter version for
-a closed season.
+**Retiring** a tour stops new dates from being added and drops it from your next renewal. It
+doesn't refund anything for the period you have already paid for, and it leaves the tour's past
+dates exactly as they are. **Pausing** — turning off *Taking sign-ups* — is the lighter option for
+an off-season.
 
 ### Guides
 
-You do not have to be a guide yourself. Add the people who actually walk it from your members, and
-each date starts with those guides on it — then change them per date, because a tour led by two
-people is not the same person every night.
+You don't have to be a guide yourself. Choose the members who actually lead the tour, and each
+date starts with those guides assigned. You can then change them for each date, since a tour with
+two guides won't always have the same person every night.
 
-Every guest who signs up is told who is leading their walk, by name, with their photograph when
-they have made one public on their profile. That is a safety thing: somebody meeting a stranger
-after dark should know who they are looking for. The photograph is optional and always theirs to
-publish or not; a guide who has not published one is simply named.
+Every guest who signs up is told who is leading their walk, by name, along with the guide's photo
+if they have made one public on their profile. This is for safety: someone meeting a stranger
+after dark should know who to look for. The photo is optional, and it is always the guide's choice
+whether to publish one. A guide without a public photo is just named.
 
 ### Dates
 
-A date is the tour happening, and it goes on the **calendar** like anything else — pick the tour,
-set the time, and the meeting point, length and group size come from the tour unless you say
-otherwise. Scheduling a tour again costs nothing; the plan counts tours, not nights.
+A date is one run of the tour, and it goes on the **calendar** like any other event. Pick the tour
+and set the time; the meeting point, length and group size come from the tour unless you change
+them. Scheduling more dates costs nothing, because the plan counts tours, not nights.
 
-A public date of a tour business has to name a tour. Without one there is nothing to tell a guest
-where to stand or who they are meeting, so the calendar refuses it and says so. A private date —
-a guides' meeting, a rehearsal — needs no tour.
+For a tour business, every public date must be linked to a tour. Without one, there is nothing to
+tell guests where to meet or who they are meeting, so the calendar won't save it and explains why.
+A private date — a guides' meeting or a rehearsal — doesn't need a tour.
 
 ### Sign-ups: nobody has a place until you say so
 
 ![The sign-ups waiting on a date](help-media:organization-administration/tour-seats.png)
-*Waiting on you first, because it is the only part of this page that is work.*
+*Sign-ups waiting for you are shown first, because that is the part of this page that needs
+action.*
 
-A sign-up for a walk is a **request**. It holds no place until a guide or manager approves it —
-which is where you say the money side is settled between you and your guest. **IsHaunted never
-takes payment.** Approving records that the two of you agree; how they pay you is yours to arrange.
+A sign-up for a walk is a **request**. It doesn't hold a place until a guide or manager approves
+it, and approving it is how you confirm that payment is settled between you and your guest.
+**IsHaunted never takes payment.** Approving records that the two of you have agreed; how they pay
+you is up to you.
 
-Open a date's **Sign-ups** from the tour's Dates list. The list shows a "waiting" count on each
-night, so you can see where the work is without opening every one.
+Open a date's **Sign-ups** from the tour's Dates list. The list shows a "waiting" count for each
+date, so you can see which ones need attention without opening every one.
 
-- **Approve** holds the places and sends your guest the tour's welcome email, with the meeting
-  point and the calendar file. Nothing goes to them before this — telling somebody where to stand
-  for a walk you have not agreed to would send them out to nothing.
-- **Turn down** says so plainly. The row is kept rather than deleted, because a guest who is not
-  coming has to be able to see that they are not coming.
+- **Approve** reserves the places and sends your guest the tour's welcome email, with the meeting
+  point and the calendar file. Nothing is sent to them before this, so nobody is told where to
+  meet for a walk you haven't confirmed.
+- **Turn down** tells the guest clearly. The sign-up is kept rather than deleted, so the guest can
+  see that they don't have a place.
 
 A sign-up can ask for **more than one place**, and a date's capacity counts places rather than
-people. If a party does not fit, the refusal names how many places are left — so you can go back
-to them about a smaller group rather than guessing.
+people. If a party doesn't fit, the message says how many places are left, so you can offer them a
+smaller group instead of guessing.
 
-**A full walk keeps taking requests.** The overflow is a waiting list you work through, not a
-closed door, and it stays your decision. If somebody turns a place down, the room is there for the
-next party in the queue.
+**A full walk keeps taking requests.** Extra requests form a waiting list you work through, and the
+decision is always yours. If somebody gives up a place, it is there for the next party on the list.
 
-Once you have approved a seat, your guest can tap **Got it** to say they have seen it. That is
-entirely optional and nothing waits on it — it just tells you they are expecting to be there.
-Their sign-ups also show on your bell as **Sign-ups waiting on you**, for group owners and
-administrators.
+Once you have approved a place, your guest can tap **Got it** to show they have seen it. This is
+entirely optional and nothing depends on it — it just tells you they are planning to come. Group
+owners and administrators also see sign-ups in their bell, under **Sign-ups waiting on you**.
 
 ### The email your guests get
 
-When somebody's seat is approved, and again the night before, they are sent an email about the
-walk with a **calendar file** attached, so it lands in their diary with the meeting point and their
-phone reminds them.
+When somebody's place is approved, and again the night before the tour, they get an email about
+the walk with a **calendar file** attached. That puts it in their calendar with the meeting point,
+and their phone reminds them.
 
 You can write that email yourself under **Tours → the tour → Guest email**, or leave it empty and
-we send a complete one. Drop in the things that change per date by clicking a placeholder and
-pasting it: the tour's name and meeting point, the date and time in your tour's own time zone, who
-is guiding that night and their photograph, how many places are left, and your own contact line.
-Anything we do not recognize is simply left out, and **the meeting point is always included**
-whether or not you ask for it — a guest who cannot tell where to stand has not been told about the
-tour.
+we send a complete one for you. To add details that change for each date, click a placeholder and
+paste it in: the tour's name and meeting point, the date and time in your tour's own time zone,
+who is guiding that night and their photo, how many places are left, and your own contact line.
+Anything we don't recognize is left out. **The meeting point is always included**, whether or not
+you add it, because guests need to know where to go.
 
-**See what it looks like** renders it against your next scheduled date, with your times, your
-guides and your wording, and shows the calendar file that travels with it. Nothing is sent.
+**See what it looks like** shows the email for your next scheduled date, with your times, your
+guides and your wording, along with the calendar file that comes with it. Nothing is sent.
 
 ![The guest email](help-media:organization-administration/tour-guest-email.png)
 
-Replies go to your group's public email address when you have set one, so a guest who hits reply
+If you have set a public email address for your group, replies go there, so a guest who hits reply
 reaches you rather than us.
 
 ### Pictures and the slideshow
 
-Each tour keeps up to 50 pictures. Add your own from **Tours → the tour → Pictures**; the first one
-is the picture on the tour's card and at the top of its page. Anything you add is fitted inside
-1920 by 1080 and re-encoded, which strips the camera data — including where the photograph was
-taken — before it is ever published.
+Each tour can hold up to 50 pictures. Add your own from **Tours → the tour → Pictures**. The first
+one is used on the tour's card and at the top of its page. Every picture you add is resized to fit
+within 1920 by 1080 and re-saved, which removes the camera data — including where the photo was
+taken — before it is published.
 
-The tour's page shows a slideshow of those pictures **and** of the photographs guests sent in that
-you accepted, each credited to whoever took it. Accepting a guest's photograph is also how you keep
-it: it is the answer to the retention clock, so a shot worth keeping goes on the page.
+The tour's page shows a slideshow of those pictures **and** of the guest photos you accepted, each
+credited to whoever took it. Accepting a guest's photo is also how you keep it, because it stops
+the retention clock. So if a photo is worth keeping, put it on the page.
 
-Somebody who came on the tour sees their own uploads on the tour's page, whatever you decided about
-them — accepted, waiting, or not published. They took the photograph; your decision is about what
-the tour publishes, not about who it belongs to.
+Guests who came on the tour can see their own uploads on the tour's page, whatever you decided
+about them — accepted, waiting, or not published. It is still their photo; your decision only
+affects what the tour publishes.
 
 ### What people say about it
 
-Guests who came on a date that has finished can leave a rating out of five and a few words. It is
-on by default and switchable per tour under **Details**; turning it off stops new ones and leaves
-anything already there.
+Guests who came on a date that has finished can leave a rating out of five and a short comment.
+Reviews are on by default, and you can turn them on or off for each tour under **Details**.
+Turning them off stops new reviews but keeps the ones already there.
 
-You can **hide** a review you think is unfair. You cannot change what somebody wrote — their name
-is on it — and hiding is undoable, so nothing is lost either way. Whoever wrote it still sees it on
-the page, marked as hidden, rather than being left to wonder where it went. If they rewrite it, it
-comes back: new words have not been judged.
+You can **hide** a review you think is unfair. You can't change what somebody wrote, because their
+name is on it. Hiding can be undone, so nothing is lost. The person who wrote the review still sees
+it on the page, marked as hidden, so they know what happened to it. If they rewrite it, it shows
+again, because the new version hasn't been reviewed yet.
 
 ### How long things stay
 
-On the tour plan, a photograph a guest sends in stays for **a month** and a recording for **a
-week**, unless somebody keeps it. Recordings are limited to **five minutes** each; a longer one is
-refused when it is sent, with the length said plainly, because the phone can trim before uploading
-and only the person who was there knows which five minutes matter.
+On the tour plan, a photo a guest sends in is kept for **a month** and a recording for **a week**,
+unless somebody chooses to keep it. Recordings are limited to **five minutes** each. A longer one
+is turned down when it is sent, with a clear message about the length. The phone can trim a
+recording before uploading, and only the person who was there knows which five minutes matter.
 
-**Keep it** on the submission itself stops the clock on anything — a recording you want to hold on
-to, a photograph you are not going to publish. **Put it on a tour** does the same for a picture and
-publishes it: the business gets its own copy, fitted inside 1920 by 1080 with the camera data
-stripped, while the guest's original keeps its own clock and its own owner. Both are on the
-evidence queue, beside Accept and Decline, along with the date each file comes off.
+**Keep it** on the submission stops the clock on anything — a recording you want to hold on to, or
+a photo you aren't going to publish. **Put it on a tour** does the same for a picture and also
+publishes it. Your business gets its own copy, resized to fit within 1920 by 1080 with the camera
+data removed, while the guest's original keeps its own clock and stays theirs. Both buttons are on
+the evidence queue, beside Accept and Decline, along with the date each file will be removed.
 
-Letting something go again puts it back on the clock from that day, not from when it was uploaded,
-and whoever sent it in is warned afresh.
+If you stop keeping something, its clock starts again from that day, not from when it was
+uploaded, and the person who sent it is warned again.
 
-Everyone who sends something in is emailed before it goes, a week ahead and again the day before,
-so they can download it. Nothing is ever deleted that has not been warned about first.
+Everyone who sends something in gets an email before it is removed — a week ahead and again the
+day before — so they can download it. Nothing is ever deleted without a warning first.
 
-Groups that are not on a tour plan have no clock at all: their files stay, as they always have.
+Groups that aren't on a tour plan have no clock at all: their files stay, as they always have.
 
 ### Starting the night, and what your guests send back
 
-On the night, a date's guide — or anybody who may edit your calendar — can start everybody's Field
-Kit from the IsHaunted app: **Launch a session for your group** in Field Kit. Everybody with a
-reserved seat is told, and the card goes in the feed. Guests who were never registered can scan the
-guide's code; at a public date they are straight in, and at a private one they ask and the guide
-lets them in. See [The iPhone and iPad Apps](/help/the-mobile-apps).
+On the night, a date's guide — or anyone who can edit your calendar — can start Field Kit for
+everyone from the IsHaunted app, using **Launch a session for your group** in Field Kit. Everyone
+with a reserved place is notified, and the card appears in the feed. Guests who never signed up can
+scan the guide's code. At a public date they join right away; at a private one they ask, and the
+guide lets them in. See [The iPhone and iPad Apps](/help/the-mobile-apps).
 
-Whatever they record and send — that night or days later — arrives on the date's page, under
-**Field sessions sent up**, with **Play back**. Your group and the date's guides see it; the other
-guests do not.
+Whatever they record and send — that night or days later — appears on the date's page, under
+**Field sessions sent up**, with **Play back**. Your group and the date's guides can see it; the
+other guests can't.
 
 ![What guests sent up from a tour date](help-media:organization-administration/tour-date-field-sessions.png)
 
@@ -823,648 +924,646 @@ cannot delete it.
 ### Where your tours show up
 
 Tours are public. They appear on your own public page, on the map on the front page, and in the
-nearby search, with the meeting point given in full — shown on its own map on the tour's page, with
-directions and a link that opens it in Maps — an address held back from somebody deciding
-whether to come is held back from the wrong person. Each tour also has a page of its own at
-`/o/your-group/tours/the-tour-name`, which is the link worth sharing.
+nearby search, with the full meeting point. The tour's page shows it on its own map, with
+directions and a link that opens it in Maps, because people deciding whether to come need to know
+where it is. Each tour also has its own page at `/o/your-group/tours/the-tour-name`, which is the
+best link to share.
 
 ### Where else you are
 
-Under **Where else you are** on a tour's page you can add the accounts that walk goes with:
-your own website, Instagram, Facebook, X, TikTok, YouTube, Bluesky, Rumble and Threads. They show
-as a quiet row at the **foot** of the tour's public page, under the dates — somebody reading it is
-deciding whether to come, and sending them to Instagram before they have seen when it runs would
-be an odd thing for the page to do.
+Under **Where else you are** on a tour's page, you can add the accounts that go with that tour:
+your own website, Instagram, Facebook, X, TikTok, YouTube, Bluesky, Rumble and Threads. They appear
+as a simple row at the **bottom** of the tour's public page, under the dates, so visitors see when
+the tour runs before being sent anywhere else.
 
 ![The nine link boxes on a tour's settings page](help-media:organization-administration/tour-links.png)
 
-One account per service. Leave a box empty to take that one down; there is nothing to confirm.
-Each link has to point at that service's own site — an Instagram link that opens somewhere else is
-refused, because a reader clicks the word without reading the address.
+You can add one account per service. To remove one, just leave its box empty; there is nothing to
+confirm. Each link must point to that service's own site — for example, an Instagram link that
+leads somewhere else isn't accepted, because people click the name without checking the address.
 
 ### Which clock an event runs on
 
-Every event carries the zone it actually happens in, chosen on the scheduler under **Which clock**.
-It starts on your group's **home time zone** (see below), and the start and end you type are on
-that clock — the form says which, so eight in the evening is eight where the event is, wherever you
-happen to be scheduling from.
+Every event has the time zone where it actually happens, chosen on the scheduler under **Which
+clock**. It starts out as your group's **home time zone** (see below), and the start and end times
+you type are in that zone. The form tells you which zone it is, so 8 p.m. means 8 p.m. where the
+event is, wherever you are when you schedule it.
 
 ![The Which clock picker on the scheduler](help-media:organization-administration/event-clock.png)
 
-That clock is what the public sees, wherever in the world they are reading — an event at eight in
-Nashville reads as eight in Tokyo, with the zone named beside it, so the listing, the event's page
-and the reminder email all agree. A date under a tour takes the tour's clock unless you say
-otherwise. Readers can switch **Local time · My time** to see it on their own clock instead.
+The public sees the event in that time zone, wherever in the world they are — an event at 8 p.m.
+in Nashville shows as 8 p.m. even to someone reading in Tokyo, with the zone named beside it. That
+way the listing, the event's page and the reminder email all agree. A tour date uses the tour's
+time zone unless you choose another. Readers can switch **Local time · My time** to see the time
+in their own zone instead.
 
 ### Your group's home time zone
 
-**Settings → Home time zone** is the clock your group keeps. New cases, events and tours start on
-it, and anything without a zone of its own is read on it. It starts as Central time (Chicago).
+**Settings → Home time zone** is your group's usual time zone. New cases, events and tours start
+with it, and anything without its own zone uses it. It starts as Central time (Chicago).
 
 ![The Home time zone setting](help-media:organization-administration/group-time-zone.png)
 
-A case or an investigation can have its own zone — a group works away from home — set on the case's
-edit page and in the investigation's schedule dialog; see
+A case or an investigation can have its own zone, for when your group works away from home. Set it
+on the case's edit page or in the investigation's schedule dialog; see
 [Working a Case](/help/working-a-case#whose-clock).
 
 ## Hosted events
 
 An **event** is something you put on over one or more dates: a weekend at a hotel, a run of
-performances, an evening with a talk and supper. It is not a ghost-hunting thing — a retreat, a
-dinner theatre and a lock-in are the same record with different words in the description.
+performances, an evening with a talk and dinner. It doesn't have to be a ghost hunt — a retreat, a
+dinner theater and a lock-in all work the same way, just with different descriptions.
 
-An event is different from a date on your calendar in the way a tour is different from a walk. The
-calendar holds dates; an event holds everything that makes the dates worth coming to, and it lives
-at **Events** in your group's menu.
+An event relates to a calendar date the way a tour relates to a single walk. The calendar holds
+the dates; the event holds everything that makes those dates worth coming to. You'll find events
+under **Events** in your group's menu.
 
 ### Building one costs nothing
 
-Give it a name, a venue and the dates it runs. That is a **draft**: only your own people can see it,
-it has no public page, it takes no bookings and it sends nothing. Build all of it — the dates, the
-program, the rooms, the files, the page — and change your mind as often as you like. Nothing is
-charged and nothing is announced until you press **Publish**.
+Give it a name, a venue and the dates it runs. That creates a **draft**: only your own people can
+see it, it has no public page, it takes no bookings, and it sends nothing. Build everything — the
+dates, the program, the rooms, the files, the page — and change your mind as often as you like.
+Nothing is charged and nothing is announced until you press **Publish**.
 
 ### Who can build and change one
 
-Adding an event and changing one are for the people who can manage your group's settings — the owner,
-administrators, and anybody whose role includes the group's settings. Every other member can still open
-**Events**, read each event and follow its pages; the page tells them who can change it, and its controls
-are shown but can't be pressed.
+Only people who can manage your group's settings can add or change an event — the owner,
+administrators, and anyone whose role includes the group's settings. Every other member can still
+open **Events**, read each event and browse its pages. The page tells them who can make changes,
+and its controls are shown but disabled.
 
 ### A venue we haven't listed
 
-Search for the venue by name, and if we have it already, use the one we have. We share venues across
-the whole site, so a building's map pin, its history and everything anybody has ever recorded there
-hang together on one record.
+Search for the venue by name, and if it is already listed, use that one. Venues are shared across
+the whole site, so a building's map pin, its history and everything anyone has recorded there stay
+together on one record.
 
-If it isn't there, choose **The venue isn't listed** and enter its name and address. We look up where
-it is so it shows on the map. If we can't find it, the event still works perfectly — it just has no
-pin yet. Entering a venue that turns out to already exist quietly uses the existing one rather than
-adding a second copy.
+If it isn't listed, choose **The venue isn't listed** and enter its name and address. We look up its
+location so it shows on the map. If we can't find it, the event still works fine — it just won't
+have a map pin yet. If the venue you enter turns out to be listed already, the existing one is used
+instead of creating a duplicate.
 
-A venue has to be somewhere public. A private residence is refused, because an event is published by
-definition and publishing somebody's home is not yours or ours to decide.
+A venue must be a public place. A private residence isn't allowed, because an event is always
+public, and publishing somebody's home isn't your decision or ours.
 
 ### One stay, or a run of dates
 
-Two shapes, chosen with a switch when you add the event.
+When you add the event, a switch lets you choose one of two kinds.
 
-**One stay** is nights running together: a weekend, where every day between the first and last date
-becomes a night of the same event and a guest books across several of them.
+**One stay** is a run of consecutive nights, like a weekend. Every day between the first and last
+date becomes a night of the same event, and a guest can book several of them.
 
-**Separate dates** is a production put on more than once — a play every month, a supper club, a
-seasonal tour. The event is the production, each date is a performance of it, and each date is booked
-on its own. The dates need not be evenly spaced or anywhere near each other.
+**Separate dates** is a production put on more than once — a monthly play, a supper club, a
+seasonal tour. The event is the production, each date is one performance, and each date is booked
+separately. The dates don't need to be evenly spaced or close together.
 
-**It costs the same either way.** A monthly show is one production on twelve dates, not twelve
-events, and you are never charged twelve times for putting the same thing on repeatedly.
+**It costs the same either way.** A monthly show is one production with twelve dates, not twelve
+events, so you are never charged twelve times for running the same thing again and again.
 
 ### Each date can say its own thing
 
-Give any date its own title, its own start and end time, and a note. Opening night starting earlier
-than the rest is exactly what this is for. Dates with nothing special said about them take the
-event's own times.
+You can give any date its own title, its own start and end time, and a note — for example, if
+opening night starts earlier than the rest. Dates you don't customize use the event's own times.
 
-Moving an event's dates keeps what you wrote about the days that survive the move. Extend a weekend
-by a day and your Saturday is still your Saturday, with its title and its notes.
+If you move an event's dates, anything you wrote about days that are still included is kept. Extend
+a weekend by a day and your Saturday keeps its title and notes.
 
 ### What publishing does
 
 Publishing puts the event on your public page, on the site-wide **What's on** list and in the phone
-apps, and opens it for bookings. It is the moment it starts costing anything, and the page tells you
-what that is before you press it.
+apps, and opens it for bookings. This is when any charge applies, and the page tells you what it
+will be before you press the button.
 
-If your plan includes running events, publishing uses one of the slots it includes. If it doesn't,
-publishing spends an **event credit**: $99, one credit for one event, and it covers that event from
-the day you publish it. You are shown how many you have and what the button will do before you press
-it.
+If your plan includes running events, publishing uses one of your plan's event slots. If it
+doesn't, publishing uses an **event credit**: $99, one credit per event, covering that event from
+the day you publish it. Before you press the button, you can see how many credits you have and what
+the button will do.
 
-**An event is only ever charged once.** Take it down and put it back up as often as you need — the
-first time paid for it, and there is no second charge for the life of that event.
+**An event is only ever charged once.** You can unpublish it and publish it again as often as you
+need. The first publish pays for it, and there is no second charge for the life of that event.
 
 ### Buying event credits
 
-Credits are bought on your group's **Billing** page, under **Event credits**, and the sentence on
-the Events page that says you need one links straight to it. Buy one or several at a time; payment
-happens on Stripe's secure page, and the receipt lands in your billing history like every other one.
+You buy credits on your group's **Billing** page, under **Event credits**. When the Events page
+tells you that you need one, that message links straight there. Buy one or several at a time.
+Payment happens on Stripe's secure page, and the receipt appears in your billing history like any
+other.
 
-A credit lasts **a year from the day you buy it**. Two things have to be true when you spend it: the
-credit itself has to be in date, and the event's first date has to fall inside that year. So a credit
-bought today cannot be parked on an event dated three years out — if that is what you are planning,
-buy the credit nearer the time. When it will not stretch, the refusal names both dates so you can see
-exactly why.
+A credit lasts **a year from the day you buy it**. When you use it, two things must be true: the
+credit hasn't expired, and the event's first date falls within that year. So you can't use a
+credit bought today on an event three years away — if that's your plan, buy the credit closer to
+the time. If a credit can't cover an event, the message shows both dates so you can see exactly
+why.
 
-Credits are spent **oldest first**, so the one closest to running out is always the one used.
+Credits are used **oldest first**, so the one closest to expiring is always used first.
 
-The card lists everything you hold: what is ready, what each one cost, when it lapses, and — for the
-ones already spent — which event each went on. That last column is the answer to "did we pay for the
-October weekend?", a year later.
+The card lists all your credits: which are available, what each one cost, when it expires, and —
+for the ones already used — which event it went on. That last column answers questions like "did we
+pay for the October weekend?" a year later.
 
-**Thirty days before a credit lapses we write to you**, so it never quietly disappears. An unspent
-credit past its date is gone; we do not extend it and it is not refunded automatically. If something
-went wrong — you bought two by mistake, or never got to use one — ask us, and a refund is something a
-person here does by hand.
+**We email you thirty days before a credit expires**, so it never disappears without warning. An
+unused credit that has expired is gone; we don't extend it, and it isn't refunded automatically. If
+something went wrong — you bought two by mistake, or never got to use one — contact us, and someone
+here can issue a refund by hand.
 
-A credit that says **Given to you** rather than a price is one we handed over: a payment that did
-not land, or something we owed you. It works exactly like one you bought.
+A credit marked **Given to you** instead of a price is one we gave you, for example after a payment
+that didn't go through, or to make up for something we owed you. It works exactly like one you
+bought.
 
 ### Taking it down, archiving it, calling it off
 
-**Un-publish** takes it off the public site. Nothing is destroyed and nothing is refunded.
+**Un-publish** removes the event from the public site. Nothing is deleted and nothing is refunded.
 
-**Archive** stops it counting against your plan and takes it off your list. Everything that happened
-stays exactly as it is. Events are archived for you automatically a fortnight after their last date,
-so you never pay for last Halloween.
+**Archive** stops the event counting against your plan and removes it from your list. Everything
+about it stays exactly as it is. Events are archived automatically two weeks after their last date,
+so you never keep paying for last Halloween.
 
-**Cancel** is different, and it is for an event that was going to happen and now is not. The listing
-says CANCELED in its title — the one line everybody actually reads, on your page, on a shared link
-and on somebody's phone — and the reason you give is shown to the people who had places. The event is
-kept rather than deleted, because somebody who was coming needs to be able to see that it is off.
+**Cancel** is for an event that was going to happen and now won't. The listing adds CANCELED to its
+title — the one line everyone actually reads, whether on your page, a shared link or a phone — and
+the reason you give is shown to people who had places. The event is kept rather than deleted, so
+anyone who was planning to come can see that it is off.
 
 ### If the event is called off, your credit
 
-An event that took one of your plan's own slots rather than a credit frees the slot when you call
-it off, and the slot is yours again at once.
+If the event used one of your plan's slots rather than a credit, canceling it frees the slot right
+away.
 
-**For an event published with a credit, the rule we are building to is this:** call it off 48 hours
-or more before its first night and the credit comes back to you — as a credit, ready for the next
-event, and never as money. Call it off later than that and the credit is spent, because by then the
-venue, the kitchen and the people who were coming have all made their arrangements.
-
-**That return is not switched on yet.** Until it is, calling off an event published with a credit
-does not give the credit back on its own — ask us and we will put one back on your account.
+**For an event published with a credit:** cancel 48 hours or more before
+its first night and you get the credit back — as a credit for your next event, never as money.
+Cancel later than that and the credit is used up, because by then the venue, the caterers and the
+guests have all made their plans.
 
 ### The date on your calendar
 
-Every event puts one entry on your group's calendar, spanning the whole thing from the first date's
-start to the last date's end. That entry is what the public list, the reminder email, the calendar
-file and the phone apps all read, which is why it is kept in step with the event automatically.
+Every event adds one entry to your group's calendar, spanning from the start of the first date to
+the end of the last. The public list, the reminder email, the calendar file and the phone apps all
+read from that entry, so it is kept in sync with the event automatically.
 
-You can't edit it from the calendar — it tells you so, and points you at the event, where its dates,
-venue and description all come from. That way two screens can never disagree about the same evening.
+You can't edit that entry from the calendar. The calendar tells you this and links you to the
+event, where its dates, venue and description are set. That way, two screens can never show
+different details for the same evening.
 
 ### If IsHaunted removes your event
 
-Hosted events have to meet the site's guidelines. If one doesn't, IsHaunted can remove it:
+Hosted events must follow the site's guidelines. If one doesn't, IsHaunted can remove it. When that
+happens:
 
 - it comes off the site and stops taking bookings;
-- everybody with a place is told it is not going ahead;
-- the event credit spent on it comes back to you, whatever the timing.
+- everyone with a place is told it isn't going ahead;
+- the event credit used on it is returned to you, whatever the timing.
 
-The people who run the group's billing and whoever created the event are emailed, with a link to appeal.
+The people who manage the group's billing, and whoever created the event, get an email with a link
+to appeal.
 
 ![An event IsHaunted removed, with the appeal](help-media:organization-administration/event-removed.png)
 
-The event's page then opens with **Removed by IsHaunted**. If you think it was a mistake, write why it
-should come back and anything you've changed, and send the appeal. A person reads every appeal, and you
-hear back by email and in your messages:
-- **Upheld** — the event comes back as a draft. Publishing it again spends a credit or a slot, as the
-  first time did.
-- **Declined** — the event stays removed, and the answer says why.
+The event's page then shows **Removed by IsHaunted** at the top. If you think it was a mistake,
+explain why it should come back and what you've changed, and send the appeal. A person reads every
+appeal, and you hear back by email and in your messages:
+- **Upheld** — the event comes back as a draft. Publishing it again uses a credit or a slot, just
+  as it did the first time.
+- **Declined** — the event stays removed, and the reply explains why.
 
-Each removal can be appealed once. A removed event can't be un-canceled, restored or published from its
-page, but you can still edit it before you appeal.
+Each removal can be appealed once. A removed event can't be un-canceled, restored or published from
+its page, but you can still edit it before you appeal.
 
 ### Rooms and bookings
 
-Under **Rooms offered** you tick which of your venue's rooms this event is using. The rooms
-themselves are the ones you have described for the place (see *Rooms* on the venue), and each one
-already says what it sleeps — but an event can say otherwise. A double you have put two camp beds
-in for a séance weekend sleeps four for that weekend and goes back to two afterwards.
+Under **Rooms offered**, check which of your venue's rooms this event is using. These are the rooms
+you have described for the place (see *Rooms* on the venue), and each one already says how many it
+sleeps — but you can change that for an event. A double room with two extra cots for a séance
+weekend sleeps four for that weekend and goes back to two afterward.
 
-A room with confirmed bookings in it can't be untick­ed. Move those parties somewhere else first;
-dropping the room would leave them sleeping in one your event says it is not using.
+You can't uncheck a room that has confirmed bookings. Move those guests to another room first;
+otherwise they would be booked into a room your event says it isn't using.
 
-The **plan** is where the rooms — or the seats, for an event sold by the seat — are drawn out so
-everybody can see what is where. It has a page of its own, listed as *Plan* down the side of the
-event page. The **board**, where requests wait for your decision, is *Bookings* in the same list.
+The **plan** lays out the rooms — or the seats, for an event sold by the seat — so everyone can see
+what is where. It has its own page, listed as *Plan* down the side of the event page. The
+**board**, where requests wait for your decision, is *Bookings* in the same list.
 
 ### Getting in and getting around
 
-**Access and what to know** on the event page is where you say what a guest needs to know before they
-come: *no elevator — the bedrooms are up one flight*, *the ballroom is step-free from the side door*,
-*some of the hunt is in low light*, *a hearing loop in the bar*, where to park. It shows on the
-public event page under *Getting in and getting around*, in the iPhone app's page for the event, and
-in every confirmation letter, just before the pass.
+Use **Access and what to know** on the event page to tell guests what they need to know before
+they come: *no elevator — the bedrooms are up one flight*, *the ballroom is step-free from the side
+door*, *some of the hunt is in low light*, *a hearing loop in the bar*, or where to park. It shows
+on the public event page under *Getting in and getting around*, on the event's page in the iPhone
+app, and in every confirmation letter, just before the pass.
 
-Say what is true of the building rather than what you think somebody can manage. A guest who uses a
-wheelchair decides for themselves whether a flight of stairs to the bedrooms is a problem.
+Describe the building as it is, rather than guessing what someone can manage. A guest who uses a
+wheelchair can decide for themselves whether a flight of stairs to the bedrooms is a problem.
 
 ### Before you publish
 
-A draft costs nothing and shows nobody anything. Publishing is the moment it goes on your public
-page, starts taking bookings, and spends a slot or an event credit — so the page carries a
-checklist of everything standing in the way, and each line links to the place you fix it.
+A draft costs nothing and isn't visible to anyone outside your group. Publishing puts the event on
+your public page, opens it for bookings, and uses a slot or an event credit. So the page shows a
+checklist of anything that still needs doing, and each item links to where you fix it.
 
-There are four things. **At least one date**, because nobody can come to something with no date on
-it. **The venue's say-so**, below. **Somewhere to book** — a room or a seat on the plan, or a
-number of day passes; an event where everybody just turns up is fine, one with nothing at all is
-not. And **a contact line**, because this site never takes a guest's money and that line is the
-only thing on the page that says how anybody pays you.
+There are four items. **At least one date**, because nobody can come to an event without a date.
+**The venue's say-so**, explained below. **Somewhere to book** — a room or a seat on the plan, or a
+number of day passes; an event where everyone just shows up is fine, but one with no way to book at
+all is not. And **a contact line**, because this site never takes a guest's money, and that line is
+the only place on the page that tells people how to pay you.
 
-The publish button refuses in exactly the same words the checklist uses. If it says something is
-missing, it is the same thing the list is pointing at.
+If the publish button won't publish, it uses exactly the same wording as the checklist, so you can
+match its message to the item on the list.
 
 ### Who confirms the event is happening
 
-Under **The venue's say-so** you record how this event came to be allowed to happen where it is
-happening. There are three answers and they are genuinely different.
+Under **The venue's say-so**, you record who gave permission for this event to take place at this
+venue. There are three options, and they really are different.
 
-**It's our own venue** is a hotel running its own weekend. Publishing is the whole declaration and
-nothing more is asked, because asking a hotel to prove it may use itself would be silly.
+**It's our own venue** is, for example, a hotel running its own weekend. Publishing counts as your
+confirmation, and nothing more is needed, since a hotel doesn't need to prove it can use its own
+building.
 
-**Somebody else's, arranged directly with them** is a hall you hired or a house whose owner said
-yes on the phone. Record who agreed and when, and their reference if there is one. We cannot check
-any of it — recording it is so that everybody knows what was arranged, and so that being asked
-reminds you to go and ask.
+**Somebody else's, arranged directly with them** is, for example, a hall you rented or a house whose
+owner agreed by phone. Record who agreed and when, and their reference if there is one. We can't
+check any of it. Recording it means everyone knows what was arranged, and the question reminds you
+to get permission if you haven't yet.
 
 **Somebody else's, and they're on this site** is a place another group has been confirmed as
-running — a hotel on IsHaunted, say. Then the choice is not yours to make: the card says who runs
-the place, and **their yes is what lets you publish**, whichever answer you picked. See
+running — a hotel on IsHaunted, for example. In that case the decision isn't yours: the card shows
+who runs the place, and **their yes is what lets you publish**, whichever option you picked. See
 [Venues on this site](#venues-on-this-site).
 
 ### Pick or ask, and how long a hold lasts
 
-Under **Your guests** you choose how somebody gets a place.
+Under **Your guests**, choose how people get a place.
 
-**They ask, you place them.** A request holds nothing until you confirm it, which means the event
-keeps taking requests after it is full and the overflow is a waiting list rather than a closed
-door. This suits a hotel putting families into the right rooms.
+**They ask, you place them.** A request doesn't hold anything until you confirm it, so the event
+keeps taking requests after it is full, and the extra requests form a waiting list. This suits a
+hotel fitting families into the right rooms.
 
 **They pick on the plan.** A guest clicks or drags across the seats they want, and those seats are
-held for them — shown to everybody else as waiting on an answer, and unavailable — until you
-confirm or the hold lapses. This suits an evening sold by the seat, where two people spending the
-evening choosing the same row is the thing to prevent.
+held for them until you confirm or the hold expires. Meanwhile, everyone else sees them as pending
+and can't take them. This suits an evening sold by the seat, where you need to stop two people from
+choosing the same seats.
 
-A hold lasts as long as you say, from an hour to a fortnight, two days by default. When it lapses
-the seats go back and the guest is told; they stay on your list as a request, so nobody is silently
-dropped.
+You choose how long a hold lasts, from an hour to two weeks; the default is two days. When a hold
+expires, the seats are released and the guest is told. They stay on your list as a request, so
+nobody is dropped without notice.
 
-**Changing between the two is refused once anybody is booked or waiting.** The switch would change
-what their existing booking means — a hold would become nothing, an ask would become a place they
-never chose — and neither is something you would find out about until the night. Decide the ones
-waiting first, and the switch is free again.
+**You can't switch between the two once anyone is booked or waiting.** Switching would change what
+their existing booking means — a hold would become nothing, and a request would become a place they
+never chose — and you might not find out until the night. Deal with everyone waiting first, and you
+can switch again.
 
 ### The booking board
 
-The **Bookings** page is where a weekend is actually run, and it opens on the one thing that
-matters: **Waiting on you**. Everything nobody has answered is at the top, soonest deadline first,
-and everything else is below it. A board that opened on a list of everybody would be a board you
-have to search before you can work.
+The **Bookings** page is where you actually run a weekend, and it opens on what matters most:
+**Waiting on you**. Everything that hasn't been answered is at the top, soonest deadline first, and
+everything else is below it, so you can start working right away.
 
-Each row says who, how many, what they asked for, and anything they wrote. **Confirm…** opens the
-party. **Turn down** tells them no. On an event where guests pick their own places there is a third
-button, **Give them longer**, and a line saying how long is left on their hold.
+Each row shows who it is, how many people, what they asked for, and anything they wrote. **Confirm…**
+opens the party. **Turn down** tells them no. On an event where guests pick their own places, there
+is a third button, **Give them longer**, and a line showing how much time is left on their hold.
 
-**Why the hold matters.** A hold that runs out is a decision the clock took instead of you. So the
-row says "their hold runs out in about four hours" while there is still time to answer, and the
-button gives them another full stretch from the moment you press it — not from a deadline that has
-already gone.
+**Why the hold matters.** If a hold expires, the clock has made the decision instead of you. So the
+row tells you "their hold runs out in about four hours" while there is still time to answer, and
+the button gives them a full new hold starting from the moment you press it — not from a deadline
+that has already passed.
 
-If holds have already run out, the header offers to **give them back now**. The site does it by
-itself within five minutes anyway; the button is there because five minutes is a long time with
-somebody standing at a desk asking whether the Blue Room is free.
+If holds have already expired, the header offers to **give them back now**. The site does this on
+its own within five minutes anyway; the button is there because five minutes is a long time when
+someone is standing at the desk asking whether the Blue Room is free.
 
-**The house** below shows one night at a time, with the night's own buttons at the top. A square
-that is settled is solid, one somebody is still holding is hatched, and one you have held back is
-marked as not on offer. Under it is how many are coming for the day on that night.
+**The house**, below, shows one night at a time, with that night's buttons at the top. A confirmed
+square is solid, one somebody is still holding is striped, and one you have held back is marked as
+not available. Underneath is the number of day guests coming that night.
 
 ### At a glance
 
 Once an event is published, its page opens with **At a glance**: how many people are coming and in
-how many parties, how many are waiting on you, places left, day passes, who has come through the
-door, and the reviews. Each number opens the screen that explains it.
+how many parties, how many are waiting on you, places left, day passes, who has checked in, and the
+reviews. Click any number to open the screen with the details.
 
 ![The event's numbers at a glance](help-media:organization-administration/event-at-a-glance.png)
 
 **Places are counted night by night.** A room on a two-night plan is two places to sell, and a party
-in it for both nights has taken both. A place somebody is holding counts as taken, as it does on the
-plan, and a place you have held back is not counted as for sale.
+staying both nights has taken both. A place somebody is holding counts as taken, just as it does on
+the plan, and a place you have held back isn't counted as for sale.
 
-When the event has a minimum number, the card says how far past it you are or how many short.
+If the event has a minimum number, the card shows how far above it you are, or how many you are
+short.
 
 ### Deciding about one party
 
-Opening a party gives you the whole of it in one place, without losing your spot in the queue.
+Opening a party shows you everything about it in one place, without losing your place in the queue.
 
-**Where they are actually staying** is the question confirming asks. The pickers start on what the
-guest asked for, and you change them to wherever suits you: moving a party of three out of a double
-and into the suite is the ordinary thing, and making them turn it down and ask again would be
-absurd. Each choice says what the room sleeps and whether anybody is in it.
+When you confirm, you choose **where they are actually staying**. The pickers start with what the
+guest asked for, and you can change them to whatever suits you. Moving a party of three from a
+double into the suite is perfectly normal, and you don't need to turn them down and make them ask
+again. Each choice shows how many the room sleeps and whether anyone is in it.
 
-If they do not fit, the refusal names the room and the number — "The Blue Room sleeps 2 more on
-10/30, and this is a party of 4" — because "full" on its own leaves you guessing whether a smaller
-party would go in.
+If they don't fit, the message names the room and the numbers — "The Blue Room sleeps 2 more on
+10/30, and this is a party of 4" — so you can tell whether a smaller party would fit, rather than
+just seeing "full".
 
-**The line for the guest** is optional and they read it. It goes out with the confirmation or the
-refusal.
+**The line for the guest** is optional, and the guest will read it. It is sent with the
+confirmation or the refusal.
 
-Confirming sends their pass at the same time. A guest who was told yes and given nothing to show at
-the door has to be looked up by name on the night, which is the queue this whole thing exists to
-remove.
+Confirming also sends their pass. Without a pass, a confirmed guest would have to be looked up by
+name at the door, which is exactly the line this is meant to avoid.
 
 **A guest asking to get out** of a confirmed booking shows on the row and in the sheet. Releasing
-frees their places and tells them; their pass stops working. Keeping it changes nothing and leaves
-the ask on record.
+them frees their places and tells them, and their pass stops working. Keeping the booking changes
+nothing, and their request stays on record.
 
 ### Holding a room or a seat back
 
-Not everything on a plan is for sale. Open a room or a seat and you can hold it back, either **for
-one night** or **for the whole run**, and say which of two things it is: **out of use** — behind a
-pillar, out of order, kept for the crew — or **the venue is using it**.
+Not everything on a plan has to be for sale. Open a room or a seat and you can hold it back,
+either **for one night** or **for the whole run**, and say which of two reasons applies: **out of
+use** — behind a pillar, out of order, kept for the crew — or **the venue is using it**.
 
-Guests see the difference between those two and never see your note about it. Write "Mrs Cole's
-family are in it on the Friday" if that is what it is; what a guest is told is that the venue is
-using that room on that night.
+Guests see which of those two reasons applies, but never see your note. You can write "Mrs. Cole's
+family is in it on Friday" if that is the reason; a guest is only told that the venue is using that
+room that night.
 
-A held-back place cannot be picked or confirmed into, and it goes back to being available the
-moment you remove the block.
+A held-back place can't be picked or booked, and it becomes available again as soon as you remove
+the hold.
 
 ### When two guests want the same seat
 
-On an event where guests pick their own places, two people can reach for the same seat within the
-same second. One of them gets it. The other is told which seat went, by name, and keeps everything
-else they had chosen — so a party of four who lost one seat picks one seat again rather than
-starting over.
+On an event where guests pick their own places, two people can try to take the same seat at the
+same moment. Only one gets it. The other is told which seat was taken, by name, and keeps
+everything else they had chosen — so a party of four who lost one seat only has to pick one seat
+again, rather than starting over.
 
-That is settled by the database rather than by the page, which is why it is reliable: there is no
-window in which both people can be told yes.
+The site guarantees that only one of them can ever be told yes.
 
-**A hold lasts as long as you said** under *Your guests*. When it runs out the places go back and
-the guest is told what happened — that the hold ran out, not that you turned them down — and they
-stay on your list. You can still offer them a place.
+**A hold lasts as long as you set** under *Your guests*. When it expires, the places are released
+and the guest is told what happened — that the hold expired, not that you turned them down — and
+they stay on your list. You can still offer them a place.
 
 ### Who can see what
 
-Four different things, and they are deliberately separate permissions:
+These are separate permissions, on purpose:
 
-- **Seeing the event and its plan** is open to any member. What an event offers is mostly on the
+- **Seeing the event and its plan** is open to any member. Most of what an event offers is on the
   public page anyway.
 - **Changing the event** — its dates, its plan, its blocks, its menus — is arranging it.
-- **Seeing the bookings** means guests' names, their email addresses and their dietary notes. A
-  dietary note is a health disclosure somebody made to you so they would not be poisoned, and it is
-  not something a whole group's membership needs. This used to be open to every member.
-- **Deciding the bookings** is confirming, turning down, releasing, editing and issuing passes.
-- **Running the door** is scanning passes and marking people arrived. Somebody on the door sees
+- **Seeing the bookings** means seeing guests' names, email addresses and dietary notes. A dietary
+  note is health information someone shared with you so they can eat safely, and not everyone in
+  the group needs to see it.
+- **Deciding the bookings** means confirming, turning down, releasing, editing and issuing passes.
+- **Running the door** means scanning passes and checking people in. Somebody on the door sees
   tonight's dietary flags and nothing else — not addresses, not phone numbers.
 
-**Publishing is separate again** and needs whoever can change the group's settings, because it is
-the one act that spends money.
+**Publishing is separate again.** It needs someone who can change the group's settings, because it
+is the one action that costs money.
 
 ### The group's session on the night
 
-As with a tour, the organizer — or staff who run the door — can start everybody's Field Kit from the
-IsHaunted app, and confirmed guests are told. What they send comes back to the event's page under
-**Field sessions sent up**, for your group and the event's staff. Letting in somebody who scanned the
-code and asked never makes a booking: it lets them record with everybody, nothing more.
+As with a tour, the organizer — or staff running the door — can start Field Kit for everyone from
+the IsHaunted app, and confirmed guests are notified. What they send appears on the event's page
+under **Field sessions sent up**, visible to your group and the event's staff. Letting in someone who
+scanned the code and asked to join never creates a booking: it only lets them record along with
+everyone else.
 
 ### Minimum numbers
 
-Some events are only worth running if enough people come. Say the fewest, and the date by which
-you will decide, and we will remind you a week before and again the day before. Leave both empty
-and the event runs whatever the numbers come to.
+Some events are only worth running if enough people come. Enter the minimum number and the date by
+which you will decide, and we will remind you a week before and again the day before. Leave both
+empty and the event goes ahead regardless of numbers.
 
 Once the date is set, **Is it going ahead?** appears on the same card with two buttons. Saying yes
-records the decision and nothing else changes. Saying no calls the event off, which is the same as
-calling it off for any other reason: the people who had places are told, and the listing says so.
+records your decision and nothing else changes. Saying no cancels the event, just like canceling it
+for any other reason: the people who had places are told, and the listing shows it is canceled.
 
 ### Calling it off, and your credit
 
-Ben's rule, and the site follows it exactly: **more than 48 hours before the event starts, the
-event credit you spent comes back.** Inside those 48 hours it does not. The event was advertised,
-it took bookings, and people arranged a weekend around it, so by then you have had what you paid
-for.
+The rule is simple: **cancel more than 48 hours before the event starts, and the event credit you
+used comes back.** Within those 48 hours, it doesn't. By then the event has been advertised, taken
+bookings, and people have planned around it, so you have had what you paid for.
 
-The card says which of the two is about to happen *before* you press the button, in the same words
-the site will use afterwards.
+The card tells you which will happen *before* you press the button, in the same words the site uses
+afterward.
 
-When the credit does come back, the event goes back to needing one — so publishing it again spends
-a credit, exactly as the first time. That is deliberate: you cannot end up holding both the credit
-and the event. When the credit does not come back, the event stays paid for and putting it up again
-costs nothing.
+If the credit comes back, the event needs a credit again, so publishing it again uses a credit,
+just like the first time. You can't keep both the credit and the published event. If the credit
+doesn't come back, the event stays paid for, and publishing it again costs nothing.
 
-A credit that comes back keeps its own expiry. One bought last October still lapses next October
-whatever happened to the event it was spent on, and if it has already lapsed the card says so
-rather than implying there is something waiting.
+A returned credit keeps its original expiry date. One bought last October still expires next
+October, whatever happened to the event it was used on. If it has already expired, the card says
+so rather than suggesting you have a credit available.
 
-**An event that has already happened cannot be taken back to a draft.** It ran; it stays on the
-record. Archive it if you want it off your list, or make a new event for the next one.
+**An event that has already happened can't be turned back into a draft.** It stays on the record.
+Archive it if you want it off your list, or create a new event for next time.
 
 ### What happens without you
 
-An event moves itself along, on your venue's clock rather than ours:
+An event moves through these stages on its own, using your venue's time zone:
 
 - **On the site** once you publish it.
 - **On now** when the first night starts.
-- **Over** when the last one ends. It stays readable and stops taking bookings, because a request
-  arriving after the night is somebody who has misread the date.
-- **Filed away** a fortnight later. It comes off your list and out of the counts; nothing is
-  destroyed.
+- **Over** when the last night ends. It stays readable but stops taking bookings, since any request
+  after that would be from someone who misread the date.
+- **Filed away** two weeks later. It comes off your list and out of the counts; nothing is deleted.
 
-When it is filed away, anybody still waiting on an answer is told the event has passed rather than
-left waiting for ever, and you are told what was closed on your behalf. That is the one thing here
-that acts for you, and it only ever acts once the event is two weeks gone.
+When it is filed away, anyone still waiting for an answer is told the event has passed, rather than
+being left waiting forever, and you are told what was closed for you. This is the only step that
+acts on your behalf, and only once the event is two weeks past.
 
 ### The plan: rooms or seats
 
-An event's plan holds one kind of thing, and you choose which while it is still empty: **Rooms** for
-a venue where people stay the night, **Seats** for an evening where they sit down. Once anything is
-on the plan the choice is settled and the buttons stop being offered — changing it would throw away
-everything arranged so far, and every booking made against it.
+An event's plan holds either rooms or seats, and you choose which while it is still empty: **Rooms**
+for a venue where people stay the night, **Seats** for an evening where they sit down. Once anything
+is on the plan, the choice is locked and the buttons disappear, because switching would throw away
+everything arranged so far, along with every booking made on it.
 
 ![A floor plan of a hotel's rooms](help-media:organization-administration/event-plan-rooms.png)
 
-On a **Rooms** plan the list on the left holds every room the venue has marked bookable that is not
-yet on the plan. Pick one, then press an empty square to say where it goes. *Arrange them for me*
-lays out everything still waiting, one floor per row, which is usually close enough to right that
-you only nudge a couple. A room does not have to go on the plan at all — a cellar you describe and
-never let is simply left in the list.
+On a **Rooms** plan, the list on the left shows every room the venue has marked bookable that isn't
+on the plan yet. Pick one, then press an empty square to place it. *Arrange them for me* lays out
+all the remaining rooms, one floor per row, which is usually close enough that you only need to
+adjust a couple. A room doesn't have to go on the plan at all — a cellar you describe but never
+rent out can just stay in the list.
 
 Rooms keep the venue's own names, so renaming a room on the venue's Rooms page renames it here and
-on every guest's booking at once. A row whose rooms all share a floor gets that floor's name in the
-margin, which is how a hotel ends up with its floors labeled without a column spent on it.
+on every guest's booking at once. If all the rooms in a row are on the same floor, that floor's name
+appears in the margin, so a hotel's floors are labeled without taking up a column.
 
 ### Laying out a theatre quickly
 
 ![A 260-seat house with a center aisle](help-media:organization-administration/event-plan-seats.png)
 
-**Add a block** is how a house gets built: how many rows, how many seats in each, where the letters
-start, which way the numbers run, and what the section is called and costs. A line under the form
-shows the first and the last seat before you commit — *13 rows × 20 = 260 seats, A1 … N20* — which
-is the cheapest way to catch a backwards row before you have named two hundred and sixty chairs.
-Press it twice for a Stalls and a Balcony.
+Use **Add a block** to build a seating layout: how many rows, how many seats in each, which letter
+the rows start at, which direction the numbers run, and the section's name and price. A line under
+the form shows the first and last seat before you commit — *13 rows × 20 = 260 seats, A1 … N20* —
+so you can catch a backwards row before naming two hundred and sixty seats. Use it twice for an
+orchestra section and a balcony.
 
-**Rows skip I and O.** On a printed ticket and a brass rail, I is a 1 and O is a 0, and dropping
-both is cheaper than every usher in the building explaining it for the life of the venue. So the
-rows run A to H, then J, K, L, M, N.
+**Rows skip I and O**, because on a printed ticket or a seat plate, I looks like 1 and O looks like
+0. So the rows run A to H, then J, K, L, M, N.
 
-**Insert an aisle** opens a gangway to the left of whatever you have chosen, pushing everything to
-its right one place over. The gap is genuinely empty — it is a walkway, not a row of seats nobody
-may sit in — and the seats keep their numbers, so you can relabel afterwards if the venue numbers
-across the aisle rather than through it.
+**Insert an aisle** adds an aisle to the left of whatever you have selected, moving everything to
+its right over by one place. The gap is truly empty — it is a walkway, not a row of seats nobody can
+sit in — and the seats keep their numbers, so you can relabel them afterward if the venue numbers
+seats across the aisle rather than continuing through it.
 
-Choose seats by clicking them, or by dragging across a run with a mouse. Everything you press is
-added to the choice and pressing it again takes it back out, so there is no modifier key to
-remember; **Clear** on the bar is how you start over. With a selection you can set a section, a
-price or a note on all of them at once, relabel a whole block by row, nudge it about with the
-arrows, or take it off the plan.
+Select seats by clicking them, or by dragging across a run of seats with a mouse. Each one you
+click is added to the selection, and clicking it again removes it, so there is no modifier key to
+remember. Press **Clear** on the bar to start over. With seats selected, you can set a section, a
+price or a note on all of them at once, relabel a whole block by row, move them with the arrows, or
+remove them from the plan.
 
-**Prices are shown to guests and never charged here.** Blank means "ask us", and zero means the
-seat is included. You and your guests settle up between yourselves.
+**Prices are shown to guests but never charged here.** A blank price means "ask us", and zero means
+the seat is included. You and your guests settle payment between yourselves.
 
 ### Starting from a plan used here before
 
-When an event's plan is empty and the venue has been laid out for an earlier event, the plan page offers
-**Start from a plan used at this venue before**: the venue's own plan first, then your group's, then other
-groups' published events there. Pressing *Start from this plan* fills the page with its rooms or seats,
-sections and positions — not saved until you press Save, so you can change anything first. Your own
-group's prices and notes come across; another group's never do, and a room this event can't offer is
-left out and the page says so.
+If an event's plan is empty and the venue has been laid out for an earlier event, the plan page
+offers **Start from a plan used at this venue before**. It lists the venue's own plan first, then
+your group's, then other groups' published events there. Pressing *Start from this plan* fills the
+page with its rooms or seats, sections and positions. Nothing is saved until you press Save, so you
+can change anything first. Your own group's prices and notes are copied, but another group's never
+are. Any room this event can't offer is left out, and the page tells you.
 
 ### The plan on a phone
 
 ![The same 260-seat house at iPhone width](help-media:organization-administration/event-plan-phone.png)
 
-Laying a whole house out is a computer or an iPad job, and the page says so rather than pretending.
-On a phone the plan is there to be read and adjusted a square at a time: tap a room or a seat to
-open it, fix its price or its note, and save. The squares stay big enough to hit and the plan
-scrolls sideways inside its own box, so the page underneath never slides about.
+Laying out a whole venue is a job for a computer or an iPad, and the page tells you so. On a phone,
+you can read the plan and adjust one square at a time: tap a room or a seat to open it, fix its
+price or note, and save. The squares stay big enough to tap, and the plan scrolls sideways inside
+its own box, so the rest of the page stays put.
 
-If you do want more of a big house on screen at once, *Fit the whole plan* under the tools button
-shrinks the squares. It is a deliberate press, not something the page decides for you.
+If you want to see more of a large plan at once, use *Fit the whole plan* under the tools button to
+shrink the squares. The page only does this when you ask.
 
-Nothing is saved until you press **Save the plan**, and the page says *Not saved yet* while there is
-anything to lose. Leaving with unsaved work asks first.
+Nothing is saved until you press **Save the plan**, and the page shows *Not saved yet* while you
+have unsaved changes. If you try to leave with unsaved changes, you are asked first.
 
 #### Sleeps, bookable and beds
 
-The rooms themselves live on the venue's own **Rooms** page, which the event's Details card links
-to as *Describe the venue's rooms*. Each room can say what it sleeps, whether it may be booked, and
-how many beds it has.
+The rooms themselves are set up on the venue's own **Rooms** page, which the event's Details card
+links to as *Describe the venue's rooms*. Each room can say how many it sleeps, whether it can be
+booked, and what beds it has.
 
-**Sleeps** left blank means nobody has said: ask the venue, and an event that offers the room will
-have to give a number of its own. **Zero** is a decision — a room nobody sleeps in, a parlour or a
-séance room that guests visit and leave. The two look alike on a form and mean opposite things on a
-booking, so a blank is never quietly read as zero.
+A blank **Sleeps** means nobody has entered a number yet. Ask the venue, and any event that offers
+the room will need to enter its own number. **Zero** is a deliberate choice — a room nobody sleeps
+in, such as a parlor or a séance room that guests visit and leave. Blank and zero look similar on a
+form but mean opposite things for a booking, so a blank is never treated as zero.
 
-**Bookable** is separate from **Public**. Public says whether a visitor can read about the room on
-the venue's page; bookable says whether a party can take it for the night. A famous room can be
-public and never booked — the owner sleeps in it — and a plain twin can be bookable without earning
-a paragraph on the page. Ticking one does nothing to the other.
+**Bookable** is separate from **Public**. Public controls whether visitors can read about the room
+on the venue's page; bookable controls whether a party can book it for the night. A famous room can
+be public but never booked — the owner sleeps in it — and a plain twin room can be bookable without
+a description on the page. Checking one doesn't affect the other.
 
-**Beds** is a description, in your own words — "one king", "two twins and a cot", "four bunks". It
-answers the question a number cannot: *will the two of us have to share a bed?* It is not a count
-and nothing is booked by it; **Sleeps** is the number a booking is checked against. A room let out
-bed by bed is described as several rooms — "Bunk 1" through "Bunk 6", each sleeping one — because a
-party takes a room, and six beds sold separately are six things to take.
+**Beds** is a description in your own words — "one king", "two twins and a cot", "four bunks". It
+answers a question a number can't: *will the two of us have to share a bed?* It isn't a count, and
+bookings don't use it; **Sleeps** is the number bookings are checked against. If you rent out a room
+bed by bed, describe it as several rooms — "Bunk 1" through "Bunk 6", each sleeping one — because a
+party books a whole room.
 
 #### How a booking works
 
-A **booking is a party**, not a person: one lead who talks to you, a party size, and as many named
-guests as there are people. Guests don't need accounts — somebody brings a partner who has never
-heard of us — and each guest can carry their own dietary note.
+A **booking is a party**, not a person: one lead contact, a party size, and a named guest for each
+person. Guests don't need accounts — someone might bring a partner who has never heard of us — and
+each guest can have their own dietary note.
 
-There are two kinds. An **overnight** party takes a room on named nights. A **day pass** is for
-somebody coming without staying, counted against one number for the whole event.
+There are two kinds. An **overnight** party books a room on specific nights. A **day pass** is for
+someone coming without staying, counted against a single limit for the whole event.
 
-A guest asks; you decide. Until you confirm it, a request **holds nothing** — no room, no day pass —
-which means your event keeps taking requests after it is full and the overflow is a waiting list
-you can work through rather than a closed door. The board shows both numbers: how many are in a
-room on a night, and how many have *asked* for it.
+A guest asks, and you decide. Until you confirm it, a request **holds nothing** — no room, no day
+pass. So your event keeps taking requests after it is full, and the extra requests form a waiting
+list you can work through. The board shows both numbers: how many are in a room on a given night,
+and how many have *asked* for it.
 
 #### Confirming, and moving people about
 
-Confirming is you saying the place is theirs and that you two have settled how money changes hands.
-**This site never takes a guest's money.** When you confirm you say which room they are actually in
-on each night, and that need not be the room they asked for — putting a party of three out of a
-double and into the suite is the ordinary thing, and there is no need to make them start again.
+Confirming means the place is theirs and that the two of you have settled how they will pay.
+**This site never takes a guest's money.** When you confirm, you choose which room they are actually
+in each night, and it doesn't have to be the room they asked for. Moving a party of three from a
+double into the suite is perfectly normal, and there's no need to make them start over.
 
-If they don't fit, the refusal tells you what to do about it: which room, which night, and how many
-more it sleeps. "Full" on its own would leave you guessing whether a smaller party would go in.
+If they don't fit, the message tells you exactly why: which room, which night, and how many more it
+sleeps, so you can tell whether a smaller party would fit.
 
-Confirming also puts them on the event's calendar entry, which is what the reminder email, the
-calendar file, the public count and the phone apps all read.
+Confirming also adds them to the event's calendar entry, which the reminder email, the calendar
+file, the public count and the phone apps all read from.
 
 #### Changing and canceling
 
-Bookings are editable after they are confirmed, because a real weekend has somebody dropping out on
-the Thursday. Change the party size, the rooms, the nights or the guests; the room is re-checked so
-an edit can never do what a booking couldn't, and a party moving rooms is never blocked by the beds
-it is leaving.
+You can edit bookings after they are confirmed, because in real life someone always drops out on
+Thursday. Change the party size, the rooms, the nights or the guests. The room is checked again, so
+an edit can't do anything a new booking couldn't, and a party moving rooms is never blocked by the
+beds it is leaving.
 
-A guest can change their own booking too. If they change what you agreed to — the party size or the
-nights — it comes back to you as a request, because the thing you said yes to is not the thing
-being asked for any more.
+Guests can change their own bookings too. If they change something you agreed to — the party size or
+the nights — it comes back to you as a request, because it is no longer what you said yes to.
 
-**A guest cannot free a confirmed room on their own.** They ask, you release it. You have catered,
-staffed and possibly turned somebody else away against that room, and a room freed without your
-knowing is a room that stays empty. Their reason comes with the ask.
+**A guest can't free up a confirmed room on their own.** They ask, and you release it. You may have
+planned food and staff around that room, or turned someone else away, and a room freed without your
+knowledge would just sit empty. Their reason comes with the request.
 
-Turning a booking down and canceling one both tell the guest, and both give the room back.
+Turning a booking down and canceling one both notify the guest, and both free up the room.
 
 #### Bookings close
 
-You can set a date when the event stops taking new requests, so you can cater and staff to a known
-number. It stops *new* ones only — a request already waiting when it closes is still yours to
-decide, because somebody who asked in time shouldn't be refused by a clock while you were asleep.
+You can set a date when the event stops taking new requests, so you know your numbers for catering
+and staffing. It only stops *new* requests — any request already waiting when bookings close is
+still yours to decide, so nobody who asked in time is turned away automatically.
 
 #### Inviting somebody who has no account
 
-Most guests ask you through the event's page, which needs an account. For the ones who ring up, or
-who you meet at a conference, there is **Invite by email**: you type their address and we send them
-a link. Clicking it proves the address, makes them a passwordless account and puts a **day-pass
-request** on your board, which you then confirm like any other.
+Most guests ask through the event's page, which needs an account. For people who phone you, or who
+you meet at a conference, there is **Invite by email**: type their address and we send them a link.
+Clicking it confirms their email address, creates a passwordless account for them, and puts a
+**day-pass request** on your board, which you then confirm like any other.
 
-Two things about it are worth knowing before you use it.
+Two things are worth knowing before you use it.
 
-**Nothing is held until they click.** The invitation reserves no room and no day pass, and we say
-so on the screen rather than showing you something booking-shaped. If you need a room held *now*
-for somebody on the phone, make the booking against an account instead.
+**Nothing is held until they click.** The invitation doesn't reserve a room or a day pass, and the
+screen says so clearly. If you need to hold a room *right now* for someone on the phone, create the
+booking under an account instead.
 
-**It only ever asks for a day pass.** Sleeping somewhere means choosing rooms night by night and a
-hyperlink is not a booking form — so if they are staying over, move them into a room when you
-confirm, which is where you decide every other room anyway.
+**It only ever requests a day pass.** Staying overnight means choosing rooms night by night, which
+a link can't do. So if they are staying over, move them into a room when you confirm, just as you
+assign every other room.
 
-The link is good for two weeks and works once. Sending it again to the same address replaces the
-old one rather than stacking a second guest, and if they had already asked you for a place
-themselves, they become one party rather than two. If your site has no mail configured, we tell you
-the letter did not go rather than leaving you waiting at a door.
+The link is valid for two weeks and works once. Sending it again to the same address replaces the
+old one instead of adding a second guest, and if they had already asked for a place themselves,
+they are combined into one party. If your site has no email set up, we tell you the message wasn't
+sent, so you aren't left waiting.
 
-An event that isn't published yet, has been called off, or sells no day passes refuses the
-invitation and says which — better than thirty people finding out a fortnight later.
+If an event isn't published yet, has been canceled, or doesn't sell day passes, the invitation is
+refused and the message says which — much better than thirty people finding out two weeks later.
 
 ### Menus
 
-**Menus** on the event page is one page for the whole weekend: every night, and under each one
-every sitting you serve.
+**Menus** on the event page is a single page for the whole weekend: every night, and under each
+night, every meal you serve.
 
 ![Menus for a weekend, with three sittings under the Friday](help-media:organization-administration/event-menus.png)
 
-Each night's heading carries four buttons — **+ Breakfast**, **+ Lunch**, **+ Dinner**,
-**+ Snacks** — and pressing one adds a sitting under that night. They are a starting point and not
-a list to choose from: the name is an ordinary box afterwards, so a midnight vigil supper can be
-called whatever you actually call it. Give it a time if it has one, a note if it needs one, and
-then type the dishes into the box below, **one to a line**. Put the course before a colon if you
-use courses — `Starter: Tomato soup` — and a line without one is simply a dish.
+Each night's heading has four buttons — **+ Breakfast**, **+ Lunch**, **+ Dinner**, **+ Snacks** —
+and each one adds a meal under that night. They are just a starting point: once added, the name is
+an ordinary text box, so a midnight vigil supper can be called whatever you like. Add a time if it
+has one and a note if it needs one, then type the dishes in the box below, **one to a line**. If you
+use courses, put the course before a colon — `Starter: Tomato soup`. A line without a colon is just
+a dish.
 
-The arrows beside a sitting move it **within its night**, and where it sits in the list is the
-order it is served in. The bin removes it. Nothing is saved until you press **Save the menus**,
-which writes the whole weekend at once.
+The arrows beside a meal move it **within its night**, and the order in the list is the order it is
+served. The trash can removes it. Nothing is saved until you press **Save the menus**, which saves
+the whole weekend at once.
 
-**A night runs from the evening people arrive through the morning they come down.** So Friday
-night's sittings include Saturday's breakfast, and the last night of a weekend still serves the
-breakfast on the day everybody leaves. Sittings read in the order you arrange them, not by the
-clock, because an eight o'clock breakfast comes *after* the seven o'clock dinner it followed.
+**A night runs from the evening people arrive to the next morning.** So Friday night's meals include
+Saturday's breakfast, and the last night of a weekend still includes breakfast on the day everyone
+leaves. Meals appear in the order you arrange them, not by time, because an 8 a.m. breakfast comes
+*after* the 7 p.m. dinner the night before.
 
-The tags on a dish describe **the food** — "vegan", "contains nuts" — and everybody who can see the
-menu sees them. A guest's own allergy is a different thing entirely and lives on their booking.
+The tags on a dish describe **the food** — "vegan", "contains nuts" — and everyone who can see the
+menu sees them. A guest's own allergy is something else entirely, and it is recorded on their
+booking.
 
-Menus are shown to guests whose place you have **confirmed**, not to the public. A menu is part of
-what somebody has booked, and you may not want the hotel down the road costing your catering before
-you have sold the weekend. A guest still waiting is told you publish it once their place is agreed.
+Menus are shown only to guests whose place you have **confirmed**, not to the public. A menu is part
+of what somebody has booked, and you may not want a competing venue sizing up your catering before
+you have sold the weekend. A guest who is still waiting is told the menu will be shared once their
+place is confirmed.
 
-Typing a whole weekend's food is a job for a keyboard, but the page works on a phone if you need to
-add a sitting between two other things.
+Typing a whole weekend's menus is easier on a keyboard, but the page also works on a phone if you
+need to add a meal on the go.
 
 ![The menus page on a phone](help-media:organization-administration/event-menus-phone.png)
 
@@ -1480,234 +1579,235 @@ add a sitting between two other things.
 3. **Tap a party, then tap a table.** The party is seated there. To split a big party, change how many to
    seat before you tap the table, then seat the rest at another.
 
-Only confirmed bookings that are here that night are listed, with how many of each party still need a
-seat and a badge when somebody in the party has dietary notes. A table never seats more people than it
-has chairs; if a party doesn't fit, the page says how many chairs are left. A booking that is canceled
-drops off its table by itself.
+Only confirmed bookings staying that night are listed, showing how many in each party still need a
+seat, and a badge if anyone in the party has dietary notes. A table never seats more people than it
+has chairs; if a party doesn't fit, the page tells you how many chairs are left. If a booking is
+canceled, it is removed from its table automatically.
 
-**Seat the same way** copies another sitting's seating — everybody who is at both meals goes back to the
-same table. **Print table list** prints each table with who sits there and their dietary notes, for the
-kitchen and the dining room. Guests see their table on their pass.
+**Seat the same way** copies the seating from another meal, so everyone who is at both meals sits at
+the same table again. **Print table list** prints each table with who sits there and their dietary
+notes, for the kitchen and the dining room. Guests see their table on their pass.
 
-Changing a meal's name or dishes keeps its seating. Removing a meal, or a table, removes the seating for it.
+Changing a meal's name or dishes keeps its seating. Removing a meal or a table removes its seating.
 
 ### The confirmation email and the pass
 
-**Confirming a booking sends the guest a letter, and the letter carries their pass.** You do not
-have to remember to send anything — a guest who was told yes and given nothing to show has to be
-looked up by name at the door, which is the queue this whole thing exists to remove.
+**Confirming a booking sends the guest an email, and the email includes their pass.** You don't
+have to remember to send anything. Without a pass, a confirmed guest would have to be looked up by
+name at the door, which is exactly the line this is meant to avoid.
 
-The letter says which nights they have and which room they are in, repeats anything you typed in
-the decision note, and carries a **QR code**. Turning a booking down or releasing one sends a
-letter too, using the same machinery, so the guest who is *not* coming is told exactly as reliably
-as the one who is. A refusal carries your reason, because a refusal with none reads as arbitrary
-and the commonest reason is one the guest can act on.
+The email lists their nights and their room, repeats anything you typed in the decision note, and
+includes a **QR code**. Turning a booking down or releasing one sends an email too, the same way, so
+guests who *aren't* coming are told just as reliably as those who are. A refusal includes your
+reason, because a refusal without one feels arbitrary, and the most common reasons are ones the
+guest can do something about.
 
-Attached to a confirmation is a **calendar file with one entry per night**, each naming the room.
-A single entry across the whole weekend would sit there as one block and tell them nothing about
-where they are sleeping on Saturday.
+A confirmation also includes a **calendar file with one entry per night**, each naming the room. A
+single entry for the whole weekend wouldn't tell them where they are sleeping on Saturday.
 
-If your site has no mail configured, nothing is sent and the decision still stands. A guest who is
-confirmed but whose letter bounced is a confirmed guest.
+If your site has no email set up, nothing is sent, but the decision still stands. A confirmed guest
+whose email bounced is still confirmed.
 
 #### The pass, and the door
 
-**One pass admits the whole party.** Not one each: three of the four people arriving together may
-never have had an email address here, and four people at a door each hunting for their own code is
-worse than one person holding one.
+**One pass admits the whole party.** There isn't one per person: three of four people arriving
+together may never have given us an email address, and one person holding one code is easier than
+four people at the door each looking for their own.
 
-Scan it at the door and you are told who they are, how many, which nights and which room. If the
-code will not scan — a flat battery, a camera that will not focus in the dark — everything the scan
-would have told you is also written on the guest's own pass screen in words, so you can let them in
-anyway.
+Scan it at the door and you see who they are, how many, which nights and which room. If the code
+won't scan — a dead battery, or a camera that won't focus in the dark — everything the scan would
+have shown is also written out on the guest's own pass screen, so you can still let them in.
 
-**Every refusal at the door is a sentence you can read out.** Not "invalid", which does not tell
-you whether to send somebody to the desk, wait, or turn them away:
+**Every refusal at the door is a sentence you can read aloud.** You never just see "invalid", which
+doesn't tell you whether to send someone to the desk, ask them to wait, or turn them away:
 
-- a code from another event names that event, because somebody showing last month's is the
-  commonest case and naming it ends the conversation;
-- a withdrawn pass reads out the reason you gave when you withdrew it;
-- a booking not yet confirmed says so, rather than pretending the code is fake.
+- a code from another event names that event, because someone showing last month's pass is the most
+  common case, and naming it settles things quickly;
+- a withdrawn pass shows the reason you gave when you withdrew it;
+- a booking that isn't confirmed yet says so, rather than suggesting the code is fake.
 
-**Scanning the same party twice is not refused.** You are told when they first arrived and left to
-decide — a door that turned people away for walking back in from the parking lot would be a worse
-door.
+**Scanning the same party twice isn't refused.** You are told when they first arrived and can decide
+for yourself, so nobody is turned away for coming back in from the parking lot.
 
 #### Replacing a pass
 
-**A pass is never edited, only replaced.** Change a booking's party size or its nights and the old
-pass is withdrawn automatically and a new one issued, so the code in somebody's pocket can never
-quietly say the wrong thing. **Reissue** does the same on purpose, for the guest who lost the
-letter. **Revoke** withdraws one without replacing it, and asks you for a reason, because that
-reason is what the door reads out.
+**A pass is never edited, only replaced.** If you change a booking's party size or nights, the old
+pass is withdrawn automatically and a new one is issued, so the code someone is carrying can never
+show the wrong details. **Reissue** does the same thing on demand, for a guest who lost the email.
+**Revoke** withdraws a pass without replacing it, and asks you for a reason, because that reason is
+what the door shows.
 
-A withdrawn pass is kept rather than deleted. Somebody showing an old code is told it was replaced,
-which is a different sentence from being told it was never real.
+A withdrawn pass is kept rather than deleted. Someone showing an old code is told it was replaced,
+which is different from being told it was never valid.
 
 ### Who is helping, and the door
 
-**The person on the door is not a person with billing rights.** A hotel gives the door to a weekend
-helper who is not in your group and never will be, and until now the only way to let them scan a
-pass was to make them somebody who could change your billing.
+**The person on the door doesn't need billing rights.** A hotel might put a weekend helper on the
+door who isn't in your group and never will be. Event staff let you give that helper exactly what
+they need, without giving them access to your billing.
 
 ![Who is helping at an event](help-media:organization-administration/event-staff.png)
 
-**Staff** on the event page invites somebody by email and says what they may do. Five switches, and
-they are not a ladder:
+**Staff** on the event page invites someone by email and sets what they can do. There are five
+switches, and each one is independent:
 
-- **Run the door** — scan passes and mark people in. Most helpers need only this one.
-- **See who's coming** — the board, with guests' names and anything they cannot eat.
-- **Say yes or no to bookings** — deciding, which carries seeing.
+- **Run the door** — scan passes and check people in. Most helpers only need this one.
+- **See who's coming** — the board, with guests' names and anything they can't eat.
+- **Say yes or no to bookings** — making decisions, which includes seeing the board.
 - **Menus and the kitchen's sheet.**
 - **The event's files.**
 
-The role — *Door*, *Kitchen*, *Guide* — is a label for your own rota. It grants nothing.
+The role — *Door*, *Kitchen*, *Guide* — is just a label for your own schedule. It doesn't grant
+anything.
 
-**An invitation grants nothing until it is accepted**, and the list says so plainly against
-anybody who has not. The letter tells them which event, which venue and exactly what they are
-being trusted with, before the button. Accepting makes them an account if they have none.
+**An invitation grants nothing until it is accepted**, and the list clearly marks anyone who hasn't
+accepted yet. Before they press the button, the email tells them which event, which venue and
+exactly what they are being trusted with. If they don't have an account, accepting creates one.
 
-**It is this event only.** A steward for Saturday is nobody on Sunday, and nobody in your group.
-**Remove** takes effect on their very next tap.
+**It applies to this event only.** A helper for Saturday has no access on Sunday, and is not a
+member of your group. **Remove** takes effect the next time they tap anything.
 
 ### On the door
 
-**Phone-first, because that is where it is used** — one thumb, in the dark, with somebody standing
-in front of you.
+**The door screen is designed for phones, because that's where it gets used** — one thumb, in the
+dark, with someone standing in front of you.
 
 ![The door on a phone](help-media:organization-administration/event-door-phone.png)
 
-- **The count is the first thing**: how many are in, out of how many are expected, and **how many
-  more could come in tonight**. That last one is what somebody at your elbow is asking.
-- **Scan a pass** with the camera. Where the browser cannot read QR codes — Safari, mostly — we
-  fetch a reader the first time and nothing else changes. Every reason a camera will not start has
-  a sentence saying what to do instead, including the one a venue meets testing on its own network
-  over `http`.
-- **Type the code** from the guest's pass when the camera is no use. It is the six characters
+- **The count comes first**: how many are in, out of how many are expected, and **how many more
+  could come in tonight**. That last number is usually what people ask you.
+- **Scan a pass** with the camera. If the browser can't read QR codes — mostly Safari — we load a
+  reader the first time, and nothing else changes. If the camera won't start, a message tells you
+  what to do instead, including when a venue is testing on its own network over `http`.
+- **Type the code** from the guest's pass when the camera won't work. It is the six characters
   printed under their QR code.
-- **Find somebody by name** when they have lost the email entirely.
-- **They're here** admits them, **Left** marks them out again, and **Not them** takes it back —
-  because a doorway is exactly where the wrong row gets pressed.
+- **Find somebody by name** if they have lost the email entirely.
+- **They're here** checks them in, **Left** checks them out again, and **Not them** undoes it — since
+  it is easy to tap the wrong row at a busy door.
 
-**Arrivals are per night.** Somebody marked in on the Friday is not marked in on the Saturday, so
-the Saturday door tells you the truth and you can answer "who was actually here on the Saturday"
-afterwards.
+**Arrivals are counted per night.** Somebody checked in on Friday isn't checked in on Saturday, so
+the Saturday count is accurate, and afterward you can see exactly who was there on Saturday.
 
-**Somebody who just turns up** is written down as a walk-up: how many, and a name if they gave one.
-No account is invented for them and they get no pass — the point is that the count is right, for
-the kitchen and for the fire officer. Let too many in and the door refuses, because the number at
-the top is only worth anything if it is enforced.
+**Somebody who just shows up** is recorded as a walk-up: how many, and a name if they gave one. No
+account is created for them and they don't get a pass — the goal is an accurate count, for the
+kitchen and for fire safety. If letting them in would go over the limit, the door won't allow it,
+because the number at the top only matters if it is enforced.
 
-Print the page before the doors open if you expect no signal: a browser cannot scan a code with
-nothing to talk to — or run the door from the iPhone or iPad app, which can.
+If you don't expect a signal, print the page before the doors open, since a browser can't scan a
+code without a connection. Or run the door from the iPhone or iPad app, which can.
 
-**On the iPhone or iPad app.** Anybody who may run an event's door — somebody in your group with the
-door, a helper who accepted, or the venue's own people where it lent them — finds **Doors I'm running**
-under **Profile**. The door there works the same way, with two differences that matter in a cellar:
+**On the iPhone or iPad app.** Anyone who can run an event's door — a group member with door access,
+a helper who accepted an invitation, or the venue's own staff if the venue granted it — will find
+**Doors I'm running** under **Profile**. The door there works the same way, with two differences
+that matter in a cellar with no signal:
 
-- **Scanning finds the reservation; it doesn't check anybody in.** The camera reads the code and the app
-  shows the reservation it belongs to. The person on the door taps it, sees who it is, and checks them in
-  as arrived — all of the party, or as many as are actually there. The camera reads the code on the phone
+- **Scanning finds the reservation; it doesn't check anyone in.** The camera reads the code and the
+  app shows the matching reservation. The person on the door taps it, sees who it is, and checks
+  them in — the whole party, or however many are actually there. The code is read on the phone
   itself, so this works with no signal.
-- **Tonight's list is kept on the phone** once it has been opened. With no signal a scanned pass is
-  matched to its reservation on that list by its code, and whoever is checked in is kept on the phone
-  **with the time they came in** and sent as soon as there is signal. Your list and count on the website then show
-  them arriving when they did, not when the phone found a bar.
+- **Tonight's list is saved on the phone** once it has been opened. With no signal, a scanned pass
+  is matched to its reservation on that list by its code, and each check-in is saved on the phone
+  **with the time they came in**, then sent as soon as there is a signal. Your list and count on the
+  website then show when they actually arrived, not when the phone got a signal back.
 
-A pass you withdrew while the phone was offline is still refused when the phone catches up, and the
-app lists that person by name so somebody can find them. A walk-up, and taking back an arrival that
-has already been recorded, need a signal, because they have to be checked against the count first.
+A pass you withdrew while the phone was offline is still refused once the phone reconnects, and the
+app lists that person by name so someone can find them. Recording a walk-up, or undoing a check-in
+that has already been recorded, needs a signal, because it has to be checked against the count
+first.
 
 ### Bands
 
-Wristbands, lanyards, a stamp on the hand — whatever your people give out so a steward knows **by
-glance** what somebody is here for. *Blue is the whole weekend with dinner, purple is the whole
+Wristbands, lanyards, a stamp on the hand — whatever your team gives out so a steward can tell **at
+a glance** what someone is here for. *Blue is the whole weekend with dinner, purple is the whole
 weekend, red is Saturday only.*
 
 ![Setting up the bands](help-media:organization-administration/event-bands.png)
 
-**Bands** on the event page lists them. Each has a color — **your** word for it, because the box of
-wristbands in your drawer says orange and the screen should too — an optional swatch, what it means,
-and who gets it:
+**Bands** on the event page lists them. Each one has a color — in **your** words, so if the
+wristbands in your drawer are labeled orange, the screen says orange too — plus an optional swatch,
+what it means, and who gets it:
 
 - **Here every night** — the whole run.
-- **Here some nights** — the Saturday-only guest, who is exactly the one a steward gets wrong.
+- **Here some nights** — for example, the Saturday-only guest, who is the one stewards most often get
+  wrong.
 - **Day pass** — here for the day, not staying.
 - **Given out by hand** — you choose, party by party.
 
-**Most parties never need tagging.** Their band is worked out from what they booked, so two hundred
-guests do not mean two hundred decisions. **The first rule that matches wins**, in the order on the
-page, so put *every night* above *some nights* if that is what you mean.
+**Most parties never need a band assigned by hand.** Their band is worked out from what they
+booked, so two hundred guests don't mean two hundred decisions. **The first rule that matches
+wins**, in the order shown on the page, so put *every night* above *some nights* if that's what you
+want.
 
-**Anything about food is given out by hand.** Nothing on a booking says a party is eating, so we
-cannot work that one out. Open the party on the booking board and choose it under **What they
-wear**; *Worked out from the rules* puts them back.
+**Bands for meals have to be given out by hand.** Nothing on a booking says whether a party is
+eating, so the site can't work it out. Open the party on the booking board and choose the band
+under **What they wear**; *Worked out from the rules* switches them back to automatic.
 
-The band then shows **beside their name at the door**, on the booking board, and on the guest's own
-pass — so somebody who already knows they are blue does not have to be told.
+The band then appears **beside their name at the door**, on the booking board, and on the guest's
+own pass — so guests already know they are blue without being told.
 
 ![A band beside a name at the door](help-media:organization-administration/event-door-bands.png)
 
 ### Venues on this site
 
-**A place is nobody's**, and several groups can hold events or investigate at the same building. But
-a group can be **confirmed as the venue** at a place — the hotel itself, or the people who run it —
-and from then on, other groups ask that venue before they publish an event there.
+**No group owns a place**, and several groups can hold events or investigate at the same building.
+But a group can be **confirmed as the venue** for a place — the hotel itself, or the people who run
+it — and from then on, other groups must ask that venue before they publish an event there.
 
-**Asking.** On your event's page, **The venue's say-so** names who runs the place. Write anything
-they should know and press **Ask**. They are told straight away, and are asked about your event's
-exact nights: add a night afterwards and their yes does not cover it, and the checklist says so.
-While they have not answered, you can take the question back.
+**Asking.** On your event's page, **The venue's say-so** shows who runs the place. Write anything
+they should know and press **Ask**. They are notified right away, and they are asked about your
+event's exact nights: if you add a night afterward, their yes doesn't cover it, and the checklist
+tells you. Until they answer, you can withdraw the request.
 
 ![What the organizer sees once the venue has said yes](help-media:organization-administration/event-venue-yes.png)
 
-**Answering, as the venue.** **Hosting requests** — from **Your venue** in your group's settings,
-or the bell — lists every group waiting on you, oldest first, with their event, their nights and
-their message. **Say yes**, or say no with a reason they will read.
+**Answering, as the venue.** **Hosting requests** — from **Your venue** in your group's settings, or
+from the bell — lists every group waiting for your answer, oldest first, with their event, their
+nights and their message. **Say yes**, or say no with a reason they will see.
 
 ![A group asking to hold an event at your venue](help-media:organization-administration/venue-requests.png)
 
-A yes can lend three things, each your choice:
+When you say yes, you can also share three things, each one optional:
 
-- **Your rooms**, so their plan can place the rooms you have described instead of them typing
-  your building out again.
+- **Your rooms**, so their plan can use the rooms you have already described, instead of them
+  entering your building all over again.
 - **The building's story**, shown on their public event page.
-- **Your own people**, who may then see who is coming and help on the door. They never decide who
+- **Your own staff**, who can then see who is coming and help on the door. They never decide who
   comes — that stays with the organizer.
 
-**Taking a yes back.** **Withdraw…** asks for a reason and says exactly what it will do first. Every
-published event resting on that yes stops: its page says the venue withdrew, everybody with a place
-is written to with your reason, their passes stop working, and the organizer gets back any credit
-they spent, however close to the date it is — they did nothing wrong. Events that have already
-happened are left alone.
+**Taking a yes back.** **Withdraw…** asks for a reason and tells you exactly what will happen
+first. Every published event that depends on that yes is stopped: its page says the venue withdrew,
+everyone with a place is emailed with your reason, their passes stop working, and the organizer
+gets back any credit they spent, however close to the date it is — since it isn't their fault.
+Events that have already happened aren't affected.
 
 **Your venue page.** Under **Your venue**, describe each place you run — its story, house rules,
-how many may stay — and, once you are confirmed as the venue, show the page to everybody. It lists
-your public rooms and everything on at the place, whoever runs it, and the place's own page links
-to it.
+how many people it can sleep — and, once you are confirmed as the venue, make the page public. It
+lists your public rooms and every event at the place, whoever is running it, and the place's own
+page links to it.
 
-**Write as much as you like, and add your own sections.** There is no limit on how long the story or
-the house rules are. Under them, **Add a section** gives you a heading and as much text as you need —
-ghost hunt weekends, dining, shows, the chapel, how to find you. Add as many as you want, put them in
-order with the arrows, and remove one with the trash can. They appear on your venue page under their own
-headings, in that order, after the building's story. A section needs a heading; an empty one is left
-out when you save.
+**Write as much as you like, and add your own sections.** There is no length limit on the story or
+the house rules. Below them, **Add a section** gives you a heading and as much text as you need —
+ghost hunt weekends, dining, shows, the chapel, directions. Add as many as you want, reorder them
+with the arrows, and remove one with the trash can. They appear on your venue page under their own
+headings, in that order, after the building's story. Each section needs a heading; empty sections
+are dropped when you save.
 
 ![A venue's page](help-media:organization-administration/venue-page.png)
 
-**Describing a place does not make you its venue.** Any group may write about a hall it rents every
-October, and it changes nothing for anybody else. Being confirmed as the venue is a separate step —
-below — and until it is done the page stays private, because a public page headed "the venue" is
-itself a claim to be the building.
+**Describing a place doesn't make you its venue.** Any group can write about a hall it rents every
+October, and it doesn't affect anyone else. Being confirmed as the venue is a separate step,
+explained below. Until then, the page stays private, because a public venue page would suggest you
+run the building.
 
 ![Describing a place you run](help-media:organization-administration/venue-profile.png)
 
-**Photos of the venue.** Under each place you run, *Photos of the venue* keeps pictures of the building —
-as many as you want; there is no limit. Pictures you add are kept straight away. Organizers holding events at your venue can offer pictures from
-their event's gallery with **Offer to venue**; an offer waits for you to press *Keep it* or *No thanks*.
-Kept pictures show on your published venue page, fitted and with their location removed. Declining an
-offer never takes the picture away from the organizer's gallery, and a picture you keep stays in your
-library after the organizer's event files are removed.
+**Photos of the venue.** Under each place you run, *Photos of the venue* holds pictures of the
+building — as many as you want; there is no limit. Pictures you add are saved right away.
+Organizers holding events at your venue can offer pictures from their event's gallery with **Offer
+to venue**; each offer waits until you press *Keep it* or *No thanks*. Pictures you keep appear on
+your published venue page, resized and with their location data removed. Declining an offer never
+removes the picture from the organizer's gallery, and a picture you keep stays in your library even
+after the organizer's event files are removed.
 
 ![A venue's photo library](help-media:organization-administration/venue-photos.png)
 
@@ -1715,544 +1815,549 @@ library after the organizer's event files are removed.
 
 Every place's page has a **Contact** card: its website, phone numbers and email addresses.
 
-- **Public** details are for anybody — the website, the box office, the front desk.
-- **Private** details are your group's own notes — the events coordinator's mobile you were given for
-  scheduling. Nobody outside your group sees them.
+- **Public** details are for anyone — the website, the box office, the front desk.
+- **Private** details are your group's own notes — for example, the cell number of the events
+  coordinator you work with. Nobody outside your group sees them.
 
-Before anybody has been confirmed as running a place, any group may record its public details, and
-each one says who added it. **Once a venue is confirmed, its public details are the venue's.** It
-presses **That's right** on what others added, or removes it, and other groups can add private notes
-only — the card says why, rather than offering a switch that does nothing.
+Until someone is confirmed as running a place, any group can add its public details, and each one
+shows who added it. **Once a venue is confirmed, it controls the public details.** The venue can
+press **That's right** on details others added, or remove them, and other groups can only add
+private notes — the card explains why, rather than showing a switch that does nothing.
 
 ![A place's contact details, public and private](help-media:organization-administration/place-contacts.png)
 
 ### Claiming a venue that is already on the site
 
-Most venues arrive on the site as a place somebody else typed in — the organizer of an event held
-there, months before the venue heard of us. When your group runs a place, open its page and choose
+Most venues are added to the site by someone else — usually the organizer of an event held there,
+often months before the venue hears of us. If your group runs a place, open its page and choose
 **Is this your venue? Claim it**, or **Claim it** beside a place on **Your venue**. Say whether you
 are its owner, its manager, or a representative acting for them.
 
-**A claim is on the place, never on an event.** It decides who future organizers must ask. Nothing
-already booked there moves, is canceled or changes hands, and you do not see who came to events you
-had no part in.
+**A claim applies to the place, never to an event.** It decides who future organizers must ask.
+Nothing already booked there is moved, canceled or transferred, and you can't see who came to
+events you weren't part of.
 
-There are two ways to prove it:
+There are two ways to prove your claim:
 
-- **A code to the venue's own email.** If a public email address for the place was recorded by
-  somebody **outside** your group at least a week ago, we can send a code there — shown masked, so you
-  can recognize your front desk. Whoever reads that inbox gives you the code. An address your own
-  group added proves only that you read your own mail, so it is never offered.
-- **A review by a person**, when there is no such address. Tell them what shows you run the place —
+- **A code sent to the venue's own email.** If a public email address for the place was added by
+  someone **outside** your group at least a week ago, we can send a code there. The address is
+  partly hidden, but you should recognize it as your front desk. Whoever reads that inbox gives you
+  the code. An address your own group added only proves you can read your own email, so it is never
+  offered.
+- **A review by a person**, if there is no such address. Tell them what shows you run the place —
   a license, a listing, your role — and they may contact you.
 
 ![Claiming a venue](help-media:organization-administration/venue-claim.png)
 
-**A proved claim waits a week.** Every group that knows the place — that has held events, named rooms,
-recorded details, or investigated there — is told, and any of them can say **This claim is wrong**
-with a reason. An objection sends the claim to a person instead. With no objection, you are confirmed
-as the venue when the week is up.
+**A proven claim waits a week.** Every group connected with the place — that has held events, named
+rooms, added details, or investigated there — is notified, and any of them can press **This claim
+is wrong** and give a reason. If anyone objects, the claim goes to a person for review instead. If
+nobody objects, you are confirmed as the venue when the week is up.
 
-**Reviewing claims** (site staff) happens at **Venue Claims** in the admin menu: claims with nothing to
-prove them by and claims somebody objected to come first, and a confirmed venue that turns out to be
-wrong can be undone — which takes its page down and stops it gating new events, but leaves any yes it
-already gave standing.
+**Reviewing claims** (site staff) happens at **Venue Claims** in the admin menu. Claims with no
+proof, and claims someone objected to, are listed first. A confirmed venue that turns out to be
+wrong can be undone. That takes its page down and means new events there no longer need its
+approval, but any yes it already gave still stands.
 
 ![Reviewing a claim](help-media:organization-administration/venue-claim-review.png)
 
 ### The program
 
-**Program** on the event page is where the classes, talks and meals go — the part of the weekend
-guests opt into one piece at a time. Add each session with its night, its times **on the venue's
-clock** (an end earlier than the start is the next morning), where it is — one of the venue's rooms,
-or words like "meet at reception" — and who leads it.
+**Program** on the event page is where you add the classes, talks and meals — the parts of the
+weekend guests sign up for one at a time. Add each session with its night, its times **in the
+venue's time zone** (an end time earlier than the start means the next morning), its location —
+one of the venue's rooms, or something like "meet at reception" — and who leads it.
 
-- **Guests sign up for a place** with an optional limit. Leave the limit empty for no cap; switch
-  signing up off for something anybody just comes to.
-- Only guests the venue has **confirmed** can sign up, for up to their party's size, and anybody
-  helping at the event.
-- A full session **queues** people. When somebody leaves or you raise the limit, the queue moves up
-  in order, a party is never jumped by one person behind it, and whoever gets in is written to.
-- **Who's coming** lists the people with places and the queue, and lets you take somebody off.
+- **Guests sign up for a place**, with an optional limit. Leave the limit empty for no limit, or
+  turn sign-ups off for something anyone can just attend.
+- Only guests the venue has **confirmed** can sign up, for up to their party's size, along with
+  anyone helping at the event.
+- When a session is full, people join a **queue**. When somebody drops out or you raise the limit,
+  the queue moves up in order, a party is never skipped in favor of one person behind it, and
+  whoever gets in is emailed.
+- **Who's coming** lists the people with places and the queue, and lets you remove someone.
 
 ![The program, as the host builds it](help-media:organization-administration/event-programme.png)
 
-**Nothing is shown to guests until you press Publish the program.** After that, every change says
-what it will do: **moving** a session writes to everybody with a place and rings their bell;
-**canceling** writes to everybody signed up or queued, with your reason; a session somebody signed
-up for cannot simply be removed — cancel it, so they hear.
+**Nothing is shown to guests until you press Publish the program.** After that, every change tells
+you what it will do: **moving** a session emails everyone with a place and notifies them in their
+bell; **canceling** emails everyone signed up or queued, with your reason. A session someone has
+signed up for can't simply be removed — cancel it, so they are told.
 
 ### Files for the event
 
-**Files** on the event page holds the documents that go with a weekend: the guest pack, the stewards'
-briefing, the poster. Each file has a **folder** — just a word, like *Guest pack* — and says **who it
-is for**:
+**Files** on the event page holds the documents that go with a weekend: the guest pack, the
+stewards' briefing, the poster. Each file has a **folder** — just a word, like *Guest pack* — and a
+setting for **who it is for**:
 
-- **The event's people only** — your group, and anybody helping at the event. New files start here.
-- **Confirmed guests** — people the venue has said yes to. Somebody still waiting on an answer does
-  not see these: the guest pack is where the key safe code lives.
+- **The event's people only** — your group, and anyone helping at the event. New files start here.
+- **Confirmed guests** — people the venue has said yes to. Someone still waiting for an answer
+  can't see these, since the guest pack might include the lockbox code.
 - **Anybody** — shown under *Downloads* on the public event page.
 
-The site checks every time a file is downloaded, so a link copied into a group chat downloads nothing
-for somebody the file is not for. Changing who a file is for takes effect straight away. A helper can
-add and change files when you tick **The event's files** on the staff list. Photos have their location
-removed when they are added, like every upload on the site.
+The site checks every time a file is downloaded, so a link pasted into a group chat won't work for
+someone the file isn't meant for. Changing who a file is for takes effect right away. A helper can
+add and change files if you check **The event's files** on the staff list. Photos have their
+location data removed when they are added, like every upload on the site.
 
 ![An event's files, each with who it is for](help-media:organization-administration/event-files.png)
 
 ### The room and the photo wall
 
-Every published event has a **room** on its public page, for the people at it: confirmed guests,
-your group, anybody helping, and the venue's own people when the venue lent them. It never appears
-on the public feed.
+Every published event has a **room** on its public page, for the people attending: confirmed
+guests, your group, anyone helping, and the venue's own staff if the venue shared them. It never
+appears on the public feed.
 
-- **Photos stay the guest's.** A guest's photo is their own file. They choose whether to send it to
-  your group and, when there is one on the site, the venue — which shares it with you rather than
-  giving it away.
-- **A guest agrees before their first photo.** The first time a guest adds a photo at your event they
-  are told it may be shown in the room and on a photo wall or slideshow at the venue, and they tick that
-  they agree; the site keeps that agreement and the words they were shown. Your group and your helpers
-  are not asked.
-- **Each event has 2,000 MB** for its files, gallery and room photos together. An upload past that is
-  refused with how much is left; remove files you no longer need to make room.
-- **Who can add photos** is yours to set, from the room: *the team and confirmed guests*, or *the
-  event's team only* for an event with a no-cameras rule. Guests can still write either way.
-- **Hide** takes a post out of the room for everybody but you; members can **Report** a post, and
+- **Photos belong to the guest.** A guest's photo is their own file. They choose whether to share it
+  with your group and, if the venue is on the site, with the venue — sharing it, not giving it away.
+- **A guest agrees before their first photo.** The first time a guest adds a photo at your event,
+  they are told it may be shown in the room and on a photo wall or slideshow at the venue, and they
+  check a box to agree. The site keeps a record of that agreement and the exact wording they saw.
+  Your group and your helpers aren't asked.
+- **Each event has 2,000 MB** for its files, gallery and room photos combined. An upload over that
+  limit is refused, with a message showing how much space is left; remove files you no longer need
+  to make room.
+- **Who can add photos** is up to you, set from the room: *the team and confirmed guests*, or *the
+  event's team only* for an event with a no-cameras rule. Guests can still post messages either way.
+- **Hide** removes a post from the room for everyone but you. Members can **Report** a post, and
   you see how many have. **Close the room** stops new posts early; otherwise it closes a week after
   the last night.
 
 **The photo wall** (*Photo wall* on the event page) shows the room's photos full screen, one at a
-time, newest first, picking up new ones every half-minute. **It opens only for your group, the
-event's helpers and the venue's people** — never for guests, and never for anybody outside the event —
-because a slideshow goes on a screen people walk past, and some of the people in the photos do not want
-their faces in public. Put it on a TV at the venue from a computer signed in with one of those accounts. When there are none yet it shows a code guests can
-scan to **add photos from their phone**.
+time, newest first, checking for new ones every 30 seconds. **It only opens for your group, the
+event's helpers and the venue's staff** — never for guests, and never for anyone outside the event
+— because a slideshow goes on a screen people walk past, and some people in the photos don't want
+their faces shown in public. To show it on a TV at the venue, use a computer signed in with one of
+those accounts. If there are no photos yet, it shows a code guests can scan to **add photos from
+their phone**.
 
 ![The photo wall](help-media:organization-administration/event-photo-wall.png)
 
 ### The event's page, gallery and advert
 
-**Gallery** on the event page puts your own pictures on the event's public page — last year's weekend,
-the building, the ballroom set for dinner. The first picture leads the page; the arrows change the
-order. Each picture is resized and has its location removed. Guests' photos from the room are never
-added by themselves: they are the guests', and some of the people in them did not agree to a public page.
+**Gallery** on the event page adds your own pictures to the event's public page — last year's
+weekend, the building, the ballroom set for dinner. The first picture appears at the top of the
+page, and the arrows change the order. Each picture is resized and has its location data removed.
+Guests' photos from the room are never added automatically: they belong to the guests, and some of
+the people in them didn't agree to appear on a public page.
 
 ![The event's gallery](help-media:organization-administration/event-gallery.png)
 
-The public event page opens with the pictures, says how long until the first night, and on a phone
-keeps an **Ask for a place** button at the bottom of the screen while people scroll.
+The public event page opens with the pictures, shows how long until the first night, and on a
+phone keeps an **Ask for a place** button at the bottom of the screen as people scroll.
 
-**Putting an event on your group's own pages.** When you edit one of your public pages, four sections
-show one of your published events and keep up with it by themselves: *An event: dates and ask for a
-place*, *An event's program*, *An event's pictures* and *An event's venue*. A section pointing at an
-event that is no longer on the public site says so rather than showing it.
+**Putting an event on your group's own pages.** When you edit one of your public pages, four
+section types show one of your published events and stay up to date automatically: *An event: dates
+and ask for a place*, *An event's program*, *An event's pictures* and *An event's venue*. If a
+section points to an event that is no longer on the public site, it says so instead of showing it.
 
-**Advertise this event** on the event page starts your group's ad pointing at the event. It is reviewed
-like any ad, shows the event's name and date on the card, leads straight to the event's page, and stops
-being shown by itself once the event is over.
+**Advertise this event** on the event page creates an ad for your group that points to the event.
+It is reviewed like any other ad, shows the event's name and date on the card, links straight to
+the event's page, and stops showing automatically once the event is over.
 
 ### Letters about bookings
 
-**A request is answered because somebody was told.** Everybody who may say yes or no to bookings —
-you, anybody your roles let decide, and a helper you handed **Say yes or no to bookings** — is
-written to when they arrive.
+**Requests get answered because someone is notified.** Everyone who can say yes or no to bookings —
+you, anyone your roles allow to decide, and any helper you gave **Say yes or no to bookings** — gets
+an email when requests arrive.
 
-- **The first request in a while** is written about within about five minutes.
-- **A rush becomes one letter.** When forty people ask in an hour, you get the first straight away
-  and one more saying *40 more bookings* once it quietens down — never later than an hour.
-- **A daily letter** says where each event stands: who has waited longest for an answer, holds that
-  run out in the next day, what is left on the next night, and — while the event is on — how many
-  came through the door last night. It is weekly once bookings have closed, and **it is never sent
-  when there is nothing waiting**, because an empty letter every morning trains people to stop
-  opening the one that matters.
+- **The first request in a while** is emailed within about five minutes.
+- **A rush becomes one email.** If forty people ask within an hour, you get the first one right away
+  and one more saying *40 more bookings* once things quiet down — never more than an hour later.
+- **A daily email** shows where each event stands: who has waited longest for an answer, which holds
+  expire in the next day, what is left for the next night, and — while the event is running — how
+  many people checked in last night. It becomes weekly once bookings have closed, and **it is never
+  sent when nothing is waiting**, because an empty email every morning teaches people to ignore the
+  one that matters.
 
-**A letter never names a guest** or carries their email address or what they cannot eat. It says *a
-party of 4 has asked for the Blue Room on Fri 10/30* and links to the booking board, where the rest
-is, behind the permission the board checks. Letters get forwarded and left open on shared desks in
-a way a screen does not.
+**An email never names a guest**, or includes their email address or what they can't eat. It says
+*a party of 4 has asked for the Blue Room on Fri 10/30* and links to the booking board, where you
+can see the details if you have permission. Emails get forwarded and left open on shared desks in
+a way the website doesn't.
 
-Your own booking is never news to you.
+You aren't notified about your own bookings.
 
 ### The event's staff room
 
-**The same arrivals are posted into a thread of the event's own**, in your group's **Messages**, so
-you can talk about a request where the request is. You will see it there as *Event Staff*, named
-after the event — *Bookings — Halloween Lock-In*.
+**New requests are also posted to a thread for the event**, in your group's **Messages**, so you can
+discuss a request right where it appears. You'll see it there as *Event Staff*, named after the
+event — *Bookings — Halloween Lock-In*.
 
-- **One thread for the whole event**, not one per booking, so a weekend that sells out does not
-  bury every other conversation your group is having.
-- **A new arrival brings the thread back to your bell** rather than adding another row to your
-  messages. Reply to it exactly as you would any message.
-- **Everybody who may decide bookings is in it** — including anyone who set their letters to
-  *Nothing*. Turning off letters is a statement about letters, and the room is most of the point
-  for somebody who never reads mail.
-- **It says no more than a letter does**: what was asked for and when, never who. The names are on
+- **There is one thread for the whole event**, not one per booking, so a sold-out weekend doesn't
+  bury every other conversation in your group.
+- **A new request brings the thread back to your bell** instead of adding another row to your
+  messages. Reply to it just as you would any message.
+- **Everyone who can decide bookings is in it** — including anyone who set their emails to
+  *Nothing*. That setting only turns off emails, and the thread is especially useful for people who
+  never read email.
+- **It says no more than an email does**: what was asked for and when, never who. The names are on
   the booking board.
 
-You do not switch this on, and there is nothing to set up: the thread is made the first time a
-booking arrives. An event nobody asks about never gets one.
+You don't need to turn this on or set anything up: the thread is created the first time a booking
+request arrives. An event with no requests never gets one.
 
 ![Choosing how often a group writes to you](help-media:organization-administration/event-booking-letters.png)
 
-**How often** is yours to choose, group by group, on the **Notifications** page under *Letters about
-bookings*: **As they arrive** (the default, with the daily letter too), **A daily letter** only, or
-**Nothing**. The bell still counts what is waiting whichever you pick, and a hold about to run out
-gets a row of its own there.
+You choose **how often** you hear from each group on the **Notifications** page, under *Letters
+about bookings*: **As they arrive** (the default, which includes the daily email), **A daily letter**
+only, or **Nothing**. Whichever you pick, the bell still counts what is waiting, and a hold that is
+about to expire gets its own row there.
 
-It always says the color's name as well as showing it, because about one man in twelve cannot tell
-red from green.
+The color's name is always shown along with the color itself, because about one in twelve men can't
+tell red from green.
 
 ### Writing to your guests
 
-**Write to your guests**, at the bottom of the booking board, sends one letter to everybody with a
-place: *the parking lot is closed, use the church lot*, *doors open at eight, not seven*, *bring a coat*.
-It is for what everybody needs to know. Anything about one party belongs on that party.
+**Write to your guests**, at the bottom of the booking board, sends one message to everyone with a
+place: *the parking lot is closed, use the church lot*, *doors open at eight, not seven*, *bring a
+coat*. Use it for things everyone needs to know. Anything about a single party belongs on that
+party's booking.
 
 ![Writing to everybody with a place](help-media:organization-administration/event-write-to-guests.png)
 
-- **Who it goes to.** Everybody with a confirmed place, or only the people there on one date. A pass
-  for the whole event counts as being there every date. Turn on **Include people you haven't answered
-  yet** to reach people who have asked or are holding places as well.
-- **The count comes first.** As you choose, the card says how many parties and people the letter will
-  reach. Sending takes a second click that repeats the number, because a letter can't be taken back.
-- **How it arrives.** One letter per party, to the person who booked, by email and in their messages
-  on this site. The subject starts with the event's name, and replies go to your group's email address.
-- **What is kept.** Every letter sent stays listed under the card: when, who sent it, to how many, and
-  how many of those went by email.
+- **Who it goes to.** Everyone with a confirmed place, or only the people attending on one date. A
+  pass for the whole event counts as attending every date. Turn on **Include people you haven't
+  answered yet** to also reach people who have asked or are holding places.
+- **The count comes first.** As you choose, the card shows how many parties and people the message
+  will reach. Sending takes a second click that repeats the number, because a message can't be
+  unsent.
+- **How it arrives.** One message per party, to the person who booked, by email and in their
+  messages on this site. The subject starts with the event's name, and replies go to your group's
+  email address.
+- **What is kept.** Every message sent is listed under the card: when, who sent it, how many it went
+  to, and how many of those were emailed.
 
-Only people who may say yes or no to bookings can write to guests. An unpublished or called-off event
-can't be written to from here, and an event can have **ten letters in a day**. The limit stops a stuck
-button or a bad morning turning into forty emails; put the rest in one letter.
+Only people who can say yes or no to bookings can write to guests. You can't write to guests of an
+unpublished or canceled event from here, and each event is limited to **ten letters in a day**. The
+limit keeps a stuck button or a bad morning from turning into forty emails, so put everything into
+one message.
 
 ### After the event: the next one, and the list of who came
 
-**After the event**, from the event page, gathers what happens once it is over.
+**After the event**, on the event page, collects everything you need once it is over.
 
 ![After the event](help-media:organization-administration/event-after.png)
 
-- **Thank-you email** is sent automatically the morning after the event ends, once to each confirmed
-  booking. It includes your note, a link to leave a review, a link to the gallery if you added
-  pictures, and up to three of your upcoming events. It is on unless you turn it off, and it is never
-  sent for an event that ended more than a week before.
-- **Reviews** come only from people who had a confirmed place, for two months after the event. You
-  can hide one from the page; you can't change its words, and the person who wrote it still sees it,
-  marked as hidden. Turning reviews off stops new ones.
+- **Thank-you email** is sent automatically the morning after the event ends, once to each
+  confirmed booking. It includes your note, a link to leave a review, a link to the gallery if you
+  added pictures, and up to three of your upcoming events. It is on unless you turn it off, and it
+  is never sent for an event that ended more than a week earlier.
+- **Reviews** can only come from people who had a confirmed place, for two months after the event.
+  You can hide a review from the page, but you can't change what it says, and the person who wrote
+  it still sees it, marked as hidden. Turning reviews off stops new ones.
 
-**Files are kept for 90 days after the last date.** Then the event's files, its gallery pictures and the
-links to photos in its room are removed. The event itself stays, with its bookings, program and reviews,
-and guests keep their own photos — a photo a guest sent you stays shared with you. You are written to a
-month and a week before, and nothing is removed within a week of the last letter.
+**Files are kept for 90 days after the last date.** After that, the event's files, its gallery
+pictures and the links to photos in its room are removed. The event itself stays, with its
+bookings, program and reviews, and guests keep their own photos — a photo a guest shared with you
+stays shared with you. You get an email a month before and a week before, and nothing is removed
+within a week of the last email.
 
-**Keep the files**, from *After the event*, lists everything you can take away: the event's files, its
-gallery, photos your own people posted in the room and photos guests sent to you. Tick what you want and
-**Download as a zip** — up to 100 at a time, in a folder each. A guest's photo that was never sent to you
-isn't on the list, because it is theirs.
+**Keep the files**, under *After the event*, lists everything you can download: the event's files,
+its gallery, photos your own team posted in the room, and photos guests shared with you. Check what
+you want and press **Download as a zip** — up to 100 at a time, each in its own folder. A guest's
+photo that was never shared with you isn't listed, because it belongs to them.
 
 ![Picking files to keep](help-media:organization-administration/event-keep.png)
 
-**Copy this event**, from the event page, starts the next one from this one. Choose a name and the
-first date; every other date moves with it, keeping its gaps, and a session at 7 PM stays at 7 PM
-even when the clocks have changed in between.
+**Copy this event**, on the event page, starts your next event from this one. Choose a name and the
+first date. Every other date moves along with it, keeping the same gaps, and a session at 7 PM
+stays at 7 PM even if daylight saving time has changed in between.
 
 ![Copying an event](help-media:organization-administration/event-copy.png)
 
-Each part you made is offered with its size, ticked:
+Each part you made is listed with its size, already checked:
 
 - **the plan** — rooms or seats, sections, prices, and what the venue held back on which night,
 - **menus**, on the same night of the run,
 - **the program**, at the same times, not yet published,
-- **bands**, and **helpers** with what they may do (an invitation nobody answered stays behind),
+- **bands**, and **helpers** with what they can do (unanswered invitations aren't copied),
 - **the advert**, as a draft that is reviewed again before it shows,
-- **files**, copied into the new event's own space (unticked to start with, because they count
-  against its allowance).
+- **files**, copied into the new event's own storage (unchecked at first, because they count
+  against its storage limit).
 
-**What happened stays behind:** bookings, passes, arrivals, the room, its photos and the gallery. The
-copy is a **draft**, so nothing is spent and nothing is published until you say. **The venue's
-agreement does not come across** either — a yes for October is not a yes for March — so a venue
-you recorded by hand keeps its contact and asks you when they agreed, and one on this site has to
-be asked again. The *Ready to publish* list says so.
+**Nothing that happened is copied:** bookings, passes, check-ins, the room, its photos and the
+gallery all stay with the old event. The copy is a **draft**, so nothing is charged and nothing is
+published until you choose. **The venue's approval isn't copied** either — a yes for October isn't a
+yes for March. A venue you entered by hand keeps its contact and asks you when they agreed, and a
+venue on this site has to be asked again. The *Ready to publish* list reminds you.
 
-**Download as a spreadsheet**, on the booking board, hands you every booking: status, name, email,
-the phone number the guest gave, how many, which nights and places, the guests and their dietary
-notes, their note, when they asked, when you decided and which nights they came through the door.
-It opens in Excel, Numbers or Google Sheets. Anything a guest typed that starts like a formula is
-written as plain text, so a note cannot run in your spreadsheet.
+**Download as a spreadsheet**, on the booking board, gives you every booking: status, name, email,
+the phone number the guest gave, party size, which nights and places, the guests and their dietary
+notes, their note, when they asked, when you decided, and which nights they checked in. It opens in
+Excel, Numbers or Google Sheets. Anything a guest typed that looks like a formula is saved as plain
+text, so it can't run in your spreadsheet.
 
 ### The dietary sheet
 
-**What the kitchen needs**, from the event page or from the booking board, turns every guest's note
-into the sheet the kitchen actually works from.
+**What the kitchen needs**, on the event page or the booking board, turns every guest's dietary note
+into a sheet the kitchen can actually work from.
 
 ![The kitchen's sheet: three numbers, a tally and the people](help-media:organization-administration/event-dietary.png)
 
-It counts **confirmed** parties by default, because that is who you are buying food for.
-**Count parties you haven't decided on** folds in everybody still waiting — the ones who asked and
-the ones holding places they picked — for ordering ahead of a weekend that isn't settled. The sheet
-says which of the two you are looking at, so nobody reads a provisional number as a final one.
+By default it counts **confirmed** parties, because those are the people you are buying food for.
+**Count parties you haven't decided on** adds everyone still waiting — people who asked and people
+holding places they picked — so you can order ahead before the weekend is settled. The sheet shows
+which view you are looking at, so nobody mistakes an estimate for a final number.
 
-Three numbers sit at the top, and the third is the one that matters most:
+Three numbers appear at the top, and the third matters most:
 
 - how many people you are expecting in total,
-- how many of them told you something,
-- and **how many nobody has named**. A party of four who listed two names leaves two people you
-  know nothing about. A sheet that showed only the notes would look complete when it was half your
-  guests.
+- how many of them gave you a dietary note,
+- and **how many haven't been named**. A party of four who listed only two names leaves two people
+  you know nothing about. Without this number, a sheet showing only the notes could look complete
+  when it covers only half your guests.
 
-Below that, the same note typed by several people is grouped with a count, so "vegan × 6" is one
-line. **We group on the words as typed and never guess.** "No nuts" and "nut allergy" mean the same
-thing to a cook and are two different lines here — a tally clever enough to merge them would
-eventually merge two that aren't the same, and acting on a wrong merge is how somebody gets fed the
-wrong thing. Each line names the guest, their party and which nights they are here, so Saturday's
-cook can see whose meal is theirs.
+Below that, identical notes are grouped with a count, so "vegan × 6" is one line. **Notes are
+grouped by their exact wording, never by guesswork.** "No nuts" and "nut allergy" mean the same to a
+cook but appear as two lines here. Merging them automatically would eventually merge two notes that
+aren't the same, and that is how someone ends up served the wrong food. Each line names the guest,
+their party and which nights they are staying, so Saturday's cook can see whose meal is whose.
 
-**One night at a time.** The pills at the top narrow the sheet to a single night, because a cook
-working Saturday is cooking for the people who are there on Saturday and the weekend's total is the
-wrong number to hand them. A party with no night of its own — a pass for the whole event — counts
-on every night of it. **A sheet for every night** builds the lot in one go, and each one prints on
-its own page, which is what a kitchen pins up.
+**One night at a time.** The buttons at the top narrow the sheet to a single night, because
+Saturday's cook needs the numbers for the people there on Saturday, not the weekend's total. A party
+with no specific night — a pass for the whole event — counts on every night. **A sheet for every
+night** builds them all at once, each printed on its own page for the kitchen to pin up.
 
-The page is readable standing in the kitchen with it, not only at a desk.
+The page is easy to read in the kitchen, not just at a desk.
 
 ![The kitchen's sheet on a phone](help-media:organization-administration/event-dietary-phone.png)
 
 **Dietary notes are health information about named people.** They are shown to staff who can decide
-bookings, and withheld from members who can't — an ordinary member of your group has no reason to
-read a stranger's allergy list. They never reach a public page, and the printed sheet is for the
-kitchen rather than the notice board.
+bookings, and hidden from members who can't — an ordinary member of your group has no reason to see
+a stranger's allergies. They never appear on a public page, and the printed sheet is meant for the
+kitchen, not the bulletin board.
 
 ## Tour passes
 
-When you approve somebody's place on a walk, they are sent a pass — a square code in their
-confirmation letter, drawn into the letter itself so it still shows if their mail program blocks
-pictures. There is a link under it for the guest whose program strips the code instead.
+When you approve someone's place on a walk, they are sent a pass — a square code in their
+confirmation email. The code is built into the email itself, so it still shows if their email
+program blocks pictures. If their program removes the code anyway, there is a link under it.
 
 ![Scanning guests in at the meeting point](help-media:organization-administration/tour-door.png)
 
 On the night, open the date from your tour and press **Scan guests in**. Point the camera at a
 guest's pass and the screen answers in one line:
 
-- **"Casey Hollow. Let them in."** — they hold a place on tonight's walk.
+- **"Casey Hollow. Let them in."** — they have a place on tonight's walk.
 - **"Casey Hollow — 3 places. Let them in."** — they booked for more than one person.
-- **"Casey Hollow is already in — scanned at 7.42."** — somebody has already scanned this pass.
-  Not a refusal; it is there so you can tell a queue-jumper from a guest whose friend scanned their
+- **"Casey Hollow is already in — scanned at 7.42."** — this pass has already been scanned. It isn't
+  a refusal; it lets you tell someone trying to sneak in from a guest whose friend scanned their
   code a minute ago.
-- **"That pass is for Friday Night Ghost Walk, not tonight's walk."** — a real booking, the wrong
-  night. This is the commonest honest mistake at a meeting point, so it says which walk rather than
-  telling somebody their code is not recognized.
+- **"That pass is for Friday Night Ghost Walk, not tonight's walk."** — a real booking, but for the
+  wrong night. This is the most common honest mistake at a meeting point, so the screen names the
+  walk instead of saying the code isn't recognized.
 - **"We don't recognize that code. Ask them to check the email, or look them up by name."**
 
-If the camera will not start — an old phone, a browser that will not give it permission, no light —
-type the code from the guest's screen into the box underneath instead. It does exactly the same
-thing.
+If the camera won't start — an old phone, a browser that won't allow camera access, or not enough
+light — type the code from the guest's screen into the box underneath instead. It works exactly the
+same way.
 
-A pass only ever belongs to a place somebody actually holds. A seat that is still only requested,
-or one you turned down, has no pass, so nobody can arrive holding proof of a walk you did not agree
-to take them on.
+A pass only exists for a confirmed place. A place that has only been requested, or one you turned
+down, has no pass, so nobody can show up with proof of a booking you never approved.
 
 ## Public events
 
-An event on your calendar can be opened to anybody. Tick **Public** and it appears on your group's
-public site, on the site-wide **What's on** list, and anyone with an account can say they are
+You can open an event on your calendar to anyone. Check **Public** and it appears on your group's
+public site and on the site-wide **What's on** list, and anyone with an account can say they are
 coming.
 
-This is the one part of the site that brings you people who have never heard of you. Somebody
-looking for a ghost walk near them finds your event, turns up, and meets the group — so the listing
-names you prominently and reads as an invitation rather than a record.
+This is the one part of the site that brings you people who have never heard of you. Someone
+looking for a ghost walk nearby finds your event, shows up, and meets your group — so the listing
+features your group's name prominently and reads as an invitation.
 
 ### What can be made public
 
 Events at **landmarks, businesses, and your own addresses**. Not events at a private residence, and
 not events attached to a case.
 
-That is deliberate and cannot be overridden. A public listing is a date and an address advertised to
-strangers, and a client did not agree to have people turn up at their home. If you want to publicise
-work you are doing on a case, create a separate event for a venue that is yours to publish.
+This can't be overridden. A public listing advertises a date and an address to strangers, and a
+client never agreed to have people show up at their home. If you want to publicize work you are
+doing on a case, create a separate event at a venue you are free to publish.
 
 ### Hiding the address until somebody is coming
 
-**Hide exact location** shows the town but not the street address. Whoever is coming sees the full
-address once they have said so; nobody else ever receives it, and the listing says as much up front
-so nobody feels tricked into signing up to find out where they are going.
+**Hide exact location** shows the town but not the street address. People who say they are coming
+can see the full address; nobody else ever gets it. The listing explains this up front, so nobody
+feels tricked into signing up just to find out where to go.
 
-If somebody cancels, the address stops being shown to them.
+If someone cancels, they can no longer see the address.
 
 ### Places and sign-ups
 
-- **Places** caps how many people can come. Leave it empty for no limit.
-- **Sign-ups close** sets a cut-off. Leave it empty and people can sign up until half an hour
-  after the start — the late-arrival grace, for the guest who reaches the meeting point a few
-  minutes after you set off. Set it earlier to require booking ahead, or later to hold a
-  particular night open longer.
-- **Anyone who can edit the calendar can sign somebody up by hand**, at any time, from the event's
-  attendee list. That is the walk-up who has no account, or the latecomer who turns up with three
-  friends — you are standing there, so you decide. Type the address in the invite box: if they
-  already have an account they go straight onto the list, and if they don't they get a sign-up
+- **Places** limits how many people can come. Leave it empty for no limit.
+- **Sign-ups close** sets a deadline. Leave it empty and people can sign up until half an hour
+  after the start, to allow for guests who reach the meeting point a few minutes after you set off.
+  Set it earlier to require booking ahead, or later to keep a particular night open longer.
+- **Anyone who can edit the calendar can sign someone up by hand**, at any time, from the event's
+  attendee list. This is for the walk-up guest with no account, or the latecomer who shows up with
+  three friends — you are there in person, so it's your call. Type their email address in the invite
+  box: if they already have an account, they go straight onto the list; if not, they get a sign-up
   link instead.
-- **A link you sent still works after sign-ups close, and past a full house.** That is the
-  difference between you signing somebody up and them signing themselves up — you vouched for
-  them in person, so your cut-off and your capacity are yours to set aside. A guest working
-  through the public page on their own gets no such latitude.
+- **A link you sent still works after sign-ups close, and even when the event is full.** That is
+  the difference between you signing someone up and them signing up on their own. You vouched for
+  them in person, so you can make an exception to your own deadline and capacity. A guest signing
+  up through the public page on their own can't get past those limits.
 - The guest still has to open the link. It only takes a moment on their phone while you are
-  taking the money, and it is what makes the address real — otherwise anybody could put any
-  address on any event. Until they open it, they are not on the list, and **they cannot share
-  what they recorded on the night**, because that is tied to having been there.
-- Somebody who cancels frees their place for somebody else.
+  taking payment, and it confirms the email address is really theirs — otherwise anyone could
+  sign any address up for any event. Until they open it, they aren't on the list, and **they can't
+  share what they recorded on the night**, because that depends on having been there.
+- When someone cancels, their place opens up for someone else.
 
 ### The link you can share
 
 A public event gets a readable web address — `/o/your-group/events/2026-08-24-ghost-walk` — made
-from its date and title the first time you publish it. That is the link to put on social media.
+from its date and title the first time you publish it. That is the link to share on social media.
 
-It does not change afterwards, even if you rename the event. A link somebody has already shared
-should keep working.
+It doesn't change afterward, even if you rename the event, so links people have already shared
+keep working.
 
 ### People coming who don't have an account
 
-Somebody who finds your event and has never been here before doesn't have to sign up for anything
-first. They give an email address, we send them a link, and clicking it is what actually confirms
-they're coming.
+Someone who finds your event and has never used the site before doesn't have to sign up for
+anything first. They enter an email address, we send them a link, and clicking it confirms they're
+coming.
 
-The link matters: an address typed into a box proves nothing, and an event that hides its exact
-location until people are coming would be protecting nothing if anyone could type any address and be
-shown where you're meeting.
+The link matters. Typing an address into a box proves nothing, and if your event hides its exact
+location until people sign up, that would mean nothing if anyone could type any address and see
+where you're meeting.
 
-Confirming makes them an account with no password. They can set one later if they want to sign in
-properly, but they don't have to — it exists so you have somebody you can reach, and so they can see
-what they've said they're going to.
+Confirming creates an account for them with no password. They can set one later if they want to
+sign in properly, but they don't have to. The account gives you a way to reach them, and lets them
+see what they've signed up for.
 
-You'll see them in the attendee list like anybody else.
+You'll see them in the attendee list like anyone else.
 
 ### The reminder the day before
 
-Anyone who has said they are coming is emailed a reminder about a day beforehand, automatically.
-You do not send it and there is nothing to switch on.
+Everyone who has said they are coming automatically gets a reminder email about a day before. You
+don't send it, and there is nothing to turn on.
 
-Somebody who signed up three weeks ago has had three weeks to forget, and a stranger who does not
-turn up is worse for you than one who never signed up at all — so the reminder repeats the time and
-place, carries the link to your event page, and gives them a way to say they can no longer come
-while you can still offer the place to somebody else.
+Someone who signed up three weeks ago may well have forgotten, and a stranger who doesn't show up
+is worse for you than one who never signed up at all. So the reminder repeats the time and place,
+includes the link to your event page, and lets them say they can no longer come while you still
+have time to offer the place to someone else.
 
-It goes only to people whose answer was **yes**. Somebody invited who never replied, or who said
-maybe, is not written to: they did not agree to come, and a reminder about a thing you never agreed
-to is just mail you did not ask for.
+It only goes to people who answered **yes**. Someone invited who never replied, or who said maybe,
+doesn't get one: they never agreed to come, and a reminder about something they didn't agree to is
+just unwanted email.
 
-Everyone is reminded once. If the site cannot reach somebody's address, it tries again on the next
-run rather than giving up quietly.
+Everyone is reminded once. If the site can't reach someone's email address, it tries again next
+time instead of quietly giving up.
 
 ## Applications from would-be members
 
-When **Accepting Membership Applications** is on (the group's Edit screen), your public page shows
-an apply box to signed-in visitors. Applications land on the **Members** tab, where any member
-with the requests permission can Accept or Deny — a denial asks for a reason, and the applicant
-sees your answer.
+When **Accepting Membership Applications** is on (on the group's Edit screen), your public page
+shows an apply box to signed-in visitors. Applications arrive on the **Members** tab, where any
+member with the requests permission can Accept or Deny. Denying asks for a reason, and the
+applicant sees your answer.
 
 ## What kind of group you are
 
-Every group is either an **investigation group** or a **ghost walking tour**, chosen when it was
-created and changeable in **Settings**. The choice decides what a NEW group starts with — a tour
-starts with a public, searchable meeting point and public events; an investigation group starts
-private — and after that it is a label, never a restriction. Nothing is withheld from either kind.
+Every group is either an **investigation group** or a **ghost walking tour**. You choose when you
+create the group, and you can change it in **Settings**. The choice only decides what a NEW group
+starts with — a tour starts with a public, searchable meeting point and public events, while an
+investigation group starts private. After that it is just a label, never a restriction. Both kinds
+can use every feature.
 
-Alongside it sits **runs public tours**, which is a separate switch on purpose. Plenty of
-investigation groups run paid public tours as a sideline, and none of them should have to
-register a second group to be found for it. Turn it on and your group appears under **Walking
-tours** in the group finder while its badge still says investigation group — which is the truth
-about both facts at once.
+Next to it is a separate **runs public tours** switch. Many investigation groups also run paid
+public tours, and they shouldn't have to register a second group to be found for them. Turn it on
+and your group appears under **Walking tours** in the group finder, while its badge still says
+investigation group — both of which are true.
 
 ## Promoting your group
 
 **Settings → Promote your group** builds a promotional card that rotates through the group
 finder's Featured groups, the home page, and the public feed, always marked "Promoted". In the
-feed, cards are fed to the people nearest your group's public address first — a group with no
-public address still rotates, just unranked. Once approved, the page shows two honest numbers:
-how many times the card was shown, and how many people clicked through. The builder walks you
-through it — headline (say who you help and where), a short message (what you do, what it
-costs, what to do next), an optional picture from your media library, and where the card
-leads: your public page or the group finder. Send your people to the public page only once
-it's worth arriving at — a striking headline over an empty page loses the person you just won.
+feed, cards are shown first to people closest to your group's public address; a group with no
+public address still rotates, just without that ranking. Once the card is approved, the page shows
+two straightforward numbers: how many times the card was shown, and how many people clicked
+through. The builder walks you through it — a headline (say who you help and where), a short
+message (what you do, what it costs, what to do next), an optional picture from your media library,
+and where the card leads: your public page or the group finder. Only send people to your public
+page once it has something worth seeing — a great headline that leads to an empty page loses the
+visitor you just won.
 
-Every card goes through review before anyone sees it: submit, and a platform administrator
-approves it or declines it with a reason (you're messaged either way). Any later edit comes
-back through review — the approved text is the only text that ever shows. One card per group;
-withdraw it any time and it leaves the placements immediately.
+Every card is reviewed before anyone sees it. When you submit it, a platform administrator
+approves it or declines it with a reason, and you get a message either way. Any later edit is
+reviewed again, so only approved text is ever shown. Each group can have one card. You can withdraw
+it at any time, and it disappears from every placement immediately.
 
 ## Feed posts made from your cases
 
-When a member (or a client) renders a video from one of your cases in the video editor and
-posts it to the public feed, the post is credited to *them* — **your group's name appears on
-nothing until you say so**. **Settings → Feed attribution** lists that footage for your
-decision:
+When a member (or a client) creates a video from one of your cases in the video editor and posts
+it to the public feed, the post is credited to *them*. **Your group's name doesn't appear on it
+until you say so.** **Settings → Feed attribution** lists that footage so you can decide:
 
-- **Claim** puts your group's name and a link to your public page on the post, plus a
-  **Group verified** badge — you vouching that the footage is what it says. That badge also
-  lifts the post's standing in the feed.
-- **Decline** leaves the post up, credited to the person, with no link to you — ever.
+- **Claim** adds your group's name and a link to your public page to the post, plus a **Group
+  verified** badge — your confirmation that the footage is what it claims to be. The badge also
+  helps the post rank higher in the feed.
+- **Decline** leaves the post up, credited to the person, and never linked to your group.
 
-Either decision can be changed later. Footage from a **private engagement** additionally
-required the poster's explicit, recorded confirmation before it could be posted at all —
-claiming or declining is only about your name, never about whether the post exists.
+You can change either decision later. Footage from a **private engagement** also needed the
+poster's explicit, recorded confirmation before it could be posted at all. Claiming or declining
+only affects whether your name is on it, never whether the post exists.
 
 ## Location data in your photos, audio and video
 
-Cameras and phones write the coordinates of wherever they were into the file itself. On a case at
-somebody's home, that file knows the address — and the site's careful, deliberately vague map pin
-counts for nothing if the photograph beside it carries the exact spot.
+Cameras and phones save the location where they were into the file itself. On a case at someone's
+home, that means the file contains the address — and the site's deliberately vague map pin is
+pointless if the photo next to it reveals the exact spot.
 
-**Photographs are cleaned for every group, always.** The copy anyone downloads is rebuilt from the
-picture alone, so nothing that was not the image survives. There is no setting, because there is no
-reason anyone would want the alternative.
+**Photos are always cleaned, for every group.** The copy anyone downloads is rebuilt from the image
+alone, so no hidden data survives. There is no setting for this, because nobody needs the
+alternative.
 
-**Audio and video are a setting**, under Settings on your group's page. Cleaning a recording means
-rebuilding the file, so it is offered where a plan includes it — the switch says plainly when it is
-not available, and to whom to talk. Groups working only at landmarks and businesses may reasonably
-leave it off; a group going into people's homes should not.
+**For audio and video, it is a setting**, under Settings on your group's page. Cleaning a recording
+means rebuilding the file, so it is available on plans that include it. If yours doesn't, the
+switch tells you so, and who to contact. Groups working only at landmarks and businesses may
+reasonably leave it off; a group that goes into people's homes should turn it on.
 
-**Whatever is removed is still yours.** Every file, of every kind, has its details recorded against
-its record when you upload it: where and when it was taken, the device, the technical figures.
-Removing that from the copy people download never removes it from your own records — you keep the
-facts, the public copy does not carry them. And a clip you cut from a recording keeps the
-recording's place, since a clip has no coordinates of its own.
+**What is removed is still yours.** When you upload any file, its details are saved with its
+record: where and when it was taken, the device, and the technical details. Removing them from the
+copy people download never removes them from your own records — you keep the information, and the
+public copy doesn't include it. A clip you cut from a recording keeps the recording's location,
+since a clip has no location of its own.
 
 ## Your group's plan
 
-Plans are priced by **active members, per group** — the price list is on the **Pricing** page,
-visible to everyone. Yearly billing usually costs less than paying month by month; the card says
-how much less.
+Plans are priced by **active members, per group**. The price list is on the **Pricing** page, which
+anyone can see. Yearly billing usually costs less than paying monthly, and the card shows how much
+you save.
 
 Each band on the Pricing page has its own button. If you don't run a group yet, **Start a group on
-this plan** opens the new-group steps with that plan named at the top; once the group exists you go
-straight to its billing page to confirm the plan and pay. If you already run a group, **Choose this
-plan** takes you to that group's billing page with the same billing period selected (with several
-groups, it asks which one). The price always follows the group's size: if the band you picked isn't
-the one your group falls in, the billing page says which band it is priced as. The band marked
-**Most groups start here** is simply the middle of the member bands.
+this plan** opens the new-group steps with that plan shown at the top; once the group exists, you
+go straight to its billing page to confirm the plan and pay. If you already run a group, **Choose
+this plan** takes you to that group's billing page with the same billing period selected (if you run
+several groups, it asks which one). The price is always based on the group's size: if the band you
+picked doesn't match your group's size, the billing page tells you which band applies. The band
+marked **Most groups start here** is simply the middle of the member bands.
 
-Two things worth knowing about how plans behave:
+Two things worth knowing about how plans work:
 
-**What you signed up for is a contract for the period you paid for.** If the plan changes after
-you subscribe, improvements reach you immediately — a raised limit, a lower price, nothing to do
-on your side. Changes that would reduce what you have wait until your renewal, and you'll get a
-message about them **before** your period ends, so nothing ever changes under you mid-period. When
-your current terms are better than what the pricing page shows, your Pricing page says so:
+**What you signed up for is guaranteed for the period you paid for.** If the plan changes after you
+subscribe, improvements apply right away — a higher limit or a lower price, with nothing for you to
+do. Changes that would reduce what you get wait until your renewal, and you'll get a message about
+them **before** your period ends, so nothing changes partway through a period. If your current terms
+are better than what the pricing page shows, your Pricing page tells you:
 "you keep the terms you signed up for until" your renewal date.
 
 **Plans can include limits** — on open cases, equipment, loans out at a time, open investigations,
-public pages. If your group reaches one, the screen where you tried says exactly which limit and
-what your plan includes; closed cases and retired equipment never count against you. A larger plan
-raises the limit.
+and public pages. If your group reaches one, the screen you were using tells you exactly which
+limit you hit and what your plan includes. Closed cases and retired equipment never count toward a
+limit. A larger plan raises the limit.
 
-Have a coupon code? There's a line for it at checkout — type it and the price updates before you
+Have a coupon code? There's a box for it at checkout — enter it and the price updates before you
 confirm anything. Codes can be limited to first subscriptions, to renewals, to yearly billing, or
-to a specific account, so if a code is refused the message says why.
+to a specific account, so if a code is refused, the message tells you why.
 
-**If your group grows past what your plan covers**, your plan does not change and nothing stops
-anyone joining. Each person who joins beyond your member count is billed for their own seat at a
-per-person price, told to them when they are accepted, and shown on their own Pricing page. Your
-group keeps one plan and one renewal date.
+**If your group grows beyond what your plan covers**, your plan doesn't change, and nobody is
+stopped from joining. Each person who joins beyond your member count pays for their own seat at a
+per-person price. They are told the price when they are accepted, and it appears on their own
+Pricing page. Your group keeps one plan and one renewal date.
 
-**Tax** appears as its own line on the quote when your state taxes the service, computed from
-your group's address — never folded into the price. And every payment your group makes has a
-**receipt**: open **Billing history** on your group's card on the Pricing page to see every
+**Tax** appears as a separate line on the quote if your state taxes the service. It is calculated
+from your group's address and is never hidden in the price. Every payment your group makes also has
+a **receipt**: open **Billing history** on your group's card on the Pricing page to see every
 charge, payment and adjustment, and download any receipt by its number. Receipts are generated
-from the payment record itself, so the one you download in five years says exactly what it said
-on the day.
+from the payment record itself, so a receipt you download five years from now will say exactly what
+it said on the day you paid.

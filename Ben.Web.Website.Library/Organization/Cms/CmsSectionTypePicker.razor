@@ -1,0 +1,42 @@
+@namespace Ben.Web.Website.Library.Organization.Cms
+@using Ben.Data.Common.Enums
+
+@*
+    Choosing what kind of section to add, by its picture (Ben, 10/09/2026): each kind is a card with a
+    thumbnail sketch of where things go in it and a sentence on what it does, rather than a name in a
+    drop-down to guess from. A radio group to assistive technology; arrow keys move between the cards.
+*@
+
+<div class="cms-type-picker" role="radiogroup" aria-label="Section type" id="cms-section-type-picker">
+    @foreach (var kind in CmsSectionTypes.Offered)
+    {
+        var chosen = kind;
+        var on = kind.Type == Value;
+        <button type="button" role="radio" aria-checked="@(on ? "true" : "false")"
+                class="cms-type-picker__card @(on ? "cms-type-picker__card--on" : "")"
+                data-section-type="@kind.Type"
+                tabindex="@(on ? 0 : -1)"
+                @onclick="@(() => ChooseAsync(chosen.Type))"
+                @onkeydown="@(e => OnKeyAsync(e, chosen.Type))">
+            @((MarkupString)CmsSectionTypes.Svg(kind.Type))
+            <span class="cms-type-picker__label">@kind.Label</span>
+            <span class="cms-type-picker__what">@kind.Description</span>
+        </button>
+    }
+</div>
+
+@code {
+    [Parameter] public CmsSectionType Value { get; set; }
+    [Parameter] public EventCallback<CmsSectionType> ValueChanged { get; set; }
+
+    private Task ChooseAsync(CmsSectionType type) => ValueChanged.InvokeAsync(type);
+
+    private async Task OnKeyAsync(KeyboardEventArgs e, CmsSectionType from)
+    {
+        var step = e.Key switch { "ArrowRight" or "ArrowDown" => 1, "ArrowLeft" or "ArrowUp" => -1, _ => 0 };
+        if (step == 0) return;
+        var kinds = CmsSectionTypes.Offered;
+        var at = kinds.ToList().FindIndex(k => k.Type == from);
+        await ChooseAsync(kinds[(at + step + kinds.Count) % kinds.Count].Type);
+    }
+}

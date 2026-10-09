@@ -72,7 +72,9 @@ else
 
         <h1 class="mb-4">@_page.Page.PageTitle</h1>
 
-        @if (_page.Page.Sections.Count == 0)
+        <OrgPublicIntro Html="@_page.Page.IntroHtml" />
+
+        @if (_page.Page.Sections.Count == 0 && string.IsNullOrWhiteSpace(_page.Page.IntroHtml))
         {
             <p class="text-secondary">This page has no sections yet, so a visitor would see an empty page.</p>
         }

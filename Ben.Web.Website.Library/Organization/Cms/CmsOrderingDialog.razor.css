@@ -1,0 +1,15 @@
+.cms-ordering {
+    border: 1px solid var(--bs-border-color);
+    border-radius: .6rem;
+    padding: .4rem .5rem;
+    max-height: 55vh;
+    overflow-y: auto;
+}
+
+.cms-ordering__moves {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: .25rem;
+    margin-top: .5rem;
+}

@@ -456,6 +456,24 @@
    side of the viewport, which is what widened the page and produced a horizontal scrollbar.
 
    Anchoring the right edges instead makes it open leftward, into the page. */
+/* ── Every other BenDropdown: the same anchoring (10/09/2026) ──────────────
+   The reasoning above was applied to the header only, so a BenDropdown anywhere else still laid its
+   menu out from the button's left edge. The template keeps a closed animated menu display:block
+   (invisible, but laid out), so a menu near the right of a scrolling box widened it even while
+   closed: the New Page dialog's Ideas list made the whole dialog scroll sideways and cut its left
+   edge off. Anchored to the toggle's right edge, it opens leftward, inside. A Floating menu
+   (BenDropdown.razor.js) sets its own position inline and is untouched by this. */
+.dropdown > .dropdown-menu.dropdown-menu-animated {
+    top: calc(100% + .25rem);
+    margin: 0;
+    max-width: calc(100vw - 1rem);
+}
+
+.dropdown > .dropdown-menu-end.dropdown-menu-animated {
+    right: 0;
+    left: auto;
+}
+
 .app-header .dropdown > .dropdown-menu {
     position: absolute;
     /* Anchored to the toggle, not to the header. The template's rule says
@@ -821,6 +839,20 @@ textarea.form-control::placeholder {
     margin-inline-start: 0;
 }
 
+/* A More-actions dropdown (Kit/BenDropdown) beside a row's buttons. Bootstrap's `.dropdown` is a
+   block, so in a grid cell it fell to a line of its own under the button before it — the CMS page
+   list's "…" sat under its Sections button, the row doubled in height, and at narrower widths the
+   cell clipped it (Ben, 10/09/2026). Inline, it stays on the line the column was sized for. */
+.k-grid td .dropdown {
+    display: inline-block;
+    vertical-align: middle;
+}
+
+.ben-grid-action + .dropdown,
+.ben-grid-action-tip + .dropdown {
+    margin-inline-start: 0.25rem;
+}
+
 /* ── Dropdown popups are not limited to the width of what opened them ────────
    Telerik sizes a popup to its anchor by writing an inline `width` on `.k-animation-container`
    from JavaScript — the stylesheet carries no width at all, which is why a stylesheet `min-width`
@@ -949,3 +981,25 @@ html.set-nav-dark .text-secondary {
     color: inherit;
     text-decoration: underline;
 }
+
+/* ── CMS section sketches (Organization/Cms/CmsSectionTypes) ─────────────────────────────────────
+   Thumbnail drawings of where things go in each kind of section, in the page's own colors so they
+   follow light and dark mode. Global rather than scoped: the SVG arrives as markup, which a scoped
+   stylesheet cannot reach, and the Ordering window draws the same sketches small. */
+.cms-sketch { width: 100%; height: auto; display: block; color: var(--bs-body-color); }
+.cms-sketch__frame { fill: rgba(var(--bs-primary-rgb), .05); stroke: var(--bs-border-color); }
+.cms-sketch__h { fill: currentColor; opacity: .55; }
+.cms-sketch__l { fill: currentColor; opacity: .22; }
+.cms-sketch__road { fill: none; stroke: currentColor; stroke-opacity: .25; stroke-width: 1.5; }
+.cms-sketch__s { fill: currentColor; opacity: .1; }
+.cms-sketch__a { fill: var(--bs-primary); }
+.cms-sketch__frame-on-a { fill: #fff; opacity: .85; }
+
+/* A row in a CMS tree (CmsPagePlacer, CmsOrderingDialog). Global: Telerik's TreeView renders the item
+   template inside its own markup, out of reach of a component's scoped styles. */
+.cms-tree-node { display: inline-flex; align-items: center; gap: .35rem; }
+.cms-tree-node .sa-icon { width: 1rem; height: 1rem; opacity: .7; }
+.cms-tree-node--current { font-weight: 650; color: var(--bs-primary); cursor: grab; }
+.cms-tree-node--current .sa-icon { opacity: 1; }
+.cms-tree-node--section { font-size: .88em; color: var(--bs-secondary-color); cursor: grab; }
+.cms-tree-node__sketch { width: 2.4rem; flex: 0 0 auto; }

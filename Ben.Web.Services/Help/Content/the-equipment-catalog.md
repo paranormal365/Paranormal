@@ -7,7 +7,7 @@ order: 47
 ---
 
 The catalog is public. Anybody can browse it, read a model's page and its questions, and see what
-people use; asking a question or sending feedback needs an account. Logging gear of your own is in
+people use; asking a question or sending feedback needs an account. To record gear of your own, see
 [Your Equipment](/help/your-equipment).
 
 ## The public catalog
@@ -15,97 +15,93 @@ people use; asking a question or sending feedback needs an account. Logging gear
 ![The public equipment catalog](/help/media/your-equipment/catalog.png)
 *The catalog lists makes and models, and — on its second tab — the gear people have chosen to list. It never names an owner.*
 
-The equipment catalog — **Equipment → Catalog** in the menu, or just **Equipment** if you are
-not signed in — is public: anyone can browse it, including
-visitors who are not signed in. It has two halves. *Makes & models* is reference data: what gear exists, by make and model.
-*Gear people own* lists individual pieces whose owners chose to list them. Neither half ever
-carries who owns anything or any serial number.
+The equipment catalog is **Equipment → Catalog** in the menu, or just **Equipment** if you aren't
+signed in. Anyone can browse it, including visitors who aren't signed in. It has two parts.
+*Makes & models* lists the gear that exists, by make and model. *Gear people own* lists individual
+pieces whose owners chose to list them. Neither part ever shows who owns anything, or any serial
+numbers.
 
 When you add a make or model that isn't listed yet, it goes into the catalog as a proposal. You can
-use it straight away on your own equipment. It appears in the public catalog once a site
+use it right away on your own equipment. It appears in the public catalog once a site
 administrator approves it, which keeps the shared list from filling up with typos and duplicates.
 
 ## Make and model pages
 
 Every make and model has its own page, reached by clicking the make and model under any piece of
-gear. It gathers what everyone who owns one has contributed: how many are owned, how many are
+gear. It brings together what everyone who owns one has contributed: how many are owned, how many are
 offered for borrowing, the manufacturer links people have added, and their photos.
 
 Everything on that page is anonymous. It never says whose photo is whose, or who owns how many.
-Where you see a photo you can click, that is because you are allowed to open that particular piece —
-its owner listed it publicly, shared it with a group you are in, or it is your own. Everyone else
-sees the same photo with no link behind it.
+If you can click a photo, it's because you're allowed to open that piece: its owner listed it
+publicly, shared it with a group you're in, or it's your own. Everyone else sees the same photo
+without a link.
 
 ## The manufacturer's page
 
-Each piece of equipment can carry a link to the maker's own page for it. It is optional, and the
-links everyone adds for the same make and model are gathered on that model's page — so one person's
-research into a recorder's specifications saves the next person the search.
+Each piece of equipment can have an optional link to the manufacturer's own page for it. Links that
+people add for the same make and model are collected on that model's page, so one person's research
+into a recorder's specifications saves the next person from searching.
 
 ## Photos
 
 Each item can have as many photos as you like. The first one you add becomes the main photo — the
 one shown first — and you can promote any other photo to main, or remove any of them.
 
-Photos load when you open your equipment list, not as thumbnails in a long grid, so a list of many
-items stays quick.
+Photos load when you open your equipment list rather than as thumbnails in a long grid, so a list
+with many items stays quick.
 
-**Hide from the model page** is set on each photo separately. A photo of the piece against a plain
-wall may be exactly what belongs on a make and model page, while the one taken in your living room
-is not — so the choice is per photo rather than all-or-nothing. Hiding a photo keeps it on the item
-itself; it only stops it appearing in the pooled set. Captions you write are shown publicly with the
-photo, so write them as something a stranger will read.
+You set **Hide from the model page** on each photo separately. A photo of the piece against a plain
+wall may be just right for the make and model page, while one taken in your living room may not be.
+A hidden photo stays on your item; it just isn't shown with everyone else's photos on the model page.
+Captions you write are shown publicly with the photo, so write them with strangers in mind.
 
 ## Questions and FAQs
 
-Two related things, one public and one private.
+There are two related features: one public and one private.
 
 **Things worth knowing** is the FAQ you write about your own piece — anything a borrower would want
-to know before asking for it. It appears on the item's page, and entries from publicly-listed items
-are also gathered on that make and model's page alongside other owners'. FAQ entries never say who
-wrote them, anywhere, including on your own item's page.
+to know before asking for it. It appears on the item's page. Entries from publicly listed items also
+appear on the make and model's page, alongside other owners' entries. FAQ entries never say who
+wrote them, anywhere — not even on your own item's page.
 
 **Questions** are asked by someone thinking about borrowing. They arrive in **Gear Questions** in
-the main menu, where you can answer, or decline without answering, and afterwards publish a good
-answer into the FAQ.
+the main menu, where you can answer or decline, and then add a good answer to the FAQ.
 
 ### The anonymity, exactly
 
-A question is anonymous in **both** directions. You will not see who asked. They will not see who
-answered. The notice announcing a question says only that one arrived.
+A question is anonymous in **both** directions. You won't see who asked, and they won't see who
+answered. The notification only says that a question has arrived.
 
-This is deliberate: a question is how someone finds out whether a thing has a quirk they need to
-know about, and people do not ask that of a person whose answer might decide whether they get lent
-the gear at all.
+This lets people ask whether a piece has a quirk they should know about, without worrying that the
+question will affect whether they're lent the gear.
 
-The anonymity covers questions and FAQs only. **Borrowing is not anonymous** — if that same person
-goes on to ask for the piece, you will each see who the other is, because you should know who is
-holding your recorder. A group's shared-gear list still names owners too.
+The anonymity covers questions and FAQs only. **Borrowing is not anonymous** — if that person goes
+on to ask to borrow the piece, you'll each see who the other is, so you know who's holding your
+recorder. A group's shared-gear list also names owners.
 
-Publishing an answer to the FAQ **copies** the text rather than exposing the conversation. You can
-rewrite it first — what reads well as a reply to one person rarely reads well as a public answer —
-and the original thread is left as it was said. An answer can be published once.
+Publishing an answer to the FAQ **copies** the text; the conversation itself stays private. You can
+rewrite the answer first, since a reply to one person doesn't always work as a public answer. The
+original conversation stays as it was. Each answer can be published only once.
 
 ## Feedback and moderation
 
-After a loan comes back, both sides can leave feedback about the other. Neither ever sees what was
-written about them — not on any page, and there is no notification, because telling someone feedback
-about them exists is most of the way to showing it to them. What lenders write is shown to future
-lenders deciding that person's next request; what borrowers write is shown, unattributed, to other
-borrowers considering asking. The full rules are in
+After a loan comes back, both sides can leave feedback about the other. Neither side ever sees what
+was written about them, on any page, and nobody is notified when feedback is left about them. What
+lenders write is shown to future lenders deciding on that person's next request. What borrowers
+write is shown, without their name, to other borrowers thinking of asking that lender. The full rules are in
 [Borrowing Equipment](/help/borrowing-equipment#feedback-after-a-loan).
 
 A group's **Administrators and Owner** get an **Equipment feedback** link on the group's Equipment
-tab; nobody else is shown it, because nobody else can open the page. It
-lists everything left about the group's gear and its members' loans, naming both sides, and anything
-that crosses a line can be removed. That page exists so a complaint can be acted on — it is the one
-place in the app where feedback is attributed on both ends.
+tab. Nobody else sees the link, because nobody else can open the page. It
+lists all the feedback about the group's gear and its members' loans, with both people named, and
+anything inappropriate can be removed. It's the only place on the site where feedback shows both who
+wrote it and who it's about, so that complaints can be acted on.
 
 ## Who is looking
 
-Each piece counts how many times its page has been opened and how many times someone followed its
-manufacturer link. Those numbers are shown to the Administrators and Owner of the group that owns
+Each piece keeps a count of how many times its page has been opened and how many times someone
+followed its manufacturer link. Those numbers are shown to the Administrators and Owner of the group that owns
 the equipment, and to site administrators. Nobody else sees them — not other members, and not the
 individual owner of a personal piece.
 
-The counts are totals only. Nothing is recorded about who did the looking.
+The counts are totals only. Nothing is recorded about who looked.

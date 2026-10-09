@@ -36,6 +36,18 @@ public sealed partial class BenAdminClientAdapter
     public Task<bool> DeleteCmsPageAsync(Guid orgId, Guid pageId, CancellationToken token = default)
         => _api.DeleteAsync($"/api/organizations/{orgId}/pages/{pageId}", token);
 
+    public async Task<(IReadOnlyList<CmsPageListItem>? Pages, string? Error)> MoveCmsPageAsync(
+        Guid orgId, Guid pageId, Guid? parentPageId, int index, CancellationToken token = default)
+    {
+        var (pages, error) = await _api.SendExpectingReasonAsync<object, List<CmsPageListItem>>(
+            HttpMethod.Put, $"/api/organizations/{orgId}/pages/{pageId}/position",
+            new { ParentPageId = parentPageId, Index = index }, token);
+        return (pages, pages is null ? error ?? "That move couldn't be saved." : null);
+    }
+
+    public Task<LoadResult<CmsOutlinePage>> GetCmsOutlineAsync(Guid orgId, CancellationToken token = default)
+        => _api.GetListAsync<CmsOutlinePage>($"/api/organizations/{orgId}/pages/outline", token);
+
     // ── CMS Sections ──────────────────────────────────────────────────────────
 
     public Task<CmsSectionRecord?> CreateCmsSectionAsync(Guid orgId, Guid pageId, CmsCreateSectionRequest request, CancellationToken token = default)
@@ -50,6 +62,10 @@ public sealed partial class BenAdminClientAdapter
 
     public Task<bool> DeleteCmsSectionAsync(Guid orgId, Guid pageId, Guid sectionId, CancellationToken token = default)
         => _api.DeleteAsync($"/api/organizations/{orgId}/pages/{pageId}/sections/{sectionId}", token);
+
+    public Task<OrgPublicSectionItem?> PreviewCmsSectionAsync(Guid orgId, Guid pageId, CmsCreateSectionRequest request, CancellationToken token = default)
+        => _api.PostAsync<CmsCreateSectionRequest, OrgPublicSectionItem>(
+               $"/api/organizations/{orgId}/pages/{pageId}/sections/preview", request, token);
 
     // ── CMS Page Permissions ──────────────────────────────────────────────────
 

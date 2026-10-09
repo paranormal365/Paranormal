@@ -42,8 +42,10 @@ else
                       Active="@PageSlug" /></Nav>
         </OrgPublicBanner>
 
-        @* ── Page sections ────────────────────────────────────────────────── *@
-        @if (_page.Page.Sections.Count == 0)
+        @* ── The page's Summary / Intro, then its sections below it ─────────── *@
+        <OrgPublicIntro Html="@_page.Page.IntroHtml" />
+
+        @if (_page.Page.Sections.Count == 0 && string.IsNullOrWhiteSpace(_page.Page.IntroHtml))
         {
             @* A page can be published with nothing on it, and the visitor then got a heading over
                an empty screen — which reads as a page that failed to load rather than one nobody

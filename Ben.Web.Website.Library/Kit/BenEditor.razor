@@ -1,5 +1,6 @@
 @namespace Ben.Web.Website.Library.Kit
 @implements IAsyncDisposable
+@using Telerik.Blazor.Components.Editor
 
 @*
     The site's rich-text box. One wrapper so the font is decided once.
@@ -23,15 +24,17 @@
 *@
 
 <div class="ben-editor" @ref="_host">
-    @if (CleanPaste)
-    {
-        <TelerikEditor @ref="_editor"
-                       Value="@Value"
-                       ValueChanged="@ValueChanged"
-                       EditMode="@EditorEditMode.Div"
-                       Height="@Height"
-                       Tools="@Tools">
-            <EditorSettings>
+    @* One editor, not one per paste mode: the custom tools below have to be declared inside it, and two copies of
+       them would drift. An empty EditorSettings leaves Telerik's own paste handling as it was. *@
+    <TelerikEditor @ref="_editor"
+                   Value="@Value"
+                   ValueChanged="@ValueChanged"
+                   EditMode="@EditorEditMode.Div"
+                   Height="@Height"
+                   Tools="@ToolList">
+        <EditorSettings>
+            @if (CleanPaste)
+            {
                 @* Pasting from Word, a web page or a PDF brings its styling and its comments; a research page wants the
                    words and their structure (2026-09-14). Scripts and embeds never come in at all. *@
                 <EditorPasteSettings ConvertMsLists="true"
@@ -39,19 +42,82 @@
                                      RemoveMsStyles="true"
                                      RemoveHtmlComments="true"
                                      StripTags="@StrippedOnPaste" />
-            </EditorSettings>
-        </TelerikEditor>
-    }
-    else
-    {
-        <TelerikEditor @ref="_editor"
-                       Value="@Value"
-                       ValueChanged="@ValueChanged"
-                       EditMode="@EditorEditMode.Div"
-                       Height="@Height"
-                       Tools="@Tools" />
-    }
+            }
+        </EditorSettings>
+        <EditorCustomTools>
+            @if (PictureLibrary is not null)
+            {
+                <EditorCustomTool Name="@LibraryPictureTool">
+                    <TelerikButton Icon="@SvgIcon.Images" FillMode="@ThemeConstants.Button.FillMode.Flat"
+                                   Title="Picture from your library" Class="ben-editor-library-picture"
+                                   OnClick="@(() => _choosingPicture = true)" />
+                </EditorCustomTool>
+            }
+            @if (PageLinks is not null)
+            {
+                <EditorCustomTool Name="@PageLinkTool">
+                    <TelerikButton Icon="@SvgIcon.LinkAdd" FillMode="@ThemeConstants.Button.FillMode.Flat"
+                                   Title="Link to one of your pages" Class="ben-editor-page-link"
+                                   OnClick="@OpenPageLinksAsync" />
+                </EditorCustomTool>
+            }
+        </EditorCustomTools>
+    </TelerikEditor>
 </div>
+
+@if (PictureLibrary is not null)
+{
+    <BenContentPicker @bind-Visible="_choosingPicture"
+                      Title="Add a picture from your library"
+                      SelectText="Add this picture"
+                      EmptyText="Your group has no public pictures yet. Upload one under Files and make it public, then come back."
+                      Loader="@PictureLibrary"
+                      OnSelected="@InsertPictureAsync" />
+}
+
+@if (PageLinks is not null)
+{
+    @* The editor's own link tool asks for an address; this one lists the group's pages, so linking to "About
+       us" is a click rather than remembering how its address is spelled (Ben, 10/09/2026). *@
+    <BenModal @bind-Visible="_choosingPage" Title="Link to one of your pages">
+        <ChildContent>
+            <p class="small text-secondary">
+                @if (string.IsNullOrEmpty(_selectedText))
+                {
+                    <span>The page's title becomes the link text. To link some of your own words instead, select them before you click this button.</span>
+                }
+                else
+                {
+                    <span>This will link the words you selected: <strong>@_selectedText</strong></span>
+                }
+            </p>
+            @if (PageLinks.Count == 0)
+            {
+                <div class="alert alert-light py-2 mb-0">Your group has no other pages yet.</div>
+            }
+            else
+            {
+                <div class="list-group" id="ben-editor-page-links">
+                    @foreach (var link in PageLinks)
+                    {
+                        var chosen = link;
+                        <button type="button" class="list-group-item list-group-item-action d-flex align-items-center gap-2"
+                                style="@($"padding-left:{1 + chosen.Depth * 1.25}rem")"
+                                @onclick="@(() => InsertPageLinkAsync(chosen))">
+                            <BenIcon Name="file-text" />
+                            <span class="flex-grow-1">@chosen.Title</span>
+                            <code class="small text-secondary">@chosen.Href</code>
+                        </button>
+                    }
+                </div>
+            }
+            <div class="dialog-footer-actions">
+                <span class="dialog-footer-spacer"></span>
+                <button type="button" class="btn btn-secondary" @onclick="@(() => _choosingPage = false)">Cancel</button>
+            </div>
+        </ChildContent>
+    </BenModal>
+}
 
 @code {
     [Inject] private IJSRuntime JS { get; set; } = null!;
@@ -108,6 +174,77 @@
 
     /// <summary>Any CSS height — <c>"200px"</c>, <c>"60vh"</c>.</summary>
     [Parameter] public string Height { get; set; } = "200px";
+
+    /// <summary>
+    /// Pictures the toolbar's "Picture from your library" button offers. Set it and the button appears; leave it
+    /// null and the toolbar is unchanged. Pair with <see cref="PictureUrl"/>.
+    /// </summary>
+    [Parameter] public Func<Task<IReadOnlyList<ContentPickerItem>>>? PictureLibrary { get; set; }
+
+    /// <summary>The address a chosen picture is shown from. Required with <see cref="PictureLibrary"/>.</summary>
+    [Parameter] public Func<Guid, string>? PictureUrl { get; set; }
+
+    /// <summary>
+    /// Pages the toolbar's "Link to one of your pages" button offers, in menu order. Null: no button.
+    /// </summary>
+    [Parameter] public IReadOnlyList<BenEditorPageLink>? PageLinks { get; set; }
+
+    private const string LibraryPictureTool = "BenLibraryPicture";
+    private const string PageLinkTool = "BenPageLink";
+
+    private bool _choosingPicture, _choosingPage;
+    private string? _selectedText;
+
+    /// <summary>
+    /// The caller's tools plus ours. A new list every time: the default is Telerik's shared static set, and adding
+    /// to it would put the buttons on every editor on the site.
+    /// </summary>
+    private List<IEditorTool> ToolList
+    {
+        get
+        {
+            if (PictureLibrary is null && PageLinks is null) return Tools;
+            var list = new List<IEditorTool>(Tools);
+            if (PictureLibrary is not null) list.Add(new Telerik.Blazor.Components.Editor.CustomTool(LibraryPictureTool));
+            if (PageLinks is not null) list.Add(new Telerik.Blazor.Components.Editor.CustomTool(PageLinkTool));
+            return list;
+        }
+    }
+
+    private async Task InsertPictureAsync(ContentPickerItem item)
+    {
+        if (PictureUrl is null) return;
+        var alt = System.Net.WebUtility.HtmlEncode(Path.GetFileNameWithoutExtension(item.Name));
+        await InsertHtmlAsync($"<img src=\"{PictureUrl(item.Id)}\" alt=\"{alt}\" />", inline: false);
+    }
+
+    /// <summary>
+    /// Opens the page list, first noting the words selected in the editor: opening a window moves the browser's
+    /// focus, and the words are what the link should go on.
+    /// </summary>
+    private async Task OpenPageLinksAsync()
+    {
+        _selectedText = null;
+        try
+        {
+            _module ??= await JS.InvokeAsync<IJSObjectReference>(
+                "import", "/_content/Ben.Web.Website.Library/Kit/BenEditor.razor.js");
+            _selectedText = (await _module.InvokeAsync<string?>("selectedText", _host))?.Trim();
+        }
+        catch (JSDisconnectedException) { }
+        catch (JSException) { }
+        _choosingPage = true;
+    }
+
+    private async Task InsertPageLinkAsync(BenEditorPageLink link)
+    {
+        _choosingPage = false;
+        if (_editor is null) return;
+        if (!string.IsNullOrEmpty(_selectedText))
+            await _editor.ExecuteAsync(new Telerik.Blazor.Components.Editor.LinkCommandArgs(link.Href, _selectedText, link.Title));
+        else
+            await InsertHtmlAsync($"<a href=\"{link.Href}\">{System.Net.WebUtility.HtmlEncode(link.Title)}</a>");
+    }
 
     /// <summary>
     /// The toolbar. Defaults to Telerik's own full set, which is what most call sites want; the

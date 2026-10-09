@@ -20,34 +20,34 @@ The page opens with your name and picture, then three tabs:
 - **Contact** — email addresses, phone numbers, postal addresses and web links.
 - **Where you've been** — the map of investigations you have attended.
 
-Most visits here are to change one thing, which is why the sections are behind tabs rather than
-stacked down one page. The map in particular only loads when you open its tab.
+The map only loads when you open its tab.
 
 ## Your time zone
 
-**Time zone**, on the About tab, is the clock the whole site shows dates and times on for you. It
-was set when you signed up; choose another from the list — the US zones come first, then every
-zone in the world by region — and press **Save**. Every page switches from the next thing it draws.
+**Time zone**, on the About tab, sets the time zone the whole site uses to show you dates and
+times. It was set when you signed up. To change it, choose another from the list — the US zones come
+first, then every zone in the world by region — and press **Save**. Pages use the new time zone from
+then on.
 
 ![Choosing your time zone on your profile](/help/media/your-profile/profile-time-zone.png)
 
-Choose **Use this device's time zone** to go back to following whatever clock your phone or computer
-is on — useful if you travel and want the site to travel with you.
+Choose **Use this device's time zone** to go back to using whatever time zone your phone or computer
+is set to. This is useful if you travel and want the site's times to follow you.
 
-This is the website's clock. The iPhone and iPad app always shows the time where the phone is; see
+This setting is for the website only. The iPhone and iPad app always shows the time where the phone
+is; see
 [The iPhone and iPad Apps](/help/the-mobile-apps).
 
-A case, an investigation, an event or a tour also has a clock of its own: the place's. Those pages
-have a **Local time · My time** switch, so you can read them either way; see
+Cases, investigations, events and tours also have their own time zone: the one where they take
+place. Those pages have a **Local time · My time** switch, so you can see times either way; see
 [Working a Case](/help/working-a-case#whose-clock) and [Getting Started](/help/getting-started).
 
 ## Sex
 
-Under your name sits an optional **Sex** field — Male, Female, or Unspecified, and it starts
-blank. It exists for exactly one thing: when you have no photo, the site shows a placeholder
-icon, and this choice picks which of the three placeholders you get. It is never shown to
-anyone, never shared, and never guessed from your name; blank and Unspecified both mean the
-generic placeholder stands in.
+Under your name is an optional **Sex** field: Male, Female or Unspecified. It starts blank. It's
+used for only one thing: when you have no photo, the site shows a placeholder icon, and this
+choice decides which of the three placeholders you get. It's never shown to anyone, never shared,
+and never guessed from your name. If it's blank or Unspecified, you get the generic placeholder.
 
 ## Two photos
 
@@ -61,158 +61,152 @@ You can set two pictures, and they are treated very differently.
 | They are | They see it |
 |---|---|
 | You | Always. |
-| Someone in a group with you | Yes — colleagues see each other properly. |
+| Someone in a group with you | Yes — group members see each other's private photos. |
 | A client of a case you are working | Only if your group allows it **and** you opted in. |
 | Someone on the same case as you, as a client | Yes. |
 | Anyone else | No — they see your public photo, or your initials. |
 
-The client rule needs both keys. Your group has to allow member photos to be shown to clients,
-**and** you have to switch it on for yourself. Either one alone shares nothing, and the profile
-page tells you when you have opted in but no group allows it yet.
+For clients, two things must both be true. Your group has to allow member photos to be shown to
+clients, **and** you have to switch it on for yourself. If only one is on, clients don't see your
+private photo. The profile page tells you if you've opted in but none of your groups allows it yet.
 
 ## Your contact information
 
 Below the photos you can record as many email addresses, phone numbers, postal addresses and
-web links as you like. Each one is yours alone — nobody else can add to or edit your list, and
-an administrator changing their own copy of your record never touches these.
+web links as you like. This list is yours alone: nobody else can add to it or edit it. If an administrator updates the
+details they keep about you, your own list isn't changed.
 
-Mark one email and one phone as **Primary** if you want a single obvious "reach me here". Marking
-a new one primary clears the old one automatically: it is a slot, not a checkbox you can tick
-twice.
+Mark one email and one phone as **Primary** to show the best way to reach you. You can have only one
+primary of each, so marking a new one primary automatically clears the old one.
 
-**An email address has to be confirmed before it can be primary**, the same as before it can be
-public — primary is the address you are presented by, and neither should be an address nobody has
-proved they can read. So a new one is added, confirmed, and then promoted.
+**An email address has to be confirmed before it can be primary**, just as it must be confirmed
+before it can be public. So add the new address, confirm it, and then make it primary.
 
-Addresses are looked up on a map as you type. If the lookup finds the place, the coordinates are
-stored with the address; if it does not, the address still saves — it simply has no pin.
+As you type a postal address, the site looks it up on a map. If it finds the place, the location is
+saved with the address. If not, the address still saves; it just won't have a pin on the map.
 
 ## What public means
 
-Everything you add starts **private**. Private means only you and the people who administer the
-system can see it; it is never shown on a case page, in a group directory, or to anyone you work
+Everything you add starts **private**. Private means only you and the site's administrators can
+see it; it is never shown on a case page, in a group directory, or to anyone you work
 with.
 
-Ticking **Public** on one entry publishes that entry, and nothing else. A public email address is
-the one thing that lets somebody invite you to a calendar event by typing your address — that
-lookup deliberately ignores your sign-in address, so an unpublished account cannot be found by
-guessing.
+Checking **Public** on an entry makes only that entry public. Someone can invite you to a calendar
+event by typing your email address only if that address is public. Your sign-in address never
+works for this, so nobody can find your account by guessing it.
 
 ## The tick
 
-A **green tick** next to something means we proved it, not that somebody typed it. It appears
-against a confirmed email address, against two-factor when it is on, and on your account address in
-the band at the top of the page. Hover it and it tells you what was proved and when.
+A **green tick** (a check mark) next to something means it has been verified, not just typed in.
+It appears next to a confirmed email address, next to two-factor sign-in when it's on, and on your
+account address in the band at the top of the page. Hover over it to see what was verified and when.
 
-An **amber mark** means the opposite, and it always says what to do about it. You will not see one
-against something you cannot change: a fact with no way to prove it gets no mark at all, because a
-warning you can do nothing about is just an accusation.
+An **amber mark** means something hasn't been verified, and it always tells you what to do about
+it. You won't see one next to something you can't fix: if there's no way to verify something, it
+gets no mark at all.
 
 ## Confirming an email address
 
-An email address cannot be made **public** or **primary** until you have confirmed it. That stops
-anyone typing a stranger's address into their own profile and then receiving that stranger's
-invitations — or being presented by an address that is not theirs.
+An email address can't be made **public** or **primary** until you've confirmed it. This stops
+people from adding someone else's address to their own profile and receiving that person's
+invitations, or appearing under an address that isn't theirs.
 
-**Adding an address sends its confirmation straight away.** You do not have to ask for it: typing
-an address in is the request to confirm it, and the card tells you the link has gone. If the system
-is not set up to send mail — which is normal on a test system — the page shows you the link instead
-so you can copy it.
+**Adding an address sends its confirmation link right away.** You don't have to ask for it, and
+the card tells you the link has been sent. If the site isn't set up to send email — which is
+normal on a test system — the page shows you the link instead so you can copy it.
 
-**Send confirmation link** next to an unconfirmed address gets you another one, a minute after the
-last.
+To get another link, press **Send confirmation link** next to an unconfirmed address.
 
-Opening the link shows the address, partly hidden, and a **Confirm** button. You do not have to
+Opening the link shows the address, partly hidden, and a **Confirm** button. You don't have to
 be signed in, and you can open it on any device. The address is only confirmed when you press the
-button, so a mail scanner that follows links cannot confirm it for you.
+button, so an email scanner that follows links can't confirm it for you.
 
-Links last seven days, and you can only ask for a new one once a minute. Asking for a new link
-retires the old one. If you later change the address text, the confirmation is cleared and the
-entry goes back to private — the new address has not been proven, only the old one had.
+Links last seven days, and you can ask for a new one only once a minute. Asking for a new link
+cancels the old one. If you later edit the address, it's no longer confirmed and goes back to
+private, because the new address hasn't been confirmed.
 
 ## Your investigation map
 
 Your profile's **Where you've been** tab keeps a map of the places you have actually been; the
 same map appears on **My Investigations**. Clicking a pin opens the case that visit belonged to.
-Visits at one spot share a pin with a count; spots that only overlap at a distance gather into a
-count as well, and zooming in separates them.
+Visits to the same spot share one pin, with a count. Nearby spots that overlap when you're zoomed
+out are grouped into a count too; zoom in to separate them.
 
-It shows visits you **attended** — not ones you were invited to, and not ones you said yes to. A
-map of places you might have gone is not a record of where you have been, and only the second is
-worth keeping.
+It shows only visits you **attended** — not ones you were invited to or said yes to.
 
-That means it fills up slowly, and starts empty. Attendance is recorded after the visit, so a
-scheduled investigation appears in your list straight away but on the map only once someone has
-confirmed you were there.
+So the map starts empty and fills up over time. Attendance is recorded after the visit, so a
+scheduled investigation appears in your list right away, but it shows on the map only once someone
+has confirmed you were there.
 
 ## Your emails
 
-The site writes to you when something happens that you would want to know about while you are not
-here — a session you signed up for is canceled or moved, a place comes free and is now yours, an
-investigation request your group was reviewing went elsewhere, your plan is about to lapse.
+The site emails you when something happens that you'd want to know about while you're away — a
+session you signed up for is canceled or moved, a spot opens up and is now yours, an investigation
+request your group was reviewing went elsewhere, or your plan is about to run out.
 
 ![Choosing which emails you get](/help/media/your-profile/your-emails.png)
 
-**Choose your emails** on your profile, or from the link at the foot of any of those letters, lists
-every one you can turn off. Everything is on to begin with, and switching one off takes effect on
-the next letter — there is no Save button, because one switch is the whole decision.
+**Choose your emails**, on your profile or linked at the bottom of any of those emails, lists every
+email you can turn off. They all start on. Turning one off takes effect from the next email. There's
+no Save button — each switch saves as soon as you change it.
 
-Some letters are always sent and are not on that list:
+Some emails are always sent and aren't on that list:
 
 - confirming your email address
 - resetting your password
 - a warning that somebody used your address to try to sign up
 - a receipt for something you paid for
 
-Those are how you get back into your account and what you keep for your own records, so they are
-not a choice. Turning off everything else does not affect them.
+You can't turn these off, because they're how you get back into your account or what you keep for
+your own records. Turning off everything else doesn't affect them.
 
 ## Security — your password and two-step sign-in
 
-The profile's **Security** tab holds how you get into your account.
+The profile's **Security** tab holds your sign-in settings.
 
-**Password.** Change it here whenever you like. If your account was created by signing in with
-Microsoft it has *no* password yet — the panel says so and offers **Add password** instead, which
-asks for no current password because being signed in already proves who you are. Adding one lets
-you sign in either way from then on; Microsoft sign-in keeps working.
+**Password.** Change it here whenever you like. If you created your account by signing in with
+Microsoft, it has *no* password yet. The panel says so and offers **Add password** instead. You
+won't be asked for a current password, since you're already signed in. Once you add one, you can
+sign in either way; Microsoft sign-in keeps working.
 
-Locked out entirely? **Forgot your password?** on the sign-in page emails you a link, and that
-same link is how a Microsoft-only account sets its first password.
+Locked out entirely? **Forgot your password?** on the sign-in page emails you a link. If your
+account only uses Microsoft sign-in, that same link lets you set your first password.
 
-That link can only go to a **confirmed** address. An account made by signing in with Microsoft
-starts with the address Microsoft gave us, but Microsoft does not vouch for it, so we send a
-confirmation link when the account is made and the profile shows a notice until you follow it —
-with a **Send the link again** button if it never arrived. Signing in with Microsoft keeps working
-meanwhile; what waits for the confirmation is anything we would email you, the password-reset link
-included.
+That link can only go to a **confirmed** address. An account created through Microsoft starts with
+the email address Microsoft gives us, but Microsoft doesn't confirm it for us. So we send a
+confirmation link when the account is created, and your profile shows a notice until you follow
+it, with a **Send the link again** button in case it never arrived. You can keep signing in with
+Microsoft in the meantime, but we won't email you anything — including a password-reset link —
+until the address is confirmed.
 
-**Signed in with Apple.** The same applies: no password until you add one. If you chose Hide My
-Email, the profile says "Signed in with Apple, using Hide My Email" where an address would be; if
-you shared no address, it warns you and offers to add one, because until then Apple is the only
-way in and no reset link can reach you.
+**Signed in with Apple.** The same applies: there's no password until you add one. If you chose
+Hide My Email, the profile says "Signed in with Apple, using Hide My Email" where an address would
+be. If you didn't share an address, it warns you and offers to add one, because until you do,
+Apple is your only way in and we have nowhere to send a reset link.
 
-**Two-step sign-in.** Optional, off unless you turn it on, and worth turning on. Scan the code
-with any authenticator app — Duo, Google Authenticator, Microsoft Authenticator, 1Password, Okta
-Verify all read the same code — and keep the recovery codes somewhere safe: they are how you get
-in when your phone is not to hand, and each one works once.
+**Two-step sign-in.** This is optional and off until you turn it on, but it's worth turning on.
+Scan the code with any authenticator app — Duo, Google Authenticator, Microsoft Authenticator,
+1Password and Okta Verify all work — and keep the recovery codes somewhere safe. They're how you
+get in when you don't have your phone, and each one works once.
 
 ## Deleting your account
 
 In the iPhone and iPad app, **Profile → Delete account**.
 
-**What goes:** you. Your name, email address, password, phone number, addresses, photos and any
-sign-in methods you connected — Microsoft, Apple — are destroyed, and the account can never sign
-in again by any route. If you signed in with Apple, we also tell Apple, so IsHaunted disappears
-from the list of apps using your Apple ID. There is no undo, no grace period and no reactivation, and your email
-address is freed for somebody to register with again.
+**What's deleted:** everything about you. Your name, email address, password, phone number,
+addresses, photos and any sign-in methods you connected — Microsoft, Apple — are permanently
+deleted, and nobody can ever sign in to the account again, by any method. If you signed in with
+Apple, we also notify Apple, so IsHaunted disappears from the list of apps using your Apple ID.
+There's no undo, no grace period and no reactivation, and your email address becomes free for
+somebody to register with again.
 
 **What stays:** anything you wrote for a group. A case note, a report, a timeline entry or a
-message on a group's board belongs to that group and often to a client who paid for the work, and
-several of those records a group may be obliged to keep. Those stay, attributed to a former
-member rather than to you. Your own field sessions, recorded on your own rather than for an
-investigation, go with you.
+message on a group's board belongs to that group, and often to a client who paid for the work, and
+the group may be required to keep some of those records. They stay, credited to a former member
+rather than to you. Field sessions you recorded on your own, not for an investigation, are deleted
+with your account.
 
-**If you own a group** you will be asked to hand it over first, and told which groups. Exactly one
-owner exists per group, so leaving would strand it with nobody able to administer it or reach its
-billing. Make somebody else the owner, or close the group, and then your account will delete.
+**If you own a group**, you'll be asked to hand it over first, and told which groups. Each group has
+exactly one owner, so if you left, nobody could manage the group or reach its billing. Make
+somebody else the owner, or close the group, and then you can delete your account.
 
