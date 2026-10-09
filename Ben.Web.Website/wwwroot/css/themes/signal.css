@@ -542,3 +542,7 @@ h1, h2, h3, .h1, .h2, .h3, .display-1, .display-2, .display-3, .display-4 {
 }
 .app-header .mobile-menu-icon:active { background: var(--ben-accent-soft); }
 .app-header .mobile-menu-icon .sa-icon { stroke: currentColor; fill: none; }
+
+/* The header's initials fit their circle: they took the button's own size and ran past its edge
+   ("SM" was cut on both sides, site audit 10/09/2026). */
+.user-menu .profile-image { font-size: .78rem; font-weight: 600; line-height: 1; overflow: hidden; letter-spacing: 0; }

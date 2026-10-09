@@ -8,13 +8,13 @@
 @inject NavigationManager NavManager
 @inject Ben.Web.Services.SiteFeaturesProvider Features
 
-<PageTitle>Organizations</PageTitle>
+<PageTitle>Groups</PageTitle>
 
 <div class="container-fluid px-3">
 
     <div class="row mb-3 align-items-center">
         <div class="col">
-            <h3 class="mb-0">Organizations</h3>
+            <h3 class="mb-0">Groups</h3>
         </div>
         <div class="col-auto d-flex gap-2">
             @* Anyone may found a group — the register endpoint always allowed it, and the billing
@@ -116,7 +116,7 @@
                         <a href="@($"/organizations/{org.Id}")">@org.Name</a>
                     </Template>
                 </GridColumn>
-                <GridColumn Field="@nameof(OrganizationListItemResponse.UrlName)" Title="URL Name" Width="180px" />
+                <GridColumn Field="@nameof(OrganizationListItemResponse.UrlName)" Title="Web address" Width="180px" />
                 <GridColumn Title="Applications" Width="120px">
                     <Template>
                         @{ var item = (OrganizationListItemResponse)context; }

@@ -114,6 +114,10 @@
     -webkit-backdrop-filter: blur(10px);
 }
 .page-hero__actions ::deep .form-control::placeholder { color: rgba(255, 255, 255, .7); }
+/* app.css colors every placeholder from this variable, with !important, so the rule above never won and the
+   placeholder was dark grey on the dark field (site audit, 10/09/2026). Set here, the global rule draws it light. */
+.page-hero__actions ::deep .form-control,
+.page-hero__actions ::deep .form-select { --ben-placeholder-color: rgba(255, 255, 255, .7); }
 .page-hero__actions ::deep .form-select option { color: initial; }
 
 /* secondary buttons and muted text on the photograph — the clock switch, "show all" — as glass,
