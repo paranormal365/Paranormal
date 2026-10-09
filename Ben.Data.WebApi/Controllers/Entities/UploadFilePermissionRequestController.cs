@@ -142,6 +142,12 @@ public sealed class UploadFilePermissionRequestController : BenControllerBase
         var userId = GetCurrentUserIdOrThrow();
         await using var db = await _dbContextFactory.CreateDbContextAsync(cancellationToken);
 
+        // Asking for a group is for the group's own members, now that approving one shares the file with it.
+        if (!await db.UploadFiles.AnyAsync(f => f.Id == fileId, cancellationToken)) return NotFound();
+        if (body.OrganizationId is Guid forGroup
+            && !await db.OrganizationUserMemberships.AnyAsync(m => m.OrganizationId == forGroup && m.AppUserId == userId && m.IsActive, cancellationToken))
+            return Forbid();
+
         var request = new UploadFilePermissionRequest
         {
             Id = Guid.NewGuid(),
@@ -190,6 +196,34 @@ public sealed class UploadFilePermissionRequestController : BenControllerBase
         request.DateReviewed = DateTime.UtcNow;
         request.DateUpdated = DateTime.UtcNow;
         request.UpdatedByAppUserId = userId;
+
+        // Approving a group's request shares the file with that group: the same share the owner could make by
+        // hand. Approval used to change the request's status and grant nothing (site audit, 10/09/2026).
+        if (body.RequestStatus == FilePermissionRequestStatus.Approved && request.OrganizationId is Guid orgId)
+        {
+            var visibility = request.PermissionType.HasFlag(FilePermissionType.Display)
+                ? FileShareVisibility.Public : FileShareVisibility.OrgMembers;
+            var share = await db.UploadFileOrganizationShares
+                .FirstOrDefaultAsync(s => s.UploadFileId == request.UploadFileId && s.OrganizationId == orgId, cancellationToken);
+            if (share is null)
+            {
+                db.UploadFileOrganizationShares.Add(new UploadFileOrganizationShare
+                {
+                    Id = Guid.NewGuid(), UploadFileId = request.UploadFileId, OrganizationId = orgId,
+                    SharedByAppUserId = request.UploadFile.AppUserId ?? userId, Visibility = visibility, IsActive = true,
+                    DateCreated = DateTime.UtcNow, CreatedByAppUserId = userId,
+                });
+            }
+            else
+            {
+                share.IsActive = true;
+                share.Visibility = visibility;
+                share.RemovedByAppUserId = null;
+                share.RemovalDate = null;
+                share.DateUpdated = DateTime.UtcNow;
+                share.UpdatedByAppUserId = userId;
+            }
+        }
         await db.SaveChangesAsync(cancellationToken);
         _ = TryAuditAsync(_auditLog.LogUpdateAsync(nameof(UploadFilePermissionRequest), requestId, before!, request, userId, AppSources.WebApi));
         return Ok(_mapper.Map<UploadFilePermissionRequestRecord>(request));

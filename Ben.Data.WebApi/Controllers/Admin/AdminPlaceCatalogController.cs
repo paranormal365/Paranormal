@@ -159,8 +159,8 @@ public sealed class AdminPlaceCatalogController : BenControllerBase
         place.UpdatedByAppUserId = userId;
         await db.SaveChangesAsync(ct);
 
-        await _auditLog.LogUpdateAsync(nameof(Ben.Data.Source.Entities.Place), id,
-            before, new { place.Kind }, userId, AppSources.WebApi);
+        await TryAuditAsync(() => _auditLog.LogUpdateAsync(nameof(Ben.Data.Source.Entities.Place), id,
+            before, new { place.Kind }, userId, AppSources.WebApi));
 
         _log.LogInformation("Place {PlaceId} set to {Kind} by {UserId}.", id, request.Kind, userId);
 
@@ -291,11 +291,11 @@ public sealed class AdminPlaceCatalogController : BenControllerBase
         place.UpdatedByAppUserId = userId;
         await db.SaveChangesAsync(ct);
 
-        await _auditLog.LogUpdateAsync(nameof(Ben.Data.Source.Entities.Place), id,
+        await TryAuditAsync(() => _auditLog.LogUpdateAsync(nameof(Ben.Data.Source.Entities.Place), id,
             before,
             new { place.Name, place.StreetAddress1, place.City, place.State,
                   place.Latitude, place.Longitude },
-            userId, AppSources.WebApi);
+            userId, AppSources.WebApi));
 
         _log.LogInformation("Place {PlaceId} corrected by {UserId}.", id, userId);
 
@@ -328,8 +328,8 @@ public sealed class AdminPlaceCatalogController : BenControllerBase
         db.Places.Remove(place);
         await db.SaveChangesAsync(ct);
 
-        await _auditLog.LogDeleteAsync(nameof(Ben.Data.Source.Entities.Place), id, place,
-            userId, AppSources.WebApi);
+        await TryAuditAsync(() => _auditLog.LogDeleteAsync(nameof(Ben.Data.Source.Entities.Place), id, place,
+            userId, AppSources.WebApi));
 
         _log.LogInformation("Place {PlaceId} deleted by {UserId}.", id, userId);
         return Ok(true);

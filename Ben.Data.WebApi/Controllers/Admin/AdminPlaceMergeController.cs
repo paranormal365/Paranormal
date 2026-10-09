@@ -298,8 +298,8 @@ public sealed class AdminPlaceMergeController : BenControllerBase
         await db.SaveChangesAsync(ct);
         await transaction.CommitAsync(ct);
 
-        await _auditLog.LogDeleteAsync(nameof(Ben.Data.Source.Entities.Place), id, losing,
-            userId, AppSources.WebApi);
+        await TryAuditAsync(() => _auditLog.LogDeleteAsync(nameof(Ben.Data.Source.Entities.Place), id, losing,
+            userId, AppSources.WebApi));
 
         _log.LogInformation(
             "Place {Losing} merged into {Surviving}: {Investigations} investigations, {Cases} cases, "

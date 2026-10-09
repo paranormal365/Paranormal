@@ -95,7 +95,7 @@ public class OrganizationSecurityServiceTests
 
         var service = new OrganizationSecurityService(factory);
 
-        await Assert.ThrowsAsync<UnauthorizedAccessException>(() =>
+        await Assert.ThrowsAnyAsync<UnauthorizedAccessException>(() =>
             service.UpsertMembershipAsync(orgId, adminId, OrganizationMemberRole.Owner, true, adminId));
     }
 
@@ -111,7 +111,7 @@ public class OrganizationSecurityServiceTests
 
         var service = new OrganizationSecurityService(factory);
 
-        await Assert.ThrowsAsync<UnauthorizedAccessException>(() =>
+        await Assert.ThrowsAnyAsync<UnauthorizedAccessException>(() =>
             service.UpsertMembershipAsync(orgId, targetId, OrganizationMemberRole.Owner, true, adminId));
     }
 
@@ -127,11 +127,11 @@ public class OrganizationSecurityServiceTests
         var service = new OrganizationSecurityService(factory);
 
         // Try to demote the Owner to Member.
-        await Assert.ThrowsAsync<UnauthorizedAccessException>(() =>
+        await Assert.ThrowsAnyAsync<UnauthorizedAccessException>(() =>
             service.UpsertMembershipAsync(orgId, ownerId, OrganizationMemberRole.Member, true, adminId));
 
         // Try to deactivate the Owner outright.
-        await Assert.ThrowsAsync<UnauthorizedAccessException>(() =>
+        await Assert.ThrowsAnyAsync<UnauthorizedAccessException>(() =>
             service.UpsertMembershipAsync(orgId, ownerId, OrganizationMemberRole.Owner, false, adminId));
     }
 
@@ -149,7 +149,7 @@ public class OrganizationSecurityServiceTests
 
         var service = new OrganizationSecurityService(factory);
 
-        await Assert.ThrowsAsync<UnauthorizedAccessException>(() =>
+        await Assert.ThrowsAnyAsync<UnauthorizedAccessException>(() =>
             service.UpsertMembershipAsync(orgId, targetId, OrganizationMemberRole.Administrator, true, adminId));
     }
 
@@ -183,7 +183,7 @@ public class OrganizationSecurityServiceTests
 
         var service = new OrganizationSecurityService(factory);
 
-        await Assert.ThrowsAsync<UnauthorizedAccessException>(() =>
+        await Assert.ThrowsAnyAsync<UnauthorizedAccessException>(() =>
             service.UpsertMembershipAsync(orgId, peerAdminId, OrganizationMemberRole.Member, false, adminId));
     }
 
@@ -216,7 +216,7 @@ public class OrganizationSecurityServiceTests
 
         var service = new OrganizationSecurityService(factory);
 
-        await Assert.ThrowsAsync<InvalidOperationException>(() =>
+        await Assert.ThrowsAnyAsync<InvalidOperationException>(() =>
             service.UpsertMembershipAsync(orgId, ownerId, OrganizationMemberRole.Owner, false, ownerId));
     }
 

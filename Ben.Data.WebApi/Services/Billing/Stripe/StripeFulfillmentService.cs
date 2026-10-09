@@ -144,10 +144,33 @@ public sealed class StripeFulfillmentService
         }
     }
 
+    /// <summary>The gates a payment is fulfilled behind: a fixed set, so the same payment always meets the same one.</summary>
+    private static readonly SemaphoreSlim[] Gates = [.. Enumerable.Range(0, 64).Select(_ => new SemaphoreSlim(1, 1))];
+
+    private static SemaphoreSlim GateFor(string reference)
+        => Gates[(int)((uint)StringComparer.Ordinal.GetHashCode(reference) % (uint)Gates.Length)];
+
     /// <summary>
-    /// Records the payment and opens the period. Safe to call twice with the same checkout.
+    /// Records the payment and opens the period. Safe to call twice with the same checkout, including at
+    /// the same moment.
     /// </summary>
+    /// <remarks>
+    /// Every checkout arrives twice, as checkout.session.completed and payment_intent.succeeded with the
+    /// same payment. "Is there a ledger row for this reference" was the only guard, and two deliveries
+    /// arriving together both found none: credits granted twice, two receipts, a coupon spent twice (site
+    /// audit, 10/09/2026). A unique index can't referee it because the charge row and the payment row share
+    /// the reference, so the second delivery waits here for the first to finish, then finds its rows and
+    /// stops. The API runs as a single process; a second instance would need a database lock instead.
+    /// </remarks>
     public async Task FulfillAsync(StripeCompletedCheckout checkout, CancellationToken ct = default)
+    {
+        var gate = GateFor(checkout.PaymentIntentRef ?? checkout.SessionId);
+        await gate.WaitAsync(ct);
+        try { await FulfillOnceAsync(checkout, ct); }
+        finally { gate.Release(); }
+    }
+
+    private async Task FulfillOnceAsync(StripeCompletedCheckout checkout, CancellationToken ct)
     {
         // A store order's payment (storefront S4.6) — first, and never allowed to fall through to
         // the subscription path below, whose "no usable metadata" branch ignores and answers 200.

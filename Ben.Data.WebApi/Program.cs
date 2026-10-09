@@ -100,7 +100,7 @@ builder.Host.UseDefaultServiceProvider((context, options) =>
 // — on 2026-09-21 a new controller asked for a bare SiteIdentity, the API started clean, and the
 // endpoint 500ed on first use. Registering the controllers as services puts them inside the walk,
 // and the same mistake now stops the host instead of one screen.
-builder.Services.AddControllers().AddControllersAsServices();
+builder.Services.AddControllers(o => o.Filters.Add<Ben.Data.WebApi.Services.OrganizationRuleRefusalFilter>()).AddControllersAsServices();
 builder.Services.AddMemoryCache();
 builder.Services.AddBenRateLimiting(builder.Configuration);
 

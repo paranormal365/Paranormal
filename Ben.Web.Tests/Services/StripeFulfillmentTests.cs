@@ -128,6 +128,35 @@ public sealed class StripeFulfillmentTests
         Assert.Equal(1, await db.SubscriptionContractTerms.CountAsync());
     }
 
+    /// <summary>
+    /// The two events Stripe sends for one checkout can arrive at the same moment. Each used to find no
+    /// ledger row and fulfil, so credits were granted twice (site audit, 10/09/2026).
+    /// </summary>
+    [Fact]
+    public async Task Delivered_twice_at_the_same_moment_is_fulfilled_once()
+    {
+        var factory = Db();
+        var seed = await SeedAsync(factory);
+        var inv = System.Globalization.CultureInfo.InvariantCulture;
+        StripeCompletedCheckout Checkout() => new(
+            "cs_race", "pi_race", "cus_x", "pm_x",
+            new Dictionary<string, string>
+            {
+                [Facts.Keys.Organization] = seed.OrgId.ToString(),
+                [Facts.Keys.User]         = seed.UserId.ToString(),
+                [Facts.Keys.EventCredits] = "3",
+                [Facts.Keys.List]         = (297m).ToString(inv),
+                [Facts.Keys.TaxRate]      = (0m).ToString(inv),
+                [Facts.Keys.TaxAmount]    = (0m).ToString(inv),
+            });
+
+        await Task.WhenAll(Enumerable.Range(0, 4).Select(_ => Task.Run(() => Service(factory).FulfillAsync(Checkout(), default))));
+
+        await using var db = await factory.CreateDbContextAsync();
+        Assert.Equal(3, await db.EventCredits.CountAsync());
+        Assert.Equal(1, await db.BillingLedgerEntries.CountAsync(e => e.Kind == BillingLedgerKind.Payment));
+    }
+
     [Fact]
     public async Task A_session_that_is_not_ours_is_ignored_not_guessed_at()
     {

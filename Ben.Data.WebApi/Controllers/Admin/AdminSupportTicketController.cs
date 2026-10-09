@@ -198,8 +198,8 @@ public sealed class AdminSupportTicketController : BenControllerBase
         ticket.DateUpdated = DateTime.UtcNow;
         await db.SaveChangesAsync(ct);
 
-        await _auditLog.LogUpdateAsync(
-            nameof(SupportTicket), ticket.Id, before, ticket, userId, AppSources.WebApi);
+        await TryAuditAsync(() => _auditLog.LogUpdateAsync(
+            nameof(SupportTicket), ticket.Id, before, ticket, userId, AppSources.WebApi));
 
         return Ok(new SupportTicketAdminRecord(
             ticket.Id, ticket.Reference, ticket.FromName, ticket.FromEmail, ticket.Topic,

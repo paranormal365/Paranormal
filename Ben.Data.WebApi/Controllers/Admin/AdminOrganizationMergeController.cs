@@ -43,9 +43,9 @@ public sealed class AdminOrganizationMergeController : BenControllerBase
         if (error is not null) return BadRequest(error);
 
         // The merged org row is gone, so the audit entry is the durable record of what happened.
-        await _auditLog.LogCreateAsync("OrganizationMerge", request.BaseOrganizationId,
+        await TryAuditAsync(() => _auditLog.LogCreateAsync("OrganizationMerge", request.BaseOrganizationId,
             new { request.BaseOrganizationId, request.MergedOrganizationId, request.NewName },
-            userId, AppSources.WebApi);
+            userId, AppSources.WebApi));
         return NoContent();
     }
 }

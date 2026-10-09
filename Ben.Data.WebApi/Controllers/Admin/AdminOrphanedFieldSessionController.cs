@@ -182,9 +182,9 @@ public sealed class AdminOrphanedFieldSessionController : BenControllerBase
         var actingUserId = GetCurrentUserId();
         foreach (var orphan in orphans.Where(o => ids.Contains(o.Id)))
         {
-            await _auditLog.LogDeleteAsync(nameof(FieldSessionUpload), orphan.Id,
+            await TryAuditAsync(() => _auditLog.LogDeleteAsync(nameof(FieldSessionUpload), orphan.Id,
                 new { orphan.LocationLabel, orphan.DeviceModel, orphan.RecordedByName, orphan.StartedAt, orphan.ReadingCount, orphan.MarkerCount, Reason = "orphaned: document not on this server" },
-                actingUserId, AppSources.WebApi);
+                actingUserId, AppSources.WebApi));
         }
 
         var note = filesKept > 0

@@ -282,13 +282,13 @@ public class OrganizationSecurityService : IOrganizationSecurityService
 
         if (string.IsNullOrWhiteSpace(normalizedName))
         {
-            throw new InvalidOperationException("Organization name is required.");
+            throw new OrganizationRuleException("Give the group a name.");
         }
 
         var appUserExists = await dbContext.AppUsers.AnyAsync(u => u.Id == appUserId, token);
         if (!appUserExists)
         {
-            throw new InvalidOperationException("AppUser not found.");
+            throw new OrganizationRuleException("That account wasn't found.");
         }
 
         // The third door onto the same column. This one checked uniqueness against current names
@@ -299,7 +299,7 @@ public class OrganizationSecurityService : IOrganizationSecurityService
 
         if (refusal is not null)
         {
-            throw new InvalidOperationException(refusal);
+            throw new OrganizationRuleException(refusal);
         }
 
         var organization = new Organization
@@ -388,13 +388,13 @@ public class OrganizationSecurityService : IOrganizationSecurityService
         var exists = await dbContext.Organizations.AnyAsync(o => o.Id == organizationId, token);
         if (!exists)
         {
-            throw new InvalidOperationException("Organization not found.");
+            throw new OrganizationRuleException("That group wasn't found.");
         }
 
         var targetUserExists = await dbContext.AppUsers.AnyAsync(u => u.Id == targetUserId, token);
         if (!targetUserExists)
         {
-            throw new InvalidOperationException("Target user not found.");
+            throw new OrganizationRuleException("That person wasn't found.");
         }
 
         var existing = await dbContext.OrganizationUserMemberships
@@ -420,9 +420,9 @@ public class OrganizationSecurityService : IOrganizationSecurityService
                 // membership whose CURRENT role is already at-or-above their own rank (a peer
                 // Administrator, or the Owner).
                 if (role <= OrganizationMemberRole.Administrator)
-                    throw new UnauthorizedAccessException("An Administrator can only grant roles below Administrator.");
+                    throw new OrganizationRuleDeniedException("An administrator can only give ranks below administrator.");
                 if (existing?.Role <= OrganizationMemberRole.Administrator)
-                    throw new UnauthorizedAccessException("An Administrator cannot modify a membership at or above their own rank.");
+                    throw new OrganizationRuleDeniedException("An administrator can't change someone at or above their own rank.");
             }
         }
 
@@ -434,7 +434,7 @@ public class OrganizationSecurityService : IOrganizationSecurityService
                 .AnyAsync(m => m.OrganizationId == organizationId && m.Role == OrganizationMemberRole.Owner
                             && m.IsActive && m.AppUserId != targetUserId, token);
             if (!otherActiveOwnerExists)
-                throw new InvalidOperationException("Cannot remove or demote the organization's last active Owner.");
+                throw new OrganizationRuleException("The group's last owner can't be removed or given a lower rank. Make someone else an owner first.");
         }
 
         if (existing is null)
@@ -482,7 +482,7 @@ public class OrganizationSecurityService : IOrganizationSecurityService
 
         if (!hasMembership)
         {
-            throw new InvalidOperationException("Target user is not an active member of the organization.");
+            throw new OrganizationRuleException("That person isn't an active member of the group.");
         }
 
         var existing = await dbContext.OrganizationAccessGrants.FirstOrDefaultAsync(g =>
@@ -562,7 +562,7 @@ public class OrganizationSecurityService : IOrganizationSecurityService
 
         if (!isOrgAdmin)
         {
-            throw new UnauthorizedAccessException("Only superadmin or an active organization admin can manage organization access settings.");
+            throw new OrganizationRuleDeniedException("Only the group's owners and administrators can change who has access.");
         }
     }
 }
