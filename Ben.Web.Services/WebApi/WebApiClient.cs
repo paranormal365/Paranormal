@@ -29,6 +29,35 @@ public sealed class WebApiClient : IWebApiClient
         _visitor = visitor;
     }
 
+    /// <summary>The sentence a person is shown when the site cannot reach its own server.</summary>
+    internal const string Unreachable = "The site couldn't be reached just now. Please try again in a moment.";
+
+    /// <summary>
+    /// Sends, and turns "the server could not be reached" into an ordinary failed answer.
+    /// </summary>
+    /// <remarks>
+    /// The reads already did this. The writes let the exception out, and about eighty buttons had no catch
+    /// of their own, so an API that was down or slow ended the person's whole session with the
+    /// "An unhandled error has occurred" bar (site audit, 10/09/2026). Answered as a 503 whose body is a
+    /// plain sentence, every caller takes its failure path, and the ones that show the server's reason
+    /// show this one. Cancellation the caller asked for still throws, as it should.
+    /// </remarks>
+    private async Task<HttpResponseMessage> SendOrUnreachableAsync(HttpRequestMessage req, CancellationToken token)
+    {
+        try
+        {
+            return await _httpClient.SendAsync(req, token);
+        }
+        catch (Exception ex) when (ex is HttpRequestException || (ex is TaskCanceledException && !token.IsCancellationRequested))
+        {
+            return new HttpResponseMessage(System.Net.HttpStatusCode.ServiceUnavailable)
+            {
+                RequestMessage = req,
+                Content = new StringContent(Unreachable),
+            };
+        }
+    }
+
     /// <summary>Creates an HttpRequestMessage with the current bearer token attached.</summary>
     private HttpRequestMessage Auth(HttpMethod method, string url)
     {
@@ -127,7 +156,7 @@ public sealed class WebApiClient : IWebApiClient
     {
         using var req = Anonymous(HttpMethod.Post, relativeUrl);
         req.Content = JsonContent.Create(payload);
-        using var response = await _httpClient.SendAsync(req, token);
+        using var response = await SendOrUnreachableAsync(req, token);
 
         try
         {
@@ -168,7 +197,7 @@ public sealed class WebApiClient : IWebApiClient
     {
         using var req = Auth(HttpMethod.Post, relativeUrl);
         req.Content = JsonContent.Create(payload);
-        using var response = await _httpClient.SendAsync(req, token);
+        using var response = await SendOrUnreachableAsync(req, token);
         if (!response.IsSuccessStatusCode) return default;
         return await BodyOrDefaultAsync<TResponse>(response, token);
     }
@@ -179,7 +208,7 @@ public sealed class WebApiClient : IWebApiClient
     {
         using var req = Auth(method, relativeUrl);
         req.Content = JsonContent.Create(payload);
-        using var response = await _httpClient.SendAsync(req, token);
+        using var response = await SendOrUnreachableAsync(req, token);
 
         if (response.IsSuccessStatusCode)
         {
@@ -217,7 +246,7 @@ public sealed class WebApiClient : IWebApiClient
     {
         using var req = Auth(method, relativeUrl);
         if (payload is not null) req.Content = JsonContent.Create(payload);
-        using var response = await _httpClient.SendAsync(req, token);
+        using var response = await SendOrUnreachableAsync(req, token);
         var status = (int)response.StatusCode;
 
         if (response.IsSuccessStatusCode)
@@ -237,7 +266,7 @@ public sealed class WebApiClient : IWebApiClient
     {
         using var req = Auth(HttpMethod.Post, relativeUrl);
         req.Content = JsonContent.Create(payload);
-        using var response = await _httpClient.SendAsync(req, token);
+        using var response = await SendOrUnreachableAsync(req, token);
 
         if (response.IsSuccessStatusCode)
         {
@@ -271,7 +300,7 @@ public sealed class WebApiClient : IWebApiClient
     {
         using var req = Auth(method, relativeUrl);
         req.Content = JsonContent.Create(payload);
-        using var response = await _httpClient.SendAsync(req, token);
+        using var response = await SendOrUnreachableAsync(req, token);
 
         if (response.IsSuccessStatusCode)
         {
@@ -328,7 +357,7 @@ public sealed class WebApiClient : IWebApiClient
     {
         using var req = Anonymous(HttpMethod.Post, relativeUrl);
         req.Content = JsonContent.Create(payload);
-        using var response = await _httpClient.SendAsync(req, token);
+        using var response = await SendOrUnreachableAsync(req, token);
         if (!response.IsSuccessStatusCode) return default;
         return await BodyOrDefaultAsync<TResponse>(response, token);
     }
@@ -337,7 +366,7 @@ public sealed class WebApiClient : IWebApiClient
     {
         using var req = Anonymous(HttpMethod.Post, relativeUrl);
         req.Content = JsonContent.Create(payload);
-        using var response = await _httpClient.SendAsync(req, token);
+        using var response = await SendOrUnreachableAsync(req, token);
         return response.IsSuccessStatusCode;
     }
 
@@ -347,7 +376,7 @@ public sealed class WebApiClient : IWebApiClient
     {
         using var req = Anonymous(HttpMethod.Post, relativeUrl);
         req.Content = JsonContent.Create(payload);
-        using var response = await _httpClient.SendAsync(req, token);
+        using var response = await SendOrUnreachableAsync(req, token);
         if (response.IsSuccessStatusCode) return (true, null);
 
         // The same prose test as SendExpectingReasonAsync: a refusal we wrote is a sentence.
@@ -364,7 +393,7 @@ public sealed class WebApiClient : IWebApiClient
     {
         using var req = Auth(HttpMethod.Put, relativeUrl);
         req.Content = JsonContent.Create(payload);
-        using var response = await _httpClient.SendAsync(req, token);
+        using var response = await SendOrUnreachableAsync(req, token);
         if (!response.IsSuccessStatusCode) return default;
         return await BodyOrDefaultAsync<TResponse>(response, token);
     }
@@ -372,7 +401,7 @@ public sealed class WebApiClient : IWebApiClient
     public async Task<bool> DeleteAsync(string relativeUrl, CancellationToken token = default)
     {
         using var req = Auth(HttpMethod.Delete, relativeUrl);
-        using var response = await _httpClient.SendAsync(req, token);
+        using var response = await SendOrUnreachableAsync(req, token);
         return response.IsSuccessStatusCode;
     }
 
@@ -381,7 +410,7 @@ public sealed class WebApiClient : IWebApiClient
         string relativeUrl, CancellationToken token = default)
     {
         using var req = Auth(HttpMethod.Delete, relativeUrl);
-        using var response = await _httpClient.SendAsync(req, token);
+        using var response = await SendOrUnreachableAsync(req, token);
 
         if (response.IsSuccessStatusCode) return (true, null);
 
@@ -402,7 +431,7 @@ public sealed class WebApiClient : IWebApiClient
     {
         using var req = Auth(HttpMethod.Put, relativeUrl);
         req.Content = JsonContent.Create(payload);
-        using var response = await _httpClient.SendAsync(req, token);
+        using var response = await SendOrUnreachableAsync(req, token);
         return response.IsSuccessStatusCode;
     }
 
@@ -410,7 +439,7 @@ public sealed class WebApiClient : IWebApiClient
     {
         using var req = Auth(HttpMethod.Post, relativeUrl);
         req.Content = JsonContent.Create(payload);
-        using var response = await _httpClient.SendAsync(req, token);
+        using var response = await SendOrUnreachableAsync(req, token);
         return response.IsSuccessStatusCode;
     }
 
@@ -492,7 +521,7 @@ public sealed class WebApiClient : IWebApiClient
     {
         using var req = Auth(HttpMethod.Post, "/api/upload-files");
         req.Content = content;
-        using var response = await _httpClient.SendAsync(req, token);
+        using var response = await SendOrUnreachableAsync(req, token);
         if (!response.IsSuccessStatusCode) return null;
         return await response.Content.ReadFromJsonAsync<UploadFileRecord>(cancellationToken: token);
     }
@@ -502,7 +531,7 @@ public sealed class WebApiClient : IWebApiClient
     {
         using var req = Auth(HttpMethod.Post, "/api/chunked-uploads");
         req.Content = System.Net.Http.Json.JsonContent.Create(request);
-        using var response = await _httpClient.SendAsync(req, token);
+        using var response = await SendOrUnreachableAsync(req, token);
 
         if (response.IsSuccessStatusCode)
             return (await response.Content.ReadFromJsonAsync<ChunkedUploadSessionRecord>(cancellationToken: token), null);
@@ -521,7 +550,7 @@ public sealed class WebApiClient : IWebApiClient
     {
         using var req = Auth(HttpMethod.Post, relativeUrl);
         req.Content = content;
-        using var response = await _httpClient.SendAsync(req, token);
+        using var response = await SendOrUnreachableAsync(req, token);
         if (!response.IsSuccessStatusCode) return default;
         return await response.Content.ReadFromJsonAsync<TResponse>(cancellationToken: token);
     }
@@ -536,7 +565,7 @@ public sealed class WebApiClient : IWebApiClient
     {
         using var req = Auth(HttpMethod.Post, relativeUrl);
         req.Content = content;
-        using var response = await _httpClient.SendAsync(req, token);
+        using var response = await SendOrUnreachableAsync(req, token);
 
         if (response.IsSuccessStatusCode)
         {
@@ -584,7 +613,7 @@ public sealed class WebApiClient : IWebApiClient
     public async Task<(byte[] Data, string ContentType, string FileName)?> DownloadFileAsync(Guid id, CancellationToken token = default)
     {
         using var req = Auth(HttpMethod.Get, $"/api/upload-files/{id}/download");
-        using var response = await _httpClient.SendAsync(req, token);
+        using var response = await SendOrUnreachableAsync(req, token);
         if (!response.IsSuccessStatusCode) return null;
         var data = await response.Content.ReadAsByteArrayAsync(token);
         var contentType = response.Content.Headers.ContentType?.ToString() ?? "application/octet-stream";
@@ -595,7 +624,7 @@ public sealed class WebApiClient : IWebApiClient
     public async Task<(byte[] Data, string ContentType, string FileName)?> GetBytesAsync(string relativeUrl, string fallbackFileName, CancellationToken token = default)
     {
         using var req = Auth(HttpMethod.Get, relativeUrl);
-        using var response = await _httpClient.SendAsync(req, token);
+        using var response = await SendOrUnreachableAsync(req, token);
         if (!response.IsSuccessStatusCode) return null;
         var data = await response.Content.ReadAsByteArrayAsync(token);
         var contentType = response.Content.Headers.ContentType?.ToString() ?? "application/pdf";
@@ -722,7 +751,7 @@ public sealed class WebApiClient : IWebApiClient
     {
         using var req = Auth(HttpMethod.Get,
             $"/api/upload-files/{fileId}/clip/preview?start={start.ToString(System.Globalization.CultureInfo.InvariantCulture)}&end={end.ToString(System.Globalization.CultureInfo.InvariantCulture)}");
-        using var response = await _httpClient.SendAsync(req, token);
+        using var response = await SendOrUnreachableAsync(req, token);
         if (!response.IsSuccessStatusCode) return null;
         var data        = await response.Content.ReadAsByteArrayAsync(token);
         var contentType = response.Content.Headers.ContentType?.ToString() ?? "audio/wav";
@@ -780,7 +809,7 @@ public sealed class WebApiClient : IWebApiClient
     {
         using var req = EntraAuth(HttpMethod.Post, "/api/auth/entra/register", entraAccessToken);
         req.Content = JsonContent.Create(request);
-        using var response = await _httpClient.SendAsync(req, token);
+        using var response = await SendOrUnreachableAsync(req, token);
         if (!response.IsSuccessStatusCode) return default;
         return await response.Content.ReadFromJsonAsync<EntraRegisterResponse>(cancellationToken: token);
     }

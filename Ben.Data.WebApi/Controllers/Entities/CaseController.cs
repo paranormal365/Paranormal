@@ -579,6 +579,11 @@ public sealed class CaseController : BenControllerBase
         if (application.Status is ClientOrgRequestStatus.Accepted or ClientOrgRequestStatus.Cancelled)
             return BadRequest("This application has already been responded to.");
         if (application.ClientRequest is null) return NotFound("Client request not found.");
+        // A request the client withdrew, or never sent, can't be taken on. Only the application's own
+        // status was asked, so a group that had declined could still open a case holding the home
+        // address of somebody who had since withdrawn (site audit, 10/09/2026).
+        if (application.ClientRequest.Status is ClientRequestStatus.Withdrawn or ClientRequestStatus.Closed or ClientRequestStatus.Draft)
+            return BadRequest("This request is no longer open.");
 
         // Ben, 2026-08-26: any group who accepts first wins. This check answers the common case
         // politely; the unique filtered index UX_ClientRequestOrganizations_OneAcceptedPerRequest

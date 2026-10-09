@@ -76,7 +76,7 @@
                 <h3 class="mb-0">@(_session.LocationLabel ?? "Field session")</h3>
                 <span class="text-muted small">
                     @_session.StartedAt.ToViewerLocalTime(UserState).ToDisplayDateTime()
-                    · @_session.DeviceModel
+                    · @Ben.Web.Website.Library.Kit.DeviceNames.Friendly(_session.DeviceModel)
                     @if (!string.IsNullOrWhiteSpace(_session.RecordedByName))
                     {
                         <text> · recorded by @_session.RecordedByName</text>

@@ -322,4 +322,42 @@ public class CaseNoteControllerTests
         var note = Assert.Single((IEnumerable<CaseNoteRecord>)ok.Value!);
         Assert.Equal("<p>Line one<br>line &lt;two&gt;</p><p>Next paragraph</p>", note.Body);
     }
+
+    // ── Site audit, 10/09/2026 ───────────────────────────────────────────────
+
+    /// <summary>
+    /// A member of one group cannot read another group's case notes by putting that case's id under their
+    /// own group's address. GetAll asked only whether the caller was in the route group, never whether the
+    /// case was that group's (site audit, 10/09/2026).
+    /// </summary>
+    [Fact]
+    public async Task A_member_of_one_group_cannot_read_another_groups_case_notes()
+    {
+        var (factory, orgId, _, userId) = await SeedAsync();
+        var otherOrgId  = Guid.NewGuid();
+        var otherCaseId = Guid.NewGuid();
+        var otherUserId = Guid.NewGuid();
+        await using (var db = await factory.CreateDbContextAsync())
+        {
+            db.Users.Add(new AppUser { Id = otherUserId, UserName = "o@t.com", NormalizedUserName = "O@T.COM", Email = "o@t.com", NormalizedEmail = "O@T.COM", DateCreated = DateTime.UtcNow });
+            db.Organizations.Add(new Organization { Id = otherOrgId, Name = "Other Org", UrlName = "other", DateCreated = DateTime.UtcNow, CreatedByAppUserId = otherUserId });
+            db.Cases.Add(new Case
+            {
+                Id = otherCaseId, OrganizationId = otherOrgId, Title = "Other Case",
+                CaseYear = 2026, OrgCaseNumber = 1,
+                StreetAddress1 = "2 Main", City = "Nashville", State = "TN", ZipCode = "37201", Country = "US",
+                DateCreated = DateTime.UtcNow, CreatedByAppUserId = otherUserId,
+            });
+            db.CaseNotes.Add(new CaseNote
+            {
+                Id = Guid.NewGuid(), CaseId = otherCaseId, AuthorAppUserId = otherUserId, Body = "Private note",
+                DateCreated = DateTime.UtcNow, CreatedByAppUserId = otherUserId,
+            });
+            await db.SaveChangesAsync();
+        }
+
+        var result = await Build(factory, userId).GetAll(orgId, otherCaseId, default);
+
+        Assert.IsType<NotFoundResult>(result.Result);
+    }
 }

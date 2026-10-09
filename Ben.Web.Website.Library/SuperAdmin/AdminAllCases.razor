@@ -29,16 +29,16 @@
                wrapped onto five lines inside a 950px content area (Signal phase 4). *@
             <GridColumns>
                 <GridColumn Field="@nameof(AdminCaseSummaryRecord.OrganizationName)" Title="Organization" Width="170px" />
-                <GridColumn Field="@nameof(AdminCaseSummaryRecord.CaseReference)" Title="Reference" Width="110px" />
+                <GridColumn Field="@nameof(AdminCaseSummaryRecord.CaseReference)" Title="Reference" Width="150px" />
                 <GridColumn Field="@nameof(AdminCaseSummaryRecord.Title)" Title="Title" />
-                <GridColumn Field="@nameof(AdminCaseSummaryRecord.Status)" Title="Status" Width="110px" />
+                <GridColumn Field="@nameof(AdminCaseSummaryRecord.Status)" Title="Status" Width="150px" />
                 <GridColumn Title="Location" Width="150px">
                     <Template>
                         @{ var c = (AdminCaseSummaryRecord)context; }
                         @c.City, @c.State
                     </Template>
                 </GridColumn>
-                <GridColumn Field="@nameof(AdminCaseSummaryRecord.DateCaseOpened)" Title="Opened" Width="110px">
+                <GridColumn Field="@nameof(AdminCaseSummaryRecord.DateCaseOpened)" Title="Opened" Width="160px">
                     <Template>
                         @{ var cs = (AdminCaseSummaryRecord)context; }
                         @cs.DateCaseOpened.ToViewerLocalTime(UserState).ToDisplayDate()

@@ -254,4 +254,43 @@ public class OrgMemberGroupControllerTests
         var result = await ctrl.RemoveMember(orgId, group.Id, Guid.NewGuid(), default);
         Assert.IsType<NotFoundResult>(result);
     }
+
+    // ── Site audit, 10/09/2026 ───────────────────────────────────────────────
+
+    /// <summary>
+    /// Somebody with member-group rights in one group cannot take a person out of another group's member
+    /// group by naming it under their own group's address. RemoveMember checked only that the membership
+    /// was in the named member group, never that the member group was the route group's (site audit,
+    /// 10/09/2026).
+    /// </summary>
+    [Fact]
+    public async Task Rights_in_one_group_cannot_remove_a_member_from_another_groups_member_group()
+    {
+        var factory    = CreateFactory();
+        var myOrgId    = Guid.NewGuid();
+        var otherOrgId = Guid.NewGuid();
+        var (group, membership) = await SeedGroupAndMembershipAsync(factory, otherOrgId, Guid.NewGuid());
+        var gm = new OrgMemberGroupMembership
+        {
+            Id = Guid.NewGuid(), OrgMemberGroupId = group.Id, OrganizationUserMembershipId = membership.Id,
+            DateCreated = DateTime.UtcNow, CreatedByAppUserId = Guid.NewGuid(),
+        };
+        await using (var db = await factory.CreateDbContextAsync())
+        {
+            db.OrgMemberGroupMemberships.Add(gm);
+            await db.SaveChangesAsync();
+        }
+        var security = new Mock<IOrganizationSecurityService>();
+        security.Setup(x => x.HasAccessAsync(It.IsAny<Guid>(), It.IsAny<Guid>(),
+                  It.IsAny<OrganizationSecurityTable>(), It.IsAny<OrganizationSecurityAction>(),
+                  It.IsAny<CancellationToken>()))
+             .ReturnsAsync((Guid _, Guid org, OrganizationSecurityTable _, OrganizationSecurityAction _, CancellationToken _) => org == myOrgId);
+        var me = new ClaimsPrincipal(new ClaimsIdentity([new Claim(ClaimTypes.NameIdentifier, Guid.NewGuid().ToString())], "Bearer"));
+
+        var result = await Build(factory, me, security).RemoveMember(myOrgId, group.Id, gm.Id, default);
+
+        Assert.IsType<NotFoundResult>(result);
+        await using var check = await factory.CreateDbContextAsync();
+        Assert.True(await check.OrgMemberGroupMemberships.AnyAsync(m => m.Id == gm.Id));
+    }
 }

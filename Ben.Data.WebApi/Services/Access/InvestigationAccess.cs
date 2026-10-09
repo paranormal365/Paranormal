@@ -129,6 +129,10 @@ public static class InvestigationAccess
             .Select(a => new { a.InvestigationId, a.IsLead })
             .ToListAsync(ct);
 
+        // The same rule as CanManageAsync: the creator, lead and case manager act for the group only while in it.
+        var isMember = isSuperAdmin || await db.OrganizationUserMemberships.AsNoTracking().AnyAsync(m =>
+            m.OrganizationId == organizationId && m.AppUserId == userId && m.IsActive, ct);
+
         var leadOf = myAttendances.Where(a => a.IsLead).Select(a => a.InvestigationId).ToHashSet();
         var attending = myAttendances.Select(a => a.InvestigationId).ToHashSet();
 
@@ -145,9 +149,9 @@ public static class InvestigationAccess
             r => new InvestigationPermissionFlags(
                 CanEditRecord:
                     hasOrgAuthority
-                    || r.CreatedByAppUserId == userId
-                    || leadOf.Contains(r.Id)
-                    || (r.CaseId is { } cid && managedCaseIds.Contains(cid)),
+                    || (isMember && (r.CreatedByAppUserId == userId
+                                     || leadOf.Contains(r.Id)
+                                     || (r.CaseId is { } cid && managedCaseIds.Contains(cid)))),
                 // Recording your own findings is a participant's right, not a manager's. Someone
                 // who was there has something to say about it whether or not they run anything.
                 CanCompleteMyFindings: attending.Contains(r.Id)));

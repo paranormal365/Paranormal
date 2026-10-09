@@ -317,4 +317,33 @@ public class PlaceCandidateTests
         // row means.
         Assert.Null(Assert.Single(await FindAsync(f, street: "4512 Belmont Blvd")).DistanceMiles);
     }
+
+    // ── Site audit, 10/09/2026 ───────────────────────────────────────────────
+
+    /// <summary>
+    /// Somebody's home is not offered to a person who typed only its name. Matched on a name alone, any
+    /// signed-in person could learn the street of somebody's home by guessing what its family called it
+    /// (site audit, 10/09/2026). Typing the street still finds it: they already know the address.
+    /// </summary>
+    [Fact]
+    public async Task A_private_residence_is_not_offered_on_its_name_alone()
+    {
+        var f = await SeedAsync(NewPlace(name: "The Harlan House", street: "4512 Belmont Blvd"));
+
+        Assert.Empty(await FindAsync(f, name: "The Harlan House"));
+        Assert.Single(await FindAsync(f, street: "4512 Belmont Blvd", name: "The Harlan House"));
+    }
+
+    /// <summary>
+    /// A public location with a street address still matches on its name alone; the private-residence
+    /// rule above is about homes only (site audit, 10/09/2026).
+    /// </summary>
+    [Fact]
+    public async Task A_public_location_with_a_street_still_matches_on_its_name()
+    {
+        var f = await SeedAsync(NewPlace(
+            name: "Belmont Mansion", street: "1900 Belmont Blvd", kind: PlaceKind.PublicLocation));
+
+        Assert.Equal("1900 Belmont Blvd", Assert.Single(await FindAsync(f, name: "Belmont Mansion")).StreetAddress1);
+    }
 }

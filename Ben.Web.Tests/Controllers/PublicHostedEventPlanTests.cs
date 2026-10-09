@@ -368,4 +368,58 @@ public sealed class PublicHostedEventPlanTests
         Assert.Null(typeof(PublicHostedEventPlanCellRecord).GetProperty("BookingId"));
         Assert.Null(typeof(PublicHostedEventPlanCellRecord).GetProperty("LeadName"));
     }
+
+    // ── Site audit, 10/09/2026 ───────────────────────────────────────────────
+
+    private static async Task<PublicHostedEventRecord> EventAtAsync(SqliteTestDb sqlite, bool hideExactLocation)
+    {
+        await using (var db = await sqlite.NewContextAsync())
+        {
+            var place = await db.Places.SingleAsync(p => p.Id == PlaceId);
+            place.StreetAddress1 = "1 Main St";
+            place.City = "Nashville";
+            place.State = "TN";
+            place.Latitude = 36.16m;
+            place.Longitude = -86.78m;
+            (await db.HostedEvents.SingleAsync(e => e.Id == EventId)).HideExactLocation = hideExactLocation;
+            await db.SaveChangesAsync();
+        }
+        var answer = await Build(sqlite.Factory).GetOne(EventId, default);
+        return Assert.IsType<PublicHostedEventRecord>(Assert.IsType<OkObjectResult>(answer.Result).Value);
+    }
+
+    /// <summary>
+    /// An event whose host hides its address gets a rounded pin, not the building's position. The
+    /// street was withheld while the exact position went out beside it (site audit, 10/09/2026).
+    /// </summary>
+    [Fact]
+    public async Task A_hidden_address_publishes_a_rounded_pin()
+    {
+        await using var sqlite = await SqliteTestDb.CreateAsync();
+        await SeedAsync(sqlite);
+
+        var ev = await EventAtAsync(sqlite, hideExactLocation: true);
+
+        Assert.Null(ev.ExactAddress);
+        Assert.NotNull(ev.Latitude);
+        Assert.NotNull(ev.Longitude);
+        Assert.NotEqual(36.16m, ev.Latitude);
+        Assert.NotEqual(-86.78m, ev.Longitude);
+        // Near enough that the map still puts it in the right town.
+        Assert.True(Math.Abs(ev.Latitude!.Value - 36.16m) < 0.2m);
+        Assert.True(Math.Abs(ev.Longitude!.Value - -86.78m) < 0.2m);
+    }
+
+    /// <summary>An event that shows its address still shows its exact pin (site audit, 10/09/2026).</summary>
+    [Fact]
+    public async Task A_shown_address_publishes_the_exact_pin()
+    {
+        await using var sqlite = await SqliteTestDb.CreateAsync();
+        await SeedAsync(sqlite);
+
+        var ev = await EventAtAsync(sqlite, hideExactLocation: false);
+
+        Assert.Equal(36.16m, ev.Latitude);
+        Assert.Equal(-86.78m, ev.Longitude);
+    }
 }

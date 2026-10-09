@@ -69,14 +69,14 @@
                          Sortable="true"
                          Class="admin-session-files-grid">
                 <GridColumns>
-                    <GridColumn Field="@nameof(SessionFileRecord.StartedAt)" Title="Recorded" Width="150px">
+                    <GridColumn Field="@nameof(SessionFileRecord.StartedAt)" Title="Recorded" Width="130px">
                         <Template>
                             @{ var row = (SessionFileRecord)context; }
                             @row.StartedAt.ToViewerLocalTime(UserState).ToDisplayDateTime()
                         </Template>
                     </GridColumn>
 
-                    <GridColumn Field="@nameof(SessionFileRecord.FileName)" Title="File" Width="240px">
+                    <GridColumn Field="@nameof(SessionFileRecord.FileName)" Title="File">
                         <Template>
                             @{ var row = (SessionFileRecord)context; }
                             <div class="text-truncate" title="@row.FileName">@row.FileName</div>
@@ -96,7 +96,7 @@
                         </Template>
                     </GridColumn>
 
-                    <GridColumn Field="@nameof(SessionFileRecord.LocationLabel)" Title="Where" Width="180px">
+                    <GridColumn Field="@nameof(SessionFileRecord.LocationLabel)" Title="Where" Width="150px">
                         <Template>
                             @{ var row = (SessionFileRecord)context; }
                             @if (row.LocationLabel is { Length: > 0 } label)
@@ -110,7 +110,7 @@
                         </Template>
                     </GridColumn>
 
-                    <GridColumn Field="@nameof(SessionFileRecord.RecordedByName)" Title="Recorded by" Width="160px">
+                    <GridColumn Field="@nameof(SessionFileRecord.RecordedByName)" Title="Recorded by" Width="130px">
                         <Template>
                             @{ var row = (SessionFileRecord)context; }
                             @if (row.RecordedByName is { Length: > 0 } who)
@@ -129,18 +129,18 @@
                         </Template>
                     </GridColumn>
 
-                    <GridColumn Field="@nameof(SessionFileRecord.UploadedByName)" Title="Uploaded by" Width="160px">
+                    <GridColumn Field="@nameof(SessionFileRecord.UploadedByName)" Title="Uploaded by" Width="130px">
                         <Template>
                             @{ var row = (SessionFileRecord)context; }
                             @(row.UploadedByName ?? "—")
                         </Template>
                     </GridColumn>
 
-                    <GridColumn Field="@nameof(SessionFileRecord.ReadingCount)" Title="Readings" Width="100px" />
+                    <GridColumn Field="@nameof(SessionFileRecord.ReadingCount)" Title="Readings" Width="90px" />
 
-                    <GridColumn Field="@nameof(SessionFileRecord.FileCount)" Title="Recordings" Width="110px" />
+                    <GridColumn Field="@nameof(SessionFileRecord.FileCount)" Title="Recordings" Width="100px" />
 
-                    <GridColumn Field="@nameof(SessionFileRecord.InvestigationTitle)" Title="Attached to" Width="200px">
+                    <GridColumn Field="@nameof(SessionFileRecord.InvestigationTitle)" Title="Attached to" Width="160px">
                         <Template>
                             @{ var row = (SessionFileRecord)context; }
                             @if (row.InvestigationTitle is { Length: > 0 } title)

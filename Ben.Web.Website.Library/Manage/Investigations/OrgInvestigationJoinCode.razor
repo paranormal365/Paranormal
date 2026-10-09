@@ -31,6 +31,11 @@
         </h3>
     </div>
 
+    @if (_actionError is { } actionError)
+    {
+        <div class="alert alert-danger py-2 d-print-none" role="alert">@actionError</div>
+    }
+
     @if (_loading)
     {
         <BenLoaderOverlay />
@@ -173,6 +178,7 @@
     private List<InvestigationGuestPassRecord> _holders = new();
     private bool _loading = true;
     private bool _busy;
+    private string? _actionError;
     private string? _refused;
 
     private static int HoursText => 12;
@@ -242,7 +248,13 @@
         _busy = true;
         try
         {
-            await AdminClient.RevokeInvestigationJoinCodeAsync(OrgId, InvestigationId);
+            _actionError = null;
+            // A refused revoke leaves the code working, so the page must not show it gone (site audit, 10/09/2026).
+            if (!await AdminClient.RevokeInvestigationJoinCodeAsync(OrgId, InvestigationId))
+            {
+                _actionError = "The code couldn't be turned off. It still works; please try again.";
+                return;
+            }
             _code = null;
             _holders = new();
         }
@@ -255,7 +267,9 @@
         _busy = true;
         try
         {
-            await AdminClient.RevokeInvestigationGuestPassAsync(OrgId, InvestigationId, passId);
+            _actionError = null;
+            if (!await AdminClient.RevokeInvestigationGuestPassAsync(OrgId, InvestigationId, passId))
+                _actionError = "That guest's pass couldn't be turned off. It still works; please try again.";
             await LoadHoldersAsync();
         }
         finally { _busy = false; }

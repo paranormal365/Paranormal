@@ -113,13 +113,15 @@
                  FilterMode="GridFilterMode.FilterRow">
         <GridColumns>
             <GridColumn Field="@nameof(UploadFileRecord.FileName)" Title="File Name" />
-            <GridColumn Field="@nameof(UploadFileRecord.ContentType)" Title="Type" Width="140px" />
-            <GridColumn Field="@nameof(UploadFileRecord.FileSize)" Title="Size" Width="100px">
+            <GridColumn Field="@nameof(UploadFileRecord.ContentType)" Title="Type" Width="140px">
+                <Template>@KindOf(((UploadFileRecord)context).ContentType)</Template>
+            </GridColumn>
+            <GridColumn Field="@nameof(UploadFileRecord.FileSize)" Title="Size" Width="130px">
                 <Template>
                     @(FormatSize(((UploadFileRecord)context).FileSize))
                 </Template>
             </GridColumn>
-            <GridColumn Field="@nameof(UploadFileRecord.IsPublic)" Title="Public" Width="80px">
+            <GridColumn Field="@nameof(UploadFileRecord.IsPublic)" Title="Public" Width="110px">
                 <Template>
                     @if (((UploadFileRecord)context).IsPublic)
                     {
@@ -679,7 +681,21 @@
     }
 
     // ── Helpers ──────────────────────────────────────────────────────────────
-    private static string FormatSize(long bytes) => Ben.Web.Website.Library.Manage.Audio.AudioFormatUtils.FormatSize(bytes);
+    private static string FormatSize(long bytes) => Ben.Web.Website.Library.Manage.Audio.AudioFormatUtils.FormatSizeCompact(bytes);
+
+    /// <summary>What kind of file it is, in a word, rather than its media type ("audio/mpeg").</summary>
+    private static string KindOf(string? contentType) => contentType?.ToLowerInvariant() switch
+    {
+        null or "" => "",
+        var t when t.StartsWith("audio/") => "Audio",
+        var t when t.StartsWith("video/") => "Video",
+        var t when t.StartsWith("image/") => "Photo",
+        "application/pdf" => "PDF",
+        var t when t.StartsWith("text/") => "Text",
+        var t when t.Contains("json") => "Data",
+        var t when t.Contains("zip") || t.Contains("bundle") => "Archive",
+        _ => "File",
+    };
 
     private sealed class NewUploadModel
     {

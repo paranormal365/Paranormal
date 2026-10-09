@@ -278,4 +278,46 @@ public class CmsSectionControllerTests
         await using var db = await factory.CreateDbContextAsync();
         Assert.Null(await db.CmsSections.FindAsync(section.Id));
     }
+
+    // ── Site audit, 10/09/2026 ───────────────────────────────────────────────
+
+    private static ClaimsPrincipal Member(Guid id) =>
+        new(new ClaimsIdentity([new Claim(ClaimTypes.NameIdentifier, id.ToString())], "Bearer"));
+
+    /// <summary>Grants every CMS right in one group, and nothing in any other.</summary>
+    private static Mock<IOrganizationSecurityService> GrantOnly(Guid orgId)
+    {
+        var s = new Mock<IOrganizationSecurityService>();
+        s.Setup(x => x.HasAccessAsync(It.IsAny<Guid>(), It.IsAny<Guid>(),
+              It.IsAny<OrganizationSecurityTable>(), It.IsAny<OrganizationSecurityAction>(),
+              It.IsAny<CancellationToken>()))
+         .ReturnsAsync((Guid _, Guid org, OrganizationSecurityTable _, OrganizationSecurityAction _, CancellationToken _) => org == orgId);
+        return s;
+    }
+
+    /// <summary>
+    /// An editor in one group cannot rewrite or delete a section on another group's page by naming that
+    /// page under their own group's address. Update and Delete checked only that the section was on the
+    /// page, never that the page was the route group's (site audit, 10/09/2026).
+    /// </summary>
+    [Fact]
+    public async Task An_editor_in_one_group_cannot_change_or_delete_another_groups_page_sections()
+    {
+        var factory   = CreateFactory();
+        var myOrgId   = Guid.NewGuid();
+        var otherPage = await SeedPageAsync(factory, Guid.NewGuid());
+        var section   = await SeedSectionAsync(factory, otherPage.Id);
+        var ctrl      = Build(factory, Member(Guid.NewGuid()), GrantOnly(myOrgId));
+
+        var update = await ctrl.Update(myOrgId, otherPage.Id, section.Id,
+            new UpdateCmsSectionRequest("Defaced", "{\"html\":\"<p>Defaced</p>\"}", true), default);
+        var delete = await ctrl.Delete(myOrgId, otherPage.Id, section.Id, default);
+
+        Assert.IsType<NotFoundResult>(update.Result);
+        Assert.IsType<NotFoundResult>(delete);
+        await using var db = await factory.CreateDbContextAsync();
+        var kept = await db.CmsSections.FindAsync(section.Id);
+        Assert.NotNull(kept);
+        Assert.Null(kept!.Title);
+    }
 }

@@ -340,4 +340,25 @@ public class InvestigationAccessTests
 
         Assert.Empty(flags);
     }
+
+    // ── Site audit, 10/09/2026 ───────────────────────────────────────────────
+
+    /// <summary>
+    /// The person who scheduled a visit loses their say over it when they leave the group. The creator,
+    /// the case manager and the lead kept it after leaving or being removed, and that say opens join
+    /// codes and Field Kit launches (site audit, 10/09/2026).
+    /// </summary>
+    [Fact]
+    public async Task The_creator_cannot_manage_it_once_their_membership_is_inactive()
+    {
+        var w = await SeedAsync();
+        await using (var db = await w.Factory.CreateDbContextAsync())
+        {
+            var m = await db.OrganizationUserMemberships.FirstAsync(x => x.AppUserId == w.CreatorId);
+            m.IsActive = false;
+            await db.SaveChangesAsync();
+        }
+
+        Assert.False(await CanManageAsync(w, w.CreatorId));
+    }
 }

@@ -76,7 +76,13 @@ public static class CmsSectionTypes
     public static IReadOnlyList<Kind> Offered { get; } = [.. All.Where(k => k.Offered)];
 
     /// <summary>What a kind is called in the editor. Unlisted values fall back to the enum name.</summary>
-    public static string Label(CmsSectionType type) => All.FirstOrDefault(k => k.Type == type)?.Label ?? type.ToString();
+    public static string Label(CmsSectionType type)
+    {
+        if (All.FirstOrDefault(k => k.Type == type)?.Label is { } label) return label;
+        // A kind with no entry still reads as words ("Some kind" rather than "SomeKind").
+        var words = System.Text.RegularExpressions.Regex.Replace(type.ToString(), "(?<=[a-z])(?=[A-Z])", " ").ToLowerInvariant();
+        return char.ToUpperInvariant(words[0]) + words[1..];
+    }
 
     /// <summary>The sketch for a kind, as a complete SVG element.</summary>
     public static string Svg(CmsSectionType type)

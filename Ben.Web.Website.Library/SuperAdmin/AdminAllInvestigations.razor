@@ -26,10 +26,10 @@
                      Pageable="true"
                      PageSize="25">
             <GridColumns>
-                <GridColumn Field="@nameof(AdminInvestigationSummaryRecord.OrganizationName)" Title="Organization" Width="220px" />
-                <GridColumn Field="@nameof(AdminInvestigationSummaryRecord.CaseReference)" Title="Case" Width="120px" />
+                <GridColumn Field="@nameof(AdminInvestigationSummaryRecord.OrganizationName)" Title="Organization" Width="190px" />
+                <GridColumn Field="@nameof(AdminInvestigationSummaryRecord.CaseReference)" Title="Case" Width="150px" />
                 <GridColumn Field="@nameof(AdminInvestigationSummaryRecord.Title)" Title="Investigation" />
-                <GridColumn Field="@nameof(AdminInvestigationSummaryRecord.Status)" Title="Status" Width="130px" />
+                <GridColumn Field="@nameof(AdminInvestigationSummaryRecord.Status)" Title="Status" Width="150px" />
                 <GridColumn Field="@nameof(AdminInvestigationSummaryRecord.ScheduledDateTime)" Title="Scheduled" Width="180px">
                     <Template>
                         @{ var inv = (AdminInvestigationSummaryRecord)context; }

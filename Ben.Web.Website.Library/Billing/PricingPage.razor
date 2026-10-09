@@ -343,6 +343,7 @@
                 <div class="card-body">
                     <BenListState TItem="Ben.Service.Models.Admin.OrgBillingHistoryRecord" Result="@_history"
                                   Loading="@_historyLoading" EmptyText="Nothing billed yet" OnRetry="@ReloadHistoryAsync">
+                        <div class="table-responsive">
                         <table class="table table-sm align-middle">
                             <thead><tr><th>Date</th><th>What</th><th class="text-end">Amount</th><th class="text-end">Tax</th><th></th></tr></thead>
                             <tbody>
@@ -375,6 +376,7 @@
                                 }
                             </tbody>
                         </table>
+                        </div>
                     </BenListState>
                 </div>
             </div>

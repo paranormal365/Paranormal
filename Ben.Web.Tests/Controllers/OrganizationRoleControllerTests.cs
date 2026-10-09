@@ -543,4 +543,80 @@ public class OrganizationRoleControllerTests
         var kept = Assert.Single(await verify.OrganizationRolePermissions.Where(p => p.OrganizationRoleId == roleId).ToListAsync());
         Assert.Equal(DataAction.Read, kept.Actions);
     }
+
+    // ── Site audit, 10/09/2026 ───────────────────────────────────────────────
+
+    /// <summary>
+    /// A controller for an ordinary (not SuperAdmin) user whose security check says yes to everything,
+    /// the way a Secretary's "edit the group's details" right did.
+    /// </summary>
+    private static OrganizationRoleController BuildAsMemberWithGroupEditRights(
+        IDbContextFactory<BenDataContext> factory, Guid userId)
+    {
+        var securityMock = new Mock<IOrganizationSecurityService>();
+        securityMock.Setup(s => s.HasAccessAsync(
+                It.IsAny<Guid>(), It.IsAny<Guid>(),
+                It.IsAny<DataTable>(), It.IsAny<DataAction>(),
+                It.IsAny<CancellationToken>()))
+            .ReturnsAsync(true);
+        var ctrl = new OrganizationRoleController(
+            factory, CreateMapper(), securityMock.Object, new Mock<IAuditLogService>().Object);
+        ctrl.ControllerContext = new ControllerContext
+        {
+            HttpContext = new DefaultHttpContext
+            {
+                User = new ClaimsPrincipal(new ClaimsIdentity(
+                    [new Claim(ClaimTypes.NameIdentifier, userId.ToString())], "Bearer"))
+            }
+        };
+        return ctrl;
+    }
+
+    private static async Task<Guid> AddMemberAsync(
+        IDbContextFactory<BenDataContext> factory, Guid orgId, MemberRole role)
+    {
+        var userId = Guid.NewGuid();
+        await using var db = await factory.CreateDbContextAsync();
+        db.OrganizationUserMemberships.Add(new OrganizationUserMembership
+        {
+            Id = Guid.NewGuid(), OrganizationId = orgId, AppUserId = userId,
+            Role = role, IsActive = true, DateCreated = DateTime.UtcNow, CreatedByAppUserId = userId,
+        });
+        await db.SaveChangesAsync();
+        return userId;
+    }
+
+    /// <summary>
+    /// The right to edit the group's details is not enough to create a role. It used to be, and the
+    /// Secretary role has it, so a secretary could build a role allowing everything and join it (site
+    /// audit, 10/09/2026). Shaping roles is for the group's owners and administrators.
+    /// </summary>
+    [Fact]
+    public async Task A_member_with_group_edit_rights_but_not_an_administrator_cannot_create_a_role()
+    {
+        var factory = CreateFactory();
+        var (orgId, _) = await SeedOrgAsync(factory);
+        var memberId = await AddMemberAsync(factory, orgId, MemberRole.Member);
+
+        var result = await BuildAsMemberWithGroupEditRights(factory, memberId)
+            .Create(orgId, new CreateOrgRoleRequest("Everything", null, true, 1), CancellationToken.None);
+
+        Assert.IsType<ForbidResult>(result.Result);
+        await using var db = await factory.CreateDbContextAsync();
+        Assert.False(await db.OrganizationRoles.AnyAsync(r => r.OrganizationId == orgId));
+    }
+
+    /// <summary>The group's administrators still create roles (site audit, 10/09/2026).</summary>
+    [Fact]
+    public async Task An_administrator_can_create_a_role()
+    {
+        var factory = CreateFactory();
+        var (orgId, _) = await SeedOrgAsync(factory);
+        var adminId = await AddMemberAsync(factory, orgId, MemberRole.Administrator);
+
+        var result = await BuildAsMemberWithGroupEditRights(factory, adminId)
+            .Create(orgId, new CreateOrgRoleRequest("Content Team", null, true, 1), CancellationToken.None);
+
+        Assert.IsType<CreatedAtActionResult>(result.Result);
+    }
 }

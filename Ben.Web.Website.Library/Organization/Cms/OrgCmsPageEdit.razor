@@ -261,7 +261,7 @@
                                 <div class="form-text">Shown at the top of the page and as its name in your site's menu.</div>
                             </div>
                             <div class="col-12">
-                                <label class="form-label fw-semibold" for="orgcmspageedit-url-slug-8cc6">URL Slug <span class="text-danger">*</span></label>
+                                <label class="form-label fw-semibold" for="orgcmspageedit-url-slug-8cc6">Web address <span class="text-danger">*</span></label>
                                 <input id="orgcmspageedit-url-slug-8cc6" type="text" class="form-control" @bind="@_metaForm.UrlName" @bind:event="oninput" />
                                 <div class="form-text">
                                     The page's address on this site: <code>@($"/o/{_orgUrlName ?? "your-group"}/{_metaForm.UrlName?.Trim().ToLowerInvariant()}")</code>.
@@ -779,7 +779,7 @@
     {
         if (string.IsNullOrWhiteSpace(_metaForm.PageTitle) || string.IsNullOrWhiteSpace(_metaForm.UrlName))
         {
-            _errorMessage = "Title and URL Slug are required.";
+            _errorMessage = "Give the page a title and a web address.";
             return;
         }
         _isBusy = true;
@@ -891,7 +891,7 @@
                 // (see CmsSectionEditor); here the job is to keep rendering.
             }
             }
-            builder.AddMarkupContent(0, $"<em class='text-secondary'>[{section.SectionType}]</em>");
+            builder.AddMarkupContent(0, $"<em class='text-secondary'>{System.Net.WebUtility.HtmlEncode(CmsSectionTypes.Label(section.SectionType))} section</em>");
         };
     }
 
@@ -1050,7 +1050,14 @@
         (_sections[idx], _sections[newIdx]) = (_sections[newIdx], _sections[idx]);
 
         var orderedIds = _sections.Select(s => s.Id).ToList();
-        await AdminClient.ReorderCmsSectionsAsync(OrgId, PageId, orderedIds);
+        // Put back when the save fails, so the screen shows the order the page really has (site audit,
+        // 10/09/2026): it used to keep the new order while the live page kept the old one.
+        if (!await AdminClient.ReorderCmsSectionsAsync(OrgId, PageId, orderedIds))
+        {
+            (_sections[idx], _sections[newIdx]) = (_sections[newIdx], _sections[idx]);
+            _errorMessage = "The new order couldn't be saved. Please try again.";
+            return;
+        }
 
         // Update local sort order numbers
         for (int i = 0; i < _sections.Count; i++)

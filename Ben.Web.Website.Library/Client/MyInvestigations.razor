@@ -302,7 +302,7 @@
             <div class="flex-grow-1">
                 <div class="d-flex align-items-center gap-2 flex-wrap mb-1">
                     <span class="fw-semibold">@inv.Title</span>
-                    <span class="badge @InvStatusBadge(inv.Status)" style="font-size:.72rem;">@inv.Status</span>
+                    <span class="badge @InvStatusBadge(inv.Status)" style="font-size:.72rem;">@Ben.Web.Website.Library.Organization.Cases.InvestigationPanel.StatusLabel(inv.Status)</span>
                     @if (!string.IsNullOrWhiteSpace(inv.AssignedRole))
                     {
                         <span class="badge bg-secondary" style="font-size:.72rem;">@inv.AssignedRole</span>

@@ -305,6 +305,91 @@ public sealed class FieldSessionArchiveTests
         await using var after = await factory.CreateDbContextAsync();
         Assert.Equal(first, (await after.FieldSessionUploads.SingleAsync()).PublishedAtUtc);
     }
+
+    // ── Site audit, 10/09/2026 ───────────────────────────────────────────────
+
+    /// <summary>
+    /// Files the seeded session with a group's investigation. The investigation sits on
+    /// <paramref name="investigationPlaceId"/> if given, and on a case that may be a private engagement.
+    /// </summary>
+    private static async Task FileWithInvestigationAsync(
+        IDbContextFactory<BenDataContext> factory, Seeded seed, bool privateEngagement, Guid? investigationPlaceId)
+    {
+        await using var db = await factory.CreateDbContextAsync();
+        var orgId = Guid.NewGuid();
+        var caseId = Guid.NewGuid();
+        var investigationId = Guid.NewGuid();
+        db.Organizations.Add(new Organization
+        {
+            Id = orgId, Name = "Group", UrlName = $"group-{orgId:N}",
+            DateCreated = DateTime.UtcNow, CreatedByAppUserId = seed.UserId,
+        });
+        db.Cases.Add(new Case
+        {
+            Id = caseId, OrganizationId = orgId, Title = "A client's home", CaseYear = 2026, OrgCaseNumber = 1,
+            StreetAddress1 = "1 Main", City = "Nashville", State = "TN", ZipCode = "37201", Country = "US",
+            IsPrivateEngagement = privateEngagement,
+            DateCreated = DateTime.UtcNow, CreatedByAppUserId = seed.UserId,
+        });
+        db.Investigations.Add(new Investigation
+        {
+            Id = investigationId, OrganizationId = orgId, CaseId = caseId, PlaceId = investigationPlaceId,
+            Title = "Night visit", ScheduledDateTime = DateTime.UtcNow.AddHours(-3),
+            DateCreated = DateTime.UtcNow, CreatedByAppUserId = seed.UserId,
+        });
+        var session = await db.FieldSessionUploads.SingleAsync(s => s.Id == seed.SessionId);
+        session.InvestigationId = investigationId;
+        await db.SaveChangesAsync();
+    }
+
+    /// <summary>
+    /// A session filed with a private engagement's investigation cannot be published to the open archive
+    /// by naming a public place. Only the session's sender was asked (site audit, 10/09/2026), so readings
+    /// from a client's home could be published to any public place.
+    /// </summary>
+    [Fact]
+    public async Task A_session_filed_with_a_private_engagement_cannot_be_published()
+    {
+        var factory = Db();
+        var seed = await SeedAsync(factory);
+        await FileWithInvestigationAsync(factory, seed, privateEngagement: true, investigationPlaceId: null);
+
+        var result = await Publisher(factory, seed.UserId)
+            .Publish(seed.SessionId, new FieldSessionPublishController.PublishRequest(seed.PublicPlaceId), default);
+
+        Assert.IsType<BadRequestObjectResult>(result);
+        await using var db = await factory.CreateDbContextAsync();
+        Assert.Null((await db.FieldSessionUploads.SingleAsync()).PublishedAtUtc);
+    }
+
+    /// <summary>
+    /// A session filed with an investigation at one place cannot go in another place's archive (site
+    /// audit, 10/09/2026).
+    /// </summary>
+    [Fact]
+    public async Task A_session_filed_with_an_investigation_elsewhere_cannot_be_published_to_another_place()
+    {
+        var factory = Db();
+        var seed = await SeedAsync(factory);
+        var elsewhere = Guid.NewGuid();
+        await using (var db = await factory.CreateDbContextAsync())
+        {
+            db.Places.Add(new Place
+            {
+                Id = elsewhere, Name = "Old Jail", City = "Adams", State = "TN",
+                Kind = PlaceKind.PublicLocation, DateCreated = DateTime.UtcNow, CreatedByAppUserId = seed.UserId,
+            });
+            await db.SaveChangesAsync();
+        }
+        await FileWithInvestigationAsync(factory, seed, privateEngagement: false, investigationPlaceId: elsewhere);
+
+        var result = await Publisher(factory, seed.UserId)
+            .Publish(seed.SessionId, new FieldSessionPublishController.PublishRequest(seed.PublicPlaceId), default);
+
+        Assert.IsType<BadRequestObjectResult>(result);
+        await using var check = await factory.CreateDbContextAsync();
+        Assert.Null((await check.FieldSessionUploads.SingleAsync()).PublishedAtUtc);
+    }
 }
 
 /// <summary>

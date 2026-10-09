@@ -326,7 +326,7 @@ else
                             · @a.FileCount recording@(a.FileCount == 1 ? "" : "s")
                         </div>
                         <div class="text-secondary small">
-                            @(string.IsNullOrWhiteSpace(a.RecordedByName) ? "Nobody was signed in on the device" : a.RecordedByName) · @a.DeviceModel
+                            @(string.IsNullOrWhiteSpace(a.RecordedByName) ? "Nobody was signed in on the device" : a.RecordedByName) · @Ben.Web.Website.Library.Kit.DeviceNames.Friendly(a.DeviceModel)
                         </div>
                     </div>
                     <div class="d-flex gap-1 flex-shrink-0">

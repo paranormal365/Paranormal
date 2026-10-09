@@ -1339,4 +1339,45 @@ public class MyCaseControllerTests
         Assert.False(Assert.Single(timeline, o => o.Title == "Mine").FromInvestigators);
         Assert.True(Assert.Single(timeline, o => o.Title == "Theirs").FromInvestigators);
     }
+
+    // ── Site audit, 10/09/2026 ───────────────────────────────────────────────
+
+    /// <summary>
+    /// Only the primary client moves a paused case to another group. A co-client could ask for the move,
+    /// and give the consent to share its history that goes with it, while every other primary-only
+    /// action already refused them (site audit, 10/09/2026).
+    /// </summary>
+    [Fact]
+    public async Task ReassignCase_a_co_client_cannot_move_the_case()
+    {
+        var (factory, caseId, clientId, _) = await SeedClientCaseAsync();
+        var coClientId = Guid.NewGuid();
+        var newOrgId   = Guid.NewGuid();
+        await using (var db = await factory.CreateDbContextAsync())
+        {
+            db.Users.Add(new AppUser { Id = coClientId, UserName = "co@t.com", NormalizedUserName = "CO@T.COM", Email = "co@t.com", NormalizedEmail = "CO@T.COM", DateCreated = DateTime.UtcNow });
+            db.CaseClientAccesses.Add(new CaseClientAccess
+            {
+                Id = Guid.NewGuid(), CaseId = caseId, AppUserId = coClientId,
+                DateCreated = DateTime.UtcNow, CreatedByAppUserId = coClientId,
+            });
+            db.Organizations.Add(new Organization { Id = newOrgId, Name = "New Org", UrlName = "new", DateCreated = DateTime.UtcNow, CreatedByAppUserId = clientId });
+            var c = await db.Cases.SingleAsync(x => x.Id == caseId);
+            c.StatusBeforePause = c.Status;
+            c.Status = CaseStatus.Paused;
+            await db.SaveChangesAsync();
+        }
+        var request = new MyCaseController.ReassignCaseRequest(newOrgId, true, true, null);
+
+        var byCoClient = await Build(factory, coClientId).ReassignCase(caseId, request, default);
+
+        Assert.IsType<NotFoundResult>(byCoClient);
+        await using (var db = await factory.CreateDbContextAsync())
+            Assert.False(await db.CaseTransferLogs.AnyAsync(l => l.CaseId == caseId));
+
+        // The same request from the primary client goes through, so the refusal above is about who asked.
+        Assert.IsNotType<NotFoundResult>(await Build(factory, clientId).ReassignCase(caseId, request, default));
+        await using var after = await factory.CreateDbContextAsync();
+        Assert.True(await after.CaseTransferLogs.AnyAsync(l => l.CaseId == caseId));
+    }
 }

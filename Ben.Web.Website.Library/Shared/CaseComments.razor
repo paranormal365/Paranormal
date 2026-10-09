@@ -172,7 +172,14 @@ else
     private async Task DeleteAsync(Guid commentId)
     {
         _busy = true;
-        await AdminClient.DeleteCaseCommentAsync(CaseId, commentId);
+        _error = null;
+        // Said when it fails, as Report already does; a refused delete used to leave the comment with no word.
+        if (!await AdminClient.DeleteCaseCommentAsync(CaseId, commentId))
+        {
+            _error = "That comment couldn't be deleted. Please try again.";
+            _busy = false;
+            return;
+        }
         _busy = false;
         await LoadAsync();
     }

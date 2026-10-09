@@ -90,7 +90,7 @@ else
             <div class="mt-4" data-testid="default-group-page">
                 <p class="lead mb-3">
                     @Ben.Data.Common.Enums.OrganizationKindDefaults.DisplayName(_org.Kind)
-                    @if (facts.AreaServed is not null) { <text> serving <strong data-testid="default-area">@facts.AreaServed</strong></text> }
+                    @if (facts.AreaServed is not null) { <text> serving <strong data-testid="default-area">@MidSentence(facts.AreaServed)</strong></text> }
                     @if (facts.OnSinceYear > 0) { <text>, on @SiteOptions.Value.Name since @facts.OnSinceYear</text> }.
                 </p>
 
@@ -171,6 +171,10 @@ else
 </FeatureGate>
 
 @code {
+    /// <summary>An area label such as "Within 30 miles of Nashville, TN", lower-cased to sit inside a sentence.</summary>
+    private static string MidSentence(string area)
+        => area.StartsWith("Within ", StringComparison.Ordinal) ? "within " + area[7..] : area;
+
     [Parameter] public string UrlName { get; set; } = "";
 
     private OrgPublicHomeResponse? _org;

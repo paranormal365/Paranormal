@@ -80,7 +80,7 @@
                     </div>
                     <p class="small text-secondary" id="after-send-hint">
                         It is sent automatically the morning after the event ends, to
-                        @(a.GuestsToThank == 1 ? "the 1 confirmed booking" : $"the {a.GuestsToThank} confirmed bookings").
+                        @(a.GuestsToThank switch { 0 => "every confirmed booking (there are none yet)", 1 => "the one confirmed booking", var n => $"all {n} confirmed bookings" }).
                         It includes your note below@(_reviews ? ", a link to leave a review" : "")@(a.HasGallery ? ", a link to the gallery" : ""),
                         and up to three of your upcoming events.
                     </p>
