@@ -329,7 +329,12 @@ public sealed class EquipmentCheckoutController : BenControllerBase
         }
 
         await db.SaveChangesAsync(ct);
-        _ = TryAuditAsync(_auditLog.LogUpdateAsync(nameof(EquipmentCheckout), checkout.Id, before, checkout, userId, Ben.Data.Common.Constants.AppSources.WebApi));
+        // The same shape both sides: the audit compares like with like (backlog 257).
+        _ = TryAuditAsync(_auditLog.LogUpdateAsync(nameof(EquipmentCheckout), checkout.Id, before, new
+        {
+            checkout.Status, checkout.DateDue, checkout.ReviewNotes,
+            checkout.DateCheckedOut, checkout.DateReturned,
+        }, userId, Ben.Data.Common.Constants.AppSources.WebApi));
 
         return await ProjectOneAsync(db, checkout.Id, userId, ct);
     }
