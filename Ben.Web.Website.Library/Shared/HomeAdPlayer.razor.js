@@ -19,8 +19,26 @@ function hasBeenActive() {
     return ua ? ua.hasBeenActive : interactions > 0;
 }
 
-// The playlist (10/06/2026): ads = [{ hd, sd, poster }], start = the one the server picked (its poster is
-// already showing). When an ad ends, the next is a random different one.
+// The playlist: ads = [{ hd, sd, poster }], start = the one the server picked at random (its poster is
+// already showing). After it, the others play in a shuffled order, and none repeats until every ad has
+// played once (Ben, 10/09/2026); then a new shuffle starts, never beginning with the one that just ended.
+export function nextOrder(count, current, random = Math.random) {
+    const rest = [];
+    for (let i = 0; i < count; i++) if (i !== current) rest.push(i);
+    for (let i = rest.length - 1; i > 0; i--) {                  // Fisher-Yates
+        const j = Math.floor(random() * (i + 1));
+        [rest[i], rest[j]] = [rest[j], rest[i]];
+    }
+    return rest;
+}
+
+// A whole new round: every ad once, in a fresh shuffle, but not starting with the one that just ended.
+export function newRound(count, justPlayed, random = Math.random) {
+    const order = nextOrder(count, justPlayed, random);
+    if (count > 1) order.splice(1 + Math.floor(random() * (order.length)), 0, justPlayed);
+    return order;
+}
+
 export function init(frame, video, ads, start) {
     if (!frame || !video || players.has(frame)) return;
     ads = (ads || []).filter(a => a && a.hd);
@@ -41,8 +59,10 @@ export function init(frame, video, ads, start) {
         listeners: [],
         ads,
         i: Math.min(Math.max(start | 0, 0), ads.length - 1),
+        queue: [],                 // the ads still to play in this round, in their shuffled order
         observers: [],
     };
+    s.queue = nextOrder(ads.length, s.i);
     players.set(frame, s);
 
     video.muted = true;
@@ -172,12 +192,11 @@ export function init(frame, video, ads, start) {
         }
     });
     on(video, 'playing', () => { frame.dataset.state = 'ready'; render(); });
-    // One finished: on to a random different one (or the same again, if it is the only one).
+    // One finished: on to the next in the round; when the round is done, a new shuffle of all of them.
     on(video, 'ended', () => {
         if (s.ads.length > 1) {
-            let n;
-            do { n = Math.floor(Math.random() * s.ads.length); } while (n === s.i);
-            s.i = n;
+            if (!s.queue.length) s.queue = newRound(s.ads.length, s.i);
+            s.i = s.queue.shift();
         }
         s.loaded = false;
         apply();

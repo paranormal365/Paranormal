@@ -22,6 +22,13 @@ it carry no number.
 The history before 2026-08-22 is summarized rather than listed: the site was not yet open, and a
 day-by-day account of building it would say nothing to anyone using it now.
 
+## 2026-10-09 · 2.16.0
+
+- A new short film on the home page: a ghost walk in the future, where the tour group turns out to be robots
+  who check in with the app.
+- The home page's films start on a random one, then play every other one in a shuffled order before any of
+  them comes round again.
+
 ## 2026-10-05 · 2.15.0
 
 - The home page has a section for the iPhone and iPad app: what it does, its own screens, Apple's
