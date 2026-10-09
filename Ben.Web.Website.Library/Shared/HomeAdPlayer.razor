@@ -35,8 +35,8 @@
             <div class="ben-kicker">Short films</div>
             <h2 class="ad-player__title">Haunted, <span class="ben-accent-text">in under a minute.</span></h2>
             <p class="ad-player__lede">
-                A ninja who arrives by dragon, a wizard who checks for EVPs, a diver who finds pirate ghosts, a guest with a pass on their phone, a ghost that gets out of a video at a campfire.
-                A different one each time, and when one ends the next picks itself.
+                A ninja who arrives by dragon, a wizard who checks for EVPs, a diver who finds pirate ghosts, a guest with a pass on their phone, a ghost that gets out of a video at a campfire, a ghost walk in the future where the robots check in by app.
+                A different one to start, and then every other one before any comes round again.
             </p>
 
             <div class="ad-player__frame" @ref="_frame" tabindex="0" role="button"
@@ -63,13 +63,18 @@
     private bool _disposed;
     private bool _hasVideo;
 
-    // The playlist (Ben, 10/06/2026): every ad with a static/video/ads/<id>-hd.mp4 in wwwroot is in the
-    // rotation (each also has -sd.mp4 for narrow screens and -poster.jpg). The page starts on a random one;
-    // the module picks a random different one each time an ad ends. Add an id here to add an ad.
-    private static readonly string[] AdIds = { "anime", "wizard", "cartoon", "underwater", "campfire" };
+    // The playlist (Ben, 10/06/2026; the order 10/09/2026): every ad with a static/video/ads/<id>-hd.mp4 in
+    // wwwroot is in the rotation (each also has -sd.mp4 for narrow screens and -poster.jpg). The page starts on
+    // a random one; after it the module plays the others in a shuffled order with no repeats until all have
+    // played, then shuffles again. Add an id here to add an ad.
+    private static readonly string[] AdIds = { "anime", "wizard", "cartoon", "underwater", "campfire", "walkingtour" };
     private sealed record Ad(string Hd, string Sd, string Poster);
     private readonly List<Ad> _ads = new();
     private int _start;
+
+    // The first ad is picked once, on the server's first draw, and carried into the live page: picked again
+    // there, the poster showed one film and a different one started (seen 10/09/2026).
+    [PersistentState] public int? StartAd { get; set; }
 
     protected override void OnInitialized()
     {
@@ -77,7 +82,9 @@
             if (Env.WebRootFileProvider.GetFileInfo($"static/video/ads/{id}-hd.mp4").Exists)
                 _ads.Add(new Ad($"/static/video/ads/{id}-hd.mp4", $"/static/video/ads/{id}-sd.mp4", $"/static/video/ads/{id}-poster.jpg"));
         _hasVideo = _ads.Count > 0;
-        if (_hasVideo) _start = Random.Shared.Next(_ads.Count);
+        if (!_hasVideo) return;
+        StartAd = StartAd is int carried && carried >= 0 && carried < _ads.Count ? carried : Random.Shared.Next(_ads.Count);
+        _start = StartAd.Value;
     }
 
     protected override async Task OnAfterRenderAsync(bool firstRender)
