@@ -23,10 +23,8 @@ public static class CmsSectionTypes
     /// The kinds, in the order the picker shows them: what most pages need first.
     /// </summary>
     /// <remarks>
-    /// <b>Not offered for a new section:</b> contact details, a file gallery and a member roster. The public
-    /// page draws each of them as a gray placeholder ("Contact information section — configure in org
-    /// settings."), so adding one would put a sentence about the editor in front of visitors. They stay here so
-    /// a section already saved as one still has a name and can be edited or removed.
+    /// Every kind is offered. Contact details, the file gallery and the member roster were held back while the
+    /// public page could only draw them as gray placeholders; backlog 256 (10/09/2026) built them.
     /// </remarks>
     public static IReadOnlyList<Kind> All { get; } =
     [
@@ -36,6 +34,16 @@ public static class CmsSectionTypes
         new(CmsSectionType.ImageBanner, "Image or banner",
             "One wide picture from your library, with words for screen readers and an optional link.",
             Heading + Photo(8, 18, 104, 50)),
+        new(CmsSectionType.ContactInfo, "Contact details",
+            "Your group's public emails, phone numbers, websites and addresses, kept up to date for you.",
+            Heading + ContactRow(20) + ContactRow(33) + ContactRow(46) + ContactRow(59)),
+        new(CmsSectionType.FileGallery, "File gallery",
+            "Public pictures, videos and recordings from your files, as a slideshow, plus files to download.",
+            Heading + Photo(8, 18, 66, 38) + Photo(77, 18, 35, 18) + Photo(77, 38, 35, 18)
+                    + """<rect class="cms-sketch__s" x="8" y="60" width="104" height="8" rx="2"/>"""),
+        new(CmsSectionType.MemberRoster, "Our members",
+            "The members who agreed to be listed, with their photos and titles.",
+            Heading + Person(22) + Person(48) + Person(74) + Person(100)),
         new(CmsSectionType.EmbeddedCases, "Our cases",
             "Cards for the cases you choose. A client appears only by the alias they chose, never their name.",
             Heading + Card(8, 18) + Card(62, 18)),
@@ -62,12 +70,6 @@ public static class CmsSectionTypes
         new(CmsSectionType.CustomHtml, "Custom HTML",
             "Your own HTML, for anything the other kinds can't do. Forms, scripts and styles are removed when you save.",
             Heading + """<text x="60" y="52" text-anchor="middle" class="cms-sketch__a" font-size="22" font-family="ui-monospace, monospace" font-weight="700">&lt;/&gt;</text>"""),
-        new(CmsSectionType.ContactInfo, "Contact details",
-            "Not ready yet: shows visitors a placeholder.", Heading + Lines(19, 4), Offered: false),
-        new(CmsSectionType.FileGallery, "File gallery",
-            "Not ready yet: shows visitors a placeholder.", Heading + Lines(19, 4), Offered: false),
-        new(CmsSectionType.MemberRoster, "Our members",
-            "Not ready yet: shows visitors a placeholder.", Heading + Lines(19, 4), Offered: false),
     ];
 
     /// <summary>The kinds a new section can be.</summary>
@@ -117,6 +119,17 @@ public static class CmsSectionTypes
          + $"""<rect class="cms-sketch__l" x="33" y="{N(y + 1)}" width="50" height="3.5" rx="1.75"/>"""
          + $"""<rect class="cms-sketch__l" x="33" y="{N(y + 6.5)}" width="34" height="3" rx="1.5"/>"""
          + $"""<rect class="cms-sketch__s" x="92" y="{N(y + 1)}" width="20" height="8" rx="4"/>""";
+
+    private static string ContactRow(double y)
+        => $"""<circle class="cms-sketch__a" cx="13" cy="{N(y + 3)}" r="3.5"/>"""
+         + $"""<rect class="cms-sketch__l" x="22" y="{N(y + 1)}" width="{N(y < 40 ? 60 : 78)}" height="4" rx="2"/>""";
+
+    private static string Person(double cx)
+        => $"""<circle class="cms-sketch__s" cx="{N(cx)}" cy="34" r="10"/>"""
+         + $"""<circle class="cms-sketch__a" cx="{N(cx)}" cy="31" r="4"/>"""
+         + $"""<path class="cms-sketch__a" d="M{N(cx - 7)} 42 Q{N(cx)} 34 {N(cx + 7)} 42 Z"/>"""
+         + $"""<rect class="cms-sketch__h" x="{N(cx - 9)}" y="49" width="18" height="4" rx="2"/>"""
+         + $"""<rect class="cms-sketch__l" x="{N(cx - 7)}" y="56" width="14" height="3" rx="1.5"/>""";
 
     private const string Booking =
         """<rect class="cms-sketch__s" x="8" y="18" width="104" height="50" rx="4"/>"""

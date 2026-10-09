@@ -137,6 +137,9 @@ public sealed partial class BenAdminClientAdapter
         Guid orgId, CancellationToken token = default)
             => _api.GetListAsync<EmbeddableRecord>($"/api/organizations/{orgId}/cms/embeddable/investigations", token);
 
+    public Task<LoadResult<RosterCandidate>> GetCmsRosterCandidatesAsync(Guid orgId, CancellationToken token = default)
+        => _api.GetListAsync<RosterCandidate>($"/api/organizations/{orgId}/cms/embeddable/members", token);
+
     public Task<LoadResult<EmbeddableRecord>> GetEmbeddableCasesAsync(
         Guid orgId, CancellationToken token = default)
             => _api.GetListAsync<EmbeddableRecord>($"/api/organizations/{orgId}/cms/embeddable/cases", token);

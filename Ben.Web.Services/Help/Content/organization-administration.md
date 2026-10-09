@@ -631,6 +631,23 @@ close the preview and press **Save section** to keep it.
 ![A section's preview](help-media:organization-administration/cms-section-preview.png)
 *The preview of a Text section, before it is saved.*
 
+### Contact details, files and members
+
+Three kinds of section fill themselves in from what your group already keeps, and keep up with it:
+
+- **Contact details** shows the emails, phone numbers, websites and addresses your group marked public
+  in its settings. Check the kinds you want. Anything private never shows, and an address shows only as
+  much as its own setting allows: the street only when you chose to show the full address, otherwise
+  just the town.
+- **File gallery** shows public files you choose from your group's files. Pictures go in a slideshow,
+  videos and recordings in their own rows, and anything else as a file to download. Use the arrows to
+  put them in order.
+- **Our members** lists members with their public photo and, if you like, their title. It can only list
+  people who agreed: each member decides for themselves, from **Profile** → **About** → **Your groups'
+  public pages**. Choose **Everyone who has agreed to be listed** and people who agree later appear by
+  themselves, or pick the people to show. The list shows who hasn't agreed, so you can see why someone
+  is missing.
+
 ### Drafts
 
 When you edit a page that is **not** published, your changes apply directly. Nobody else can see it

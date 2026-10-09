@@ -423,7 +423,7 @@ else if (SectionType == CmsSectionType.CaseMedia)
 else if (SectionType == CmsSectionType.ContactInfo)
 {
     <div class="row g-2 mt-1">
-        <p class="col-12 mb-1 fw-semibold">Show organization contact info:</p>
+        <p class="col-12 mb-1 fw-semibold">Which contact details to show</p>
         <div class="col-6 d-flex align-items-center gap-2">
             <input type="checkbox" id="ci-addr" class="form-check-input" checked="@_contactShowAddresses" @onchange="@(e => { var v = (bool)(e.Value ?? false); _contactShowAddresses = v; PushContactJson(); })" />
             <label for="ci-addr" class="form-label mb-0">Addresses</label>
@@ -434,30 +434,115 @@ else if (SectionType == CmsSectionType.ContactInfo)
         </div>
         <div class="col-6 d-flex align-items-center gap-2">
             <input type="checkbox" id="ci-phone" class="form-check-input" checked="@_contactShowPhones" @onchange="@(e => { var v = (bool)(e.Value ?? false); _contactShowPhones = v; PushContactJson(); })" />
-            <label for="ci-phone" class="form-label mb-0">Phone Numbers</label>
+            <label for="ci-phone" class="form-label mb-0">Phone numbers</label>
         </div>
         <div class="col-6 d-flex align-items-center gap-2">
             <input type="checkbox" id="ci-links" class="form-check-input" checked="@_contactShowLinks" @onchange="@(e => { var v = (bool)(e.Value ?? false); _contactShowLinks = v; PushContactJson(); })" />
-            <label for="ci-links" class="form-label mb-0">Links</label>
+            <label for="ci-links" class="form-label mb-0">Websites and links</label>
+        </div>
+        <div class="col-12 form-text">
+            Shows the details your group marked public in its settings, and keeps up with them: change one there
+            and the page changes too. Anything marked private never shows, and an address shows only as much as
+            its own setting allows. Press Preview to see what visitors will get.
         </div>
     </div>
 }
-else
+else if (SectionType == CmsSectionType.FileGallery)
 {
-    @* FileGallery / MemberRoster — raw JSON editor (enhanced in a later phase) *@
-    <div class="mt-3">
-        <label class="form-label fw-semibold" for="cmssectioneditor-content-json-1ebf">Content JSON</label>
-        <textarea id="cmssectioneditor-content-json-1ebf" class="form-control" rows="8" value="@ContentJson" @oninput="@(e => ContentJsonChanged.InvokeAsync(e.Value?.ToString() ?? string.Empty))"></textarea>
-        <div class="form-text">
-            @if (SectionType == CmsSectionType.FileGallery)
-            {
-                <span>Format: <code>{ "uploadFileIds": ["guid1", "guid2"] }</code></span>
-            }
-            else if (SectionType == CmsSectionType.MemberRoster)
-            {
-                <span>Format: <code>{ "memberIds": ["guid1"], "showRole": true, "showBio": false }</code></span>
-            }
+    @* Backlog 256: this was a box for typing file ids by hand. *@
+    <div class="mt-3" id="cms-gallery-editor">
+        <label class="form-label fw-semibold">Files</label>
+        <div class="form-text mt-0 mb-2">
+            Pictures show in a slideshow, videos and recordings in their own rows, and anything else as a file
+            to download. Only public files are offered: visitors can't open members-only ones.
         </div>
+        @if (_galleryIds.Count == 0)
+        {
+            <p class="text-secondary small mb-2">No files chosen yet.</p>
+        }
+        else
+        {
+            <ul class="list-group mb-2" data-testid="cms-gallery-chosen">
+                @for (var i = 0; i < _galleryIds.Count; i++)
+                {
+                    var at = i;
+                    var id = _galleryIds[i];
+                    var file = _galleryLibrary.FirstOrDefault(f => f.Id == id);
+                    <li class="list-group-item d-flex align-items-center gap-2">
+                        @if (file?.ContentType.StartsWith("image/", StringComparison.OrdinalIgnoreCase) == true)
+                        {
+                            <CmsFileThumbnail FileId="@id" Width="56px" Height="40px" Alt="@file.FileName" />
+                        }
+                        else
+                        {
+                            <BenIcon Name="file" />
+                        }
+                        <span class="flex-grow-1 text-truncate">@(file?.FileName ?? "A file that is no longer public")</span>
+                        <button type="button" class="btn btn-outline-secondary btn-sm" title="Earlier" disabled="@(at == 0)" @onclick="@(() => MoveGalleryFile(at, -1))"><BenIcon Name="arrow-up" /><span class="visually-hidden">Earlier</span></button>
+                        <button type="button" class="btn btn-outline-secondary btn-sm" title="Later" disabled="@(at == _galleryIds.Count - 1)" @onclick="@(() => MoveGalleryFile(at, 1))"><BenIcon Name="arrow-down" /><span class="visually-hidden">Later</span></button>
+                        <button type="button" class="btn btn-outline-danger btn-sm" title="Take it out" @onclick="@(() => RemoveGalleryFile(at))"><BenIcon Name="x" /><span class="visually-hidden">Take it out</span></button>
+                    </li>
+                }
+            </ul>
+        }
+        <button type="button" class="btn btn-outline-primary btn-sm" id="cms-gallery-add" @onclick="@(() => _showGalleryPicker = true)">
+            <BenIcon Name="plus" Class="me-1" />Add a file
+        </button>
+    </div>
+
+    <BenContentPicker @bind-Visible="_showGalleryPicker"
+                      Title="Add a file to the gallery"
+                      SelectText="Add this file"
+                      EmptyText="Your group has no public files yet. Upload one under Files and make it public, then come back."
+                      Loader="@LoadPublicFilesAsync"
+                      OnSelected="@AddGalleryFile" />
+}
+else if (SectionType == CmsSectionType.MemberRoster)
+{
+    @* Backlog 256: members choose for themselves whether a group may name them on its public pages. *@
+    <div class="mt-3" id="cms-roster-editor">
+        <label class="form-label fw-semibold">Who to show</label>
+        <div class="form-check">
+            <input class="form-check-input" type="radio" name="roster-who" id="roster-everyone" checked="@_rosterEveryone"
+                   @onchange="@(() => SetRosterEveryone(true))" />
+            <label class="form-check-label" for="roster-everyone">Everyone who has agreed to be listed</label>
+        </div>
+        <div class="form-check mb-2">
+            <input class="form-check-input" type="radio" name="roster-who" id="roster-chosen" checked="@(!_rosterEveryone)"
+                   @onchange="@(() => SetRosterEveryone(false))" />
+            <label class="form-check-label" for="roster-chosen">Only the people I choose</label>
+        </div>
+        <div class="form-text mt-0 mb-2">
+            Members decide for themselves whether your group may name them on its public pages, from
+            <strong>Profile</strong> → <strong>About</strong>. @_rosterCandidates.Count(c => c.AgreedToBeListed) of
+            @_rosterCandidates.Count have agreed. With "Everyone", people who agree later appear by themselves.
+        </div>
+
+        @if (!_rosterEveryone)
+        {
+            <div class="border rounded p-2 mb-2" style="max-height:260px; overflow-y:auto;" data-testid="cms-roster-choices">
+                @foreach (var c in _rosterCandidates)
+                {
+                    var chosen = _rosterIds.Contains(c.AppUserId);
+                    <div class="form-check">
+                        <input class="form-check-input" type="checkbox" id="@($"roster-{c.AppUserId}")" checked="@chosen"
+                               disabled="@(!c.AgreedToBeListed)" @onchange="@(e => ToggleRosterMember(c.AppUserId, (bool?)e.Value == true))" />
+                        <label class="form-check-label" for="@($"roster-{c.AppUserId}")">
+                            @c.Name
+                            @if (c.Title is { Length: > 0 }) { <span class="text-secondary small"> · @c.Title</span> }
+                            @if (!c.AgreedToBeListed) { <span class="text-secondary small fst-italic"> · hasn't agreed to be listed</span> }
+                        </label>
+                    </div>
+                }
+            </div>
+        }
+
+        <div class="form-check">
+            <input class="form-check-input" type="checkbox" id="roster-titles" checked="@_rosterShowRole"
+                   @onchange="@(e => { _rosterShowRole = (bool?)e.Value == true; PushRosterJson(); })" />
+            <label class="form-check-label" for="roster-titles">Show each person's title</label>
+        </div>
+        <div class="form-text">Their title on your group's ladder, such as Lead Investigator.</div>
     </div>
 }
 
@@ -665,6 +750,73 @@ else
         _imgChosenNotPublic = !f.IsPublic;
         StateHasChanged();
     }
+
+    // FileGallery (backlog 256)
+    private List<Guid> _galleryIds = [];
+    private List<UploadFileRecord> _galleryLibrary = [];
+    private bool _showGalleryPicker, _galleryLoaded;
+
+    private async Task LoadGalleryLibraryAsync()
+    {
+        if (OrgId is not { } orgId || _galleryLoaded) return;
+        _galleryLoaded = true;
+        var result = await AdminClient.GetOrgSharedFilesAsync(orgId);
+        if (!result.Failed) _galleryLibrary = [.. result.Items];
+    }
+
+    private async Task<IReadOnlyList<ContentPickerItem>> LoadPublicFilesAsync()
+    {
+        if (OrgId is not { } orgId) return [];
+        var result = await AdminClient.GetOrgSharedFilesAsync(orgId);
+        if (result.Failed) throw new InvalidOperationException(result.Reason ?? "load failed");
+        _galleryLibrary = [.. result.Items];
+        return [.. result.Items
+            .Where(f => f.IsPublic && !_galleryIds.Contains(f.Id))
+            .Select(f => new ContentPickerItem(f.Id, f.FileName,
+                f.ContentType.StartsWith("image/") ? "Image" : f.ContentType.StartsWith("video/") ? "Video"
+                    : f.ContentType.StartsWith("audio/") ? "Recording" : "File",
+                $"{f.DateCreated:MM/dd/yyyy}", null, f.ContentType, f.FileSize))];
+    }
+
+    private void AddGalleryFile(ContentPickerItem item) { _galleryIds.Add(item.Id); PushGalleryJson(); }
+    private void RemoveGalleryFile(int at) { _galleryIds.RemoveAt(at); PushGalleryJson(); }
+    private void MoveGalleryFile(int at, int by)
+    {
+        var to = at + by;
+        if (to < 0 || to >= _galleryIds.Count) return;
+        (_galleryIds[at], _galleryIds[to]) = (_galleryIds[to], _galleryIds[at]);
+        PushGalleryJson();
+    }
+
+    private void PushGalleryJson()
+        => ContentJsonChanged.InvokeAsync(JsonSerializer.Serialize(new { uploadFileIds = _galleryIds }));
+
+    // MemberRoster (backlog 256)
+    private bool _rosterEveryone = true, _rosterShowRole = true, _rosterLoaded;
+    private List<Guid> _rosterIds = [];
+    private IReadOnlyList<RosterCandidate> _rosterCandidates = [];
+
+    private async Task LoadRosterCandidatesAsync()
+    {
+        if (OrgId is not { } orgId || _rosterLoaded) return;
+        _rosterLoaded = true;
+        _rosterCandidates = (await AdminClient.GetCmsRosterCandidatesAsync(orgId)).Items;
+    }
+
+    private void SetRosterEveryone(bool everyone) { _rosterEveryone = everyone; PushRosterJson(); }
+
+    private void ToggleRosterMember(Guid id, bool on)
+    {
+        if (on && !_rosterIds.Contains(id)) _rosterIds.Add(id);
+        if (!on) _rosterIds.Remove(id);
+        PushRosterJson();
+    }
+
+    private void PushRosterJson()
+        => ContentJsonChanged.InvokeAsync(JsonSerializer.Serialize(new
+        {
+            everyone = _rosterEveryone, memberIds = _rosterIds, showRole = _rosterShowRole,
+        }));
 
     // ContactInfo
     private bool _contactShowAddresses = true;
@@ -932,6 +1084,9 @@ else
             await ResolveBannerFileAsync();
         }
 
+        if (SectionType == CmsSectionType.FileGallery) await LoadGalleryLibraryAsync();
+        if (SectionType == CmsSectionType.MemberRoster) await LoadRosterCandidatesAsync();
+
         if (OrgId is not Guid orgId || _templatesLoadedFor == orgId) return;
         _templatesLoadedFor = orgId;
         await LoadOrgTemplatesAsync();
@@ -970,6 +1125,20 @@ else
                               or CmsSectionType.EventGallery or CmsSectionType.EventVenue)
             {
                 _eventId = root.TryGetProperty("eventId", out var ev) ? ev.GetString() ?? "" : "";
+            }
+            else if (SectionType == CmsSectionType.FileGallery)
+            {
+                _galleryIds = root.TryGetProperty("uploadFileIds", out var g) && g.ValueKind == JsonValueKind.Array
+                    ? [.. g.EnumerateArray().Select(e => Guid.TryParse(e.GetString(), out var id) ? id : Guid.Empty).Where(id => id != Guid.Empty)]
+                    : [];
+            }
+            else if (SectionType == CmsSectionType.MemberRoster)
+            {
+                _rosterEveryone = GetBool(root, "everyone", true);
+                _rosterShowRole = GetBool(root, "showRole", true);
+                _rosterIds = root.TryGetProperty("memberIds", out var m) && m.ValueKind == JsonValueKind.Array
+                    ? [.. m.EnumerateArray().Select(e => Guid.TryParse(e.GetString(), out var id) ? id : Guid.Empty).Where(id => id != Guid.Empty)]
+                    : [];
             }
             else if (SectionType == CmsSectionType.ContactInfo)
             {

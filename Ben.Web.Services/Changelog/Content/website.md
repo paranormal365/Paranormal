@@ -22,6 +22,12 @@ it carry no number.
 The history before 2026-08-22 is summarized rather than listed: the site was not yet open, and a
 day-by-day account of building it would say nothing to anyone using it now.
 
+## 2026-10-09 · 2.18.0
+
+- Three more kinds of section for your group's public pages: your contact details, a gallery of your
+  public files, and your members. Each one keeps up with your group's records by itself.
+- Members choose whether each of their groups may list them on its public pages, from their profile.
+
 ## 2026-10-09 · 2.17.0
 
 - You choose where a page goes in your group's menu by dragging it on a tree, up to three levels deep,

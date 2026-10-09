@@ -24,21 +24,15 @@
             break;
 
         case CmsSectionType.ContactInfo:
-            <div class="alert alert-light">
-                <em>Contact information section — configure in org settings.</em>
-            </div>
+            @RenderContact()
             break;
 
         case CmsSectionType.FileGallery:
-            <div class="alert alert-light">
-                <em>File gallery section.</em>
-            </div>
+            @RenderGallery()
             break;
 
         case CmsSectionType.MemberRoster:
-            <div class="alert alert-light">
-                <em>Member roster section.</em>
-            </div>
+            @RenderRoster()
             break;
 
         case CmsSectionType.EmbeddedInvestigations:
@@ -307,6 +301,111 @@
             return @<span />;
         }
     }
+
+    // ── Built from the group's own records (backlog 256) ─────────────────────
+
+    /// <summary>The group's public contact details, resolved by the server from what it marked public.</summary>
+    private RenderFragment RenderContact() => @<text>
+        @{ var lines = ParseArray(); }
+        @if (lines.Count == 0)
+        {
+            <div class="text-muted small">Nothing to show here yet.</div>
+        }
+        else
+        {
+            <ul class="list-unstyled cms-contact mb-0" data-testid="cms-contact">
+                @foreach (var line in lines)
+                {
+                    var kind = Text(line, "kind");
+                    var href = Text(line, "href");
+                    var label = Text(line, "label");
+                    <li class="d-flex align-items-start gap-2 mb-2">
+                        <Ben.Web.Website.Library.Kit.BenIcon Name="@(kind switch { "email" => "mail", "phone" => "phone", "link" => "globe", _ => "map-pin" })" Class="mt-1" />
+                        <span>
+                            @if (label is { Length: > 0 }) { <span class="text-secondary small d-block">@label</span> }
+                            @if (href is { Length: > 0 })
+                            {
+                                <a href="@href" rel="noopener" target="@(kind == "link" ? "_blank" : null)">@Text(line, "value")</a>
+                            }
+                            else
+                            {
+                                <span>@Text(line, "value")</span>
+                            }
+                        </span>
+                    </li>
+                }
+            </ul>
+        }
+    </text>;
+
+    /// <summary>
+    /// The group's public files: pictures, videos and recordings in the same gallery a place page uses, and
+    /// anything else as a file to download.
+    /// </summary>
+    private RenderFragment RenderGallery() => @<text>
+        @{
+            var files = ParseArray();
+            var media = files.Where(f => (Text(f, "contentType") ?? "") is var t && (t.StartsWith("image/") || t.StartsWith("video/") || t.StartsWith("audio/")))
+                .Select(f => new Ben.Web.Website.Library.Shared.PlaceMediaItem(
+                    Guid.Parse(Text(f, "id")!), $"{FileBaseUrl}{Text(f, "id")}/download", Text(f, "contentType")!,
+                    Text(f, "fileName") ?? "", null, "", null, null))
+                .ToList();
+            var others = files.Where(f => !media.Any(m => m.Key.ToString() == Text(f, "id"))).ToList();
+        }
+        @if (files.Count == 0)
+        {
+            <div class="text-muted small">Nothing to show here yet.</div>
+        }
+        <Ben.Web.Website.Library.Shared.PlaceMediaGallery Items="@media" />
+        @if (others.Count > 0)
+        {
+            <div class="d-flex flex-wrap gap-2 mt-3" data-testid="cms-gallery-files">
+                @foreach (var f in others)
+                {
+                    <a class="btn btn-outline-secondary btn-sm" href="@($"{FileBaseUrl}{Text(f, "id")}/download")" target="_blank" rel="noopener">
+                        <Ben.Web.Website.Library.Kit.BenIcon Name="file" Class="me-1" />@Text(f, "fileName")
+                    </a>
+                }
+            </div>
+        }
+    </text>;
+
+    /// <summary>The members who agreed to be named, with their public photo or their initials.</summary>
+    private RenderFragment RenderRoster() => @<text>
+        @{ var people = ParseArray(); }
+        @if (people.Count == 0)
+        {
+            <div class="text-muted small">Nothing to show here yet.</div>
+        }
+        else
+        {
+            <div class="cms-roster" data-testid="cms-roster">
+                @foreach (var person in people)
+                {
+                    var name = Text(person, "name") ?? "";
+                    var photo = Text(person, "photoFileId");
+                    <div class="cms-roster__person">
+                        @if (photo is { Length: > 0 })
+                        {
+                            <img class="cms-roster__photo" src="@($"{FileBaseUrl}{photo}/download")" alt="@name" loading="lazy" />
+                        }
+                        else
+                        {
+                            <span class="cms-roster__photo cms-roster__initials" aria-hidden="true">@Initials(name)</span>
+                        }
+                        <div class="fw-semibold">@name</div>
+                        @if (Text(person, "title") is { Length: > 0 } title)
+                        {
+                            <div class="text-secondary small">@title</div>
+                        }
+                    </div>
+                }
+            </div>
+        }
+    </text>;
+
+    private static string Initials(string name)
+        => string.Concat(name.Split(' ', StringSplitOptions.RemoveEmptyEntries).Take(2).Select(w => char.ToUpperInvariant(w[0])));
 
     // ── an event (item 235 phase 11) ─────────────────────────────────────────
 

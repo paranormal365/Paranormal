@@ -35,7 +35,7 @@
             }
         </div>
         <div class="place-gallery__caption">
-            <span class="badge bg-secondary">@current.Source</span>
+            @if (current.Source.Length > 0) { <span class="badge bg-secondary">@current.Source</span> }
             @if (!string.IsNullOrWhiteSpace(current.Caption)) { <span>@current.Caption</span> }
             <span class="text-secondary small">@Byline(current)</span>
             @if (current.VoteFileId is Guid vote)
@@ -88,7 +88,7 @@
                 <div class="card place-gallery__card">
                     <BenAudioTile FileId="@a.Key" FileName="@a.FileName" ContentType="@a.ContentType"
                                   SourceUrl="@a.Url" Title="@(a.Caption ?? a.FileName)">
-                        <p class="small text-secondary mt-2 mb-0">@a.Source · @Byline(a)</p>
+                        <p class="small text-secondary mt-2 mb-0">@string.Join(" · ", new[] { a.Source, Byline(a) }.Where(x => x.Length > 0))</p>
                     </BenAudioTile>
                     <div class="card-body p-2">@Describe(a)</div>
                 </div>
@@ -142,7 +142,7 @@
                                   .Where(s => s is not null));
 
     private RenderFragment Describe(PlaceMediaItem item) => @<text>
-        <span class="badge bg-secondary">@item.Source</span>
+        @if (item.Source.Length > 0) { <span class="badge bg-secondary">@item.Source</span> }
         @if (!string.IsNullOrWhiteSpace(item.Caption))
         {
             <div class="small mt-1">@item.Caption</div>

@@ -357,4 +357,61 @@ public class CmsEditorUxTests : BenTestBase
         await links.GetByRole(AriaRole.Button, new() { Name = $"Contact {_stamp}" }).ClickAsync();
         await Expect(intro.Locator($".ProseMirror a[href$='/contact-{_stamp}']")).ToHaveTextAsync($"Contact {_stamp}");
     }
+
+    /// <summary>
+    /// "Our members" names only people who said yes from their own profile (backlog 256): a member turns it on,
+    /// a visitor sees them; turns it off, and they are gone.
+    /// </summary>
+    [Test]
+    public async Task OurMembers_ListsOnlyMembersWhoAgreed()
+    {
+        var team = await MakePageAsync("Team");
+        var section = await _api!.PostAsJsonAsync($"/api/organizations/{_orgId}/pages/{team}/sections", new
+        {
+            sectionType = 5, title = $"Our members {_stamp}", contentJson = "{}", sortOrder = 1, isActive = true,
+        });
+        Assert.That(section.IsSuccessStatusCode, Is.True);
+        var page = await _api.GetFromJsonAsync<JsonElement>($"/api/organizations/{_orgId}/pages/{team}");
+        (await _api.PutAsJsonAsync($"/api/organizations/{_orgId}/pages/{team}", new
+        {
+            pageTitle = page.GetProperty("pageTitle").GetString(), urlName = page.GetProperty("urlName").GetString(),
+            pageHtml = "", isPublished = true, isPublic = true, parentPageId = (string?)null, sortOrder = 1,
+        })).EnsureSuccessStatusCode();
+        var address = $"/o/benco/{page.GetProperty("urlName").GetString()}";
+
+        await LoginAsync(UserEmail, UserPassword);
+        await Page.GotoAsync($"{BaseUrl}/profile");
+        await WaitUntilLoadedAsync();
+        var toggle = Page.Locator("#my-public-listing").GetByRole(AriaRole.Switch, new() { Name = "BenCo", Exact = false });
+        await Expect(toggle).ToBeVisibleAsync(new() { Timeout = 30_000 });
+
+        async Task<string> VisitorSeesAsync()
+        {
+            var visitor = await Page.Context.Browser!.NewContextAsync();
+            try
+            {
+                var v = await visitor.NewPageAsync();
+                await v.GotoAsync($"{BaseUrl}{address}");
+                var roster = v.GetByText($"Our members {_stamp}").Locator("xpath=..");
+                await Expect(roster).ToBeVisibleAsync(new() { Timeout = 30_000 });
+                return await roster.InnerTextAsync();
+            }
+            finally { await visitor.CloseAsync(); }
+        }
+
+        try
+        {
+            if (!await toggle.IsCheckedAsync()) await toggle.CheckAsync();
+            await Page.WaitForTimeoutAsync(800);
+            Assert.That(await VisitorSeesAsync(), Does.Contain("Sarah"), "a member who said yes should be listed");
+
+            await toggle.UncheckAsync();
+            await Page.WaitForTimeoutAsync(800);
+            Assert.That(await VisitorSeesAsync(), Does.Not.Contain("Sarah"), "a member who said no should not be");
+        }
+        finally
+        {
+            if (await toggle.IsCheckedAsync()) await toggle.UncheckAsync();
+        }
+    }
 }

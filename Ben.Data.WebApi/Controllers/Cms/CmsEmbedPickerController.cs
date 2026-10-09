@@ -119,7 +119,34 @@ public sealed class CmsEmbedPickerController : OrgCmsControllerBase
 
         return Ok(await CaseMediaPublication.PublishableAsync(db, caseId, ct));
     }
+
+    /// <summary>
+    /// The group's active members for an "Our members" section, and whether each agreed to be named
+    /// publicly (backlog 256). Only those who agreed can appear on the page; the others are listed so the
+    /// editor can see why somebody is missing.
+    /// </summary>
+    [HttpGet("members")]
+    public async Task<ActionResult<IReadOnlyList<RosterCandidate>>> GetMembers(Guid orgId, CancellationToken ct)
+    {
+        var userId = GetCurrentUserId();
+        if (userId is null) return Unauthorized();
+        if (!await IsCmsAuthorizedAsync(userId.Value, orgId, OrganizationSecurityTable.CmsSection,
+                                        OrganizationSecurityAction.Read, ct))
+            return NotFound();
+
+        await using var db = await DbFactory.CreateDbContextAsync(ct);
+        return Ok(await (from m in db.OrganizationUserMemberships.AsNoTracking()
+                         join u in db.AppUsers.AsNoTracking() on m.AppUserId equals u.Id
+                         where m.OrganizationId == orgId && m.IsActive && u.DateClosed == null
+                         orderby u.DisplayName
+                         select new RosterCandidate(u.Id, u.DisplayName ?? u.Handle ?? "A member",
+                             m.MemberLevel != null ? m.MemberLevel.Name : null, m.ShowOnPublicPages))
+                        .ToListAsync(ct));
+    }
 }
+
+/// <summary>A member an "Our members" section could show, and whether they agreed to be named.</summary>
+public sealed record RosterCandidate(Guid AppUserId, string Name, string? Title, bool AgreedToBeListed);
 
 // EmbeddableRecord lives in Ben.Service.Models — the Blazor picker needs the same shape, and a
 // hand-mirrored copy is how two definitions of "is this already public" start disagreeing.

@@ -70,6 +70,13 @@ For clients, two things must both be true. Your group has to allow member photos
 clients, **and** you have to switch it on for yourself. If only one is on, clients don't see your
 private photo. The profile page tells you if you've opted in but none of your groups allows it yet.
 
+## Your groups' public pages
+
+A group can list its members on its public website, with their name, public photo and title. It can
+only list you if you say yes. On **Profile** → **About**, **Your groups' public pages** has a switch for
+each of your groups. It's off until you turn it on, and you can turn it off again at any time; the group's
+page changes straight away.
+
 ## Your contact information
 
 Below the photos you can record as many email addresses, phone numbers, postal addresses and

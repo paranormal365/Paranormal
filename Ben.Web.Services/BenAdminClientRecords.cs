@@ -820,6 +820,12 @@ public sealed record SavePlaceRoomRequest(
 
 public sealed record MyMembershipOrgItem(Guid OrganizationId, string Name);
 
+/// <summary>One of my groups, and whether it may name me on its public pages (backlog 256).</summary>
+public sealed record MyPublicListing(Guid OrganizationId, string OrganizationName, bool ShowOnPublicPages);
+
+/// <summary>A member an "Our members" section could show, and whether they agreed to be named (backlog 256).</summary>
+public sealed record RosterCandidate(Guid AppUserId, string Name, string? Title, bool AgreedToBeListed);
+
 /// <summary>One candidate for the share-from-user picker (item 175).</summary>
 public sealed record ShareableUserFileItem(
     Guid Id, string FileName, string ContentType, long FileSize, string? Description,
