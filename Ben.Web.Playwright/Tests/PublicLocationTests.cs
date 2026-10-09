@@ -128,8 +128,11 @@ public sealed class PublicLocationTests : BenTestBase
         // The rule the whole slice is built around. One piece of evidence, and the photograph of
         // the building listed apart from it — mixed together every figure on the page is wrong.
         await Assertions.Expect(Page.Locator("#place-figures-evidence")).ToHaveTextAsync("1");
-        await Assertions.Expect(Main).ToContainTextAsync("The place itself");
-        await Assertions.Expect(Main).ToContainTextAsync("The frontage from the drive");
+        // Since 10/09/2026 both are in the page's one photo slideshow, each labeled with what it is: the
+        // building's picture comes first and says so.
+        var photos = Page.GetByTestId("place-photos");
+        await Assertions.Expect(photos).ToContainTextAsync("The place");
+        await Assertions.Expect(photos).ToContainTextAsync("The frontage from the drive");
     }
 
     [Test]

@@ -23,8 +23,12 @@
         @ToggleContent
     </button>
 
+    @* A click on a choice closes the menu (10/09/2026). Nothing did before: picking Edit on a CMS page's row opened
+       its window with the menu still hanging open behind it, and choosing a title idea left an invisible backdrop
+       over the dialog that swallowed the next click. The choice's own handler runs first; this one bubbles after. *@
     <div @ref="_menu" class="dropdown-menu @(AlignEnd ? "dropdown-menu-end" : null) dropdown-menu-animated @(_open ? "show" : null)"
-         style="@(MinWidth is not null ? $"min-width:{MinWidth};" : null)">
+         style="@(MinWidth is not null ? $"min-width:{MinWidth};" : null)"
+         @onclick="@(() => CloseOnClick ? Close() : Task.CompletedTask)">
         @* Only while open: a closed menu that still renders its items leaves every one of them
            in the DOM as an invisible match for any text lookup. The wrapper stays so the
            template's open/close animation still has something to animate. *@
@@ -57,6 +61,12 @@
 
     /// <summary>Places the open menu against the window, for a dropdown inside something that clips it — a grid cell.</summary>
     [Parameter] public bool Floating { get; set; }
+
+    /// <summary>
+    /// Closes the menu when anything in it is clicked — a menu of choices. Turn it off for a menu holding a filter
+    /// box or a form, which has to stay open while somebody types in it.
+    /// </summary>
+    [Parameter] public bool CloseOnClick { get; set; } = true;
 
     /// <summary>CSS length, e.g. "320px".</summary>
     [Parameter] public string? MinWidth { get; set; }

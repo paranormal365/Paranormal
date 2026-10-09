@@ -164,6 +164,14 @@
                     {
                         <VenuePhotoLibrary OrgId="OrgId" ProfileId="profileId" />
                     }
+                    @* A confirmed venue decides about the files people add to its place (Ben, 10/09/2026). *@
+                    @if (f.VerifiedUtc is not null)
+                    {
+                        <hr class="my-4" />
+                        <PlaceFileReviewList PlaceId="@f.PlaceId" Id="@($"venue-files-{key}")"
+                                             Title="Files people added to this place"
+                                             EmptyText="Nothing is waiting. When somebody adds a photo or a recording to this place, it waits here for you or a site moderator to approve it." />
+                    }
                 </div>
             </div>
         }

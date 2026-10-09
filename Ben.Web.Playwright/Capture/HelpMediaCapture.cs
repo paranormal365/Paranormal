@@ -2227,6 +2227,89 @@ public sealed class HelpMediaCapture : BenTestBase
     }
 
     /// <summary>
+    /// The CMS editor after Ben's 10/09/2026 changes: the page list in menu order with Ordering beside New
+    /// Page, a new page's title ideas and menu tree, the Ordering window, the section kinds as pictures, a
+    /// section's preview, the intro's toolbar, and what a visitor's menu does with pages under pages.
+    /// </summary>
+    [Test]
+    [Description("organization-administration: the CMS editor. Gated.")]
+    public async Task Capture_CmsEditor()
+    {
+        await LoginAsync(SuperAdminEmail, SuperAdminPassword);
+        var orgId = await OrgIdBySlugAsync("paranormal365");
+        var token = await SuperAdminTokenAsync();
+        Assert.That(token, Is.Not.Null);
+        var site = await CmsSampleSite.EnsureAsync(ApiUrl, token!, orgId);
+        const string slug = "organization-administration";
+
+        await GoAsync($"/organizations/{orgId}/cms");
+        await SkipAnyTourAsync();
+        await ShootAsync(slug, "cms.png", gated: true, selector: ".content-wrapper .k-grid", proves: "Our equipment",
+                         around: new Around(Top: 70, Bottom: 10));
+
+        // A new page: the ideas list open, then the dialog with an idea taken and the tree. Tall enough that
+        // the whole dialog is in the picture rather than scrolled to wherever the last click was.
+        await Page.SetViewportSizeAsync(DesktopWidth, 1500);
+        var dialog = Page.Locator(".modal.show");
+        await ClickUntilAsync(Page.Locator("#cms-new-page"), dialog);
+        await ClickUntilAsync(dialog.Locator(".cms-title-ideas button[title='Ideas for a title']"),
+                              dialog.GetByRole(AriaRole.Button, new() { Name = "History of the property" }));
+        // The ideas float over the page rather than inside the dialog, so the picture is the whole window.
+        await ShootAsync(slug, "cms-title-ideas.png", gated: true);
+        await dialog.GetByRole(AriaRole.Button, new() { Name = "History of the property" }).ClickAsync();
+        await dialog.Locator("#cms-placer-up").ClickAsync();
+        await dialog.Locator("#cms-placer-in").ClickAsync();
+        await dialog.Locator(".modal-body").EvaluateAsync("b => b.scrollTo(0, 0)");
+        await ShootAsync(slug, "cms-new-page.png", gated: true, selector: ".modal.show .modal-content");
+        await dialog.GetByRole(AriaRole.Button, new() { Name = "Cancel" }).ClickAsync();
+        await Expect(dialog).ToBeHiddenAsync();
+
+        // The Ordering window, tips showing, a row chosen for the arrows.
+        await ClickUntilAsync(Page.Locator("#cms-ordering-open"), dialog.Locator("#cms-ordering-tree"));
+        if (await dialog.Locator("#cms-ordering-show-tips").CountAsync() > 0)
+            await dialog.Locator("#cms-ordering-show-tips").ClickAsync();
+        await dialog.Locator(".cms-tree-node", new() { HasTextString = "Ghost tours" }).ClickAsync();
+        await ShootAsync(slug, "cms-ordering.png", gated: true, selector: ".modal.show .modal-content");
+        await dialog.Locator("#cms-ordering-done").ClickAsync();
+        await Expect(dialog).ToBeHiddenAsync();
+        await Page.SetViewportSizeAsync(DesktopWidth, DesktopHeight);
+
+        // A page: its settings with the menu tree, and the intro's toolbar.
+        await GoAsync($"/organizations/{orgId}/cms/pages/{site["our-team"]}");
+        await ShootAsync(slug, "cms-page-settings.png", gated: true,
+                         selector: ".card:has(> .card-header strong:text-is('Page Settings'))", proves: "Where it sits in your menu");
+        await ShootAsync(slug, "cms-intro.png", gated: true,
+                         selector: ".card:has(> .card-header strong:text-is('Summary / Intro'))");
+
+        // Add Section: the kinds as pictures, then the preview of one filled in. The form is taller than a
+        // laptop screen; photographed in one, the page's sticky header lands on top of it.
+        await Page.SetViewportSizeAsync(DesktopWidth, 2000);
+        await ClickUntilAsync(Page.Locator("#cms-add-section"), Page.Locator("#cms-section-editor"));
+        await Page.Locator("#cms-section-type-picker [data-section-type=RichText]").ClickAsync();
+        await Page.Locator("#orgcmspageedit-section-title-optional-13b4").FillAsync("Who comes out with us");
+        await Page.Locator("#cms-section-editor .ProseMirror").ClickAsync();
+        await Page.Keyboard.TypeAsync("Most nights there are five of us: two on cameras, two on audio, and one keeping notes.");
+        await Page.WaitForTimeoutAsync(400);
+        await ShootAsync(slug, "cms-section-kinds.png", gated: true, selector: "#cms-section-editor");
+        await ClickUntilAsync(Page.Locator("#cms-section-preview"), Page.Locator("#cms-section-preview-body"));
+        await ShootAsync(slug, "cms-section-preview.png", gated: true, selector: ".modal.show .modal-content");
+        await Page.Locator("#cms-section-preview-close").ClickAsync();
+        await Page.SetViewportSizeAsync(DesktopWidth, DesktopHeight);
+
+        // What a visitor gets: the intro above the sections, and the pages under this one in a row of their own.
+        var orgs = await Playwright.APIRequest.NewContextAsync(new() { BaseURL = ApiUrl });
+        var list = await orgs.GetAsync("/api/organizations", new() { Headers = new Dictionary<string, string> { ["Authorization"] = $"Bearer {token}" } });
+        var urlName = (await list.JsonAsync())!.Value.EnumerateArray()
+            .First(o => o.GetProperty("id").GetString() == orgId).GetProperty("urlName").GetString();
+        await orgs.DisposeAsync();
+        await GoAsync($"/o/{urlName}/our-team");
+        await ShootAsync(slug, "cms-visitor-menu.png", gated: true, selector: "[data-testid=org-hero]", proves: "Our equipment",
+                         around: new Around(Bottom: 150));
+
+        await CmsSampleSite.RemoveAsync(ApiUrl, token!, orgId);
+    }
+
+    /// <summary>
     /// The photo editor, full screen, with a photo in it and one mark drawn - the Edit image button
     /// on a Files tab. Until 09/25/2026 it opened in the smallest dialog size with no picture at all.
     /// </summary>

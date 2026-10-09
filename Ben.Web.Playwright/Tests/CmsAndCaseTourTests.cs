@@ -36,7 +36,10 @@ public class CmsAndCaseTourTests : BenTestBase
 
         await Expect(Page.Locator(".ben-tour-card")).ToContainTextAsync("Pages are born here");
         await Page.Locator(".ben-tour-card").GetByRole(AriaRole.Button, new() { Name = "Next" }).ClickAsync();
-        await Expect(Page.Locator(".ben-tour-card")).ToContainTextAsync("sections");
+        // Ordering (10/09/2026): the whole site as one tree, beside New Page.
+        await Expect(Page.Locator(".ben-tour-card")).ToContainTextAsync("Ordering");
+        await Page.Locator(".ben-tour-card").GetByRole(AriaRole.Button, new() { Name = "Next" }).ClickAsync();
+        await Expect(Page.Locator(".ben-tour-card")).ToContainTextAsync("Content lives in sections");
         await Page.Locator(".ben-tour-card").GetByRole(AriaRole.Button, new() { Name = "Next" }).ClickAsync();
         await Expect(Page.Locator(".ben-tour-card")).ToContainTextAsync("publish");
         await Page.Locator(".ben-tour-card").GetByRole(AriaRole.Button, new() { Name = "Next" }).ClickAsync();

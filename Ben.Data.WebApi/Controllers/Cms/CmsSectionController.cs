@@ -131,9 +131,15 @@ public sealed class CmsSectionController : OrgCmsControllerBase
 
         await using var db = await DbFactory.CreateDbContextAsync(ct);
 
+        // The page has to be this group's. Without this, permission to reorder one group's sections
+        // reordered any page's whose id somebody knew (found 10/09/2026, adding the Ordering window).
+        if (!await db.OrganizationPages.AnyAsync(p => p.Id == pageId && p.OrganizationId == orgId, ct))
+            return NotFound();
+
         var sections = await db.CmsSections
             .Where(s => s.OrganizationPageId == pageId)
             .ToListAsync(ct);
+        var before = new { Order = sections.OrderBy(s => s.SortOrder).Select(s => s.Id).ToList() };
 
         for (var i = 0; i < request.OrderedSectionIds.Count; i++)
         {
@@ -142,8 +148,50 @@ public sealed class CmsSectionController : OrgCmsControllerBase
         }
 
         await db.SaveChangesAsync(ct);
-        _ = TryAuditAsync(_auditLog.LogUpdateAsync("CmsSectionReorder", pageId, new { }, request, userId.Value, AppSources.WebApi));
+        // Before and after are the same shape: the audit compares them field by field and throws on two
+        // different types. It used to be given `new { }` and the request, so every reorder was saved and then
+        // answered 500 — which the page editor's arrows ignored, and the Ordering window would not (10/09/2026).
+        var after = new { Order = sections.OrderBy(s => s.SortOrder).Select(s => s.Id).ToList() };
+        _ = TryAuditAsync(_auditLog.LogUpdateAsync("CmsSectionReorder", pageId, before, after, userId.Value, AppSources.WebApi));
         return NoContent();
+    }
+
+    // ── POST preview — a section as a visitor would see it, before it is saved ──
+
+    /// <summary>
+    /// What a section being written would look like on the public page, without saving it.
+    /// </summary>
+    /// <remarks>
+    /// <para>Ben asked for a Preview button beside Cancel (10/09/2026): somebody filling in a section
+    /// should see it the way a visitor will before deciding to keep it. The page preview only shows
+    /// what is saved, so this takes the section as it stands in the editor.</para>
+    ///
+    /// <para>Cleaned and resolved exactly as the public page does it: markup through the sanitizer,
+    /// an embed's references through <see cref="CmsEmbed"/> with its redaction rules. A preview that
+    /// showed raw ids, or markup the save would strip, would promise a page that never appears.</para>
+    ///
+    /// <para>Nothing is written. Read access is enough, the same gate the page preview uses.</para>
+    /// </remarks>
+    [HttpPost("preview")]
+    public async Task<ActionResult<Ben.Data.WebApi.Controllers.Public.OrgPublicSectionItem>> Preview(
+        Guid orgId, Guid pageId, [FromBody] CreateCmsSectionRequest request, CancellationToken ct)
+    {
+        var userId = GetCurrentUserId();
+        if (userId is null) return Unauthorized();
+        if (!await IsCmsAuthorizedAsync(userId.Value, orgId, OrganizationSecurityTable.CmsSection, OrganizationSecurityAction.Read, ct))
+            return Forbid();
+
+        await using var db = await DbFactory.CreateDbContextAsync(ct);
+        if (!await db.OrganizationPages.AnyAsync(p => p.Id == pageId && p.OrganizationId == orgId, ct))
+            return NotFound();
+
+        var clean = _sanitizer.SanitizeContentJson(request.ContentJson);
+        var content = CmsEmbed.IsEmbed(request.SectionType)
+            ? await CmsEmbed.ResolveAsync(db, orgId, request.SectionType, clean, ct)
+            : clean;
+
+        return Ok(new Ben.Data.WebApi.Controllers.Public.OrgPublicSectionItem(
+            Guid.Empty, request.SectionType, request.Title?.Trim(), content, request.SortOrder));
     }
 
     // ── DELETE section ───────────────────────────────────────────────────────

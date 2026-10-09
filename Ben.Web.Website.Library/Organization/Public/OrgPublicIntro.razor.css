@@ -1,0 +1,16 @@
+/* The intro reads as the page's opening, a little larger than the sections under it. Pictures
+   added from the group's library fit the column rather than overflowing it. */
+.cms-intro {
+    font-size: 1.05rem;
+    line-height: 1.6;
+}
+
+.cms-intro ::deep img {
+    max-width: 100%;
+    height: auto;
+    border-radius: .5rem;
+}
+
+.cms-intro ::deep p:last-child {
+    margin-bottom: 0;
+}

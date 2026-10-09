@@ -63,11 +63,16 @@
         </div>
 
         <BenEditor Value="@_html"
-                       ValueChanged="@OnHtmlChanged"
-                       Height="300px" />
+                   ValueChanged="@OnHtmlChanged"
+                   Height="300px"
+                   PictureLibrary="@(OrgId is null ? null : LoadPublicPicturesAsync)"
+                   PictureUrl="@AdminClient.GetFileDownloadUrl"
+                   PageLinks="@PageLinks" />
         <div class="form-text">
-            Blocks are added at the end. Move them where you want them, then replace the placeholder
-            text.
+            This is what visitors read. Blocks from <strong>Add a block</strong> go at the end; move them where you
+            want them and replace the placeholder text. Use <strong>Picture from your library</strong> and
+            <strong>Link to one of your pages</strong> in the toolbar to add your group's public pictures and links to
+            your other pages.
         </div>
     </div>
 }
@@ -98,6 +103,7 @@ else if (SectionType == CmsSectionType.ImageBanner)
                     Choose an image…
                 </button>
             </div>
+            <div class="form-text">A wide picture across the page. Visitors can only see public pictures.</div>
             @if (_imgChosenNotPublic)
             {
                 @* The author always sees their own file; the visitor is the one it breaks for. *@
@@ -111,10 +117,29 @@ else if (SectionType == CmsSectionType.ImageBanner)
         <div class="col-12">
             <label class="form-label fw-semibold" for="cmssectioneditor-alt-text-4058">Alt Text</label>
             <input id="cmssectioneditor-alt-text-4058" type="text" class="form-control" value="@_imgAlt" @oninput="@(e => { var v = e.Value?.ToString() ?? string.Empty; _imgAlt = v; PushImageJson(); })" />
+            <div class="form-text">What the picture shows, in a few words, for people using a screen reader.</div>
         </div>
         <div class="col-12">
             <label class="form-label fw-semibold" for="cmssectioneditor-link-url-optional-82dd">Link URL (optional)</label>
-            <input id="cmssectioneditor-link-url-optional-82dd" type="text" class="form-control" placeholder="https://example.com" value="@_imgLink" @oninput="@(e => { var v = e.Value?.ToString() ?? string.Empty; _imgLink = v; PushImageJson(); })" />
+            <div class="input-group">
+                <input id="cmssectioneditor-link-url-optional-82dd" type="text" class="form-control" placeholder="https://example.com" value="@_imgLink" @oninput="@(e => { var v = e.Value?.ToString() ?? string.Empty; _imgLink = v; PushImageJson(); })" />
+                @if (PageLinks is { Count: > 0 })
+                {
+                    @* Ben, 10/09/2026: a link can go to one of the group's own pages, chosen rather than typed. *@
+                    <BenDropdown ToggleClass="btn btn-outline-secondary" Title="Link to one of your pages" MinWidth="280px" Floating="true">
+                        <ToggleContent><BenIcon Name="file-text" Class="me-1" />Your pages</ToggleContent>
+                        <ChildContent>
+                            @foreach (var link in PageLinks)
+                            {
+                                var chosen = link;
+                                <li><button class="dropdown-item" type="button" style="@($"padding-left:{1 + chosen.Depth * 1.25}rem")"
+                                            @onclick="@(() => { _imgLink = chosen.Href; PushImageJson(); })">@chosen.Title</button></li>
+                            }
+                        </ChildContent>
+                    </BenDropdown>
+                }
+            </div>
+            <div class="form-text">Where a click on the picture goes: a web address, or one of your pages. Leave it empty for none.</div>
         </div>
     </div>
 
@@ -476,6 +501,21 @@ else
     /// </summary>
     [Parameter] public Guid? OrgId { get; set; }
     [Parameter] public string ContentJson { get; set; } = "{}";
+
+    /// <summary>The group's other pages, for links chosen rather than typed. Null where none are offered.</summary>
+    [Parameter] public IReadOnlyList<BenEditorPageLink>? PageLinks { get; set; }
+
+    /// <summary>The group's public pictures, for the text editor's "Picture from your library".</summary>
+    private async Task<IReadOnlyList<ContentPickerItem>> LoadPublicPicturesAsync()
+    {
+        if (OrgId is not { } orgId) return [];
+        var result = await AdminClient.GetOrgSharedFilesAsync(orgId);
+        if (result.Failed) throw new InvalidOperationException(result.Reason ?? "load failed");
+        return [.. result.Items
+            .Where(f => f.IsPublic && f.ContentType.StartsWith("image/", StringComparison.OrdinalIgnoreCase))
+            .Select(f => new ContentPickerItem(f.Id, f.FileName, "Image", $"{f.DateCreated:MM/dd/yyyy}",
+                                               null, f.ContentType, f.FileSize))];
+    }
     [Parameter] public EventCallback<string> ContentJsonChanged { get; set; }
 
     // RichText / CustomHtml

@@ -58,6 +58,25 @@
     </div>
 }
 
+@* Files people added to a place, waiting for this person to approve or hold (10/09/2026): every place for
+   a SuperAdmin or moderator, the place a group they run is the confirmed venue of for anybody else. Without
+   this a held file sat where nobody knew to look. *@
+@if (_placeFiles.Count > 0)
+{
+    <div class="alert alert-info d-flex align-items-start gap-2 mb-3" role="status" id="place-files-waiting">
+        <span aria-hidden="true">🖼️</span>
+        <div class="flex-grow-1">
+            @(_placeFiles.Sum(p => p.Count) == 1 ? "A file is" : $"{_placeFiles.Sum(p => p.Count)} files are") waiting for you to review:
+            @for (var i = 0; i < _placeFiles.Count; i++)
+            {
+                var w = _placeFiles[i];
+                <a class="alert-link" href="@PlaceFilesLink(w)">@w.Count at @w.PlaceName</a>@(i < _placeFiles.Count - 1 ? ", " : ".")
+            }
+        </div>
+        <button type="button" class="btn-close" aria-label="Dismiss" @onclick="DismissPlaceFilesAsync"></button>
+    </div>
+}
+
 @*
     Signal phase 4 (2026-10-01): ONE card, a row per group, rather than a full alert per group. A
     SuperAdmin in five busy groups had five alerts stacked over every page they opened — on the
@@ -131,6 +150,7 @@
             _visible.Clear();
             _feedReminder = null;
             _unconfirmedAddress = null;
+            _placeFiles = [];
             _addressChecked = false;
             StateHasChanged();
             await LoadAsync();
@@ -215,6 +235,7 @@
 
             await LoadFeedReminderAsync();
             await LoadUnconfirmedAddressAsync();
+            await LoadPlaceFilesAsync();
 
             if (generation != _generation) return;
             // Always re-render, including when the new viewer has NOTHING to show: the old
@@ -222,6 +243,39 @@
             StateHasChanged();
         }
         finally { _loading = false; }
+    }
+
+    // ── Files added to a place, waiting for this person (10/09/2026) ─────────────────────────
+
+    private List<Ben.Service.Models.Entities.PlaceFilesWaiting> _placeFiles = [];
+
+    private async Task LoadPlaceFilesAsync()
+    {
+        _placeFiles = [];
+        if (!UserState.IsAuthenticated) return;
+        try
+        {
+            var waiting = (await AdminClient.GetPlaceFilesWaitingAsync()).Items;
+            if (waiting.Count > 0
+                && await JS.InvokeAsync<string?>("sessionStorage.getItem", PlaceFilesKey(waiting)) is null)
+                _placeFiles = [.. waiting];
+        }
+        catch { /* same rule as every banner here: never the reason a page errors */ }
+    }
+
+    private string PlaceFilesLink(Ben.Service.Models.Entities.PlaceFilesWaiting w)
+        => !(UserState.IsModerator || UserState.IsSuperAdmin) && w.VenueOrganizationId is Guid org
+            ? $"/organizations/{org}/venue"
+            : "/moderation/archive";
+
+    /// <summary>Quiet for the session, until a new file arrives and changes the counts.</summary>
+    private static string PlaceFilesKey(IEnumerable<Ben.Service.Models.Entities.PlaceFilesWaiting> waiting)
+        => "place-files-waiting:" + string.Join(",", waiting.Select(w => $"{w.PlaceId:N}={w.Count}"));
+
+    private async Task DismissPlaceFilesAsync()
+    {
+        try { await JS.InvokeVoidAsync("sessionStorage.setItem", PlaceFilesKey(_placeFiles), "1"); } catch { }
+        _placeFiles = [];
     }
 
     // ── The dark-launch reminder (item 186 F10) ──────────────────────────────

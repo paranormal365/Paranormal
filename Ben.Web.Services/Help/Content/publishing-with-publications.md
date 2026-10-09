@@ -7,24 +7,24 @@ feature: features.publications
 order: 62
 ---
 
-A **publication** is your group's own title — a place to write for people outside the group. Case
-write-ups, research, field notes, anything that deserves more room than
+A **publication** is a place for your group to write for people outside the group, under a title
+of its own: case write-ups, research, field notes, anything that needs more room than
 [the Feed](/help/the-feed) gives it.
 
-Readers do not need an account to read what you publish, and can subscribe to keep track of you.
+Readers don't need an account to read what you publish, and they can subscribe to follow along.
 
 ## Where it lives
 
-**Publications** is a tab on your group's page. If you do not see it, either you do not have
+**Publications** is a tab on your group's page. If you don't see it, either you don't have
 permission to edit the group's public material, or publications are switched off for the whole
 site — a site administrator controls that.
 
-Permission is the same one that governs the group's CMS pages: whoever may speak for the group in
-public may write in a publication.
+It uses the same permission as the group's CMS pages, so anyone who can speak for the group in
+public can write in a publication.
 
 **Not the place for a case's finding.** A publication is for what your group wants to say — an
 article, a notice, a piece of research. What you concluded about a particular case belongs on that
-case, and is published by ticking **Show this on our public case page** on the report itself. See
+case, and is published by checking **Show this on our public case page** on the report itself. See
 *Showing your finding on your public page* in
 [Working a case](/help/working-a-case). A publication post can of course link to it.
 
@@ -41,91 +41,88 @@ Research*.
 
 **Description** — a line or two shown in the public directory, explaining what a reader will find.
 
-**Visible to the public** — leave this **off** while you find your feet. Nothing you write is
-readable outside the group until *both* the publication is public *and* a post has been published.
-Two switches, deliberately: one lets you get a few pieces ready before anyone can see the
-publication exists at all.
+**Visible to the public** — leave this **off** while you're getting started. Nothing you write can
+be read outside the group until *both* the publication is public *and* a post has been published.
+Having two switches means you can get a few pieces ready before anyone can even see that the
+publication exists.
 
 ### About the address
 
 The address — `/publications/field-notes` — is made from the title **once**, when you create the
-publication, and never changes afterwards.
+publication, and never changes after that.
 
-That is on purpose. Renaming later changes the heading readers see; it does not move the link. Any
-link somebody shared today still works next year. If the address really matters to you, get the
-title right the first time.
+If you rename the publication later, the heading readers see changes, but the link stays the same,
+so a link somebody shares today still works next year. If the address matters to you, get the title
+right the first time.
 
 ## Writing a post
 
 **Posts** on a publication opens everything in it, drafts included. **New post** opens the writing
-page, at the full width of the screen — a thousand-word piece written in a small box gets written
-badly.
+page, which uses the full width of the screen so you have room for longer pieces.
 
-**Title** — the heading, and the source of the post's own address, fixed on first save the same
-way the publication's is.
+**Title** — the heading. The post's address is made from it when you first save, and like the
+publication's address, it never changes after that.
 
-**Excerpt** — a line or two shown in listings. Worth writing rather than skipping: it is what a
-reader in the directory uses to decide whether to open the post.
+**Excerpt** — a line or two shown in listings. It's worth writing one, because it's what readers in
+the directory use to decide whether to open the post.
 
 **Body** — the piece itself, in the full editor.
 
 ![Writing a post](help-media:publications/post-editor.png)
-*The writing page. **Save** leaves a draft a draft; **Save & publish** is the separate act.*
+*The writing page. **Save** keeps a draft as a draft; **Save & publish** saves and publishes it.*
 
 ## Drafts and publishing
 
-**A new post is always a draft.** Saving does not publish, whatever you had in mind when you hit
-the button. Nothing you write is in front of the public until you say so explicitly.
+**A new post is always a draft.** Saving doesn't publish it. Nothing you write is shown to the
+public until you choose to publish it.
 
-**Save & publish** saves what is on screen and then publishes it, in that order — so what readers
-get is what you were looking at, not the last version you happened to save.
+**Save & publish** saves what's on screen and then publishes it, so readers get exactly what you
+were looking at, not the last version you saved.
 
-**Publish** and **Withdraw** are also on the post list, if you would rather work from there.
+**Publish** and **Withdraw** are also on the post list, if you'd rather work from there.
 
 ### What withdrawing does, and does not do
 
-**Withdraw** stops a post being served. It does **not** un-send it: anyone who has already read it
-still read it, and a link they shared now leads nowhere.
+**Withdraw** takes a post off the site. It does **not** undo the fact that it was published:
+anyone who already read it has still read it, and any link they shared stops working.
 
-It is a way to take back something published in error. It is not a way to unpublish history.
+Use it to take down something you published by mistake.
 
-Publishing again after withdrawing gives the post a **new** date. Keeping the original would drop
-it back into the middle of the list, where nobody looking at the top would notice it had returned.
+Publishing again after withdrawing gives the post a **new** date, so it appears at the top of the
+list where readers will notice it, rather than back in the middle.
 
 ## Subscribers
 
 The publications list shows how many people subscribe to each one. Subscribing needs an account —
-reading does not — so a subscriber is somebody you can actually reach.
+reading doesn't — so a subscriber is somebody you can actually reach.
 
-Nobody can subscribe to a publication that is not public, even if they know its address.
+Nobody can subscribe to a publication that isn't public, even if they know its address.
 
 ## "Subscribers only" posts
 
-You may see posts described as being for subscribers. Nothing on the site can be marked that way
-today: **every post you publish is free to read in full**, and there is no billing anywhere on the
-platform.
+You may see posts described as being for subscribers, but there's currently no way to mark a post
+like that: **every post you publish is free to read in full**, and there is no billing anywhere on
+the platform.
 
-The groundwork is in place so that if paid publications ever arrive, they arrive without changing
-what you have already published.
+If paid publications are ever added, what you've already published won't change.
 
 ## Deleting
 
-**Delete** on a post removes it outright — it asks once first. Unlike a feed post, which is hidden
-rather than deleted so a moderation record survives, nothing points at a publication post but its
-own address. The group owns what it wrote.
+**Delete** on a post removes it permanently, after asking you to confirm. (A feed post, by contrast,
+is hidden rather than deleted, so a moderation record is kept.) A publication post belongs to the
+group that wrote it.
 
 ### Deleting a whole publication
 
 **Delete** on the publication itself appears only while the publication is **completely empty** —
-nothing written, nobody subscribed. That is the case it is for: you created one, the title came
-out wrong, and the address does not move when you rename it.
+nothing written, nobody subscribed. It's there for when you've just created one and got the title
+wrong: renaming doesn't change the address, so you can delete it and start again.
 
-Once there is anything in it the button is gone, and the reason is what deleting would cost.
-Removing a publication people have written in and subscribed to destroys the work and breaks every
-link anybody shared, which is not something to do by clicking twice. Delete the posts first if you
-genuinely want it gone — or ask a site administrator, who can remove any publication along with
-everything inside it.
+Once there's anything in it, the button disappears, because deleting a publication people have
+written in and subscribed to would destroy the work and break every link anybody shared. If you
+really want it gone, delete the posts first — or ask a site administrator, who can remove any
+publication along with everything in it.
 
 One thing that surprises people: **somebody who subscribed and then unsubscribed still counts.**
-The rule is "nothing ever happened here", and somebody having read you is something happening. If
-Delete is missing on a publication that looks empty, that is usually why.
+A publication can only be deleted if nobody has ever subscribed to it. If Delete is missing on a
+publication that looks empty, that's usually why.

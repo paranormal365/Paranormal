@@ -3,12 +3,14 @@
 @inject IBenAdminClient AdminClient
 @inject IBenUserState UserState
 @inject NavigationManager NavManager
+@inject IJSRuntime JS
 
 @using System.Text.Json
 @using System.Text.Json.Nodes
 @using Ben.Data.Common.Enums
 @using Ben.Web.Services.WebApi
 @using Ben.Web.Website.Library.Kit
+@using Ben.Web.Website.Library.Organization.Public
 
 @* Item 154: the address must die with the feature switch, not just the links to it. *@
 <FeatureGate Flag="@SiteFeatures.CmsPages">
@@ -85,7 +87,9 @@
        thing does not belong in a box. *@
     @if (_showSectionEditor)
     {
-        <div class="card mb-3">
+        @* Scrolled to when Add Section or a section's edit button is pressed (Ben, 10/09/2026: "I couldn't even
+           tell it did anything" — the form opened up here while the button was a screen further down). *@
+        <div class="card mb-3" id="cms-section-editor">
             <div class="card-header d-flex justify-content-between align-items-center">
                 <strong>@(_editingSection is null ? "New section" : "Edit section")</strong>
                 <button type="button" class="btn @(ThemeConstants.Button.FillMode.Flat == ThemeConstants.Button.FillMode.Solid ? "btn-secondary" : "btn-outline-secondary")" @onclick="CloseSectionDialog"><BenIcon Name="x" Class="me-1" />Close</button>
@@ -94,30 +98,40 @@
                 <div class="row g-3">
                     @if (_editingSection is null)
                     {
-                        <div class="col-md-4">
-                            <label class="form-label fw-semibold">Section type <span class="text-danger">*</span></label>
-                            <BenSelect Data="@_sectionTypeOptions" @bind-Value="@_sectionForm.SectionType" ValueField="@nameof(SectionTypeOption.Value)" TextField="@nameof(SectionTypeOption.Label)" Width="100%" />
+                        <div class="col-12">
+                            <label class="form-label fw-semibold" id="cms-section-type-label">What kind of section? <span class="text-danger">*</span></label>
+                            <CmsSectionTypePicker @bind-Value="@_sectionForm.SectionType" />
+                            <div class="form-text">Each picture shows roughly how that kind of section is laid out. You can't change the kind later, so pick the one you want.</div>
                         </div>
                     }
                     else
                     {
                         <div class="col-md-4">
                             <label class="form-label fw-semibold">Section type</label>
-                            <p class="mb-0"><strong>@_sectionForm.SectionType</strong></p>
+                            <div class="d-flex align-items-center gap-2">
+                                <span style="width:4.5rem">@((MarkupString)CmsSectionTypes.Svg(_sectionForm.SectionType))</span>
+                                <strong>@CmsSectionTypes.Label(_sectionForm.SectionType)</strong>
+                            </div>
+                            <div class="form-text">This can't be changed after the section is created.</div>
                         </div>
                     }
-                    <div class="col-md-6">
+                    <div class="@(_editingSection is null ? "col-md-9" : "col-md-6")">
                         <label class="form-label fw-semibold" for="orgcmspageedit-section-title-optional-13b4">Section title (optional)</label>
                         <input id="orgcmspageedit-section-title-optional-13b4" type="text" class="form-control" placeholder="Optional heading above this section" @bind="@_sectionForm.Title" @bind:event="oninput" />
+                        <div class="form-text">A heading shown above the section on the page. Leave it empty for none.</div>
                     </div>
-                    <div class="col-md-2 d-flex align-items-end gap-2 pb-2">
-                        <input type="checkbox" class="form-check-input" id="sec-active" @bind="@_sectionForm.IsActive" />
-                        <label for="sec-active" class="form-label mb-0">Visible</label>
+                    <div class="@(_editingSection is null ? "col-md-3" : "col-md-2")">
+                        <div class="d-flex align-items-center gap-2 mt-md-4 pt-md-2">
+                            <input type="checkbox" class="form-check-input" id="sec-active" @bind="@_sectionForm.IsActive" />
+                            <label for="sec-active" class="form-label mb-0">Visible</label>
+                        </div>
+                        <div class="form-text">Off hides it from visitors without deleting it.</div>
                     </div>
                 </div>
 
                 <CmsSectionEditor SectionType="@_sectionForm.SectionType"
                                   OrgId="@OrgId"
+                                  PageLinks="@_pageLinks"
                                   @bind-ContentJson="@_sectionForm.ContentJson" />
 
                 @if (_sectionError is not null)
@@ -126,6 +140,9 @@
                 }
 
                 <div class="d-flex justify-content-end gap-2 mt-3">
+                    @* Before Cancel (Ben, 10/09/2026): see the section as a visitor will, filled in as it stands,
+                       before deciding to keep it. Nothing is saved by looking. *@
+                    <button type="button" class="btn btn-outline-primary" id="cms-section-preview" @onclick="PreviewSectionAsync" disabled="@(!(!_isBusy))"><BenIcon Name="eye" Class="me-1" />Preview</button>
                     <button type="button" class="btn btn-secondary" @onclick="CloseSectionDialog" disabled="@(!(!_isBusy))">Cancel</button>
                     <button type="button" class="btn btn-primary" @onclick="SaveSection" disabled="@(!(!_isBusy))"><BenIcon Name="save" Class="me-1" />
                         @(_isBusy ? "Saving…" : "Save section")
@@ -134,6 +151,36 @@
             </div>
         </div>
     }
+
+    <BenModal @bind-Visible="_showSectionPreview" Title="Preview: how visitors will see this section" Size="xl">
+        <ChildContent>
+            @if (_sectionPreviewError is not null)
+            {
+                <div class="alert alert-danger mb-0">@_sectionPreviewError</div>
+            }
+            else if (_sectionPreview is null)
+            {
+                <BenLoaderOverlay Visible="true" Text="Drawing the preview…" />
+            }
+            else
+            {
+                @if (!_sectionForm.IsActive)
+                {
+                    <div class="alert alert-warning py-2">This section is hidden, so visitors won't see it until you turn Visible on.</div>
+                }
+                <div class="cms-section-preview" id="cms-section-preview-body">
+                    <OrgPublicSection Section="@_sectionPreview"
+                                      FileBaseUrl="@AdminClient.GetFileDownloadUrl(Guid.Empty).Replace(Guid.Empty.ToString(), "")"
+                                      PublicMediaBaseUrl="@AdminClient.GetPublicCaseMediaBaseUrl()" />
+                </div>
+                <p class="small text-secondary mb-0">Not saved yet. Close this and press Save section to keep it.</p>
+            }
+            <div class="dialog-footer-actions">
+                <span class="dialog-footer-spacer"></span>
+                <button type="button" class="btn btn-primary" id="cms-section-preview-close" @onclick="@(() => _showSectionPreview = false)">Back to editing</button>
+            </div>
+        </ChildContent>
+    </BenModal>
 
     @if (_errorMessage is not null)
     {
@@ -205,26 +252,51 @@
                         </button>
                     </div>
                     <div class="card-body">
+                        @* Ben, 10/09/2026: each field says under it what it does, and the page's place in the menu is
+                           chosen on a tree rather than as a sort number. *@
                         <div class="row g-3">
-                            <div class="col-md-8">
+                            <div class="col-12">
                                 <label class="form-label fw-semibold" for="orgcmspageedit-title-947a">Title <span class="text-danger">*</span></label>
                                 <input id="orgcmspageedit-title-947a" type="text" class="form-control" @bind="@_metaForm.PageTitle" @bind:event="oninput" />
-                            </div>
-                            <div class="col-md-4">
-                                <label class="form-label fw-semibold" for="orgcmspageedit-sort-order-d872">Sort Order</label>
-                                <input id="orgcmspageedit-sort-order-d872" type="number" class="form-control" min="0" max="100" step="1" @bind="@_metaForm.SortOrder" @bind:event="oninput" />
+                                <div class="form-text">Shown at the top of the page and as its name in your site's menu.</div>
                             </div>
                             <div class="col-12">
                                 <label class="form-label fw-semibold" for="orgcmspageedit-url-slug-8cc6">URL Slug <span class="text-danger">*</span></label>
                                 <input id="orgcmspageedit-url-slug-8cc6" type="text" class="form-control" @bind="@_metaForm.UrlName" @bind:event="oninput" />
+                                <div class="form-text">
+                                    The page's address on this site: <code>@($"/o/{_orgUrlName ?? "your-group"}/{_metaForm.UrlName?.Trim().ToLowerInvariant()}")</code>.
+                                    Changing it breaks links people have saved to the old address.
+                                </div>
                             </div>
-                            <div class="col-md-6 d-flex align-items-center gap-2">
-                                <input type="checkbox" class="form-check-input" id="meta-published" @bind="@_metaForm.IsPublished" />
-                                <label for="meta-published" class="form-label mb-0">Published</label>
+                            <div class="col-md-6">
+                                <div class="d-flex align-items-center gap-2">
+                                    <input type="checkbox" class="form-check-input" id="meta-published" @bind="@_metaForm.IsPublished" />
+                                    <label for="meta-published" class="form-label mb-0">Published</label>
+                                </div>
+                                <div class="form-text">Off: a draft only your editors see. On: it goes live and joins the menu.</div>
                             </div>
-                            <div class="col-md-6 d-flex align-items-center gap-2">
-                                <input type="checkbox" class="form-check-input" id="meta-public" @bind="@_metaForm.IsPublic" />
-                                <label for="meta-public" class="form-label mb-0">Visible to public</label>
+                            <div class="col-md-6">
+                                <div class="d-flex align-items-center gap-2">
+                                    <input type="checkbox" class="form-check-input" id="meta-public" @bind="@_metaForm.IsPublic" />
+                                    <label for="meta-public" class="form-label mb-0">Visible to public</label>
+                                </div>
+                                <div class="form-text">On: anyone can read it once published. Off: only your group's members can.</div>
+                            </div>
+                            <div class="col-12">
+                                <label class="form-label fw-semibold">Where it sits in your menu</label>
+                                @if (_sitePages is null)
+                                {
+                                    <div class="text-secondary small">Loading your pages…</div>
+                                }
+                                else
+                                {
+                                    <CmsPagePlacer Pages="@_sitePages" PageId="@PlacedPageId" @bind-Value="@_placement" />
+                                }
+                                <div class="form-text">
+                                    Drag the highlighted page to where it belongs, or use the arrows, then press Save Settings. Top-level
+                                    pages make up your site's menu, and the pages under one appear when a visitor opens it. Your menu can
+                                    go three levels deep. To arrange all your pages at once, use Ordering on the page list.
+                                </div>
                             </div>
                         </div>
                     </div>
@@ -240,7 +312,15 @@
                     </div>
                     <div class="card-body">
                         <BenEditor @bind-Value="@_metaForm.PageHtml"
-                                       Height="200px" />
+                                   Height="220px"
+                                   PictureLibrary="@LoadPublicPicturesAsync"
+                                   PictureUrl="@AdminClient.GetFileDownloadUrl"
+                                   PageLinks="@_pageLinks" />
+                        <div class="form-text">
+                            Shown at the top of the page, under its title and above its sections. Use
+                            <strong>Picture from your library</strong> in the toolbar to add one of your group's public
+                            pictures, and <strong>Link to one of your pages</strong> to link to another of your pages.
+                        </div>
                     </div>
                 </div>
 
@@ -248,7 +328,7 @@
                 <div class="card mb-4">
                     <div class="card-header d-flex justify-content-between align-items-center">
                         <strong>Sections (@(_sections.Count))</strong>
-                        <button type="button" class="btn btn-primary btn-sm" @onclick="OpenNewSectionDialog"><BenIcon Name="plus" Class="me-1" />
+                        <button type="button" class="btn btn-primary btn-sm" id="cms-add-section" @onclick="OpenNewSectionDialog"><BenIcon Name="plus" Class="me-1" />
                             Add Section
                         </button>
                     </div>
@@ -270,7 +350,7 @@
                                     </div>
                                     <div class="flex-grow-1">
                                         <div class="d-flex align-items-center gap-2 mb-1">
-                                            <span class="badge bg-secondary">@s.SectionType</span>
+                                            <span class="badge bg-secondary">@CmsSectionTypes.Label(s.SectionType)</span>
                                             @if (!string.IsNullOrWhiteSpace(s.Title))
                                             {
                                                 <strong>@s.Title</strong>
@@ -516,36 +596,46 @@
     // Raw permission records for reference when editing
     private List<CmsPagePermissionRecord> _permissionRecords = [];
 
-    private static readonly List<SectionTypeOption> _sectionTypeOptions = Enum.GetValues<CmsSectionType>()
-        .Select(t => new SectionTypeOption(t, SectionTypeLabel(t)))
-        .ToList();
+    // ── The rest of the site: for the menu tree, the editor's page links and the slug's address ──
+
+    private IReadOnlyList<CmsPageListItem>? _sitePages;
+    private IReadOnlyList<BenEditorPageLink>? _pageLinks;
+    private string? _orgUrlName;
+    private CmsSiteTree.Placement? _placement;
 
     /// <summary>
-    /// What each section type is called in the menu.
+    /// The page whose place in the menu this is. A draft is a copy, not a place: its tree shows the live page,
+    /// and publishing the draft leaves the live page where it is.
     /// </summary>
-    /// <remarks>
-    /// The list is built from the enum so a new type cannot be added and forgotten, but the raw
-    /// names read like code — "EmbeddedInvestigations" is not something to put in front of somebody
-    /// choosing what to add to their page. Unlisted values fall back to the enum name, so the menu
-    /// still works before somebody gets round to naming a new one.
-    /// </remarks>
-    private static string SectionTypeLabel(CmsSectionType type) => type switch
+    private Guid PlacedPageId => _draft is { DraftPageId: Guid draftId } && draftId == PageId ? _draft.LivePageId : PageId;
+
+    private async Task LoadSiteAsync()
     {
-        CmsSectionType.RichText               => "Text",
-        CmsSectionType.ImageBanner            => "Image or banner",
-        CmsSectionType.FileGallery            => "File gallery",
-        CmsSectionType.ContactInfo            => "Contact details",
-        CmsSectionType.MemberRoster           => "Our members",
-        CmsSectionType.CustomHtml             => "Custom HTML",
-        CmsSectionType.EmbeddedInvestigations => "Our investigations",
-        CmsSectionType.EmbeddedCases          => "Our cases",
-        CmsSectionType.CaseMedia              => "Photos from a case",
-        CmsSectionType.EventBooking           => "An event: dates and ask for a place",
-        CmsSectionType.EventProgramme         => "An event's program",
-        CmsSectionType.EventGallery           => "An event's pictures",
-        CmsSectionType.EventVenue             => "An event's venue",
-        _                                     => type.ToString(),
-    };
+        var org = await AdminClient.GetOrganizationAsync(OrgId);
+        _orgUrlName = org?.UrlName;
+        _sitePages = (await AdminClient.GetCmsPagesAsync(OrgId)).Items;
+        _placement = null;
+
+        _pageLinks = _orgUrlName is null ? [] :
+            [.. CmsSiteTree.InMenuOrder([.. _sitePages.Select(p => new CmsSiteTree.Page(p.Id, p.ParentPageId, p.SortOrder, p.PageTitle))])
+                .Where(x => x.Page.Id != PlacedPageId)
+                .Select(x => new BenEditorPageLink(
+                    x.Page.Title, $"/o/{_orgUrlName}/{_sitePages.First(p => p.Id == x.Page.Id).UrlName}", x.Depth))];
+    }
+
+    /// <summary>
+    /// The group's public pictures, for the intro's "Picture from your library". Public only: a members-only
+    /// file shows its author a picture and every visitor a broken one.
+    /// </summary>
+    private async Task<IReadOnlyList<ContentPickerItem>> LoadPublicPicturesAsync()
+    {
+        var result = await AdminClient.GetOrgSharedFilesAsync(OrgId);
+        if (result.Failed) throw new InvalidOperationException(result.Reason ?? "load failed");
+        return [.. result.Items
+            .Where(f => f.IsPublic && f.ContentType.StartsWith("image/", StringComparison.OrdinalIgnoreCase))
+            .Select(f => new ContentPickerItem(f.Id, f.FileName, "Image", $"{f.DateCreated:MM/dd/yyyy}",
+                                               null, f.ContentType, f.FileSize))];
+    }
 
     protected override async Task OnInitializedAsync()
     {
@@ -554,20 +644,13 @@
             NavManager.NavigateTo("/login");
     }
 
-    protected override async Task OnAfterRenderAsync(bool firstRender)
-    {
-        if (!firstRender) return;
-        if (!await UserState.WaitUntilAuthReadyAsync(RendererInfo.IsInteractive)) return;
-        await LoadPageAsync();
-        StateHasChanged();
-    }
-
     private async Task LoadPageAsync()
     {
         _page = await AdminClient.GetCmsPageAsync(OrgId, PageId);
         if (_page is null) { _errorMessage = "Page not found."; return; }
 
         await LoadDraftStateAsync();
+        await LoadSiteAsync();
 
         _sections = [.. _page.Sections.OrderBy(s => s.SortOrder)];
         _metaForm = new MetaFormModel
@@ -709,8 +792,22 @@
             _page?.ParentPageId,
             _metaForm.SortOrder));
 
+        if (result.Result is not null && _placement is { } placed)
+        {
+            // Its place in the menu, chosen on the tree. Moved after the rest is saved, so a refused move
+            // (too deep) still leaves the title and switches saved — and says why it stayed put.
+            var (_, moveError) = await AdminClient.MoveCmsPageAsync(OrgId, PlacedPageId, placed.ParentPageId, placed.Index);
+            if (moveError is not null) _errorMessage = moveError;
+            await LoadSiteAsync();
+        }
+
         _isBusy = false;
-        if (result.Result is not null) { _successMessage = "Page settings saved."; _page = result.Result; }
+        if (result.Result is not null)
+        {
+            _successMessage = "Page settings saved.";
+            // The update answers without sections; keep the ones on screen.
+            _page = result.Result with { Sections = _page?.Sections ?? [] };
+        }
         else _errorMessage = result.Error ?? "Failed to save page settings.";
     }
 
@@ -830,6 +927,7 @@
         _sectionError    = null;
         _sectionForm     = new SectionFormModel { SortOrder = _sections.Count + 1 };
         _showSectionEditor = true;
+        _scrollToEditor  = true;
     }
 
     private void OpenEditSectionDialog(CmsSectionRecord s)
@@ -845,7 +943,60 @@
             SortOrder   = s.SortOrder
         };
         _showSectionEditor = true;
+        _scrollToEditor = true;
     }
+
+    // ── Bringing the section form into view ──────────────────────────────────
+
+    private bool _scrollToEditor;
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender)
+        {
+            if (!await UserState.WaitUntilAuthReadyAsync(RendererInfo.IsInteractive)) return;
+            await LoadPageAsync();
+            StateHasChanged();
+            return;
+        }
+
+        if (!_scrollToEditor || !_showSectionEditor) return;
+        _scrollToEditor = false;
+        try
+        {
+            await using var dom = await JS.InvokeAsync<IJSObjectReference>("import", "/_content/Ben.Web.Website.Library/js/domInterop.js");
+            await dom.InvokeVoidAsync("scrollToElementId", "cms-section-editor", "start");
+        }
+        catch (JSDisconnectedException) { }
+    }
+
+    // ── Previewing a section before it is saved ──────────────────────────────
+
+    private bool _showSectionPreview;
+    private OrgPublicSectionItem? _sectionPreview;
+    private string? _sectionPreviewError;
+
+    /// <summary>
+    /// The section as it stands in the form, drawn by the public page's own renderer after the server has
+    /// cleaned and resolved it — so the preview is what a visitor gets, not the editor's guess at it.
+    /// </summary>
+    private async Task PreviewSectionAsync()
+    {
+        _sectionPreview = null;
+        _sectionPreviewError = null;
+        _showSectionPreview = true;
+        StateHasChanged();
+
+        _sectionPreview = await AdminClient.PreviewCmsSectionAsync(OrgId, PageId, new CmsCreateSectionRequest(
+            _sectionForm.SectionType, _sectionForm.Title?.Trim(), _sectionForm.ContentJson, _sectionForm.SortOrder, _sectionForm.IsActive));
+        if (_sectionPreview is null)
+            _sectionPreviewError = "The preview couldn't be drawn. Your section is still here; try again, or save it and use View as visitor.";
+        else if (string.IsNullOrWhiteSpace(_sectionPreview.Title) && IsEmptyContent(_sectionPreview.ContentJson))
+            _sectionPreviewError = "There's nothing in this section yet, so a visitor would see nothing. Fill it in, then preview again.";
+    }
+
+    private static bool IsEmptyContent(string? json)
+        => string.IsNullOrWhiteSpace(json) || json.Trim() is "{}" or "{\"html\":\"\"}";
 
     private void CloseSectionDialog()
     {
@@ -949,7 +1100,6 @@
         public int SortOrder   { get; set; } = 1;
     }
 
-    private sealed record SectionTypeOption(CmsSectionType Value, string Label);
 
     private sealed record PermissionRow(Guid Id, Guid? AppUserId, Guid? GroupId, string GranteeType, string GranteeName, CmsPageAction Actions);
     private sealed record OrgMemberPermOption(Guid AppUserId, string DisplayName);

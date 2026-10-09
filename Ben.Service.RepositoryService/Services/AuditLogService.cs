@@ -44,9 +44,20 @@ public sealed class AuditLogService : IAuditLogService
 
     public Task LogUpdateAsync(string entityType, Guid entityId, object before, object after, Guid userId, string source)
     {
-        var changes = AuditChangeTracker.GetChanges(before, after);
-        var changesJson = JsonSerializer.Serialize(changes, _jsonOptions);
-        return WriteAsync(AuditAction.Update, entityType, entityId, userId, source, changesJson);
+        // A comparison that cannot be made (a before and after of different types) comes back as a faulted task,
+        // not a throw. Callers hand this task to TryAuditAsync, whose whole promise is that an audit failure never
+        // reaches the person — but a synchronous throw escaped before it was handed over, so the change was saved and
+        // the request still answered 500. Every CMS section reorder and draft publish did exactly that (10/09/2026).
+        try
+        {
+            var changes = AuditChangeTracker.GetChanges(before, after);
+            var changesJson = JsonSerializer.Serialize(changes, _jsonOptions);
+            return WriteAsync(AuditAction.Update, entityType, entityId, userId, source, changesJson);
+        }
+        catch (Exception ex) when (ex is ArgumentException or NotSupportedException or JsonException)
+        {
+            return Task.FromException(ex);
+        }
     }
 
     public Task LogDeleteAsync(string entityType, Guid entityId, object entity, Guid userId, string source)

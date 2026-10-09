@@ -44,16 +44,18 @@ public sealed class PlaceEvidenceController : BenControllerBase
     private readonly IMediaIngestService _mediaIngest;
     private readonly IFeedMediaScreener _screener;
     private readonly ILogger<PlaceEvidenceController> _log;
+    private readonly PlatformMessageService? _messages;
 
     public PlaceEvidenceController(
         IDbContextFactory<BenDataContext> db,
         IFileStorageService fileStorage,
         IMediaIngestService mediaIngest,
         IFeedMediaScreener screener,
-        ILogger<PlaceEvidenceController> log)
+        ILogger<PlaceEvidenceController> log,
+        PlatformMessageService? messages = null)
     {
         _db = db; _fileStorage = fileStorage; _mediaIngest = mediaIngest;
-        _screener = screener; _log = log;
+        _screener = screener; _log = log; _messages = messages;
     }
 
     /// <summary>Adds one file to this place's evidence.</summary>
@@ -174,12 +176,43 @@ public sealed class PlaceEvidenceController : BenControllerBase
         db.PlaceEvidence.Add(row);
         await db.SaveChangesAsync(ct);
 
+        if (row.ReviewState != FeedMediaReviewState.Approved)
+            await TellTheVenueAsync(db, placeId, place.Name, userId, ct);
+
         return Ok(new PlaceEvidenceAdded(
             row.Id,
             row.ReviewState == FeedMediaReviewState.Approved,
             row.ReviewState == FeedMediaReviewState.Approved
                 ? "Added. It is on the page now."
                 : "Thank you — somebody will look at this before it appears on the page."));
+    }
+
+    /// <summary>
+    /// Tells the people who answer for the place's confirmed venue that a file is waiting for them to
+    /// decide about (Ben, 10/09/2026: whoever's claim to a property was approved moderates what is added
+    /// to it). Moderators find it on the Place Archive page and in their "waiting for you" notice.
+    /// </summary>
+    /// <remarks>Best effort: the file is saved whether or not the message goes, and says so in the log.</remarks>
+    private async Task TellTheVenueAsync(BenDataContext db, Guid placeId, string placeName, Guid senderId, CancellationToken ct)
+    {
+        if (_messages is null) return;
+        try
+        {
+            var venue = await Services.Venues.VenueGrants.VerifiedVenueAtAsync(db, placeId, ct);
+            if (venue is null) return;
+            var people = await Services.Venues.VenueNotices.PeopleWhoAnswerForAsync(db, venue.OrganizationId, ct);
+            if (people.Count == 0) return;
+            await _messages.SendAsync(
+                $"A file was added to {placeName} and is waiting for you",
+                $"<p>Somebody added a file to {Services.Venues.VenueNotices.Safe(placeName)}. It won't appear on the "
+                + "place's page until you or a site moderator approve it.</p>"
+                + $"<p><a href=\"/organizations/{venue.OrganizationId}/venue\">Look at it and decide</a></p>",
+                people, senderId, ct);
+        }
+        catch (Exception ex) when (ex is not OperationCanceledException)
+        {
+            _log.LogWarning(ex, "Couldn't tell the venue at place {PlaceId} about a file waiting for review.", placeId);
+        }
     }
 
     /// <summary>Takes back something this account added.</summary>

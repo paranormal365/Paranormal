@@ -1,0 +1,60 @@
+/* A recording in a grid: a waveform-shaped face, a play mark, and its name. */
+.ben-audio-tile {
+    position: relative;
+    display: flex;
+    flex-direction: column;
+    justify-content: flex-end;
+    gap: .4rem;
+    width: 100%;
+    aspect-ratio: 4 / 3;
+    padding: .6rem;
+    border: 1px solid var(--bs-border-color);
+    border-radius: .6rem;
+    background: linear-gradient(160deg, rgba(var(--bs-primary-rgb), .18), rgba(var(--bs-primary-rgb), .04));
+    color: var(--bs-body-color);
+    text-align: start;
+    overflow: hidden;
+}
+
+.ben-audio-tile:hover { border-color: rgba(var(--bs-primary-rgb), .6); }
+.ben-audio-tile:focus-visible { outline: 2px solid var(--bs-primary); outline-offset: 2px; }
+
+.ben-audio-tile__wave {
+    flex: 1;
+    display: flex;
+    align-items: center;
+    gap: 3px;
+}
+
+.ben-audio-tile__wave span {
+    flex: 1;
+    min-height: 4px;
+    border-radius: 2px;
+    background: var(--bs-primary);
+    opacity: .55;
+}
+
+.ben-audio-tile__play {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -60%);
+    display: grid;
+    place-items: center;
+    width: 2.6rem;
+    height: 2.6rem;
+    border-radius: 50%;
+    background: var(--bs-primary);
+    color: #fff;
+    box-shadow: 0 4px 14px rgba(0, 0, 0, .35);
+}
+
+.ben-audio-tile__play ::deep .sa-icon { width: 1.1rem; height: 1.1rem; stroke: currentColor; --sa-icon-color: currentColor; }
+
+.ben-audio-tile__name {
+    font-size: .8rem;
+    font-weight: 600;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}

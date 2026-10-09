@@ -1,0 +1,59 @@
+@namespace Ben.Web.Website.Library.Kit
+@using Ben.Web.Website.Library.Manage.Audio
+
+@*
+    A recording shown as a tile in a grid; clicking it opens the site's waveform player (AudioFilePreview,
+    WaveSurfer) in a window (Ben, 10/09/2026: "the audio files are in a grid and when clicked, they open in
+    the wavesurfer.js component we built"). A row of bare browser audio bars told nobody which recording was
+    which, and gave none of the zoom, scrubbing and waveform an EVP is judged by.
+
+    The player streams from SourceUrl, so nothing is held in the server's memory, and only the one that is
+    open is drawn.
+*@
+
+<button type="button" class="ben-audio-tile" title="@($"Play {Label}")" data-testid="audio-tile"
+        @onclick="@(() => _open = true)">
+    <span class="ben-audio-tile__wave" aria-hidden="true">
+        @for (var i = 0; i < Bars.Length; i++)
+        {
+            <span style="@($"height:{Bars[i]}%")"></span>
+        }
+    </span>
+    <span class="ben-audio-tile__play" aria-hidden="true"><BenIcon Name="play" /></span>
+    <span class="ben-audio-tile__name">@Label</span>
+</button>
+
+<BenModal @bind-Visible="_open" Title="@Label" Size="lg">
+    <ChildContent>
+        @if (_open)
+        {
+            <AudioFilePreview FileId="@FileId" FileName="@FileName" ContentType="@ContentType"
+                              FileSize="@FileSize" SourceUrl="@SourceUrl" />
+        }
+        @ChildContent
+        <div class="dialog-footer-actions">
+            <span class="dialog-footer-spacer"></span>
+            <button type="button" class="btn btn-secondary" @onclick="@(() => _open = false)">Close</button>
+        </div>
+    </ChildContent>
+</BenModal>
+
+@code {
+    [Parameter, EditorRequired] public Guid FileId { get; set; }
+    [Parameter, EditorRequired] public string FileName { get; set; } = "";
+    [Parameter, EditorRequired] public string ContentType { get; set; } = "audio/mpeg";
+    [Parameter, EditorRequired] public string SourceUrl { get; set; } = "";
+    [Parameter] public long FileSize { get; set; }
+
+    /// <summary>What the tile and the window are called. Defaults to the file name.</summary>
+    [Parameter] public string? Title { get; set; }
+
+    /// <summary>Anything to show under the player in the window — a caption, who recorded it.</summary>
+    [Parameter] public RenderFragment? ChildContent { get; set; }
+
+    private bool _open;
+    private string Label => string.IsNullOrWhiteSpace(Title) ? FileName : Title!;
+
+    // A waveform-shaped decoration, the same for every tile so it reads as "a recording", not as data.
+    private static readonly int[] Bars = [30, 55, 40, 80, 60, 95, 45, 70, 35, 85, 50, 65, 30, 75, 40, 55];
+}

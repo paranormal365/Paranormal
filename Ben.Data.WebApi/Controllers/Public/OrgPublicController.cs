@@ -20,8 +20,14 @@ namespace Ben.Data.WebApi.Controllers.Public;
 public sealed class OrgPublicController : ControllerBase
 {
     private readonly IDbContextFactory<BenDataContext> _db;
+    private readonly Ben.Data.WebApi.Services.ICmsMarkupSanitizer _sanitizer;
 
-    public OrgPublicController(IDbContextFactory<BenDataContext> db) => _db = db;
+    public OrgPublicController(IDbContextFactory<BenDataContext> db,
+                               Ben.Data.WebApi.Services.ICmsMarkupSanitizer? sanitizer = null)
+    {
+        _db = db;
+        _sanitizer = sanitizer ?? new Ben.Data.WebApi.Services.CmsMarkupSanitizer();
+    }
 
     // ── GET /api/public/organizations/{urlName} ───────────────────────────────
 
@@ -39,7 +45,7 @@ public sealed class OrgPublicController : ControllerBase
         if (org is null) return NotFound();
 
         var logos    = await BuildLogosAsync(db, org.Id, ct);
-        var homePage = await BuildPageAsync(db, org.Id, isHome: true, pageSlug: null, ct);
+        var homePage = await BuildPageAsync(db, _sanitizer, org.Id, isHome: true, pageSlug: null, ct);
         var navPages = await BuildNavPagesAsync(db, org.Id, homePageId: homePage?.Id, ct);
         // Only when there is no authored page: a group that wrote one gets exactly what it wrote.
         var facts = homePage is null ? await BuildFactsAsync(db, org, ct) : null;
@@ -66,7 +72,7 @@ public sealed class OrgPublicController : ControllerBase
 
         if (org is null) return NotFound();
 
-        var page = await BuildPageAsync(db, org.Id, isHome: false, pageSlug: Ben.Data.Common.SlugText.NormalizeOrEmpty(pageSlug), ct);
+        var page = await BuildPageAsync(db, _sanitizer, org.Id, isHome: false, pageSlug: Ben.Data.Common.SlugText.NormalizeOrEmpty(pageSlug), ct);
         if (page is null) return NotFound();
 
         var logos    = await BuildLogosAsync(db, org.Id, ct);
@@ -149,7 +155,7 @@ public sealed class OrgPublicController : ControllerBase
     }
 
     private static async Task<OrgPublicPageItem?> BuildPageAsync(
-        BenDataContext db, Guid orgId, bool isHome, string? pageSlug, CancellationToken ct)
+        BenDataContext db, Ben.Data.WebApi.Services.ICmsMarkupSanitizer sanitizer, Guid orgId, bool isHome, string? pageSlug, CancellationToken ct)
     {
         IQueryable<OrganizationPage> query = db.OrganizationPages.AsNoTracking()
             .Where(p => p.OrganizationId == orgId
@@ -182,7 +188,12 @@ public sealed class OrgPublicController : ControllerBase
             sections.Add(new OrgPublicSectionItem(s.Id, s.SectionType, s.Title, content, s.SortOrder));
         }
 
-        return new OrgPublicPageItem(page.Id, page.PageTitle, page.UrlName, page.IsHome, sections);
+        // The Summary / Intro, shown above the sections (Ben, 10/09/2026: "the sections appear below
+        // the summary"). It was written and saved on every page and never shown to anyone. Cleaned
+        // here as well as on save: pages saved before the intro was sanitized on the way in still
+        // hold whatever was typed.
+        return new OrgPublicPageItem(page.Id, page.PageTitle, page.UrlName, page.IsHome, sections,
+                                     sanitizer.SanitizeHtml(page.PageHtml));
     }
 
     private static async Task<IReadOnlyList<OrgPublicNavItem>> BuildNavPagesAsync(
@@ -262,7 +273,9 @@ public sealed record OrgPublicPageItem(
     string PageTitle,
     string UrlName,
     bool IsHome,
-    IReadOnlyList<OrgPublicSectionItem> Sections);
+    IReadOnlyList<OrgPublicSectionItem> Sections,
+    // The page's Summary / Intro, cleaned; drawn above the sections.
+    string? IntroHtml = null);
 
 public sealed record OrgPublicSectionItem(
     Guid Id,

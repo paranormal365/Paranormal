@@ -21,37 +21,37 @@ it, or **Browse everything** to see the whole store.
 The search box finds gear by name, and by the code on its label (the SKU). Suggestions appear as
 you type two letters or more; press Enter to see every match.
 
-A list can be narrowed down the side of the page — or, on a phone or a tablet held upright, with
-the **Filters** button:
+You can narrow a list with the filters down the side of the page — or, on a phone or a tablet held
+upright, with the **Filters** button:
 
 - **Price** — a band, or your own range with **Go**.
-- **Color**, **Size** and the product's other options — tick as many as you like. Two colors
+- **Color**, **Size** and the product's other options — check as many as you like. Two colors
   means either color; a color and a size means both.
 - **Rating** — four stars and up, three and up, and so on.
 - **In stock only** — hides what is sold out.
 
-Each filter you choose shows as a chip above the list; its **✕** takes that one off, and
-**Clear all** takes them all off. **Sort** puts the list in order of popularity, newest, rating or
-price. The address in your browser carries every choice, so a filtered list can be bookmarked or
-sent to a friend and opens the same way.
+Each filter you choose shows as a chip above the list. Its **✕** removes that filter, and
+**Clear all** removes them all. **Sort** orders the list by popularity, newest, rating or price.
+Your choices are saved in the page address, so you can bookmark a filtered list or send it to a
+friend, and it opens the same way.
 
 ![All products, with the shelves and filters down the side](/help/media/shopping-at-the-store/listing.png)
 
-A card marked **Sold out** is still listed — you can see what the store carries — but it cannot
-be bought until it is back. **Only 3 left** means just that.
+A card marked **Sold out** is still listed, so you can see what the store carries, but you can't
+buy it until it's back in stock. **Only 3 left** means only three are in stock.
 
 ## Options and prices
 
-Some gear comes in more than one version — a color, a size. Pick each on the product page: the
-price, the stock line and the code under them change to match what you chose, and the picture
-changes too when that version has its own.
+Some gear comes in more than one version, such as a color or a size. Pick each option on the
+product page. The price, the stock line and the code under them change to match your choice, and
+so does the picture if that version has its own.
 
-A choice with a dashed ring is **sold out** in that combination: you can pick it to see so, and
-the button says **Sold out**. A choice you cannot pick at all does not exist with what you have
-already chosen — Camo may come only in one size, for example.
+A choice with a dashed ring is **sold out** in that combination. You can still pick it, and the
+button will say **Sold out**. If you can't pick a choice at all, that version doesn't exist with
+what you've already chosen — Camo may come in only one size, for example.
 
-A price with another struck through beside it is on sale; the struck-through one is what it used
-to cost. Prices are in US dollars and do not include sales tax or delivery, which are added at
+If a price has another price struck through beside it, the item is on sale; the struck-through
+price is what it used to cost. Prices are in US dollars and do not include sales tax or delivery, which are added at
 checkout.
 
 ![A product page: the picture, the price with its old price struck through, the heart, and Add to cart](/help/media/shopping-at-the-store/product.png)
@@ -66,9 +66,9 @@ link. If the old one is no longer made, its page stays up — so a saved link st
 
 ## Your cart
 
-You don't need an account to shop. Your cart belongs to your browser until you sign in, and then
-it joins your account's cart, so what you picked out before signing in is still there. A cart
-saved on your account follows you to any device you sign in on.
+You don't need an account to shop. Until you sign in, your cart is kept in your browser. When you
+sign in, it's added to your account's cart, so anything you picked out beforehand is still there.
+A cart saved on your account follows you to any device you sign in on.
 
 **Adding something.** On a product's page, choose any options, set how many you want and press
 **Add to cart**. A product with only one version has a cart button on its card in the lists as
@@ -84,8 +84,8 @@ press **Go to Cart** for the full cart page.
 ![The quick look under the cart icon](/help/media/shopping-at-the-store/cart-menu.png)
 
 **Changing quantities.** On the cart page or in the slide-out cart, use − and + to change how
-many. The totals update as you press — there is no "update cart" button to remember. The bin
-icon removes an item. Each item says how many are in stock. An item that has sold out, or has
+many. The totals update as you press — there's no "update cart" button to remember. The trash
+can icon removes an item. Each item says how many are in stock. An item that has sold out, or has
 been taken out of the store since you added it, is marked in red. Fix or remove it before
 checking out.
 
@@ -113,11 +113,11 @@ order**, **Payment**, **Complete**.
 
 1. **From your cart**, press **To checkout** (on the cart page, or in the slide-out cart).
 2. **Delivery.** Enter your email address and where the order should go: your name, phone,
-   street, city, state and ZIP code. If your card's billing address is somewhere else, tick
+   street, city, state and ZIP code. If your card's billing address is different, check
    **Billing address is different** and fill that in too. You can add a note for the person
    packing your order.
 3. **A discount code**, if you have one, goes in the box under the order summary. The summary
-   shows it coming off straight away.
+   shows the discount right away.
 4. **Agree to the terms** and press **Continue to payment**. Your items are now held for you,
    sales tax is worked out from your address, and the summary shows the total you'll pay.
 5. **Payment.** Enter your card in the payment form. It belongs to Stripe, our payment company,
@@ -131,10 +131,10 @@ order**, **Payment**, **Complete**.
 
 **Changing something after you continue.** Once you press Continue, your details are shown as a
 summary so the payment is for exactly what you see. To change the address, the email or the
-discount code, press **Edit**. Continue again afterwards and the total is worked out again.
+discount code, press **Edit**. When you continue again, the total is recalculated.
 
 **Your items are held for a short while** — the payment step shows how long. If the time runs
-out before you pay, the page checks stock again by itself and says "Your reservation expired —
+out before you pay, the page automatically checks stock again and says "Your reservation expired —
 we've checked stock again." Nothing is charged until you press Place order.
 
 **If something can't be bought**, the checkout says so in a red box at the top: an item that sold
@@ -168,10 +168,10 @@ do, that is included in the sales tax line.
 ## Your orders
 
 **With an account.** Orders you place while signed in are under **My Orders** in the menu (also
-linked at the bottom of the store's front page). Each one shows its number, date, total and where
-it has got to: *Paid — being prepared*, *Packed*, *Partially shipped* (some of its packages are on their
-way), *Shipped*, *Delivered*, *Canceled* or *Refunded*. An order in more than one package lists each
-package on its page, with where it has got to and its own tracking number.
+linked at the bottom of the store's front page). Each one shows its number, date, total and
+status: *Paid — being prepared*, *Packed*, *Partially shipped* (some of its packages are on their
+way), *Shipped*, *Delivered*, *Canceled* or *Refunded*. If an order comes in more than one package,
+its page lists each package with its own status and tracking number.
 Open an order to see where it's going, what's in it, what it came to, and its tracking number once
 it ships. Checkouts you started but never paid for aren't orders, so they aren't listed.
 
@@ -181,17 +181,17 @@ it ships. Checkouts you started but never paid for aren't orders, so they aren't
 
 ![An order in two packages: each one's sender, where it has got to and its tracking](/help/media/shopping-at-the-store/order-packages.png)
 
-**As a guest.** Your receipt email has a private link to your order — keep that email, because it
-is the way back. If you've lost it, go to **Find my order** (at the bottom of the store's front
+**As a guest.** Your receipt email has a private link to your order. Keep that email, because it's
+how you get back to your order. If you've lost it, go to **Find my order** (at the bottom of the store's front
 page), enter the order number and the email address you used, and the link is sent again. The page
-says the same thing whether or not those match an order, so nobody can use it to find out what
-someone else bought.
+shows the same message whether or not those details match an order, so nobody can use it to find
+out what someone else bought.
 
-**The invoice.** Once an order is paid, its page has an **Invoice** link — a printable invoice with
+**The invoice.** Once an order is paid, its page has an **Invoice** link — a printable invoice showing
 who it's from and to, each item with its discount and tax, and any refund. Press **Print** to print
 it or save it as a PDF.
 
-Your orders stay open to you even if the store is closed for a while.
+You can still see your orders even if the store is closed for a while.
 
 ## Downloads
 
@@ -227,16 +227,16 @@ part refund shows what was refunded and what's left.
 ## Favorites
 
 Tap the **heart** on a product — on its page, or on its card anywhere in the store — to keep it in
-your **Favorites**. The heart fills in once it's kept; tap it again to let it go. The heart at the
-top of the screen, beside the cart, shows how many you're keeping and opens the list (it's also
+your **Favorites**. The heart fills in once it's saved; tap it again to remove it. The heart at the
+top of the screen, beside the cart, shows how many favorites you have and opens the list (it's also
 under **Store → Favorites** in the menu).
 
 The Favorites page shows each product as it is today — its price, and whether it's in stock. **Remove**
-takes one off the list after asking. A product that stops being sold drops out of the list, and
-comes back if it returns.
+takes one off the list after asking you to confirm. A product that stops being sold drops off the
+list, and comes back if the store starts selling it again.
 
-Favorites belong to your account, so you need to be signed in: a guest who taps a heart is asked to
-sign in first.
+Favorites belong to your account, so you need to be signed in. If you tap a heart without signing
+in, you're asked to sign in first.
 
 ![Favorites: the products you're keeping, as they are today](/help/media/shopping-at-the-store/favourites.png)
 
@@ -245,22 +245,23 @@ sign in first.
 **Reading reviews.** A product's reviews are at the bottom of its page, with its average stars
 at the top. Sort them by *Most popular*, *Newest*, *Highest rated*, *Lowest rated* or *Most helpful*.
 Every review is from somebody who bought that product here, and some have a reply from the store.
-Signed in, you can mark a review **Helpful**; the count under it says how many people did.
+When you're signed in, you can mark a review **Helpful**; the count under it shows how many people
+did.
 
 ![A product's reviews: the average, each review with its stars, the store's reply and Helpful](/help/media/shopping-at-the-store/reviews.png)
 
 **Writing one.** Only somebody who has bought a product can review it. Sign in, open the product,
 and press **Write a review**: pick one to five stars, give it a title and say a few words about how
-it did. Every review is read by a moderator before it appears — until then yours shows on the
-product page, to you only, marked **Waiting for approval**. If it isn't published you'll see why.
+it worked for you. A moderator reads every review before it appears. Until then, yours shows on
+the product page to you only, marked **Waiting for approval**. If it isn't published you'll see why.
 
 You can **Edit** or **Delete** your review from the same place. An edited review goes back to the
-moderator and is taken down until it's approved again. One review per product; a refunded item
+moderator and is hidden until it's approved again. One review per product; a refunded item
 can't be reviewed.
 
 **Bought as a guest? Sign up with the email you ordered with — the order attaches to your account and you can review.**
 
-Some items don't take reviews — the store has switched them off — and show none.
+The store has turned off reviews for some items, so those items show none.
 
 ## Selling your own gear
 

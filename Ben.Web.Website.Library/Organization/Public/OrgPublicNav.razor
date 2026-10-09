@@ -16,13 +16,32 @@
     }
     @* Named `nav`, not `page`: Razor reads a line beginning "@page" as the page directive and
        refuses to compile the file. *@
-    @foreach (var nav in NavPages.Where(p => p.ParentPageId is null).OrderBy(p => p.SortOrder))
+    @foreach (var nav in Children(null))
     {
-        <a href="@($"/o/{OrgUrlName}/{nav.UrlName}")" class="org-nav__item @(Here(nav.UrlName))">
+        <a href="@($"/o/{OrgUrlName}/{nav.UrlName}")" class="org-nav__item @(Here(nav.UrlName)) @(OnTrail(nav) ? "org-nav__item--trail" : "")">
             @nav.PageTitle
+            @if (Children(nav.Id).Count > 0)
+            {
+                <span class="org-nav__more" aria-hidden="true">▾</span>
+            }
         </a>
     }
 </nav>
+
+@* The pages under the one being read, a row for each level (Ben, 10/09/2026: a group's menu goes
+   three levels deep). A row rather than a drop-down: the menu sits in the hero's frame, which clips
+   anything that pops out of it, and a row shows a reader where they are without opening anything. *@
+@foreach (var level in SubLevels())
+{
+    <nav class="org-nav org-nav--sub @Class" aria-label="@($"Pages under {level.Parent.PageTitle}")" data-testid="org-subnav">
+        @foreach (var nav in level.Pages)
+        {
+            <a href="@($"/o/{OrgUrlName}/{nav.UrlName}")" class="org-nav__item @(Here(nav.UrlName)) @(OnTrail(nav) ? "org-nav__item--trail" : "")">
+                @nav.PageTitle
+            </a>
+        }
+    </nav>
+}
 
 @code {
     [Parameter, EditorRequired] public string OrgUrlName { get; set; } = string.Empty;
@@ -38,4 +57,42 @@
 
     private string Here(string slug) =>
         slug.Equals(Active, StringComparison.OrdinalIgnoreCase) ? "org-nav__item--here" : "";
+
+    /// <summary>
+    /// The pages under <paramref name="parentId"/> (null: the top level), in the group's order. A page
+    /// whose parent is not published is shown where its parent would be, rather than vanishing from the
+    /// menu with nothing to say why.
+    /// </summary>
+    private List<OrgPublicNavItem> Children(Guid? parentId)
+    {
+        var shown = NavPages.Select(p => p.Id).ToHashSet();
+        return [.. NavPages
+            .Where(p => parentId is null
+                ? p.ParentPageId is null || !shown.Contains(p.ParentPageId.Value)
+                : p.ParentPageId == parentId)
+            .OrderBy(p => p.SortOrder).ThenBy(p => p.PageTitle)];
+    }
+
+    /// <summary>The page being read and the pages above it, top level first.</summary>
+    private List<OrgPublicNavItem> Trail()
+    {
+        var here = NavPages.FirstOrDefault(p => p.UrlName.Equals(Active, StringComparison.OrdinalIgnoreCase));
+        var trail = new List<OrgPublicNavItem>();
+        for (var at = here; at is not null && trail.Count <= NavPages.Count; at = NavPages.FirstOrDefault(p => p.Id == at.ParentPageId))
+            trail.Insert(0, at);
+        return trail;
+    }
+
+    private bool OnTrail(OrgPublicNavItem page)
+        => !page.UrlName.Equals(Active, StringComparison.OrdinalIgnoreCase) && Trail().Any(t => t.Id == page.Id);
+
+    /// <summary>One row per level the reader is inside: the children of each page on the trail that has any.</summary>
+    private IEnumerable<(OrgPublicNavItem Parent, List<OrgPublicNavItem> Pages)> SubLevels()
+    {
+        foreach (var page in Trail())
+        {
+            var under = Children(page.Id);
+            if (under.Count > 0) yield return (page, under);
+        }
+    }
 }

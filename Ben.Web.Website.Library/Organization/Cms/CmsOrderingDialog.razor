@@ -1,0 +1,353 @@
+@namespace Ben.Web.Website.Library.Organization.Cms
+@inject IBenAdminClient AdminClient
+
+@*
+    The Ordering window (Ben, 10/09/2026): the group's whole site as one tree — every page, and each
+    page's sections under it — so the order of the menu and of each page can be set by dragging.
+
+    Pages go anywhere the menu allows: beside another page, or under one, three levels deep at most.
+    Sections only change places on their own page; moving one to another page is refused with a
+    sentence, because a section's content is bound to its page (its case photos, its event) and a copy
+    that silently changed meaning would be worse than no move at all.
+
+    Every drop saves as it happens and says so, so the window needs only Done. If the server refuses a
+    move, the tree is reloaded from what is stored rather than left showing something that isn't.
+*@
+
+<BenModal Visible="@Visible" VisibleChanged="@CloseAsync" Title="Ordering your pages" Size="lg">
+    <ChildContent>
+        @if (_showTips)
+        {
+            <div class="alert alert-info d-flex gap-2 align-items-start py-2" id="cms-ordering-tips">
+                <BenIcon Name="info" Class="flex-shrink-0 mt-1" />
+                <div class="small flex-grow-1">
+                    <p class="mb-1"><strong>Drag a page</strong> to change where it sits in your site's menu. Drop it
+                        on another page to put it under that page, or between two pages to put it beside them.
+                        Your menu goes three levels deep: a top-level page, a page under it, and a page under that.</p>
+                    <p class="mb-1"><strong>Drag a section</strong> up or down to change its order on the page. A section stays on the page it belongs to; it can't be moved to another page.</p>
+                    <p class="mb-0">Each move is saved right away. Prefer not to drag? Click a row, then use the arrows
+                        below the tree.</p>
+                </div>
+                <button type="button" class="btn btn-sm btn-outline-secondary text-nowrap" id="cms-ordering-hide-tips"
+                        @onclick="HideTipsAsync">Hide</button>
+            </div>
+        }
+        else
+        {
+            <div class="text-end mb-2">
+                <button type="button" class="btn btn-link btn-sm p-0" id="cms-ordering-show-tips"
+                        @onclick="@(() => _showTips = true)">
+                    <BenIcon Name="info" Class="me-1" />How this works
+                </button>
+            </div>
+        }
+
+        @if (!_loaded)
+        {
+            <BenLoaderOverlay Visible="true" Text="Loading your pages…" />
+        }
+        else if (_outline.Failed)
+        {
+            <BenListState TItem="CmsOutlinePage" Result="@_outline" />
+        }
+        else if (_pages.Count == 0)
+        {
+            <p class="text-secondary mb-0">Your group has no pages yet. Make one with New Page, then come back to order them.</p>
+        }
+        else
+        {
+            <div class="cms-ordering" id="cms-ordering-tree">
+                <TelerikTreeView Data="@_nodes"
+                                 Draggable="true"
+                                 OnDrop="@OnDropAsync"
+                                 SelectionMode="@TreeViewSelectionMode.Single"
+                                 SelectedItems="@_selected"
+                                 SelectedItemsChanged="@((IEnumerable<object> items) => _selected = items)"
+                                 ExpandedItems="@_expanded"
+                                 ExpandedItemsChanged="@((IEnumerable<object> items) => _expanded = items)"
+                                 AriaLabel="Your pages and their sections">
+                    <TreeViewBindings>
+                        <TreeViewBinding>
+                            <ItemTemplate>
+                                @{ var node = (CmsTreeNode)context; }
+                                @if (node.IsSection)
+                                {
+                                    <span class="cms-tree-node cms-tree-node--section" data-node-id="@node.Id" data-kind="section">
+                                        <span class="cms-tree-node__sketch">@((MarkupString)CmsSectionTypes.Svg(node.SectionType!.Value))</span>
+                                        <span>@node.Text</span>
+                                        @if (!node.IsActive)
+                                        {
+                                            <span class="badge bg-warning text-dark">Hidden</span>
+                                        }
+                                    </span>
+                                }
+                                else
+                                {
+                                    <span class="cms-tree-node" data-node-id="@node.Id" data-kind="page">
+                                        <BenIcon Name="file-text" />
+                                        <span class="fw-semibold">@node.Text</span>
+                                        @if (!node.IsPublished)
+                                        {
+                                            <span class="badge bg-warning text-dark">Draft</span>
+                                        }
+                                        @if (!node.IsPublic)
+                                        {
+                                            <span class="badge bg-secondary">Members only</span>
+                                        }
+                                    </span>
+                                }
+                            </ItemTemplate>
+                        </TreeViewBinding>
+                    </TreeViewBindings>
+                </TelerikTreeView>
+            </div>
+
+            <div class="cms-ordering__moves" role="group" aria-label="Move the chosen row">
+                <span class="small text-secondary me-1">@(SelectedNode is { } s ? s.Text : "Click a row to move it with the arrows")</span>
+                <button type="button" class="btn btn-outline-secondary btn-sm" title="Earlier" id="cms-ordering-up"
+                        disabled="@(!CanNudge(CmsSiteTree.Nudge.Up))" @onclick="@(() => NudgeAsync(CmsSiteTree.Nudge.Up))">
+                    <BenIcon Name="arrow-up" /><span class="visually-hidden">Earlier</span>
+                </button>
+                <button type="button" class="btn btn-outline-secondary btn-sm" title="Later" id="cms-ordering-down"
+                        disabled="@(!CanNudge(CmsSiteTree.Nudge.Down))" @onclick="@(() => NudgeAsync(CmsSiteTree.Nudge.Down))">
+                    <BenIcon Name="arrow-down" /><span class="visually-hidden">Later</span>
+                </button>
+                <button type="button" class="btn btn-outline-secondary btn-sm" title="Up a level" id="cms-ordering-out"
+                        disabled="@(!CanNudge(CmsSiteTree.Nudge.Out))" @onclick="@(() => NudgeAsync(CmsSiteTree.Nudge.Out))">
+                    <BenIcon Name="arrow-left" /><span class="visually-hidden">Up a level</span>
+                </button>
+                <button type="button" class="btn btn-outline-secondary btn-sm" title="Under the page above it" id="cms-ordering-in"
+                        disabled="@(!CanNudge(CmsSiteTree.Nudge.In))" @onclick="@(() => NudgeAsync(CmsSiteTree.Nudge.In))">
+                    <BenIcon Name="arrow-right" /><span class="visually-hidden">Under the page above it</span>
+                </button>
+            </div>
+        }
+
+        <div class="dialog-footer-actions">
+            <span class="small @(_statusIsError ? "text-danger" : "text-secondary")" id="cms-ordering-status" role="status">@_status</span>
+            <span class="dialog-footer-spacer"></span>
+            <button type="button" class="btn btn-primary" id="cms-ordering-done" @onclick="@(() => CloseAsync(false))">Done</button>
+        </div>
+    </ChildContent>
+</BenModal>
+
+@code {
+    [Parameter, EditorRequired] public Guid OrgId { get; set; }
+    [Parameter] public bool Visible { get; set; }
+    [Parameter] public EventCallback<bool> VisibleChanged { get; set; }
+
+    /// <summary>Raised on Done when anything moved, so the page list behind can reload.</summary>
+    [Parameter] public EventCallback OnChanged { get; set; }
+
+    private const string TipsName = "cms-ordering-tips";
+
+    private LoadResult<CmsOutlinePage> _outline;
+    private bool _loaded;
+    private List<CmsSiteTree.Page> _pages = [];
+    private Dictionary<Guid, List<CmsOutlineSection>> _sections = [];
+    private Dictionary<Guid, CmsOutlinePage> _pageInfo = [];
+    private List<CmsTreeNode> _nodes = [];
+    private IEnumerable<object> _expanded = [];
+    private IEnumerable<object> _selected = [];
+    private bool _showTips = true, _wasVisible, _changed, _statusIsError;
+    private string? _status;
+
+    private CmsTreeNode? SelectedNode => _selected.OfType<CmsTreeNode>().FirstOrDefault();
+
+    protected override async Task OnParametersSetAsync()
+    {
+        // Loaded each time it opens: pages may have been made or moved since it was last open.
+        if (Visible && !_wasVisible)
+        {
+            _wasVisible = true;
+            _changed = false;
+            _status = null;
+            _statusIsError = false;
+            _selected = [];
+            _loaded = false;
+            await LoadAsync();
+            try { _showTips = !(await AdminClient.GetMyDismissedToursAsync()).Items.Contains(TipsName); }
+            catch { _showTips = true; }
+        }
+        else if (!Visible) _wasVisible = false;
+    }
+
+    private async Task LoadAsync()
+    {
+        _outline = await AdminClient.GetCmsOutlineAsync(OrgId);
+        _loaded = true;
+        _pageInfo = _outline.Items.ToDictionary(p => p.Id);
+        _pages = [.. _outline.Items.Select(p => new CmsSiteTree.Page(p.Id, p.ParentPageId, p.SortOrder, p.PageTitle))];
+        _sections = _outline.Items.ToDictionary(p => p.Id, p => p.Sections.OrderBy(s => s.SortOrder).ToList());
+        Rebuild();
+    }
+
+    private void Rebuild()
+    {
+        var nodes = new List<CmsTreeNode>();
+        foreach (var (page, depth) in CmsSiteTree.InMenuOrder(_pages))
+        {
+            var info = _pageInfo[page.Id];
+            var sections = _sections.GetValueOrDefault(page.Id) ?? [];
+            nodes.Add(new CmsTreeNode
+            {
+                Id = page.Id, ParentId = page.ParentPageId, Text = page.Title, Depth = depth,
+                HasChildren = sections.Count > 0 || _pages.Any(p => p.ParentPageId == page.Id),
+                IsPublished = info.IsPublished, IsPublic = info.IsPublic,
+            });
+            // A page's sections first, then the pages under it: the sections are what is ON the page.
+            nodes.AddRange(sections.Select(s => new CmsTreeNode
+            {
+                Id = s.Id, ParentId = page.Id, IsSection = true, SectionType = s.SectionType, IsActive = s.IsActive,
+                Text = string.IsNullOrWhiteSpace(s.Title) ? CmsSectionTypes.Label(s.SectionType) : s.Title!,
+                Depth = depth + 1,
+            }));
+        }
+        // InMenuOrder lists a page's children right after it; the sections were added in between, which
+        // Telerik's flat binding does not mind — it groups by ParentId and keeps the list's order.
+        var selectedId = SelectedNode?.Id;
+        _nodes = nodes;
+        // Every page that has anything under it stays open, so a page dropped under another is still in
+        // sight afterwards. Rows are rebuilt as new objects; CmsTreeNode compares by id.
+        _expanded = [.. _nodes.Where(n => n.HasChildren && !n.IsSection)];
+        _selected = [.. _nodes.Where(n => n.Id == selectedId)];
+    }
+
+    // ── Dropping ──────────────────────────────────────────────────────────────
+
+    private async Task OnDropAsync(TreeViewDropEventArgs args)
+    {
+        if (args.Item is not CmsTreeNode dragged || args.DestinationItem is not CmsTreeNode target
+            || target.Id == dragged.Id || args.DropPosition is not { } position)
+            return;
+
+        var place = position switch
+        {
+            Telerik.Blazor.TreeViewDropPosition.Before => CmsSiteTree.DropPlace.Before,
+            Telerik.Blazor.TreeViewDropPosition.After => CmsSiteTree.DropPlace.After,
+            _ => CmsSiteTree.DropPlace.Over,
+        };
+
+        if (dragged.IsSection) await DropSectionAsync(dragged, target, place);
+        else await DropPageAsync(dragged, target, place);
+    }
+
+    private async Task DropPageAsync(CmsTreeNode dragged, CmsTreeNode target, CmsSiteTree.DropPlace place)
+    {
+        if (target.IsSection)
+        {
+            // Beside or onto a section means "on that page, among its sections", which a page can't be.
+            Refuse("Drop a page onto another page to put it under that page, or between two pages to put it beside them.");
+            return;
+        }
+        await MovePageAsync(dragged.Id, CmsSiteTree.WhereDropped(_pages, dragged.Id, target.Id, place));
+    }
+
+    private async Task MovePageAsync(Guid pageId, CmsSiteTree.Placement to)
+    {
+        if (CmsSiteTree.WhyNot(_pages, pageId, to.ParentPageId) is string refused)
+        {
+            Refuse(refused);
+            return;
+        }
+
+        // Shown at once, then confirmed: the server renumbers the same way, so the two agree.
+        _pages = CmsSiteTree.Apply(_pages, pageId, to);
+        Rebuild();
+        Saying("Saving…");
+
+        var (pages, error) = await AdminClient.MoveCmsPageAsync(OrgId, pageId, to.ParentPageId, to.Index);
+        if (pages is null)
+        {
+            await LoadAsync();
+            Refuse(error ?? "That move couldn't be saved.");
+            return;
+        }
+        _pages = [.. pages.Select(p => new CmsSiteTree.Page(p.Id, p.ParentPageId, p.SortOrder, p.PageTitle))];
+        Rebuild();
+        _changed = true;
+        Saying($"Saved: {_pageInfo[pageId].PageTitle} moved.");
+    }
+
+    private async Task DropSectionAsync(CmsTreeNode dragged, CmsTreeNode target, CmsSiteTree.DropPlace place)
+    {
+        var pageId = dragged.ParentId!.Value;
+        var ownPage = !target.IsSection && target.Id == pageId;
+        if (!ownPage && (!target.IsSection || target.ParentId != pageId))
+        {
+            Refuse("A section stays on its own page. Drag it up or down among that page's sections.");
+            return;
+        }
+
+        var order = CmsSiteTree.SectionsAfterDrop(
+            [.. _sections[pageId].Select(s => s.Id)], dragged.Id, target.Id, place, destinationIsTheOwnPage: ownPage);
+        if (order is null)
+        {
+            Refuse("Drop the section between two of its page's sections.");
+            return;
+        }
+        await ReorderSectionsAsync(pageId, order, dragged.Text);
+    }
+
+    private async Task ReorderSectionsAsync(Guid pageId, List<Guid> order, string what)
+    {
+        var byId = _sections[pageId].ToDictionary(s => s.Id);
+        _sections[pageId] = [.. order.Select((id, i) => byId[id] with { SortOrder = i + 1 })];
+        Rebuild();
+        Saying("Saving…");
+
+        if (!await AdminClient.ReorderCmsSectionsAsync(OrgId, pageId, order))
+        {
+            await LoadAsync();
+            Refuse("That order couldn't be saved, so the tree has been put back the way it was.");
+            return;
+        }
+        _changed = true;
+        Saying($"Saved: {what} moved.");
+    }
+
+    // ── The arrows, for anybody not dragging ──────────────────────────────────
+
+    private bool CanNudge(CmsSiteTree.Nudge nudge)
+    {
+        if (SelectedNode is not { } node) return false;
+        if (!node.IsSection) return CmsSiteTree.Nudged(_pages, node.Id, nudge) is not null;
+        var row = _sections[node.ParentId!.Value];
+        var at = row.FindIndex(s => s.Id == node.Id);
+        return nudge switch { CmsSiteTree.Nudge.Up => at > 0, CmsSiteTree.Nudge.Down => at < row.Count - 1, _ => false };
+    }
+
+    private async Task NudgeAsync(CmsSiteTree.Nudge nudge)
+    {
+        if (SelectedNode is not { } node || !CanNudge(nudge)) return;
+        if (!node.IsSection)
+        {
+            await MovePageAsync(node.Id, CmsSiteTree.Nudged(_pages, node.Id, nudge)!);
+            return;
+        }
+        var pageId = node.ParentId!.Value;
+        var order = _sections[pageId].Select(s => s.Id).ToList();
+        var at = order.IndexOf(node.Id);
+        var to = nudge == CmsSiteTree.Nudge.Up ? at - 1 : at + 1;
+        (order[at], order[to]) = (order[to], order[at]);
+        await ReorderSectionsAsync(pageId, order, node.Text);
+    }
+
+    // ── Saying what happened ──────────────────────────────────────────────────
+
+    private void Saying(string status) { _status = status; _statusIsError = false; }
+    private void Refuse(string why) { _status = why; _statusIsError = true; }
+
+    private async Task HideTipsAsync()
+    {
+        _showTips = false;
+        try { await AdminClient.DismissTourAsync(TipsName, completed: true); } catch { }
+    }
+
+    private async Task CloseAsync(bool visible)
+    {
+        if (visible) return;
+        await VisibleChanged.InvokeAsync(false);
+        if (_changed) await OnChanged.InvokeAsync();
+    }
+}

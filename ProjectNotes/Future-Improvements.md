@@ -13781,6 +13781,34 @@ run, but these fail or pass by order:
   that branch comes back, each fixture that changes a person's own state (their open menu, their votes,
   their banners) needs its own account or the [NonParallelizable] marker with what it shares.
 
+Added 10/09/2026 (CMS branch full run): `Listing_FiltersAndPagesThroughTheQueryString` shows "0 products" for
+`?opt=Color:Olive` on the long-lived `IsHauntedDb_e2e`, and finds no listing at all on a fresh database (the store
+switch is off unless another fixture turned it on first). The branch changed no store code. Three event tests
+(`An_event_opened_cold_still_names_its_group`, `A_stranger_holding_the_link_is_told_whose_group_it_is`,
+`WideningRadius_BringsInTheFarEvent`) failed on the old database because its seeded "Public Night Walk" is dated
+14 days after seeding and has passed; all three pass on a freshly seeded one.
+
 Fixed on the way: the blink test's liveness check (the Signal layout hid the sidebar filter it typed into),
 the phone room test (a "Work waiting" banner pushed the form below the fold), and three fixtures marked to
 run alone (store checkout and product stock, the seeded case's votes).
+
+## 256. Three CMS section kinds that show visitors a placeholder (OPEN — found 10/09/2026)
+
+Found building the section picker's thumbnails (`feature/cms-editor-ux`). **Contact details**, **File
+gallery** and **Our members** save their settings, but the public renderer (`OrgPublicSection`) draws each
+as a gray box with a sentence about the editor ("Contact information section — configure in org
+settings."). File gallery and member roster are edited as raw JSON. They are no longer offered for a new
+section (`CmsSectionTypes.Offered`); existing ones still render and can be edited or deleted. Building each
+properly — contact details from the group's public addresses/emails/phones/links, a gallery from public
+files, a roster from members who have agreed to be listed — would bring them back into the picker.
+
+## 257. Audit entries compared across two different shapes (OPEN — found 10/09/2026)
+
+`AuditChangeTracker.GetChanges` refuses a before and after of different types. The CMS section reorder
+(anonymous `{}` vs the request) and the draft publish (anonymous vs the page entity) did that, and because
+`AuditLogService.LogUpdateAsync` threw synchronously the change was saved and the request still answered
+500. Fixed for those two, and `LogUpdateAsync` now returns a faulted task so `TryAuditAsync` logs instead of
+failing the request. Any other call site with mismatched shapes now writes an "Audit log write failed" error
+to the log and no audit row; a sweep of the 84 `LogUpdateAsync` calls for mismatched before/after would
+recover those rows.
+

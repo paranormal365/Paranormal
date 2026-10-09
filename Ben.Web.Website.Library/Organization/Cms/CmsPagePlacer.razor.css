@@ -1,0 +1,15 @@
+.cms-placer {
+    border: 1px solid var(--bs-border-color);
+    border-radius: .6rem;
+    padding: .4rem .5rem;
+    max-height: 18rem;
+    overflow-y: auto;
+}
+
+.cms-placer__moves {
+    display: flex;
+    gap: .25rem;
+    padding-top: .4rem;
+    margin-top: .3rem;
+    border-top: 1px dashed var(--bs-border-color);
+}

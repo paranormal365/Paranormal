@@ -188,17 +188,18 @@ public sealed class CmsPageDraftController : OrgCmsControllerBase
         var now = DateTime.UtcNow;
 
         // Captured before the copy: an update audit with identical before/after says nothing.
-        var before = new { live.PageTitle, live.UrlName, live.PageHtml, live.SortOrder, live.ParentPageId };
+        var before = new { live.PageTitle, live.UrlName, live.PageHtml };
 
         live.PageTitle          = draft.PageTitle;
         live.UrlName            = draft.UrlName;
         live.PageHtml           = draft.PageHtml;
-        live.SortOrder          = draft.SortOrder;
-        live.ParentPageId       = draft.ParentPageId;
         live.DateUpdated        = now;
         live.UpdatedByAppUserId = userId.Value;
         // IsHome, IsPublished, IsPublic and CaseId are deliberately not copied. They are properties
         // of the page's place in the site, decided on the page itself, not things a draft is for.
+        // Its place in the menu (SortOrder, ParentPageId) is the same kind of thing (10/09/2026): the
+        // Ordering window moves the live page, and copying the draft's stale position back on publish
+        // would quietly undo a move made while the draft was open.
 
         db.CmsSections.RemoveRange(live.CmsSections);
         foreach (var section in draft.CmsSections.OrderBy(s => s.SortOrder))
@@ -219,8 +220,10 @@ public sealed class CmsPageDraftController : OrgCmsControllerBase
         db.OrganizationPages.Remove(draft);
 
         await db.SaveChangesAsync(ct);
+        // The same shape on both sides: the audit compares like with like, and was handed the page entity
+        // here, which failed the publish after it had been saved (10/09/2026).
         _ = TryAuditAsync(_auditLog.LogUpdateAsync(
-            nameof(OrganizationPage), live.Id, before, live, userId.Value,
+            nameof(OrganizationPage), live.Id, before, new { live.PageTitle, live.UrlName, live.PageHtml }, userId.Value,
             Data.Common.Constants.AppSources.WebApi));
 
         return NoContent();

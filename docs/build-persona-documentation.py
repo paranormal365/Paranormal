@@ -249,6 +249,14 @@ documents for what the same page looks like without those grants.</p>
             "5b-writing-to-guests": "One letter to everybody with a place, with the count shown before it is sent.",
             "5c-venue-profile": "The group's venue: its history, house rules and photo library.",
             "5f-tour-date-field-sessions": "A tour date's page after the night: the seats, and the Field Kit sessions guests sent up from the guide's launch, with Play back.",
+            "5g-website-pages": "The group's public pages, listed the way its menu runs: each page under the one it "
+                                "sits under, with Ordering beside New Page (10/09/2026).",
+            "5h-website-ordering": "Ordering: every page and its sections as one tree. Pages drag anywhere three "
+                                   "levels deep; sections only move within their page; each move saves as it is made.",
+            "5i-website-section-kinds": "Adding a section: each kind is a picture of where things go, with Preview "
+                                        "before Cancel to see it filled in as a visitor will.",
+            "5j-website-visitor-menu": "What a visitor gets: the page's intro above its sections, and the pages under "
+                                       "it as a row beneath the group's menu.",
         },
     },
     "superadmin": {

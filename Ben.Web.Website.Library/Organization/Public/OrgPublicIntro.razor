@@ -1,0 +1,17 @@
+@namespace Ben.Web.Website.Library.Organization.Public
+
+@*
+    A CMS page's Summary / Intro, drawn above its sections (Ben, 10/09/2026). The editor has always
+    had the box and saved what was typed into it, and no visitor ever saw a word of it. The markup
+    arrives cleaned by the API (ICmsMarkupSanitizer), the same as a text section's.
+*@
+
+@if (!string.IsNullOrWhiteSpace(Html))
+{
+    <div class="cms-intro mb-4" data-testid="cms-intro">@((MarkupString)Html)</div>
+}
+
+@code {
+    /// <summary>The intro's markup, already cleaned by the server. Nothing is drawn when it is empty.</summary>
+    [Parameter] public string? Html { get; set; }
+}

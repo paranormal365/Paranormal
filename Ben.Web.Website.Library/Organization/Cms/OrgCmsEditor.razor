@@ -49,6 +49,13 @@
                     <BenIcon Name="help-circle" />
                     <span class="visually-hidden">How pages work</span>
                 </button>
+                @* Ben, 10/09/2026: the order of the menu and of each page's sections, set by dragging, in a window
+                   of its own beside New Page. *@
+                <button type="button" id="cms-ordering-open" class="btn btn-outline-primary me-2"
+                        title="Drag your pages and sections into order" disabled="@(_pages is not { Count: > 0 })"
+                        @onclick="@(() => _showOrdering = true)">
+                    <BenIcon Name="git-branch" Class="me-1" />Ordering
+                </button>
                 <button type="button" id="cms-new-page" class="btn btn-primary" @onclick="OpenNewPageDialogAsync"><BenIcon Name="plus" Class="me-1" />
                     New Page
                 </button>
@@ -60,32 +67,46 @@
             }
             else
             {
-                <TelerikGrid Data="@_pages"
-                             TItem="CmsPageListItem"
+                @* In menu order, each page indented under the one it sits under, so the list reads as the
+                   visitor's menu does. Sorting by column would scramble that, so the grid doesn't sort.
+
+                   Four columns, not six (10/09/2026): with a fixed-width column for every field, a window a
+                   little narrower than a laptop's squeezed the one flexible column — the title — to nothing.
+                   The address now sits under the title, and the two switches share a column. *@
+                <TelerikGrid Data="@_pageRows"
+                             TItem="PageRow"
                              Pageable="true"
                              PageSize="25"
-                             Sortable="true">
+                             Sortable="false">
                     <GridColumns>
-                        <GridColumn Field="@nameof(CmsPageListItem.PageTitle)" Title="Title" />
-                        <GridColumn Field="@nameof(CmsPageListItem.UrlName)" Title="URL Slug" Width="220px">
+                        <GridColumn Field="@nameof(PageRow.Title)" Title="Page">
                             <Template>
-                                @{ var slugRow = (CmsPageListItem)context; }
-                                <code class="small">@slugRow.UrlName</code>
-                                @* Only possible on a page saved before the reserved-word check. It
-                                   looks perfectly fine here, and the only symptom is that its link
-                                   lands somewhere else — so the list has to say so. *@
-                                @if (slugRow.IsUnreachable)
-                                {
-                                    <span class="badge bg-danger ms-2"
-                                          title="The site routes this word, so this page can never open. Rename it.">
-                                        Unreachable
-                                    </span>
-                                }
+                                @{ var row = (PageRow)context; var slugRow = row.Page; }
+                                <div class="d-flex align-items-start gap-2" style="@($"padding-left:{row.Depth * 1.4}rem")">
+                                    @if (row.Depth > 0)
+                                    {
+                                        <span class="text-secondary" aria-hidden="true">↳</span>
+                                    }
+                                    <div class="min-w-0">
+                                        <div class="fw-semibold text-truncate">@slugRow.PageTitle</div>
+                                        <code class="small">@(_orgUrlName is null ? slugRow.UrlName : $"/o/{_orgUrlName}/{slugRow.UrlName}")</code>
+                                        @* Only possible on a page saved before the reserved-word check. It
+                                           looks perfectly fine here, and the only symptom is that its link
+                                           lands somewhere else — so the list has to say so. *@
+                                        @if (slugRow.IsUnreachable)
+                                        {
+                                            <span class="badge bg-danger ms-2"
+                                                  title="The site routes this word, so this page can never open. Rename it.">
+                                                Unreachable
+                                            </span>
+                                        }
+                                    </div>
+                                </div>
                             </Template>
                         </GridColumn>
-                        <GridColumn Title="Status" Width="110px">
+                        <GridColumn Title="Status" Width="150px">
                             <Template>
-                                @{ var p = (CmsPageListItem)context; }
+                                @{ var p = ((PageRow)context).Page; }
                                 @if (p.IsPublished)
                                 {
                                     <span class="badge bg-success">Published</span>
@@ -94,22 +115,19 @@
                                 {
                                     <span class="badge bg-warning text-dark">Draft</span>
                                 }
+                                <div class="small text-secondary mt-1">@(p.IsPublic ? "Public" : "Members only")</div>
                             </Template>
                         </GridColumn>
-                        <GridColumn Title="Visibility" Width="130px">
-                            <Template>
-                                @{ var p2 = (CmsPageListItem)context; }
-                                <span>@(p2.IsPublic ? "Public" : "Members only")</span>
-                            </Template>
+                        <GridColumn Title="Sections" Width="95px">
+                            <Template>@(((PageRow)context).Page.SectionCount)</Template>
                         </GridColumn>
-                        <GridColumn Field="@nameof(CmsPageListItem.SectionCount)" Title="Sections" Width="90px" />
                         @* Item 169: four stacked buttons wrapped to two lines here. The house
                            pattern for a busy Actions cell is OrganizationList's — the primary
                            action as a button, the rest behind a More-actions dropdown — which
                            also keeps the pair on ONE line at a sane width. *@
-                        <GridColumn Title="Actions" Width="170px">
+                        <GridColumn Title="Actions" Width="110px">
                             <Template>
-                                @{ var pg = (CmsPageListItem)context; }
+                                @{ var pg = ((PageRow)context).Page; }
                                 <span class="text-nowrap">
                                 <BenGridAction Icon="layout" Label="Sections" OnClick="@(() => NavManager.NavigateTo($"/organizations/{OrgId}/cms/pages/{pg.Id}"))" />
                                 <BenDropdown ToggleClass="btn btn-sm ben-grid-action btn-outline-secondary" Title="More actions" MinWidth="160px" Floating="true">
@@ -251,20 +269,54 @@
 @* ── New/Edit Page dialog ─────────────────────────────────────────────────── *@
 <BenModal @bind-Visible="@_showPageDialog" Title="@(_editingPage is null ? "New Page" : "Edit Page")" Size="lg">
     <ChildContent>
+        @* Ben, 10/09/2026: every field says, in small print under it, what it does. *@
         <div class="row g-3">
             <div class="col-12">
                 <label class="form-label fw-semibold" for="orgcmseditor-title-5a77">Title <span class="text-danger">*</span></label>
-                <input id="orgcmseditor-title-5a77" type="text" class="form-control" @bind="@_pageForm.PageTitle" @bind:event="oninput" />
+                <div class="input-group">
+                    <input id="orgcmseditor-title-5a77" type="text" class="form-control" placeholder="e.g. About us"
+                           value="@_pageForm.PageTitle" @oninput="@(e => OnTitleTyped(e.Value?.ToString()))" />
+                    <BenDropdown ToggleClass="btn btn-outline-secondary" Title="Ideas for a title" MinWidth="320px" Class="cms-title-ideas" Floating="true">
+                        <ToggleContent><BenIcon Name="zap" Class="me-1" />Ideas</ToggleContent>
+                        <ChildContent>
+                            @foreach (var group in CmsPageIdeas.All)
+                            {
+                                <li><h6 class="dropdown-header">@group.Heading</h6></li>
+                                @foreach (var idea in group.Ideas)
+                                {
+                                    var chosen = idea;
+                                    var taken = (_pages ?? []).Any(p => p.Id != _editingPage?.Id
+                                        && string.Equals(p.UrlName, CmsPageIdeas.SlugFrom(chosen.Title), StringComparison.OrdinalIgnoreCase));
+                                    <li>
+                                        <button class="dropdown-item" type="button" disabled="@taken" @onclick="@(() => UseIdea(chosen))">
+                                            <span class="d-block">@chosen.Title @(taken ? "(already added)" : "")</span>
+                                            <span class="d-block small text-secondary">@chosen.What</span>
+                                        </button>
+                                    </li>
+                                }
+                            }
+                        </ChildContent>
+                    </BenDropdown>
+                </div>
+                <div class="form-text">Shown at the top of the page and as its name in your site's menu. Type your own, or pick one from Ideas.</div>
             </div>
             <div class="col-12">
                 <label class="form-label fw-semibold" for="orgcmseditor-url-slug-d5ae">URL Slug <span class="text-danger">*</span></label>
-                <input id="orgcmseditor-url-slug-d5ae" type="text" class="form-control" @bind="@_pageForm.UrlName" @bind:event="oninput" />
-                <div class="form-text">Lowercase, hyphens only (e.g. <code>about-us</code>).</div>
+                <input id="orgcmseditor-url-slug-d5ae" type="text" class="form-control" value="@_pageForm.UrlName"
+                       @oninput="@(e => { _pageForm.UrlName = e.Value?.ToString() ?? ""; _slugTouched = true; })" />
+                <div class="form-text">
+                    The page's address on this site: <code>@($"/o/{_orgUrlName ?? "your-group"}/{(string.IsNullOrWhiteSpace(_pageForm.UrlName) ? "…" : _pageForm.UrlName.Trim().ToLowerInvariant())}")</code>.
+                    Use lowercase letters, numbers and hyphens. It is filled in from the title until you change it.
+                </div>
             </div>
             <div class="col-12">
-                <label class="form-label fw-semibold" for="orgcmseditor-summary-intro-html-a301">Summary / Intro HTML</label>
-                <input id="orgcmseditor-summary-intro-html-a301" type="text" class="form-control" @bind="@_pageForm.PageHtml" @bind:event="oninput" />
-                <div class="form-text">Short intro shown above sections. Full editing available in Sections.</div>
+                <label class="form-label fw-semibold" for="orgcmseditor-summary-intro-html-a301">Summary / Intro</label>
+                <textarea id="orgcmseditor-summary-intro-html-a301" class="form-control" rows="3"
+                          @bind="@_pageForm.PageHtml" @bind:event="oninput"></textarea>
+                <div class="form-text">
+                    A few sentences at the top of the page, under its title and above its sections. To format it or add a
+                    picture from your library, open the page with its Sections button.
+                </div>
             </div>
             @if (_editingPage is null && _pageTemplates.Count > 0)
             {
@@ -279,23 +331,30 @@
                     </div>
                 </div>
             }
-            <div class="col-6">
-                <label class="form-label fw-semibold" for="orgcmseditor-sort-order-c4e7">Sort Order</label>
-                <input id="orgcmseditor-sort-order-c4e7" type="number" class="form-control" min="0" max="100" step="1" @bind="@_pageForm.SortOrder" @bind:event="oninput" />
+            <div class="col-12">
+                <label class="form-label fw-semibold" id="cms-placer-label">Where it goes in your menu</label>
+                <CmsPagePlacer Pages="@(_pages ?? [])" PageId="@_editingPage?.Id" NewTitle="@_pageForm.PageTitle"
+                               @bind-Value="@_pageForm.Placement" />
+                <div class="form-text">
+                    Drag the highlighted page to where it belongs, or use the arrows. Top-level pages make up your site's menu,
+                    and the pages under one appear when a visitor opens it. Your menu can go three levels deep.
+                </div>
             </div>
-            <div class="col-6">
-                <label class="form-label fw-semibold">Parent Page</label>
-                <BenSelect Data="@_parentPageOptions" @bind-Value="@_pageForm.ParentPageId" ValueField="@nameof(PageOption.Id)" TextField="@nameof(PageOption.Title)" DefaultText="— None (top level) —" Width="100%" />
-            </div>
-            <div class="col-6 d-flex align-items-center gap-2">
-                <input type="checkbox" class="form-check-input" id="pg-public" @bind="@_pageForm.IsPublic" />
-                <label for="pg-public" class="form-label mb-0">Visible to public</label>
+            <div class="col-md-6">
+                <div class="d-flex align-items-center gap-2">
+                    <input type="checkbox" class="form-check-input" id="pg-public" @bind="@_pageForm.IsPublic" />
+                    <label for="pg-public" class="form-label mb-0">Visible to public</label>
+                </div>
+                <div class="form-text">On: anyone can read it once it is published. Off: only your group's members can.</div>
             </div>
             @if (_editingPage is not null)
             {
-                <div class="col-6 d-flex align-items-center gap-2">
-                    <input type="checkbox" class="form-check-input" id="pg-published" @bind="@_pageForm.IsPublished" />
-                    <label for="pg-published" class="form-label mb-0">Published</label>
+                <div class="col-md-6">
+                    <div class="d-flex align-items-center gap-2">
+                        <input type="checkbox" class="form-check-input" id="pg-published" @bind="@_pageForm.IsPublished" />
+                        <label for="pg-published" class="form-label mb-0">Published</label>
+                    </div>
+                    <div class="form-text">Off: a draft only your editors see. On: it goes live and joins the menu.</div>
                 </div>
             }
         </div>
@@ -313,6 +372,8 @@
         </div>
     </ChildContent>
 </BenModal>
+
+<CmsOrderingDialog OrgId="@OrgId" @bind-Visible="_showOrdering" OnChanged="LoadAsync" />
 
 @* ── Delete page confirmation ─────────────────────────────────────────────── *@
 <BenModal @bind-Visible="@_showDeletePageDialog" Title="Delete Page">
@@ -560,7 +621,10 @@
     [
         new TourModel.TourStep("#cms-new-page",
             "Pages are born here",
-            "A page gets a title and a web address. Give it a parent and it nests under that page in your public site's menu — that's how pages link into a structure rather than a pile."),
+            "A page gets a title (or pick one from Ideas) and a web address. Drag it on the tree to where it belongs in your menu: under another page, three levels deep at most."),
+        new TourModel.TourStep("#cms-ordering-open",
+            "Ordering",
+            "Your whole site as one tree. Drag pages to rearrange your menu, and drag sections to change their order on a page. Each move saves as you make it."),
         new TourModel.TourStep("#tab-cms-pages",
             "Content lives in sections",
             "Each page is a stack of sections — text, pictures, your cases, your calendar. The Sections button on a page's row opens the builder. A layout you like can be saved and reused: reusing copies the arrangement onto the new page, so editing one page never rewrites another."),
@@ -682,6 +746,7 @@
             // Try to get org name
             var org = await AdminClient.GetOrganizationAsync(OrgId);
             _orgName = org?.Name;
+            _orgUrlName = org?.UrlName;
         }
         catch
         {
@@ -689,12 +754,20 @@
         }
     }
 
-    // ── Parent page dropdown ──────────────────────────────────────────────────
+    // ── The page list, in menu order ───────────────────────────────────────
 
-    private IEnumerable<PageOption> _parentPageOptions =>
-        (_pages ?? [])
-            .Where(p => _editingPage is null || p.Id != _editingPage.Id)
-            .Select(p => new PageOption(p.Id, p.PageTitle));
+    private string? _orgUrlName;
+    private bool _showOrdering;
+
+    /// <summary>A row of the page list: the page and how far under the top level it sits.</summary>
+    private sealed record PageRow(CmsPageListItem Page, int Depth)
+    {
+        public string Title => Page.PageTitle;
+    }
+
+    private IReadOnlyList<PageRow> _pageRows => _pages is null ? [] :
+        [.. CmsSiteTree.InMenuOrder([.. _pages.Select(p => new CmsSiteTree.Page(p.Id, p.ParentPageId, p.SortOrder, p.PageTitle))])
+            .Select(x => new PageRow(_pages.First(p => p.Id == x.Page.Id), x.Depth))];
 
     // ── Page layouts the group has saved ──────────────────────────────────────
 
@@ -709,11 +782,14 @@
 
     // ── Page dialog ───────────────────────────────────────────────────────────
 
+    private bool _slugTouched;
+
     private async Task OpenNewPageDialogAsync()
     {
         _editingPage  = null;
         _dialogError  = null;
-        _pageForm     = new PageFormModel { SortOrder = (_pages?.Count ?? 0) + 1 };
+        _slugTouched  = false;
+        _pageForm     = new PageFormModel();
         _showPageDialog = true;
 
         _pageTemplates = [.. (await AdminClient.GetCmsTemplatesAsync(OrgId, CmsTemplateScope.Page)).Items];
@@ -723,6 +799,9 @@
     {
         _editingPage = pg;
         _dialogError = null;
+        // An existing page keeps its address unless somebody edits it: renaming "About" to "About us"
+        // must not quietly break every link to /about.
+        _slugTouched = true;
         _pageForm = new PageFormModel
         {
             PageTitle   = pg.PageTitle,
@@ -734,6 +813,15 @@
         };
         _showPageDialog = true;
     }
+
+    /// <summary>The title as typed; a new page's address follows it until somebody edits the address.</summary>
+    private void OnTitleTyped(string? title)
+    {
+        _pageForm.PageTitle = title ?? "";
+        if (!_slugTouched) _pageForm.UrlName = CmsPageIdeas.SlugFrom(title);
+    }
+
+    private void UseIdea(CmsPageIdeas.Idea idea) => OnTitleTyped(idea.Title);
 
     private void ClosePageDialog()
     {
@@ -753,6 +841,11 @@
         _isBusy = true;
         _dialogError = null;
 
+        // Where the tree put it. Untouched, a new page goes last at the top level and an existing one
+        // stays where it is.
+        var placement = _pageForm.Placement;
+        var parentId = placement is null ? _pageForm.ParentPageId : placement.ParentPageId;
+
         if (_editingPage is null)
         {
             var (result, createError) = await AdminClient.CreateCmsPageAsync(OrgId, new CmsCreatePageRequest(
@@ -760,8 +853,8 @@
                 _pageForm.UrlName.Trim().ToLowerInvariant(),
                 _pageForm.PageHtml,
                 _pageForm.IsPublic,
-                _pageForm.ParentPageId,
-                _pageForm.SortOrder,
+                parentId,
+                int.MaxValue,
                 _pageForm.FromTemplateId));
 
             // The server names the reserved word or the clashing address; the guess only stands in
@@ -769,10 +862,14 @@
             if (result is null) _dialogError = createError ?? "Failed to create page. The URL slug may already be in use.";
             else
             {
+                // Created last among its new siblings; this puts it where it was dropped and numbers the
+                // row 1, 2, 3… The page exists either way, so a refused move is said, not undone.
+                var (_, moveError) = await AdminClient.MoveCmsPageAsync(OrgId, result.Id, parentId, placement?.Index ?? int.MaxValue);
                 _showPageDialog = false;
                 _successMessage = result.Sections.Count > 0
                     ? $"Page '{result.PageTitle}' created with {result.Sections.Count} sections to fill in."
                     : $"Page '{result.PageTitle}' created.";
+                if (moveError is not null) _errorMessage = $"It was added at the end of the menu: {moveError}";
             }
         }
         else
@@ -783,11 +880,18 @@
                 _pageForm.PageHtml,
                 _pageForm.IsPublished,
                 _pageForm.IsPublic,
-                _pageForm.ParentPageId,
+                parentId,
                 _pageForm.SortOrder));
 
             if (result.Result is null) _dialogError = result.Error ?? "Failed to update page.";
-            else { _showPageDialog = false; _successMessage = $"Page '{result.Result.PageTitle}' updated."; }
+            else
+            {
+                string? moveError = null;
+                if (placement is not null)
+                    (_, moveError) = await AdminClient.MoveCmsPageAsync(OrgId, _editingPage.Id, placement.ParentPageId, placement.Index);
+                if (moveError is not null) _dialogError = moveError;
+                else { _showPageDialog = false; _successMessage = $"Page '{result.Result.PageTitle}' updated."; }
+            }
         }
 
         _isBusy = false;
@@ -1059,11 +1163,12 @@
         public Guid? ParentPageId { get; set; }
         public int SortOrder     { get; set; } = 1;
 
+        /// <summary>Where the menu tree put the page; null until somebody moves it there.</summary>
+        public CmsSiteTree.Placement? Placement { get; set; }
+
         /// <summary>A saved page layout to start from. Only meaningful when creating.</summary>
         public Guid? FromTemplateId { get; set; }
     }
-
-    private sealed record PageOption(Guid Id, string Title);
 
     // ── Member Group methods ──────────────────────────────────────────────────
 

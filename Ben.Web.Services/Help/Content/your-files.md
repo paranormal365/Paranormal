@@ -8,59 +8,60 @@ order: 52
 
 ## Your files
 
-**Media → Upload Files** is every file you own: what you uploaded on the site, photos and
+**Media → Upload Files** shows every file you own: files you uploaded on the site, photos and
 videos you posted to the feed, evidence you attached to a case, equipment photos, and the
-recordings and documents your Field Kit sessions sent up. A file is yours from the moment it
-arrives, and it stays yours until you delete it.
+recordings and documents your Field Kit sessions uploaded. A file is yours from the moment it
+arrives until you delete it.
 
-Each row can be downloaded, shared, replaced or deleted.
+From each row you can download, share, replace or delete the file.
 
-An audio file also has a player. Right-click it and choose **Open Full View** for the editor:
-regions, a spectrogram, EVP scanning, and clips saved from what you find. See
+Audio files also have a player. Right-click one and choose **Open Full View** to open the editor,
+where you can mark regions, view a spectrogram, scan for EVPs, and save clips of what you find. See
 [Using the Audio Editor](/help/using-the-audio-editor).
 
 ## Sharing
 
-**Share** offers a file to a group, at one of three levels — the group's administrators only,
-every member, or public. Sharing lends the file; it does not give it away. The group can attach
-it to a case, which takes a **copy** for the case, or copy it into its own Files. Those copies
-carry the file's location and camera details with them, marked as inherited.
+**Share** offers a file to a group at one of three levels: the group's administrators only, every
+member, or public. Sharing lends the file to the group; it doesn't give it away. The group can
+attach it to a case, which makes a **copy** for that case, or copy it into its own Files. Those
+copies keep the file's location and camera details, marked as inherited.
 
 ## Replacing
 
-**Replace** swaps in a new version of the same file and updates every case copy with it. The
-dialog lists the cases that hold a copy, with how many comments and votes each has, so you can
-see what you are about to change before you do.
+**Replace** swaps in a new version of the file and updates every copy of it on a case. The dialog
+lists the cases that hold a copy and how many comments and votes each one has, so you can see what
+you are about to change before you do it.
 
 ## Deleting
 
-Press the trash button, on a row of **Your Files** or on a card in the **Media Library**. Both do
-exactly the same thing — the Media Library only offers it on a file that is yours, because a file
-you have handed to a group is deleted by somebody with that group's permission instead.
+Press the trash button on a row of **Your Files** or on a card in the **Media Library**. Both do
+exactly the same thing. The Media Library only shows the button on files that are yours, because a
+file you have handed to a group can only be deleted by someone with permission in that group.
 
-What happens next depends on whether anyone else is using it.
+What happens next depends on whether anyone else is using the file.
 
-**Nobody else is using it.** You are asked once, and it is gone — the file, its details, and any
-shares to individual people.
+**Nobody else is using it.** You confirm once, and it's gone — the file, its details, and any
+shares with individual people.
 
 **A group is using it.** The dialog lists each group and what it holds: shares, copies on cases,
-copies in its files, and places the file itself is referenced. Then you are asked two things.
+copies in its files, and places that refer to the file itself. Then you are asked two questions.
 
-1. **Do you want it removed everywhere it is shared?** Yes ends every share, removes every copy
-   the groups took — including comments and votes on those copies — unlinks the file from
-   wherever it is referenced, and destroys it. There is no undo.
+1. **Do you want it removed everywhere it is shared?** If you say yes, every share ends, every copy
+   the groups took is removed — including comments and votes on those copies — the file is
+   unlinked from everywhere it's referenced, and then it is destroyed. There is no undo.
 2. If you said no: **do you still want it out of your files?** If so, the file and its details
-   are **handed to the group** using it. If more than one group is, you choose which. From then on
-   it belongs to that group: it leaves your files, the group's copies and shares keep working, its
-   administrators manage it, and only that group's members can see it. You cannot get it back.
+   are **handed to the group** using it. If more than one group is using it, you choose which one.
+   From then on the file belongs to that group: it leaves your files, the group's copies and shares
+   keep working, the group's administrators manage it, and only that group's members can see it.
+   You cannot get it back.
 
-Say no to both and nothing changes. Handing a file over is a choice you make twice; it never
-happens on its own.
+Say no to both and nothing changes. A file is only handed over when you choose that answer
+yourself; it never happens automatically.
 
 ### Field Kit recordings
 
-A recording that is part of a field session is held by that session — the session's document
-names the file and the readings point into it. Such a recording can be handed to a group, and
-"remove everywhere" still ends its shares and copies, but the file itself is not destroyed while
-the session exists; the page says so. To remove the recording, delete the whole session from
-**My Field Sessions** — see *The iPhone and iPad Apps* for when that is and is not allowed.
+A recording made during a field session belongs to that session: the session's document names the
+file, and its readings are linked to moments in it. You can still hand the recording to a group,
+and "remove everywhere" still ends its shares and copies, but the file itself isn't destroyed while
+the session exists. The page tells you this. To remove the recording, delete the whole session from
+**My Field Sessions** — see *The iPhone and iPad Apps* for when you can and can't do that.

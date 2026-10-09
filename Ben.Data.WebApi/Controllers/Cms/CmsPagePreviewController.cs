@@ -28,6 +28,9 @@ namespace Ben.Data.WebApi.Controllers.Cms;
 [Route("api/organizations/{orgId:guid}/cms/pages/{pageId:guid}/preview")]
 public sealed class CmsPagePreviewController : OrgCmsControllerBase
 {
+    // The same cleaning the public page gives the intro, so the preview cannot show markup a visitor won't get.
+    private static readonly Ben.Data.WebApi.Services.ICmsMarkupSanitizer Intro = new Ben.Data.WebApi.Services.CmsMarkupSanitizer();
+
     public CmsPagePreviewController(
         IDbContextFactory<BenDataContext> dbFactory, IMapper mapper, IOrganizationSecurityService security)
         : base(dbFactory, mapper, security) { }
@@ -86,7 +89,8 @@ public sealed class CmsPagePreviewController : OrgCmsControllerBase
         return Ok(new OrgPublicPageResponse(
             org.Id, org.Name, org.UrlName,
             logos,
-            new OrgPublicPageItem(page.Id, page.PageTitle, page.UrlName, page.IsHome, sections),
+            new OrgPublicPageItem(page.Id, page.PageTitle, page.UrlName, page.IsHome, sections,
+                                  Intro.SanitizeHtml(page.PageHtml)),
             navPages));
     }
 }

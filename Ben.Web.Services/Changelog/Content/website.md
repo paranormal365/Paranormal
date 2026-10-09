@@ -22,12 +22,35 @@ it carry no number.
 The history before 2026-08-22 is summarized rather than listed: the site was not yet open, and a
 day-by-day account of building it would say nothing to anyone using it now.
 
+## 2026-10-09 · 2.17.0
+
+- You choose where a page goes in your group's menu by dragging it on a tree, up to three levels deep,
+  instead of typing a sort number.
+- A new Ordering window beside New Page shows your whole site as one tree. Drag pages to rearrange your
+  menu and sections to change their order on a page; each move is saved as you make it.
+- A page's title can come from a list of ideas, and its web address follows the title as you type.
+- Each kind of section is shown as a small picture of where things go, and a Preview button shows a
+  section the way visitors will see it before you save it.
+- Add Section now brings the form into view instead of opening it out of sight.
+- A page's summary now appears to visitors, above the page's sections, and can hold pictures from your
+  group's library and links to your other pages, chosen from a list.
+- Visitors see the pages under the one they are reading as a row of links beneath your menu.
+- Every field in the page editor has a short note explaining what it does.
+- On the page list, the More actions menu no longer gets cut off, and it closes when you pick something.
+- Reordering a page's sections and publishing a draft no longer show an error when they actually worked.
+- Files people add to a public place can now be reviewed: moderators see them on the Place Archive page, and
+  a place's confirmed venue reviews the ones added to its own place. Anyone who can review sees a notice
+  while files are waiting.
+- A place's page now shows its photos as a slideshow with small thumbnails, then its videos, then its
+  recordings (which open the waveform player), then people's posts. When the venue has written about the
+  building, that comes first under the cover photo, with the map right below. Venue pages follow the same
+  layout.
+
 ## 2026-10-09 · 2.16.0
 
 - A new short film on the home page: a ghost walk in the future, where the tour group turns out to be robots
   who check in with the app.
-- The home page's films start on a random one, then play every other one in a shuffled order before any of
-  them comes round again.
+- The home page's films start with a random one, then play the rest in a shuffled order without repeating.
 
 ## 2026-10-05 · 2.15.0
 

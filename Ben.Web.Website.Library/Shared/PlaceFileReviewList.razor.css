@@ -1,0 +1,30 @@
+/* Files waiting for a decision, as a grid of cards. Every card's media sits in the same 16:9 frame, so a
+   video plays in a contained area rather than at whatever size it was filmed. */
+.place-file-review__grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(15rem, 1fr));
+    gap: .75rem;
+}
+
+.place-file-review__card { overflow: hidden; }
+
+.place-file-review__media {
+    aspect-ratio: 16 / 9;
+    background: #000;
+    display: grid;
+    place-items: center;
+}
+
+.place-file-review__media video,
+.place-file-review__media img {
+    width: 100%;
+    height: 100%;
+    object-fit: contain;
+    display: block;
+}
+
+.place-file-review__media a { width: 100%; height: 100%; display: block; }
+
+.place-file-review__media ::deep .ben-audio-tile { height: 100%; aspect-ratio: auto; border: 0; border-radius: 0; }
+
+.place-file-review__other { color: #fff; display: grid !important; place-items: center; gap: .3rem; }

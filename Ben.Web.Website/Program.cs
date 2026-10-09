@@ -773,6 +773,21 @@ app.MapGet("/media/field-sessions/{sessionId:guid}/files/{fileId:guid}", async (
         accessToken, httpFactory, ctx, ct);
 });
 
+// A file added to a place, for the person deciding whether to approve it (10/09/2026). Signed in only; the API
+// checks they are a moderator or run the place's confirmed venue.
+app.MapGet("/media/place-file-review/{evidenceId:guid}", async (
+    Guid evidenceId, string? t,
+    Ben.Web.Website.Services.MediaTicketService tickets,
+    IHttpClientFactory httpFactory, IConfiguration config,
+    HttpContext ctx, CancellationToken ct) =>
+{
+    var accessToken = string.IsNullOrWhiteSpace(t) ? null : tickets.Unprotect(evidenceId, t);
+    if (accessToken is null) return Results.NotFound();
+    return await Ben.Web.Website.Services.MediaProxy.StreamAsync(
+        $"{config["WebApi:BaseUrl"]}/api/place-files/review/{evidenceId}/file",
+        accessToken, httpFactory, ctx, ct);
+}).AllowAnonymous();
+
 // One of a hosted event's files (item 235 phase 11). The ticket carries the viewer's token when
 // they are signed in; without one the API serves only what the event has made public.
 app.MapGet("/media/event-files/{eventId:guid}/{fileId:guid}", async (

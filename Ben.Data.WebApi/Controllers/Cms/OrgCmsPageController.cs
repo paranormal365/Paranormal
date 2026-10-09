@@ -47,7 +47,13 @@ public sealed class OrgCmsPageController : OrgCmsControllerBase
             return Forbid();
 
         await using var db = await DbFactory.CreateDbContextAsync(ct);
+        return Ok(await BuildListAsync(db, orgId, userId.Value, ct));
+    }
 
+    /// <summary>The page list, in menu order, with what the caller may do to each.</summary>
+    private async Task<List<CmsPageListItemResponse>> BuildListAsync(
+        BenDataContext db, Guid orgId, Guid userId, CancellationToken ct)
+    {
         // Drafts are OrganizationPage rows too, so they have to be excluded here or the page list
         // shows a phantom duplicate of everything anyone is part-way through editing.
         var pages = await db.OrganizationPages
@@ -65,8 +71,8 @@ public sealed class OrgCmsPageController : OrgCmsControllerBase
         else
         {
             // userId/orgId/table are loop-invariant — these were previously re-checked once per page.
-            canEdit   = await Security.HasAccessAsync(userId.Value, orgId, OrganizationSecurityTable.OrganizationPage, OrganizationSecurityAction.Update, ct);
-            canDelete = await Security.HasAccessAsync(userId.Value, orgId, OrganizationSecurityTable.OrganizationPage, OrganizationSecurityAction.Delete, ct);
+            canEdit   = await Security.HasAccessAsync(userId, orgId, OrganizationSecurityTable.OrganizationPage, OrganizationSecurityAction.Update, ct);
+            canDelete = await Security.HasAccessAsync(userId, orgId, OrganizationSecurityTable.OrganizationPage, OrganizationSecurityAction.Delete, ct);
         }
 
         var pageIds = pages.Select(p => p.Id).ToList();
@@ -76,12 +82,120 @@ public sealed class OrgCmsPageController : OrgCmsControllerBase
             .Select(g => new { PageId = g.Key, Count = g.Count() })
             .ToDictionaryAsync(x => x.PageId, x => x.Count, ct);
 
-        var result = pages.Select(p => new CmsPageListItemResponse(
+        return pages.Select(p => new CmsPageListItemResponse(
             p.Id, p.OrganizationId, p.ParentPageId, p.PageTitle, p.UrlName, p.IsHome, p.IsPublished, p.IsPublic,
             p.SortOrder, sectionCounts.GetValueOrDefault(p.Id), canEdit, canDelete, p.DateCreated,
             IsUnreachable: Ben.Data.Common.CmsReservedSlugs.IsReserved(p.UrlName))).ToList();
+    }
 
-        return Ok(result);
+    // ── GET /api/organizations/{orgId}/pages/outline ─────────────────────────
+
+    /// <summary>
+    /// Every page in the group with its sections, in menu order — what the Ordering window draws.
+    /// </summary>
+    /// <remarks>
+    /// One request rather than one per page: the window shows the whole site at once, and a group
+    /// with twenty pages should not wait on twenty round trips to see it. Section content is left out;
+    /// a tree needs a section's kind and heading, not its body.
+    /// </remarks>
+    [HttpGet("outline")]
+    public async Task<ActionResult<IEnumerable<CmsOutlinePage>>> GetOutline(Guid orgId, CancellationToken ct)
+    {
+        var userId = GetCurrentUserId();
+        if (userId is null) return Unauthorized();
+        if (!await IsCmsAuthorizedAsync(userId.Value, orgId, OrganizationSecurityTable.OrganizationPage, OrganizationSecurityAction.Read, ct))
+            return Forbid();
+
+        await using var db = await DbFactory.CreateDbContextAsync(ct);
+
+        var pages = await db.OrganizationPages.AsNoTracking()
+            .Where(p => p.OrganizationId == orgId && p.DraftOfOrganizationPageId == null)
+            .OrderBy(p => p.SortOrder).ThenBy(p => p.PageTitle)
+            .Select(p => new CmsOutlinePage(
+                p.Id, p.ParentPageId, p.PageTitle, p.UrlName, p.SortOrder, p.IsPublished, p.IsPublic,
+                p.CmsSections.OrderBy(s => s.SortOrder)
+                    .Select(s => new CmsOutlineSection(s.Id, s.SectionType, s.Title, s.SortOrder, s.IsActive))
+                    .ToList()))
+            .ToListAsync(ct);
+
+        return Ok(pages);
+    }
+
+    // ── PUT /api/organizations/{orgId}/pages/{pageId}/position ───────────────
+
+    /// <summary>
+    /// Moves a page in the group's menu: under another page (or to the top level), at a position
+    /// among the pages there.
+    /// </summary>
+    /// <remarks>
+    /// <para>A position, not a number. Sort numbers were what the editor used to ask for, and two
+    /// pages given the same one sat in an order nobody chose. Here both the old and new sibling lists
+    /// are renumbered 1, 2, 3… so the order on screen is the order stored.</para>
+    ///
+    /// <para>Refused with a sentence when the page would sit under itself or one of its own pages, or
+    /// deeper than <see cref="Ben.Data.Common.CmsPageTree.MaxDepth"/>.</para>
+    /// </remarks>
+    [HttpPut("{pageId:guid}/position")]
+    public async Task<ActionResult<IEnumerable<CmsPageListItemResponse>>> Move(
+        Guid orgId, Guid pageId, [FromBody] MoveCmsPageRequest request, CancellationToken ct)
+    {
+        var userId = GetCurrentUserId();
+        if (userId is null) return Unauthorized();
+        if (!await IsCmsAuthorizedAsync(userId.Value, orgId, OrganizationSecurityTable.OrganizationPage, OrganizationSecurityAction.Update, ct))
+            return Forbid();
+
+        await using var db = await DbFactory.CreateDbContextAsync(ct);
+
+        var pages = await db.OrganizationPages
+            .Where(p => p.OrganizationId == orgId && p.DraftOfOrganizationPageId == null)
+            .ToListAsync(ct);
+        var page = pages.FirstOrDefault(p => p.Id == pageId);
+        if (page is null) return NotFound();
+
+        if (Ben.Data.Common.CmsPageTree.WhyNotPlace(pageId, request.ParentPageId,
+                pages.ToDictionary(p => p.Id, p => p.ParentPageId)) is string refused)
+            return BadRequest(refused);
+
+        var before = new { page.ParentPageId, page.SortOrder };
+
+        // Close the gap it leaves, then open one where it lands.
+        var oldSiblings = pages.Where(p => p.ParentPageId == page.ParentPageId && p.Id != pageId)
+            .OrderBy(p => p.SortOrder).ThenBy(p => p.PageTitle).ToList();
+        Renumber(oldSiblings);
+
+        var newSiblings = pages.Where(p => p.ParentPageId == request.ParentPageId && p.Id != pageId)
+            .OrderBy(p => p.SortOrder).ThenBy(p => p.PageTitle).ToList();
+        newSiblings.Insert(Math.Clamp(request.Index, 0, newSiblings.Count), page);
+        page.ParentPageId = request.ParentPageId;
+        Renumber(newSiblings);
+
+        page.DateUpdated        = DateTime.UtcNow;
+        page.UpdatedByAppUserId = userId.Value;
+
+        await db.SaveChangesAsync(ct);
+        _ = TryAuditAsync(_auditLog.LogUpdateAsync(nameof(OrganizationPage), pageId, before,
+            new { page.ParentPageId, page.SortOrder }, userId.Value, AppSources.WebApi));
+
+        return Ok(await BuildListAsync(db, orgId, userId.Value, ct));
+
+        static void Renumber(List<OrganizationPage> siblings)
+        {
+            for (var i = 0; i < siblings.Count; i++) siblings[i].SortOrder = i + 1;
+        }
+    }
+
+    /// <summary>
+    /// Why a page cannot go under <paramref name="parentPageId"/>, or null when it can. Drafts are
+    /// left out of the tree: a draft is a copy of a page, not a place in the menu.
+    /// </summary>
+    private static async Task<string?> WhyNotParentAsync(
+        BenDataContext db, Guid orgId, Guid pageId, Guid? parentPageId, CancellationToken ct)
+    {
+        if (parentPageId is null) return null;
+        var parentOf = await db.OrganizationPages.AsNoTracking()
+            .Where(p => p.OrganizationId == orgId && p.DraftOfOrganizationPageId == null)
+            .ToDictionaryAsync(p => p.Id, p => p.ParentPageId, ct);
+        return Ben.Data.Common.CmsPageTree.WhyNotPlace(pageId, parentPageId, parentOf);
     }
 
     // ── GET /api/organizations/{orgId}/pages/{pageId} ────────────────────────
@@ -138,12 +252,17 @@ public sealed class OrgCmsPageController : OrgCmsControllerBase
         if (await db.OrganizationPages.AnyAsync(p => p.OrganizationId == orgId && p.UrlName == urlName, ct))
             return BadRequest($"UrlName '{urlName}' is already in use for this organization.");
 
+        if (await WhyNotParentAsync(db, orgId, Guid.NewGuid(), request.ParentPageId, ct) is string misplaced)
+            return BadRequest(misplaced);
+
         var page = new OrganizationPage
         {
             OrganizationId     = orgId,
             PageTitle          = request.PageTitle.Trim(),
             UrlName            = urlName,
-            PageHtml           = request.PageHtml ?? string.Empty,
+            // Cleaned on the way in like a section's markup: the intro is shown to visitors above
+            // the sections, so it is author markup on the public site.
+            PageHtml           = _sanitizer.SanitizeHtml(request.PageHtml),
             IsPublished        = false,
             IsPublic           = request.IsPublic,
             ParentPageId       = request.ParentPageId,
@@ -267,9 +386,14 @@ public sealed class OrgCmsPageController : OrgCmsControllerBase
                 p => p.OrganizationId == orgId && p.UrlName == urlName, ct))
             return BadRequest($"UrlName '{urlName}' is already in use for this organization.");
 
-        // Prevent a page from becoming its own ancestor
+        // Prevent a page from becoming its own ancestor, or sitting deeper than the menu goes. A
+        // draft is a copy rather than a place in the menu (publishing keeps the live page's place),
+        // so only its own-parent check applies.
         if (request.ParentPageId == pageId)
             return BadRequest("A page cannot be its own parent.");
+        if (before.DraftOfOrganizationPageId is null && request.ParentPageId != before.ParentPageId
+            && await WhyNotParentAsync(db, orgId, pageId, request.ParentPageId, ct) is string misplaced)
+            return BadRequest(misplaced);
 
         // The subscription cap binds at the moment a page BECOMES published — editing an
         // already-published page is not a new public page, and unpublishing must always work.
@@ -286,7 +410,7 @@ public sealed class OrgCmsPageController : OrgCmsControllerBase
 
         page!.PageTitle          = request.PageTitle.Trim();
         page.UrlName            = urlName;
-        page.PageHtml           = request.PageHtml ?? string.Empty;
+        page.PageHtml           = _sanitizer.SanitizeHtml(request.PageHtml);
         page.IsPublished        = request.IsPublished;
         page.IsPublic           = request.IsPublic;
         page.ParentPageId       = request.ParentPageId;
@@ -364,6 +488,24 @@ public sealed record UpdateCmsPageRequest(
     bool IsPublic,
     Guid? ParentPageId,
     int SortOrder);
+
+/// <param name="ParentPageId">The page to go under; null for the top level.</param>
+/// <param name="Index">Where among the pages there, from 0. Past the end means last.</param>
+public sealed record MoveCmsPageRequest(Guid? ParentPageId, int Index);
+
+/// <summary>A page in the Ordering window's tree.</summary>
+public sealed record CmsOutlinePage(
+    Guid Id,
+    Guid? ParentPageId,
+    string PageTitle,
+    string UrlName,
+    int SortOrder,
+    bool IsPublished,
+    bool IsPublic,
+    IReadOnlyList<CmsOutlineSection> Sections);
+
+/// <summary>A section under its page in the Ordering window's tree.</summary>
+public sealed record CmsOutlineSection(Guid Id, CmsSectionType SectionType, string? Title, int SortOrder, bool IsActive);
 
 public sealed record CmsPageListItemResponse(
     Guid Id,
