@@ -2254,7 +2254,8 @@ public sealed class HelpMediaCapture : BenTestBase
         await ClickUntilAsync(Page.Locator("#cms-new-page"), dialog);
         await ClickUntilAsync(dialog.Locator(".cms-title-ideas button[title='Ideas for a title']"),
                               dialog.GetByRole(AriaRole.Button, new() { Name = "History of the property" }));
-        await ShootAsync(slug, "cms-title-ideas.png", gated: true, selector: ".modal.show .modal-content");
+        // The ideas float over the page rather than inside the dialog, so the picture is the whole window.
+        await ShootAsync(slug, "cms-title-ideas.png", gated: true);
         await dialog.GetByRole(AriaRole.Button, new() { Name = "History of the property" }).ClickAsync();
         await dialog.Locator("#cms-placer-up").ClickAsync();
         await dialog.Locator("#cms-placer-in").ClickAsync();

@@ -74,7 +74,9 @@
         {
             @* WIDE: the chips, as they have always been. Four actions per group the viewer
                belongs to, each naming its group when there is more than one. *@
-            <p class="mb-2 small d-none d-md-block">
+            @* Chips only for one or two groups. With more, four buttons a group pushed the place itself below
+               the fold on a laptop too (10/09/2026), so the menus below are used at every width. *@
+            <p class="mb-2 small d-none @(_myOrgs.Count <= 2 ? "d-md-block" : "")">
                 @foreach (var org in _myOrgs)
                 {
                     <a class="btn btn-sm btn-outline-secondary me-1 mb-1"
@@ -137,7 +139,7 @@
                One menu PER GROUP rather than one menu holding everything: which group you are
                acting as is the decision being made here, and burying it as a suffix inside a flat
                list of twelve items is how somebody opens a case on the wrong group's books. *@
-            <div class="d-md-none mb-2">
+            <div class="@(_myOrgs.Count <= 2 ? "d-md-none" : "") mb-2">
                 @foreach (var org in _myOrgs)
                 {
                     <BenDropdown Class="d-inline-block me-1 mb-1"
