@@ -13802,6 +13802,11 @@ section (`CmsSectionTypes.Offered`); existing ones still render and can be edite
 properly — contact details from the group's public addresses/emails/phones/links, a gallery from public
 files, a roster from members who have agreed to be listed — would bring them back into the picker.
 
+Closed the same day. `CmsGroupSections` resolves all three on every read: contact details through each record's
+public switch and each address's display mode; gallery files only when public; members only with the member's
+own consent (`OrganizationUserMembership.ShowOnPublicPages`, set from Profile → About; migration
+`MemberPublicListing`). The editor has a public-file picker with ordering and an everyone/chosen roster.
+
 ## 257. Audit entries compared across two different shapes (CLOSED 10/09/2026 — fix/audit-shapes-257)
 
 `AuditChangeTracker.GetChanges` refuses a before and after of different types. The CMS section reorder
@@ -13811,11 +13816,6 @@ files, a roster from members who have agreed to be listed — would bring them b
 failing the request. Any other call site with mismatched shapes now writes an "Audit log write failed" error
 to the log and no audit row; a sweep of the 84 `LogUpdateAsync` calls for mismatched before/after would
 recover those rows.
-
-Closed the same day. `CmsGroupSections` resolves all three on every read: contact details through each record's
-public switch and each address's display mode; gallery files only when public; members only with the member's
-own consent (`OrganizationUserMembership.ShowOnPublicPages`, set from Profile → About; migration
-`MemberPublicListing`). The editor has a public-file picker with ordering and an everyone/chosen roster.
 
 Closed the same day. A scan of all 84 `LogUpdateAsync` calls found four pairs of a hand-made snapshot against
 the entity (MyEquipment update and retire, OrganizationEquipment retire, EquipmentCheckout decisions) and one of

@@ -1048,7 +1048,7 @@ public sealed class FeedController : BenControllerBase
             return "Two of those answers are the same.";
 
         if (poll.ClosesInHours is { } hours && (hours < 1 || hours > 24 * 14))
-            return "A poll runs between an hour and a fortnight.";
+            return "A poll runs between an hour and two weeks.";
 
         return null;
     }

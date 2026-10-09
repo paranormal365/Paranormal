@@ -36,10 +36,12 @@ public class SiteAnnouncementTests : BenTestBase
         await box.ClickAsync();
         await box.FillAsync(value);
 
-        // Saved state is announced by the card's badge; waiting on it beats trusting the click.
+        // Wait for "Saved.", which shows once the save and the site's re-read of its settings have both
+        // finished. The card's Set / Not set badge is no proof: it follows the text as it is typed, so it
+        // was already right before Save was pressed, and the test moved on mid-save (backlog 255).
         await ClickUntilAsync(
             AnnouncementCard.GetByRole(AriaRole.Button, new() { Name = "Save", Exact = true }),
-            AnnouncementCard.Locator(".badge", new() { HasText = value.Length == 0 ? "Not set" : "Set" }));
+            Page.Locator(".alert-success", new() { HasText = "Saved." }));
     }
 
     [Test]
@@ -52,8 +54,8 @@ public class SiteAnnouncementTests : BenTestBase
         {
             await SaveAnnouncementAsync(TestNotice);
 
-            // The provider refreshes on a 30s snapshot, but saving calls Invalidate, so this
-            // circuit's next page sees it immediately.
+            // The provider refreshes on a 30s snapshot, but saving re-reads it before "Saved." shows,
+            // so the next page sees it immediately.
             await Page.GotoAsync($"{BaseUrl}/");
             await Expect(Banner).ToBeVisibleAsync(new() { Timeout = 20_000 });
             await Expect(Banner).ToContainTextAsync(TestNotice);

@@ -64,6 +64,9 @@ public class EventBackLinkTests : BenTestBase
 
         var href = await AnEventAddressAsync();
         if (href is null) Assert.Ignore("no published event on the public list to open");
+        // Whichever group runs the first event on the list — the seeded ones age out, and other fixtures add
+        // events of their own, so which group that is depends on the day (backlog 255).
+        var group = (await Main.Locator(".ev-row__by a").First.InnerTextAsync()).Trim();
 
         // Stripped of any origin, the way a link pasted into a message arrives.
         var bare = href.Split('?')[0];
@@ -71,7 +74,7 @@ public class EventBackLinkTests : BenTestBase
         await WaitForTheCircuitAsync();
         await WaitUntilLoadedAsync();
 
-        await Expect(Main.GetByRole(AriaRole.Link).Filter(new() { HasTextString = "Paranormal365" }).First)
+        await Expect(Main.GetByRole(AriaRole.Link).Filter(new() { HasTextString = group }).First)
             .ToBeVisibleAsync(new() { Timeout = 20_000 });
 
         // And no back-link pretending somebody came from somewhere they did not.

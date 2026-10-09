@@ -414,7 +414,12 @@ for s in subs:
     if slug not in DAYS_LEFT or s.get("subscriptionTierId") is None:
         continue
     end = s.get("currentPeriodEnd")
-    end = datetime.fromisoformat(end.rstrip("Z")[:26]) if end else None
+    # The API writes as many fraction digits as it has (".2131"); Python 3.9 reads only three or six.
+    if end:
+        whole, _, frac = end.rstrip("Z").partition(".")
+        end = datetime.fromisoformat(whole + ("." + (frac + "000000")[:6] if frac else ""))
+    else:
+        end = None
     if s["status"] == ACTIVE and end and end > now + timedelta(days=2):
         print(f"   {slug:14} current to {end:%Y-%m-%d}")
         continue

@@ -71,6 +71,17 @@ internal static class StoreDemoSeeder
         }
         var now = DateTime.UtcNow;
 
+        // The demo's options were first seeded as "Colour" and the seed now says "Color" (American English).
+        // A database seeded before that keeps the old word, and a filter for Color finds nothing (backlog 255,
+        // 10/09/2026). Only this seed's own products are touched.
+        var oldWord = await db.StoreProductOptions.Where(o => o.Name == "Colour").ToListAsync(ct);
+        foreach (var option in oldWord.Where(o => o.ProductId.ToString().StartsWith("a1000000-0000-0000-0000-", StringComparison.Ordinal)))
+        {
+            option.Name = "Color";
+            option.DateUpdated = now;
+        }
+        if (oldWord.Count > 0) await db.SaveChangesAsync(ct);
+
         foreach (var shelf in Shelves)
         {
             if (await db.StoreCategories.AnyAsync(c => c.Id == Id(shelf.N), ct))

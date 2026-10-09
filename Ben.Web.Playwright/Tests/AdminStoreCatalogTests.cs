@@ -44,16 +44,18 @@ public class AdminStoreCatalogTests : BenTestBase
     [Description("Store is a group in the administration menu, with every store screen under it.")]
     public async Task The_store_group_is_in_the_administration_menu()
     {
-        // In the rail: with the shop switched on, the bar has a "Store" of its own — the shop, not
-        // its back office — and that one came first.
+        // The Administration rail has a Store group. Looked for by the group's own drill link: with the shop
+        // switched on, the bar has a "Store" of its own (the shop, not its back office), and a test that asked
+        // for any link named Store found that one, clicked it, and left the admin menu (backlog 255).
         var rail = Page.Locator(".app-rail");
-        await OpenAdministrationUntilAsync(rail.GetByRole(AriaRole.Link, new() { Name = "Store", Exact = true }).First);
-        await ClickUntilAsync(
-            rail.GetByRole(AriaRole.Link, new() { Name = "Store", Exact = true }).First,
-            rail.GetByRole(AriaRole.Link, new() { Name = "Store Settings", Exact = false }).First);
+        await OpenAdministrationUntilAsync(rail.Locator("a.app-rail__drill[title='Store']"));
 
+        // Every page of the store's back office is in that group. Opened at one of its pages, the rail shows
+        // the group itself, whichever groups an earlier fixture left open.
+        await Page.GotoAsync($"{BaseUrl}/admin/store");
+        await WaitForTheCircuitAsync();
         foreach (var entry in new[] { "Store Dashboard", "Categories", "Products", "Sale Requests", "Sellers", "Stock", "Discount Codes", "Reviews", "Store Settings" })
-            await Expect(Page.GetByRole(AriaRole.Link, new() { Name = entry, Exact = true }).First).ToBeVisibleAsync();
+            await Expect(rail.GetByRole(AriaRole.Link, new() { Name = entry, Exact = true }).First).ToBeVisibleAsync(new() { Timeout = 15_000 });
     }
 
     [Test]

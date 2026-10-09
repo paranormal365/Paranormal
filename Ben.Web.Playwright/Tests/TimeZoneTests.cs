@@ -65,6 +65,11 @@ public class TimeZoneTests : BenTestBase
             {
                 var page = await context.NewPageAsync();
                 var when = page.Locator("[data-testid='investigation-when']").First;
+                var zone = page.Locator("#profile-time-zone");
+
+                // Start from no zone chosen. A run that failed partway left Pacific on this member's
+                // profile, and every run after it failed too (backlog 255).
+                await ChooseProfileZoneAsync(page, zone, "");
 
                 await page.GotoAsync($"{BaseUrl}/organizations/{orgId}/cases/{caseId}?tab=investigations");
 
@@ -76,12 +81,7 @@ public class TimeZoneTests : BenTestBase
                 await Expect(when).ToContainTextAsync("07:00 PM CST");
 
                 // Choose Pacific on the profile: the whole site now reads in it.
-                await page.GotoAsync($"{BaseUrl}/profile");
-                var zone = page.Locator("#profile-time-zone");
-                await Expect(zone).ToBeVisibleAsync(new() { Timeout = 30_000 });
-                await zone.SelectOptionAsync("America/Los_Angeles");
-                await page.GetByRole(AriaRole.Button, new() { Name = "Save", Exact = true }).First.ClickAsync();
-                await Expect(page.GetByText("Saving…")).ToHaveCountAsync(0, new() { Timeout = 15_000 });
+                await ChooseProfileZoneAsync(page, zone, "America/Los_Angeles");
 
                 await page.GotoAsync($"{BaseUrl}/organizations/{orgId}/cases/{caseId}?tab=investigations");
                 // Remembered: still "My time", and my time is now Pacific.
@@ -90,19 +90,43 @@ public class TimeZoneTests : BenTestBase
                 // And back to the place's clock for whoever reads next.
                 await page.Locator("[data-testid='time-zone-local']").ClickAsync();
                 await Expect(when).ToContainTextAsync("08:00 PM EST");
-
-                // Give the profile's choice back.
-                await page.GotoAsync($"{BaseUrl}/profile");
-                await Expect(zone).ToBeVisibleAsync(new() { Timeout = 30_000 });
-                await zone.SelectOptionAsync("");
-                await page.GetByRole(AriaRole.Button, new() { Name = "Save", Exact = true }).First.ClickAsync();
-                await Expect(page.GetByText("Saving…")).ToHaveCountAsync(0, new() { Timeout = 15_000 });
             }
-            finally { await context.CloseAsync(); }
+            finally
+            {
+                // Give the profile's choice back, pass or fail.
+                try { await ChooseProfileZoneAsync(await context.NewPageAsync(), null, ""); }
+                finally { await context.CloseAsync(); }
+            }
         }
         finally
         {
             await api.TrySendAsync(HttpMethod.Delete, $"/api/admin/cases/{caseId}/purge", new { confirmTitle = title });
         }
+    }
+
+    /// <summary>
+    /// Picks a zone on the profile and saves it, then reads the profile again to be sure it stuck.
+    /// </summary>
+    /// <remarks>
+    /// The profile draws before it can answer clicks. On a busy run the choice and the Save landed on that
+    /// first drawing and went nowhere, and the case page then still read in the browser's zone (backlog 255).
+    /// </remarks>
+    private async Task ChooseProfileZoneAsync(IPage page, ILocator? zone, string zoneId)
+    {
+        zone ??= page.Locator("#profile-time-zone");
+        for (var attempt = 1; ; attempt++)
+        {
+            await page.GotoAsync($"{BaseUrl}/profile");
+            await Expect(zone).ToBeVisibleAsync(new() { Timeout = 30_000 });
+            await WaitForTheCircuitAsync(page);
+            await zone.SelectOptionAsync(zoneId);
+            await page.GetByRole(AriaRole.Button, new() { Name = "Save", Exact = true }).First.ClickAsync();
+            await Expect(page.GetByText("Saving…")).ToHaveCountAsync(0, new() { Timeout = 15_000 });
+
+            await page.GotoAsync($"{BaseUrl}/profile");
+            await WaitForTheCircuitAsync(page);
+            if (await zone.InputValueAsync() == zoneId || attempt == 3) break;
+        }
+        await Expect(zone).ToHaveValueAsync(zoneId);
     }
 }

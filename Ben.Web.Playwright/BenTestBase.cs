@@ -1591,7 +1591,7 @@ public abstract class BenTestBase : PageTest
         }
     }
 
-    protected Task WaitForTheCircuitAsync() => Page.WaitForFunctionAsync(@"() => {
+    protected Task WaitForTheCircuitAsync(IPage? on = null) => (on ?? Page).WaitForFunctionAsync(@"() => {
         const comments = document.createTreeWalker(document, NodeFilter.SHOW_COMMENT);
         while (comments.nextNode()) if (comments.currentNode.data.startsWith('Blazor:')) return false;
         return true;
