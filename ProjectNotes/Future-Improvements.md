@@ -13781,6 +13781,13 @@ run, but these fail or pass by order:
   that branch comes back, each fixture that changes a person's own state (their open menu, their votes,
   their banners) needs its own account or the [NonParallelizable] marker with what it shares.
 
+Added 10/09/2026 (CMS branch full run): `Listing_FiltersAndPagesThroughTheQueryString` shows "0 products" for
+`?opt=Color:Olive` on the long-lived `IsHauntedDb_e2e`, and finds no listing at all on a fresh database (the store
+switch is off unless another fixture turned it on first). The branch changed no store code. Three event tests
+(`An_event_opened_cold_still_names_its_group`, `A_stranger_holding_the_link_is_told_whose_group_it_is`,
+`WideningRadius_BringsInTheFarEvent`) failed on the old database because its seeded "Public Night Walk" is dated
+14 days after seeding and has passed; all three pass on a freshly seeded one.
+
 Fixed on the way: the blink test's liveness check (the Signal layout hid the sidebar filter it typed into),
 the phone room test (a "Work waiting" banner pushed the form below the fold), and three fixtures marked to
 run alone (store checkout and product stock, the seeded case's votes).

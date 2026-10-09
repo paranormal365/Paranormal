@@ -40,7 +40,7 @@ public sealed class PublicVenueController : BenControllerBase
             .Select(v => new
             {
                 v.OrganizationId, OrgName = v.Organization.Name, OrgUrlName = v.Organization.UrlName,
-                PlaceName = v.Place.Name, v.Place.City, v.Place.State,
+                PlaceName = v.Place.Name, v.Place.City, v.Place.State, v.Place.Latitude, v.Place.Longitude,
                 v.History, v.HouseRules, v.MaxOvernightGuests,
             })
             .FirstOrDefaultAsync(ct);
@@ -82,7 +82,8 @@ public sealed class PublicVenueController : BenControllerBase
 
         return Ok(new PublicVenueRecord(
             profile.OrgName, profile.OrgUrlName, placeId, profile.PlaceName ?? "", profile.City, profile.State,
-            profile.History, profile.HouseRules, profile.MaxOvernightGuests, rooms, events, photos, sections));
+            profile.History, profile.HouseRules, profile.MaxOvernightGuests, rooms, events, photos, sections,
+            profile.Latitude, profile.Longitude));
     }
 
     /// <summary>
@@ -97,7 +98,14 @@ public sealed class PublicVenueController : BenControllerBase
             .Where(v => v.PlaceId == placeId && v.VerifiedUtc != null)
             .Select(v => new PlaceVenueRecord(
                 v.Organization.Name, v.Organization.UrlName,
-                v.IsPublished ? $"/o/{v.Organization.UrlName}/venues/{v.PlaceId}" : null))
+                v.IsPublished ? $"/o/{v.Organization.UrlName}/venues/{v.PlaceId}" : null,
+                // The venue's own words and cover go on the place page only once it has published its
+                // venue page — the same moment it chose to say them in public.
+                v.IsPublished ? v.History : null,
+                v.IsPublished
+                    ? db.VenuePhotos.Where(p => p.OrganizationVenueProfileId == v.Id && p.AcceptedUtc != null)
+                        .OrderBy(p => p.SortOrder).Select(p => (Guid?)p.UploadFileId).FirstOrDefault()
+                    : null))
             .FirstOrDefaultAsync(ct);
 
         // Empty rather than 404: "nobody runs this place as a venue" is the ordinary answer, and

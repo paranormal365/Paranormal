@@ -38,6 +38,13 @@ day-by-day account of building it would say nothing to anyone using it now.
 - Every field in the page editor has a short note explaining what it does.
 - On the page list, the More actions menu no longer gets cut off, and it closes when you pick something.
 - Reordering a page's sections and publishing a draft no longer show an error when they actually worked.
+- Files people add to a public place can now be reviewed: moderators see them on the Place Archive page, and
+  a place's confirmed venue reviews the ones added to its own place. Anyone who can review sees a notice
+  while files are waiting.
+- A place's page now shows its photos as a slideshow with small thumbnails, then its videos, then its
+  recordings (which open the waveform player), then people's posts. When the venue has written about the
+  building, that comes first under the cover photo, with the map right below. Venue pages follow the same
+  layout.
 
 ## 2026-10-09 · 2.16.0
 

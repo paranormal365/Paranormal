@@ -100,11 +100,30 @@ at all.
 
 ## The place archive
 
-**Moderation → Place Archive** is a second queue, and it isn't about posts. Two other things can
-appear on a public location's page: a **field session** someone published from the app, and a piece
-of **event evidence** a guest published from an event held there.
+**Moderation → Place Archive** is a second queue, and it isn't about posts. It covers three things
+that can appear on a public location's page: **files people added to the place** themselves, a
+**field session** someone published from the app, and a piece of **event evidence** a guest published
+from an event held there.
 
-Both work the opposite way from the feed. They go public as soon as their owner publishes them, and
+### Files added to a place
+
+Anyone signed in can add a photo, video or recording to a public location's page. If the screener
+doesn't clear it, the person is told somebody will look at it first, and it waits at the top of this
+page under **Files added to places**.
+
+Each file is a card you can look at right there: a photo fills the card, a video plays in it, and a
+recording opens the waveform player when you click it. Press **Approve** to put it on the place's
+page, or **Hold** to keep it off. A held file stays, with your note, so you can approve it later.
+Turn on **Show held files too** to see those.
+
+When a place has a **confirmed venue** — a group whose claim to run the property was approved — that
+group's owners and administrators can decide about files at their place too. They're sent a message
+when one arrives, and they find it on their group's **Your venue** page. Anyone who can decide also
+sees a notice at the top of the site while files are waiting for them.
+
+### Sessions and event evidence
+
+These two work the opposite way from the feed. They go public as soon as their owner publishes them, and
 they only show up in this queue when something has been questioned: either a screener couldn't
 clear the media, or **any signed-in reader flagged it**.
 

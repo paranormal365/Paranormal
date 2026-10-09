@@ -20,6 +20,12 @@ public interface IMediaUrlBuilder
     string Download(Guid fileId);
 
     /// <summary>
+    /// A file somebody added to a place, for the person deciding whether to approve it — whatever its
+    /// state (10/09/2026). The API checks they may decide about it.
+    /// </summary>
+    string PlaceFileReview(Guid evidenceId);
+
+    /// <summary>
     /// A recording belonging to an uploaded field session.
     /// </summary>
     /// <remarks>

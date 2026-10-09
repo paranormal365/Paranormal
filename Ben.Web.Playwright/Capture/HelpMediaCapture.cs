@@ -2304,6 +2304,8 @@ public sealed class HelpMediaCapture : BenTestBase
         await GoAsync($"/o/{urlName}/our-team");
         await ShootAsync(slug, "cms-visitor-menu.png", gated: true, selector: "[data-testid=org-hero]", proves: "Our equipment",
                          around: new Around(Bottom: 150));
+
+        await CmsSampleSite.RemoveAsync(ApiUrl, token!, orgId);
     }
 
     /// <summary>

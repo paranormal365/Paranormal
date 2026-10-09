@@ -1,0 +1,188 @@
+@using Ben.Data.Common.Enums
+@using Ben.Service.Models.Entities
+@using Ben.Web.Services
+@using Ben.Web.Services.WebApi
+@inject IBenAdminClient Api
+@inject IBenUserState UserState
+@inject IMediaUrlBuilder MediaUrls
+
+@*
+    Files people added to a public place, waiting for somebody to approve or hold them (10/09/2026).
+
+    Ben added a video to Cragfont, was told somebody would look at it, and found nowhere to look. This is
+    that place: on the Place Archive moderation page for SuperAdmins and moderators (every place), and on a
+    group's venue page for the people who run a confirmed venue (their place only). The server decides
+    which files a person may see here; this only draws them.
+*@
+
+<div class="place-file-review" id="@Id">
+    <div class="d-flex align-items-center justify-content-between flex-wrap gap-2 mb-2">
+        <h5 class="mb-0">@Title <span class="text-secondary fw-normal">(@_rows.Count)</span></h5>
+        <div class="form-check form-switch mb-0">
+            <input class="form-check-input" type="checkbox" role="switch" id="@($"{Id}-held")"
+                   checked="@_includeHeld" @onchange="ToggleHeldAsync" />
+            <label class="form-check-label small" for="@($"{Id}-held")">Show held files too</label>
+        </div>
+    </div>
+
+    @if (_error is not null)
+    {
+        <div class="alert alert-danger py-2">@_error</div>
+    }
+
+    @if (_loading)
+    {
+        <p class="text-secondary">Loading…</p>
+    }
+    else if (_result.Failed)
+    {
+        <BenListState TItem="PlaceFileReviewRow" Result="@_result" OnRetry="@(() => LoadAsync())" />
+    }
+    else if (_rows.Count == 0)
+    {
+        <p class="text-secondary" data-testid="no-place-files-waiting">@EmptyText</p>
+    }
+    else
+    {
+        @* A grid of cards (Ben, 10/09/2026): video plays inside its card's frame, a picture fills it, and a
+           recording is a tile that opens the waveform player. *@
+        <div class="place-file-review__grid">
+        @foreach (var row in _rows)
+        {
+            var src = MediaUrls.PlaceFileReview(row.EvidenceId);
+            var type = row.ContentType ?? "";
+            <div class="card place-file-review__card" data-testid="place-file-row">
+                <div class="place-file-review__media">
+                    @if (type.StartsWith("video/", StringComparison.OrdinalIgnoreCase))
+                    {
+                        <video src="@src" controls preload="metadata" playsinline></video>
+                    }
+                    else if (type.StartsWith("image/", StringComparison.OrdinalIgnoreCase))
+                    {
+                        <a href="@src" target="_blank" rel="noopener"><img src="@src" alt="@(row.Caption ?? row.FileName)" /></a>
+                    }
+                    else if (type.StartsWith("audio/", StringComparison.OrdinalIgnoreCase))
+                    {
+                        <BenAudioTile FileId="@row.EvidenceId" FileName="@row.FileName" ContentType="@type"
+                                      SourceUrl="@src" Title="@(row.Caption ?? row.FileName)" />
+                    }
+                    else
+                    {
+                        <a class="place-file-review__other" href="@src" target="_blank" rel="noopener">
+                            <BenIcon Name="file" /> @row.FileName
+                        </a>
+                    }
+                </div>
+                <div class="card-body p-2">
+                    <div class="d-flex align-items-center gap-1 flex-wrap mb-1">
+                        <span class="badge bg-secondary">@(row.Kind == PlaceMediaKind.Evidence ? "Evidence" : "Picture of the place")</span>
+                        @if (row.State == FeedMediaReviewState.Held)
+                        {
+                            <span class="badge bg-danger">Held</span>
+                        }
+                    </div>
+                    @if (PlaceId is null)
+                    {
+                        <div class="small fw-semibold text-truncate">
+                            <a href="@($"/places/{row.PlaceId}")" target="_blank">@row.PlaceName</a>
+                        </div>
+                    }
+                    @if (!string.IsNullOrWhiteSpace(row.Caption))
+                    {
+                        <div class="small">@row.Caption</div>
+                    }
+                    <div class="text-secondary" style="font-size:.75rem;">
+                        by @row.ContributorName · @row.AddedUtc.ToViewerLocalTime(UserState).ToDisplayDate()
+                    </div>
+                    @if (!string.IsNullOrWhiteSpace(row.Note))
+                    {
+                        <div class="text-secondary small mt-1"><em>@row.Note</em></div>
+                    }
+                    <div class="d-flex gap-2 mt-2">
+                        @if (row.State != FeedMediaReviewState.Approved)
+                        {
+                            <button type="button" class="btn btn-success btn-sm" data-testid="approve-place-file"
+                                    disabled="@(_deciding == row.EvidenceId)" @onclick="() => DecideAsync(row, approve: true)">
+                                Approve
+                            </button>
+                        }
+                        @if (row.State != FeedMediaReviewState.Held)
+                        {
+                            <button type="button" class="btn btn-outline-danger btn-sm" data-testid="hold-place-file"
+                                    disabled="@(_deciding == row.EvidenceId)" @onclick="() => DecideAsync(row, approve: false)">
+                                Hold
+                            </button>
+                        }
+                    </div>
+                </div>
+            </div>
+        }
+        </div>
+    }
+</div>
+
+@code {
+    /// <summary>Only this place's files — a venue page. Null: every place the person may decide about.</summary>
+    [Parameter] public Guid? PlaceId { get; set; }
+
+    [Parameter] public string Title { get; set; } = "Files added to places";
+    [Parameter] public string EmptyText { get; set; } = "No files are waiting.";
+
+    /// <summary>Whether held files show from the start.</summary>
+    [Parameter] public bool IncludeHeld { get; set; }
+
+    /// <summary>Element ids, so two lists on one page would not clash.</summary>
+    [Parameter] public string Id { get; set; } = "place-files";
+
+    private readonly List<PlaceFileReviewRow> _rows = [];
+    private LoadResult<PlaceFileReviewRow> _result;
+    private bool _includeHeld, _loading = true;
+    private string? _error;
+    private Guid? _deciding;
+
+    protected override async Task OnInitializedAsync()
+    {
+        _includeHeld = IncludeHeld;
+        if (!await UserState.WaitUntilAuthReadyAsync(RendererInfo.IsInteractive)) return;
+        await LoadAsync();
+    }
+
+    private async Task ToggleHeldAsync(ChangeEventArgs e)
+    {
+        _includeHeld = e.Value is true;
+        await LoadAsync();
+    }
+
+    private async Task LoadAsync()
+    {
+        _loading = true;
+        _error = null;
+        StateHasChanged();
+        try
+        {
+            _result = await Api.GetPlaceFilesToReviewAsync(_includeHeld, PlaceId);
+            _rows.Clear();
+            _rows.AddRange(_result.Items);
+        }
+        finally
+        {
+            _loading = false;
+            StateHasChanged();
+        }
+    }
+
+    private async Task DecideAsync(PlaceFileReviewRow row, bool approve)
+    {
+        _deciding = row.EvidenceId;
+        try
+        {
+            if (!await Api.DecidePlaceFileAsync(row.EvidenceId, approve))
+            {
+                _error = "That decision couldn't be saved. Try again in a moment.";
+                return;
+            }
+            _rows.Remove(row);
+        }
+        finally { _deciding = null; }
+    }
+}

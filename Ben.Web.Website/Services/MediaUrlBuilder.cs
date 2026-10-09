@@ -55,6 +55,16 @@ public sealed class MediaUrlBuilder : IMediaUrlBuilder
         return url;
     }
 
+    public string PlaceFileReview(Guid evidenceId)
+    {
+        var cacheKey = $"place-file-review:{evidenceId}";
+        if (_urls.TryGetValue(cacheKey, out var cached)) return cached;
+        // Only for somebody signed in who may decide about it, so without a token there is nothing to fetch.
+        var token = _tokens.AccessToken;
+        var ticket = string.IsNullOrWhiteSpace(token) ? "" : _tickets.Protect(evidenceId, token);
+        return _urls[cacheKey] = $"/media/place-file-review/{evidenceId}?t={Uri.EscapeDataString(ticket)}";
+    }
+
     public string VenuePhoto(Guid uploadFileId) => $"/media/venue-photo/{uploadFileId}";
 
     public string EventKeepZip(Guid orgId, Guid eventId, IReadOnlyCollection<Guid> uploadFileIds)

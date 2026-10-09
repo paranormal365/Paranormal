@@ -1,0 +1,158 @@
+@namespace Ben.Web.Website.Library.Shared
+@using Ben.Web.Website.Library.Organization.Cases
+@implements IDisposable
+@inject IBenUserState UserState
+
+@*
+    A place's photos, videos and recordings, in the order Ben asked for (10/09/2026): photos first, in a
+    carousel that turns by itself with very small thumbnails under it; then the videos, each playing in a
+    frame of its own; then the recordings as tiles that open the waveform player. People's messages about
+    their experiences come after this, on the page.
+
+    Every item says what it is — a picture of the place, evidence, or something from an event — because
+    those are different claims and a reader weighs them differently. Evidence keeps its vote buttons.
+*@
+
+@if (_photos.Count > 0)
+{
+    <section class="place-gallery mt-4" aria-label="Photos" data-testid="place-photos">
+        <h6 class="fw-semibold">Photos</h6>
+        @{ var current = _photos[_at]; }
+        <div class="place-gallery__stage" @onmouseenter="@(() => _hovering = true)" @onmouseleave="@(() => _hovering = false)">
+            <a href="@current.Url" target="_blank" rel="noopener">
+                <img src="@current.Url" alt="@(current.Caption ?? current.FileName)" data-testid="place-photo-current" />
+            </a>
+            @if (_photos.Count > 1)
+            {
+                <button type="button" class="place-gallery__nav place-gallery__nav--prev" title="Previous photo"
+                        @onclick="@(() => Show(_at - 1, byHand: true))"><BenIcon Name="chevron-left" /><span class="visually-hidden">Previous photo</span></button>
+                <button type="button" class="place-gallery__nav place-gallery__nav--next" title="Next photo"
+                        @onclick="@(() => Show(_at + 1, byHand: true))"><BenIcon Name="chevron-right" /><span class="visually-hidden">Next photo</span></button>
+                <button type="button" class="place-gallery__pause" title="@(_paused ? "Play the slideshow" : "Pause the slideshow")"
+                        @onclick="@(() => _paused = !_paused)">
+                    <BenIcon Name="@(_paused ? "play" : "pause")" /><span class="visually-hidden">@(_paused ? "Play the slideshow" : "Pause the slideshow")</span>
+                </button>
+            }
+        </div>
+        <div class="place-gallery__caption">
+            <span class="badge bg-secondary">@current.Source</span>
+            @if (!string.IsNullOrWhiteSpace(current.Caption)) { <span>@current.Caption</span> }
+            <span class="text-secondary small">@Byline(current)</span>
+            @if (current.VoteFileId is Guid vote)
+            {
+                <EvidenceVoteWidget @key="vote" UploadFileId="@vote" Compact="true" />
+            }
+        </div>
+        @if (_photos.Count > 1)
+        {
+            <div class="place-gallery__thumbs" role="tablist" aria-label="Choose a photo">
+                @for (var i = 0; i < _photos.Count; i++)
+                {
+                    var index = i;
+                    <button type="button" role="tab" aria-selected="@(i == _at ? "true" : "false")"
+                            class="place-gallery__thumb @(i == _at ? "place-gallery__thumb--on" : "")"
+                            title="@(_photos[i].Caption ?? _photos[i].FileName)" @onclick="@(() => Show(index, byHand: true))">
+                        <img src="@_photos[i].Url" alt="" loading="lazy" />
+                    </button>
+                }
+            </div>
+        }
+    </section>
+}
+
+@if (_videos.Count > 0)
+{
+    <section class="mt-4" aria-label="Videos" data-testid="place-videos">
+        <h6 class="fw-semibold">Videos</h6>
+        <div class="place-gallery__grid">
+            @foreach (var v in _videos)
+            {
+                <div class="card place-gallery__card">
+                    <div class="place-gallery__frame">
+                        <video src="@v.Url" controls preload="metadata" playsinline></video>
+                    </div>
+                    <div class="card-body p-2">@Describe(v)</div>
+                </div>
+            }
+        </div>
+    </section>
+}
+
+@if (_audio.Count > 0)
+{
+    <section class="mt-4" aria-label="Recordings" data-testid="place-recordings">
+        <h6 class="fw-semibold">Recordings</h6>
+        <div class="place-gallery__grid place-gallery__grid--small">
+            @foreach (var a in _audio)
+            {
+                <div class="card place-gallery__card">
+                    <BenAudioTile FileId="@a.Key" FileName="@a.FileName" ContentType="@a.ContentType"
+                                  SourceUrl="@a.Url" Title="@(a.Caption ?? a.FileName)">
+                        <p class="small text-secondary mt-2 mb-0">@a.Source · @Byline(a)</p>
+                    </BenAudioTile>
+                    <div class="card-body p-2">@Describe(a)</div>
+                </div>
+            }
+        </div>
+    </section>
+}
+
+@code {
+    /// <summary>Everything the place shows, in the order it should appear within each kind.</summary>
+    [Parameter, EditorRequired] public IReadOnlyList<PlaceMediaItem> Items { get; set; } = [];
+
+    /// <summary>How long a photo stays before the carousel turns.</summary>
+    private static readonly TimeSpan Turn = TimeSpan.FromSeconds(6);
+
+    private List<PlaceMediaItem> _photos = [], _videos = [], _audio = [];
+    private int _at;
+    private bool _paused, _hovering;
+    private Timer? _timer;
+
+    protected override void OnParametersSet()
+    {
+        _photos = [.. Items.Where(i => i.IsPhoto)];
+        _videos = [.. Items.Where(i => i.IsVideo)];
+        _audio = [.. Items.Where(i => i.IsAudio)];
+        if (_at >= _photos.Count) _at = 0;
+    }
+
+    protected override void OnAfterRender(bool firstRender)
+    {
+        // Only once the page is live: a prerendered page has no circuit to turn the carousel with.
+        if (!RendererInfo.IsInteractive || _timer is not null) return;
+        _timer = new Timer(_ => InvokeAsync(() =>
+        {
+            if (_paused || _hovering || _photos.Count < 2) return;
+            Show(_at + 1, byHand: false);
+            StateHasChanged();
+        }), null, Turn, Turn);
+    }
+
+    /// <summary>Shows a photo. Choosing one by hand stops the slideshow, so it doesn't move on from it.</summary>
+    private void Show(int index, bool byHand)
+    {
+        if (_photos.Count == 0) return;
+        _at = ((index % _photos.Count) + _photos.Count) % _photos.Count;
+        if (byHand) _paused = true;
+    }
+
+    private string Byline(PlaceMediaItem item)
+        => string.Join(" · ", new[] { item.By is { Length: > 0 } by ? $"by {by}" : null, item.When?.ToViewerLocalTime(UserState).ToDisplayDate() }
+                                  .Where(s => s is not null));
+
+    private RenderFragment Describe(PlaceMediaItem item) => @<text>
+        <span class="badge bg-secondary">@item.Source</span>
+        @if (!string.IsNullOrWhiteSpace(item.Caption))
+        {
+            <div class="small mt-1">@item.Caption</div>
+        }
+        <div class="text-secondary" style="font-size:.75rem;">@Byline(item)</div>
+        @if (item.VoteFileId is Guid vote)
+        {
+            <div class="mt-2"><EvidenceVoteWidget UploadFileId="@vote" Compact="true" /></div>
+        }
+    </text>;
+
+    public void Dispose() => _timer?.Dispose();
+}

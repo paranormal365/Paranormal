@@ -124,7 +124,8 @@ public class ContentPickerTests : BenTestBase
             // The section editor is an inline card, not a modal — HTML authoring gets full width.
             var sectionCard = Main.Locator(".card").Filter(new() { HasTextString = "New section" }).First;
             await ClickUntilAsync(Main.GetByRole(AriaRole.Button, new() { Name = "Add Section" }), sectionCard);
-            await sectionCard.Locator("select").First.SelectOptionAsync(new SelectOptionValue { Label = "Image or banner" });
+            // The kinds are pictures to pick from since 10/09/2026, not a drop-down.
+            await sectionCard.Locator("[data-section-type=ImageBanner]").ClickAsync();
 
             // The whole point: no GUID box, a Choose button instead.
             await Expect(Page.Locator("#cms-banner-choose")).ToBeVisibleAsync(new() { Timeout = 10_000 });

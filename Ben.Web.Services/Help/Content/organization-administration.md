@@ -1861,6 +1861,22 @@ approval, but any yes it already gave still stands.
 
 ![Reviewing a claim](help-media:organization-administration/venue-claim-review.png)
 
+
+### Files people add to your place
+
+Once your group is confirmed as a place's venue, you decide about the photos, videos and recordings
+people add to that place's public page. Anything the screener doesn't clear waits for you under
+**Files people added to this place** on **Your venue**, and your owners and administrators get a
+message when one arrives. Look at it in the card, then press **Approve** to put it on the page or
+**Hold** to keep it off. Site moderators can decide too, so whoever gets there first settles it.
+
+### What visitors see first
+
+What you write about the building on **Your venue** becomes the first thing on the place's public
+page, under your first photo as the cover, with the map right below it. Your venue page is laid out
+the same way: your words, the map, then your photos as a slideshow, then your own sections, what's on,
+the rooms and the house rules. Nothing shows until you publish your venue page.
+
 ### The program
 
 **Program** on the event page is where you add the classes, talks and meals — the parts of the

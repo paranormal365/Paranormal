@@ -71,10 +71,14 @@ public class VenuePhotoLibraryTests : BenTestBase
         await LogoutAsync();
         await Page.GotoAsync($"{BaseUrl}/o/paranormal365/venues/{VenuePlaceId}");
         await WaitUntilLoadedAsync();
-        var picture = Page.Locator("#venue-photos figure", new() { HasTextString = _caption });
-        await Expect(picture).ToBeVisibleAsync(new() { Timeout = 30_000 });
+        // In the venue page's slideshow since 10/09/2026: the picture on show, or its small thumbnail under it.
+        var picture = Page.Locator($"#venue-photos img[alt='{_caption}'], #venue-photos [title='{_caption}'] img").First;
+        await Expect(picture).ToBeAttachedAsync(new() { Timeout = 30_000 });
+        await picture.ScrollIntoViewIfNeededAsync();
+        await Expect(picture).ToBeVisibleAsync();
+        await Page.WaitForFunctionAsync("img => img.complete", await picture.ElementHandleAsync(), new() { Timeout = 10_000 });
 
-        var loaded = await picture.Locator("img").EvaluateAsync<bool>("img => img.complete && img.naturalWidth > 0");
+        var loaded = await picture.EvaluateAsync<bool>("img => img.complete && img.naturalWidth > 0");
         Assert.That(loaded, Is.True, "the venue's picture did not load for a visitor");
     }
 }

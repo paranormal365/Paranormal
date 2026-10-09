@@ -100,3 +100,21 @@ public sealed record PlaceEvidenceFigures(
 /// there first and rendered on a page any stranger reads.
 /// </remarks>
 public sealed record SetPlaceDescriptionRequest(string? Description);
+
+/// <summary>A file added to a place, waiting on (or held by) a decision — GET api/place-files/review.</summary>
+public sealed record PlaceFileReviewRow(
+    Guid EvidenceId,
+    Guid PlaceId,
+    string PlaceName,
+    string ContributorName,
+    string? Caption,
+    Ben.Data.Common.Enums.PlaceMediaKind Kind,
+    string FileName,
+    string? ContentType,
+    DateTime AddedUtc,
+    Ben.Data.Common.Enums.FeedMediaReviewState State,
+    string? Note);
+
+/// <summary>How many files are waiting at one place for this person to decide about, and its confirmed venue's group.</summary>
+public sealed record PlaceFilesWaiting(Guid PlaceId, string PlaceName, int Count, Guid? VenueOrganizationId = null);
+

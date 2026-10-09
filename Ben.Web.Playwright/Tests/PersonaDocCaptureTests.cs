@@ -126,6 +126,8 @@ public class PersonaDocCaptureTests : BenTestBase
         await Page.SetViewportSizeAsync(1440, 900);
 
         await VisitAsync("5j-website-visitor-menu", "/o/benco/our-team");
+
+        await Ben.Web.Playwright.Capture.CmsSampleSite.RemoveAsync(ApiUrl, token!, orgId);
     }
 
     [Test]

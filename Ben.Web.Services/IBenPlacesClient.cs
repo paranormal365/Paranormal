@@ -389,6 +389,19 @@ public interface IBenPlacesClient
     /// <summary>Takes back something this account added. Only ever their own.</summary>
     Task<bool> RemovePlaceEvidenceAsync(Guid placeId, Guid evidenceId, CancellationToken token = default);
 
+    /// <summary>
+    /// Files added to places that this person may approve or hold, oldest first: every place for a
+    /// SuperAdmin or moderator, otherwise the places whose confirmed venue is a group they run.
+    /// </summary>
+    Task<LoadResult<PlaceFileReviewRow>> GetPlaceFilesToReviewAsync(
+        bool includeHeld, Guid? placeId = null, CancellationToken token = default);
+
+    /// <summary>How many files are waiting for this person, by place.</summary>
+    Task<LoadResult<PlaceFilesWaiting>> GetPlaceFilesWaitingAsync(CancellationToken token = default);
+
+    /// <summary>Approves a file onto its place's page, or holds it with a note.</summary>
+    Task<bool> DecidePlaceFileAsync(Guid evidenceId, bool approve, string? note = null, CancellationToken token = default);
+
     /// <summary>Where a browser fetches one piece of a place's evidence. Anonymous by design.</summary>
     string GetPlaceEvidenceFileUrl(Guid placeId, Guid evidenceId);
 

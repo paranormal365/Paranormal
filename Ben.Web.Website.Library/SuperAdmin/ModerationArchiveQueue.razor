@@ -35,8 +35,9 @@
         <div>
             <h3 class="mb-0">The place archive<HelpLink Slug="moderating-the-feed" /></h3>
             <p class="text-secondary small mb-0">
-                Published sessions and event evidence that somebody flagged, or that a screener
-                could not clear. Nothing here is visible at its place until it is approved.
+                Published sessions, event evidence, and files people added to a place, when somebody
+                flagged them or the screener couldn't clear them. Nothing here shows at its place until
+                it is approved.
             </p>
         </div>
 
@@ -65,6 +66,11 @@
     }
     else
     {
+        @* Files added straight to a place (10/09/2026). They were held with nowhere to release them. *@
+        <div class="mt-4">
+            <PlaceFileReviewList IncludeHeld="@_includeHeld" Title="Files added to places" Id="archive-place-files" />
+        </div>
+
         <h5 class="mt-4">Field sessions <span class="text-secondary fw-normal">(@_sessions.Count)</span></h5>
 
         @if (_sessionResult.Failed)

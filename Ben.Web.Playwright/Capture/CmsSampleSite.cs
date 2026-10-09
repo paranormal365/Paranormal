@@ -81,4 +81,22 @@ public static class CmsSampleSite
         }
         return ids;
     }
+
+    /// <summary>
+    /// Takes the sample site down again after a capture, deepest pages first, so the pages don't stay in the
+    /// test database and change what the rest of the suite sees (a group's published-page count, its menu).
+    /// </summary>
+    public static async Task RemoveAsync(string apiUrl, string token, string orgId)
+    {
+        using var api = new HttpClient { BaseAddress = new Uri(apiUrl) };
+        api.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", token);
+
+        var ids = new Dictionary<string, string>();
+        foreach (var p in (await api.GetFromJsonAsync<JsonElement>($"/api/organizations/{orgId}/pages")).EnumerateArray())
+            ids[p.GetProperty("urlName").GetString()!] = p.GetProperty("id").GetString()!;
+
+        foreach (var spec in Enumerable.Reverse(Pages))
+            if (ids.TryGetValue(spec.Slug, out var id))
+                await api.DeleteAsync($"/api/organizations/{orgId}/pages/{id}");
+    }
 }

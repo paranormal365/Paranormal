@@ -57,18 +57,40 @@
             </div>
         </PageHero>
 
+        @* Ben, 10/09/2026: laid out like a public place — the venue's own words first under its cover photo,
+           the map right below them, then the photos as a carousel, then everything else. *@
         @if (v.History is { Length: > 0 } history)
         {
             <div class="card mb-3">
-                <div class="card-header fw-semibold">The building</div>
+                <div class="card-header fw-semibold">About @v.PlaceName</div>
                 <div class="card-body" id="venue-history" style="white-space:pre-line;">@history</div>
+            </div>
+        }
+
+        @if (v.Latitude is not null && v.Longitude is not null)
+        {
+            <div class="mb-3" id="venue-map">
+                <Ben.Web.Website.Library.Shared.InvestigationsMap
+                    Pins="@([new Ben.Web.Website.Library.Shared.InvestigationMapPin(v.PlaceId, v.PlaceName, v.Latitude, v.Longitude, IsPast: true, IsPublicPlace: true)])"
+                    Height="300px" />
+            </div>
+        }
+
+        @if (v.Photos is { Count: > 0 } photos)
+        {
+            @* The pictures the venue chose to keep (item 235 phase 12), in the place page's carousel. *@
+            <div id="venue-photos">
+                <Ben.Web.Website.Library.Shared.PlaceMediaGallery
+                    Items="@([.. photos.Select(p => new Ben.Web.Website.Library.Shared.PlaceMediaItem(
+                        p.UploadFileId, MediaUrls.VenuePhoto(p.UploadFileId), "image/jpeg", v.PlaceName, p.Caption,
+                        "The venue", null, null))])" />
             </div>
         }
 
         @* The venue's own sections, in its order (2026-10-05). *@
         @if (v.Sections is { Count: > 0 } sections)
         {
-            <div id="venue-sections">
+            <div id="venue-sections" class="mt-4">
                 @foreach (var section in sections)
                 {
                     <div class="card mb-3 venue-section">
@@ -77,26 +99,6 @@
                         {
                             <div class="card-body" style="white-space:pre-line;">@section.Body</div>
                         }
-                    </div>
-                }
-            </div>
-        }
-
-        @if (v.Photos is { Count: > 0 } photos)
-        {
-            @* The pictures the venue chose to keep (item 235 phase 12). *@
-            <div class="row g-2 mb-3" id="venue-photos">
-                @foreach (var photo in photos)
-                {
-                    <div class="col-6 col-md-4">
-                        <figure class="mb-0">
-                            <img class="img-fluid rounded" style="aspect-ratio:3/2;object-fit:cover;width:100%;" loading="lazy"
-                                 src="@MediaUrls.VenuePhoto(photo.UploadFileId)" alt="@(photo.Caption ?? v.PlaceName)" />
-                            @if (photo.Caption is { Length: > 0 } caption)
-                            {
-                                <figcaption class="small text-secondary mt-1">@caption</figcaption>
-                            }
-                        </figure>
                     </div>
                 }
             </div>

@@ -3,6 +3,7 @@
 
 @inject IBenAdminClient AdminClient
 @inject IBenUserState UserState
+@inject IMediaUrlBuilder MediaUrls
 @using Ben.Web.Services.WebApi
 @using Ben.Web.Website.Library.Kit
 @* The feed's own composer and card, reused rather than forked (2026-09-17). Without this using,
@@ -51,7 +52,7 @@
            "the place itself" below — and otherwise a plate in its own color. Never a stock
            photograph: behind a real building's name it would read as that building. *@
         <PageHero TestId="place-hero" Class="place-hero"
-                  PhotoUrl="@(_pictures is { Count: > 0 } heroPics ? AdminClient.GetPlaceEvidenceFileUrl(PlaceId, heroPics[0].Id) : null)"
+                  PhotoUrl="@CoverPhotoUrl"
                   Hue="@Ben.Web.Website.Library.Kit.TourPlate.Hue(_place.Name)"
                   Kicker="@(_place.Kind == Ben.Data.Common.Enums.PlaceKind.PublicLocation ? "Public location" : "A place")"
                   Title="@Title" Lede="@LocationLine">
@@ -253,7 +254,30 @@
                     <text> · </text><a href="@url">Venue page</a>
                 }
             </p>
+
+            @* Ben, 10/09/2026: when the people who run the place have written about it, their words come first,
+               under the cover photo, and the map comes right after them. *@
+            @if (!string.IsNullOrWhiteSpace(venue.Summary))
+            {
+                <div class="card mb-3" id="place-venue-summary">
+                    <div class="card-body">
+                        <h6 class="fw-semibold">About @Title, from @venue.OrganizationName</h6>
+                        <p class="mb-0" style="white-space:pre-wrap;">@venue.Summary</p>
+                    </div>
+                </div>
+            }
         }
+
+        @if (_place.Latitude.HasValue && _place.Longitude.HasValue)
+        {
+            <InvestigationsMap Pins="@_pins" Height="300px" />
+        }
+        else if (!string.IsNullOrWhiteSpace(_place.GeocodeNote))
+        {
+            @* Says why there is no map rather than leaving a blank where one should be. *@
+            <div class="alert alert-warning py-2 small">@_place.GeocodeNote</div>
+        }
+
 
         @* How to reach the place, and — for a signed-in member of a group, when nobody runs it as a
            venue yet — the question that starts a claim (item 235 phase 9). Asked here because this
@@ -290,15 +314,6 @@
             </p>
         }
 
-        @if (_place.Latitude.HasValue && _place.Longitude.HasValue)
-        {
-            <InvestigationsMap Pins="@_pins" Height="300px" />
-        }
-        else if (!string.IsNullOrWhiteSpace(_place.GeocodeNote))
-        {
-            @* Says why there is no map rather than leaving a blank where one should be. *@
-            <div class="alert alert-warning py-2 small">@_place.GeocodeNote</div>
-        }
 
         @* ── Signed-in view ───────────────────────────────────────────────── *@
         @if (_rows is not null)
@@ -363,6 +378,62 @@
                 </table>
             </div>
         }
+
+        @* ── What this place is, and what it looks like ───────────────────── *@
+        @* Ben, 10/09/2026: photos first, in a carousel; then videos; then recordings; then people's own
+           messages about their experiences. The pictures of the building, the evidence people added, and what
+           guests sent up from events here all appear in the one gallery, each labeled with what it is. *@
+        @if (_place.Kind == Ben.Data.Common.Enums.PlaceKind.PublicLocation)
+        {
+            <div class="mt-4" id="place-about">
+                @* A heading, so a reader knows this paragraph is ABOUT the building rather than a
+                   caption on the map above it (V5). *@
+                <h6 class="fw-semibold">About this place</h6>
+                @if (!string.IsNullOrWhiteSpace(_place.Description) && !_editingAbout)
+                {
+                    @* Plain text, held as plain text and rendered as plain text. The server strips
+                       markup on the way in; this does not hand it back to the browser as HTML. *@
+                    <p style="white-space:pre-wrap;">@_place.Description</p>
+                }
+                else if (!_editingAbout)
+                {
+                    <p class="text-secondary small fst-italic">
+                        Nobody has written about this place yet.
+                    </p>
+                }
+
+                @if (UserState.IsAuthenticated)
+                {
+                    @if (_editingAbout)
+                    {
+                        <textarea id="place-about-text" class="form-control mb-2" rows="5"
+                                  maxlength="4000" @bind="_aboutDraft"
+                                  placeholder="What is this place? When was it built, who lived here, what is it now?"></textarea>
+                        <button type="button" class="btn btn-primary btn-sm me-1"
+                                id="place-about-save" @onclick="SaveAboutAsync" disabled="@_savingAbout">
+                            @(_savingAbout ? "Saving…" : "Save")
+                        </button>
+                        <button type="button" class="btn btn-outline-secondary btn-sm"
+                                @onclick="@(() => _editingAbout = false)">Cancel</button>
+                        @if (_aboutSays is { Length: > 0 })
+                        {
+                            <div class="alert alert-warning mt-2 mb-0" id="place-about-says">@_aboutSays</div>
+                        }
+                    }
+                    else
+                    {
+                        <button type="button" class="btn btn-outline-secondary btn-sm"
+                                id="place-about-edit" @onclick="StartEditingAbout">
+                            <BenIcon Name="edit-2" Class="me-1" />
+                            @(string.IsNullOrWhiteSpace(_place.Description) ? "Describe this place" : "Edit")
+                        </button>
+                    }
+                }
+            </div>
+
+        }
+
+        <PlaceMediaGallery Items="@MediaItems" />
 
         @* ── Posts about this place ───────────────────────────────────────── *@
         @* Ben, 2026-09-17: a public location should be "actually public for adding files,
@@ -564,139 +635,6 @@
             </p>
         }
 
-        @* ── What guests photographed on events here ──────────────────────── *@
-        @* A tour walks the same route every week, which makes public events the one activity
-           that happens repeatedly at a fixed location — so this is where the archive fills
-           fastest. Kept as its own section rather than folded into the sessions table, because
-           one picture from a walk is not a night of readings and a table of magnetometer
-           columns is the wrong shape for it. *@
-        @if (_evidence is { Count: > 0 })
-        {
-            <h6 class="fw-semibold mt-4">From events here</h6>
-            <p class="text-secondary small mb-2">
-                Contributed by the people who took them, on public events at this place.
-            </p>
-            <div class="d-flex flex-wrap gap-3">
-                @foreach (var ev in _evidence)
-                {
-                    var url = AdminClient.GetEventEvidenceFileUrl(ev.OrgCalendarEventId, ev.SubmissionId);
-                    <div class="card" style="width:220px;">
-                        @if (ev.ContentType.StartsWith("image/"))
-                        {
-                            <a href="@url" target="_blank" rel="noopener">
-                                <img src="@url" alt="@ev.EventTitle" class="card-img-top"
-                                     style="height:150px;object-fit:cover;" />
-                            </a>
-                        }
-                        else if (ev.ContentType.StartsWith("video/"))
-                        {
-                            <video controls preload="metadata" src="@url" style="width:100%;height:150px;"></video>
-                        }
-                        else if (ev.ContentType.StartsWith("audio/"))
-                        {
-                            <audio controls preload="none" src="@url" class="w-100 mt-2"></audio>
-                        }
-                        <div class="card-body p-2">
-                            <div class="small fw-semibold text-truncate">@ev.EventTitle</div>
-                            <div class="text-secondary" style="font-size:.75rem;">
-                                @* The operator's name, on a page they did not have to buy an ad
-                                   on — the tour that ran the walk earned the credit. *@
-                                <a href="/organizations/@ev.OrganizationId">@ev.OrganizationName</a>
-                                · @ev.EventStartedAt.ToViewerLocalTime(UserState).ToDisplayDate()
-                            </div>
-                            <div class="text-secondary" style="font-size:.75rem;">
-                                by <UserNameLink AppUserId="@ev.ContributorAppUserId" DisplayName="@ev.ContributorName" />
-                            </div>
-                            @if (!string.IsNullOrWhiteSpace(ev.Note))
-                            {
-                                <div class="small mt-1">@ev.Note</div>
-                            }
-                        </div>
-                    </div>
-                }
-            </div>
-        }
-
-        @* ── What this place is, and what it looks like (item 250) ────────── *@
-        @* Ben: "we can create a page with information about it, images of it — not evidence but
-           the property and photos inside to show it." The two galleries are kept apart on purpose:
-           a daylight photograph of a staircase and a photograph of the same staircase somebody
-           thinks has a figure on it are different claims, and mixed together the page is useless.
-           Nothing here is voted on or counted. *@
-        @if (_place.Kind == Ben.Data.Common.Enums.PlaceKind.PublicLocation)
-        {
-            <div class="mt-4" id="place-about">
-                @* A heading, so a reader knows this paragraph is ABOUT the building rather than a
-                   caption on the map above it (V5). *@
-                <h6 class="fw-semibold">About this place</h6>
-                @if (!string.IsNullOrWhiteSpace(_place.Description) && !_editingAbout)
-                {
-                    @* Plain text, held as plain text and rendered as plain text. The server strips
-                       markup on the way in; this does not hand it back to the browser as HTML. *@
-                    <p style="white-space:pre-wrap;">@_place.Description</p>
-                }
-                else if (!_editingAbout)
-                {
-                    <p class="text-secondary small fst-italic">
-                        Nobody has written about this place yet.
-                    </p>
-                }
-
-                @if (UserState.IsAuthenticated)
-                {
-                    @if (_editingAbout)
-                    {
-                        <textarea id="place-about-text" class="form-control mb-2" rows="5"
-                                  maxlength="4000" @bind="_aboutDraft"
-                                  placeholder="What is this place? When was it built, who lived here, what is it now?"></textarea>
-                        <button type="button" class="btn btn-primary btn-sm me-1"
-                                id="place-about-save" @onclick="SaveAboutAsync" disabled="@_savingAbout">
-                            @(_savingAbout ? "Saving…" : "Save")
-                        </button>
-                        <button type="button" class="btn btn-outline-secondary btn-sm"
-                                @onclick="@(() => _editingAbout = false)">Cancel</button>
-                        @if (_aboutSays is { Length: > 0 })
-                        {
-                            <div class="alert alert-warning mt-2 mb-0" id="place-about-says">@_aboutSays</div>
-                        }
-                    }
-                    else
-                    {
-                        <button type="button" class="btn btn-outline-secondary btn-sm"
-                                id="place-about-edit" @onclick="StartEditingAbout">
-                            <BenIcon Name="edit-2" Class="me-1" />
-                            @(string.IsNullOrWhiteSpace(_place.Description) ? "Describe this place" : "Edit")
-                        </button>
-                    }
-                }
-            </div>
-
-            @if (_pictures is { Count: > 0 })
-            {
-                <h6 class="fw-semibold mt-4">The place itself</h6>
-                <p class="text-secondary small mb-2">
-                    Photographs of the building and its grounds. Not evidence — nobody is claiming
-                    anything about these, and they are not counted or voted on.
-                </p>
-                <div class="d-flex flex-wrap gap-3">
-                    @foreach (var pic in _pictures)
-                    {
-                        var picUrl = AdminClient.GetPlaceEvidenceFileUrl(PlaceId, pic.Id);
-                        <figure class="m-0" style="width:220px;">
-                            <a href="@picUrl" target="_blank" rel="noopener">
-                                <img src="@picUrl" alt="@(pic.Caption ?? _place.Name)"
-                                     class="rounded" style="width:220px;height:150px;object-fit:cover;" />
-                            </a>
-                            @if (!string.IsNullOrWhiteSpace(pic.Caption))
-                            {
-                                <figcaption class="small text-secondary mt-1">@pic.Caption</figcaption>
-                            }
-                        </figure>
-                    }
-                </div>
-            }
-        }
-
         @* ── What the evidence here adds up to (item 250) ─────────────────── *@
         @* Ben: "positive, negative, unknown and the average of each overall we can track."
            Per place and never compared across places — he decided against a league table on
@@ -861,49 +799,7 @@
                 </p>
             }
 
-            @if (_added is { Count: > 0 })
-            {
-                <div class="d-flex flex-wrap gap-3">
-                    @foreach (var item in _added)
-                    {
-                        var url = AdminClient.GetPlaceEvidenceFileUrl(PlaceId, item.Id);
-                        <div class="card" style="width:220px;">
-                            @if (item.ContentType.StartsWith("image/"))
-                            {
-                                <a href="@url" target="_blank" rel="noopener">
-                                    <img src="@url" alt="@(item.Caption ?? item.FileName)"
-                                         class="card-img-top" style="height:150px;object-fit:cover;" />
-                                </a>
-                            }
-                            else if (item.ContentType.StartsWith("video/"))
-                            {
-                                <video controls preload="metadata" src="@url" style="width:100%;height:150px;"></video>
-                            }
-                            else if (item.ContentType.StartsWith("audio/"))
-                            {
-                                <audio controls preload="none" src="@url" class="w-100 mt-2"></audio>
-                            }
-                            <div class="card-body p-2">
-                                @if (!string.IsNullOrWhiteSpace(item.Caption))
-                                {
-                                    <div class="small">@item.Caption</div>
-                                }
-                                <div class="text-secondary" style="font-size:.75rem;">
-                                    by @item.AddedBy · @item.AddedUtc.ToViewerLocalTime(UserState).ToDisplayDate()
-                                </div>
-                                @* The site's one vote widget, not a second set of buttons. It
-                                   posts to api/evidence-votes, which is keyed on the FILE — so a
-                                   vote cast here is the same vote the file carries anywhere else
-                                   it appears, which is what makes the tally above mean anything. *@
-                                <div class="mt-2">
-                                    <EvidenceVoteWidget UploadFileId="@item.UploadFileId" Compact="true" />
-                                </div>
-                            </div>
-                        </div>
-                    }
-                </div>
-            }
-            else
+            @if (_added is not { Count: > 0 })
             {
                 <p class="text-secondary small fst-italic">
                     Nobody has added anything here yet.
@@ -1121,6 +1017,19 @@
     private List<Ben.Service.Models.Entities.PlaceAddedEvidenceRow>? _added;
     private Ben.Service.Models.Entities.PlaceEvidenceFigures? _figures;
     private List<Ben.Service.Models.Entities.PlaceAddedEvidenceRow>? _pictures;
+
+    /// <summary>
+    /// Everything the gallery shows: pictures of the place, then evidence people added (with its votes), then
+    /// what guests sent up from events here — each kind in the order the server gave it.
+    /// </summary>
+    private IReadOnlyList<PlaceMediaItem> MediaItems =>
+        [.. (_pictures ?? []).Select(p => new PlaceMediaItem(p.Id, AdminClient.GetPlaceEvidenceFileUrl(PlaceId, p.Id),
+                p.ContentType, p.FileName, p.Caption, "The place", p.AddedBy, p.AddedUtc)),
+            .. (_added ?? []).Select(e => new PlaceMediaItem(e.Id, AdminClient.GetPlaceEvidenceFileUrl(PlaceId, e.Id),
+                e.ContentType, e.FileName, e.Caption, "Evidence", e.AddedBy, e.AddedUtc, e.UploadFileId)),
+            .. (_evidence ?? []).Select(e => new PlaceMediaItem(e.SubmissionId,
+                AdminClient.GetEventEvidenceFileUrl(e.OrgCalendarEventId, e.SubmissionId),
+                e.ContentType, e.EventTitle, e.Note, $"From {e.EventTitle}", e.ContributorName, e.EventStartedAt))];
     private Ben.Data.Common.Enums.PlaceMediaKind _evidenceKind =
         Ben.Data.Common.Enums.PlaceMediaKind.Evidence;
     private bool _editingAbout;
@@ -1136,6 +1045,15 @@
 
     /// <summary>The verified venue here, when there is one.</summary>
     private PlaceVenueRecord? _venue;
+
+    /// <summary>
+    /// The hero's photo: the venue's cover when the people who run the place have chosen one, otherwise the
+    /// first picture of the place itself, otherwise none (a plate in the place's color).
+    /// </summary>
+    private string? CoverPhotoUrl =>
+        _venue?.CoverUploadFileId is Guid cover ? MediaUrls.VenuePhoto(cover)
+        : _pictures is { Count: > 0 } pics ? AdminClient.GetPlaceEvidenceFileUrl(PlaceId, pics[0].Id)
+        : null;
 
     private string Title => string.IsNullOrWhiteSpace(_place?.Name)
         ? (string.IsNullOrWhiteSpace(_place?.StreetAddress1) ? "Place" : _place!.StreetAddress1!)

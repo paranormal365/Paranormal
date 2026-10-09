@@ -1,0 +1,86 @@
+/* The carousel: one photo large, contained in a 16:9 stage, with very small thumbnails under it. */
+.place-gallery__stage {
+    position: relative;
+    aspect-ratio: 16 / 9;
+    max-height: 32rem;
+    background: #000;
+    border-radius: .75rem;
+    overflow: hidden;
+}
+
+.place-gallery__stage a,
+.place-gallery__stage img {
+    display: block;
+    width: 100%;
+    height: 100%;
+    object-fit: contain;
+}
+
+.place-gallery__nav,
+.place-gallery__pause {
+    position: absolute;
+    display: grid;
+    place-items: center;
+    width: 2.4rem;
+    height: 2.4rem;
+    border: 0;
+    border-radius: 50%;
+    background: rgba(0, 0, 0, .55);
+    color: #fff;
+}
+
+.place-gallery__nav { top: 50%; transform: translateY(-50%); }
+.place-gallery__nav--prev { left: .6rem; }
+.place-gallery__nav--next { right: .6rem; }
+.place-gallery__pause { right: .6rem; bottom: .6rem; width: 2rem; height: 2rem; }
+
+.place-gallery__nav ::deep .sa-icon,
+.place-gallery__pause ::deep .sa-icon { stroke: currentColor; --sa-icon-color: currentColor; width: 1.1rem; height: 1.1rem; }
+
+.place-gallery__caption {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: .5rem;
+    margin-top: .5rem;
+}
+
+.place-gallery__thumbs {
+    display: flex;
+    gap: .3rem;
+    margin-top: .5rem;
+    overflow-x: auto;
+    padding-bottom: .25rem;
+}
+
+.place-gallery__thumb {
+    flex: 0 0 auto;
+    width: 3.5rem;
+    height: 2.4rem;
+    padding: 0;
+    border: 2px solid transparent;
+    border-radius: .3rem;
+    overflow: hidden;
+    opacity: .6;
+    background: #000;
+}
+
+.place-gallery__thumb img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.place-gallery__thumb--on { border-color: var(--bs-primary); opacity: 1; }
+.place-gallery__thumb:hover { opacity: 1; }
+
+/* Videos and recordings: a grid of cards, each video in the same contained frame. */
+.place-gallery__grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(16rem, 1fr));
+    gap: .75rem;
+}
+
+.place-gallery__grid--small { grid-template-columns: repeat(auto-fill, minmax(11rem, 1fr)); }
+
+.place-gallery__card { overflow: hidden; }
+
+.place-gallery__frame { aspect-ratio: 16 / 9; background: #000; }
+.place-gallery__frame video { width: 100%; height: 100%; object-fit: contain; display: block; }
+
+.place-gallery__card ::deep .ben-audio-tile { border: 0; border-radius: 0; }

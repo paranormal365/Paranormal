@@ -347,6 +347,18 @@ public sealed partial class BenAdminClientAdapter
         Guid placeId, Guid evidenceId, CancellationToken token = default)
         => _api.DeleteAsync($"/api/places/{placeId}/evidence/{evidenceId}", token);
 
+    public Task<LoadResult<PlaceFileReviewRow>> GetPlaceFilesToReviewAsync(
+        bool includeHeld, Guid? placeId = null, CancellationToken token = default)
+        => _api.GetListAsync<PlaceFileReviewRow>(
+            $"/api/place-files/review?includeHeld={(includeHeld ? "true" : "false")}"
+            + (placeId is Guid p ? $"&placeId={p}" : ""), token);
+
+    public Task<LoadResult<PlaceFilesWaiting>> GetPlaceFilesWaitingAsync(CancellationToken token = default)
+        => _api.GetListAsync<PlaceFilesWaiting>("/api/place-files/review/waiting", token);
+
+    public Task<bool> DecidePlaceFileAsync(Guid evidenceId, bool approve, string? note = null, CancellationToken token = default)
+        => _api.PostVoidAsync($"/api/place-files/review/{evidenceId}", new { Approve = approve, Note = note }, token);
+
     /// <summary>
     /// Built rather than fetched, and anonymous on purpose: this is an <c>&lt;img&gt;</c> or a
     /// <c>&lt;video&gt;</c> src on a page a stranger is reading, and neither carries a token.

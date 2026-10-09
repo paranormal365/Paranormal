@@ -129,7 +129,10 @@ public sealed record PublicVenueRecord(
     /// <summary>The pictures in the venue's library that it chose to keep (item 235 phase 12).</summary>
     IReadOnlyList<PublicVenuePhotoRecord>? Photos = null,
     /// <summary>The venue's own titled sections, in its order (2026-10-05).</summary>
-    IReadOnlyList<PublicVenueSectionRecord>? Sections = null);
+    IReadOnlyList<PublicVenueSectionRecord>? Sections = null,
+    /// <summary>Where the building is, for the map under the venue's summary (10/09/2026).</summary>
+    decimal? Latitude = null,
+    decimal? Longitude = null);
 
 /// <summary>A titled piece of writing on a venue's public page.</summary>
 public sealed record PublicVenueSectionRecord(string Title, string Body);
@@ -146,7 +149,14 @@ public sealed record PublicVenueEventRecord(
 
 /// <summary>Who runs a place as its venue, for the place page.</summary>
 /// <param name="VenuePageUrl">Null when the venue has not published its page.</param>
-public sealed record PlaceVenueRecord(string OrganizationName, string OrganizationUrlName, string? VenuePageUrl);
+/// <param name="Summary">
+/// What the venue wrote about its building (its History), shown at the top of the place page (Ben, 10/09/2026).
+/// Null until the venue page is published.
+/// </param>
+/// <param name="CoverUploadFileId">The venue's first photo, the place page's cover. Null when it has none.</param>
+public sealed record PlaceVenueRecord(
+    string OrganizationName, string OrganizationUrlName, string? VenuePageUrl,
+    string? Summary = null, Guid? CoverUploadFileId = null);
 
 // ── a place's contact details ───────────────────────────────────────────────────
 

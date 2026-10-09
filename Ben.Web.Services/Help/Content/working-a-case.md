@@ -849,6 +849,16 @@ and nothing else.
 *One location, and every group's work at it: your visits, what others shared, the cases published
 here, the posts, and the field archive.*
 
+### How a public location's page is laid out
+
+When the people who run the place have written about it (see **Your venue** in the group
+administration help), their words come first, under the place's cover photo, with the map right
+below. Then come the place's **photos**, in a slideshow that turns by itself with small thumbnails
+under it (click one to stop on it), then its **videos**, then its **recordings**, which open the
+waveform player when you click them. Each one says what it is: a picture of the place, evidence
+someone added, or something from an event held there. People's **posts** about their visits come
+after that.
+
 ### Your groups' cases here
 
 When you're signed in, a place also shows **your groups' cases here** — every case any of your
