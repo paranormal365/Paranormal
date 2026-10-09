@@ -8728,6 +8728,9 @@ namespace Ben.Data.Source.Migrations
                     b.Property<int>("Role")
                         .HasColumnType("int");
 
+                    b.Property<bool>("ShowOnPublicPages")
+                        .HasColumnType("bit");
+
                     b.Property<Guid?>("UpdatedByAppUserId")
                         .HasColumnType("uniqueidentifier");
 

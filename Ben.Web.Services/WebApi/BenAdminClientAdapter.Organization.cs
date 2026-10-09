@@ -541,6 +541,12 @@ public sealed partial class BenAdminClientAdapter
     public Task<LoadResult<MyMembershipOrgItem>> GetMyMembershipOrganizationsAsync(CancellationToken token = default)
         => _api.GetListAsync<MyMembershipOrgItem>("/api/security/organizations/my-memberships", token);
 
+    public Task<LoadResult<MyPublicListing>> GetMyPublicListingsAsync(CancellationToken token = default)
+        => _api.GetListAsync<MyPublicListing>("/api/me/public-listing", token);
+
+    public Task<bool> SetMyPublicListingAsync(Guid organizationId, bool show, CancellationToken token = default)
+        => _api.PutVoidAsync($"/api/me/public-listing/{organizationId}", new { Show = show }, token);
+
     /// <summary>The caller's waiting work per group (item 161): client requests to answer and
     /// membership applications to review, only for groups whose queues the caller can open.</summary>
     public Task<LoadResult<OrgActionNeededItem>> GetActionNeededAsync(CancellationToken token = default)

@@ -1,0 +1,80 @@
+@namespace Ben.Web.Website.Library.User
+@inject IBenAdminClient AdminClient
+@inject IBenUserState UserState
+
+@*
+    Whether each of my groups may name me on its public pages (backlog 256, 10/09/2026). A group's "Our
+    members" section shows only the people who said yes here. Off until the member turns it on, and only
+    they can.
+*@
+
+<div class="card" id="my-public-listing">
+    <div class="card-body">
+        <h6 class="card-title">Your groups' public pages</h6>
+        <p class="text-secondary small">
+            A group can list its members on its public website, with their name, public photo and title. It can
+            only list you if you say yes here. Each group is separate.
+        </p>
+        @if (_result.Failed)
+        {
+            <BenListState TItem="MyPublicListing" Result="@_result" />
+        }
+        else if (!_loaded)
+        {
+            <p class="text-secondary small mb-0">Loading your groups…</p>
+        }
+        else if (_rows.Count == 0)
+        {
+            <p class="text-secondary small mb-0">You aren't a member of any groups yet.</p>
+        }
+        else
+        {
+            @foreach (var row in _rows)
+            {
+                var org = row;
+                <div class="form-check form-switch">
+                    <input class="form-check-input" type="checkbox" role="switch" id="@($"listing-{org.OrganizationId}")"
+                           checked="@org.ShowOnPublicPages" disabled="@(_saving == org.OrganizationId)"
+                           @onchange="@(e => SetAsync(org, (bool?)e.Value == true))" />
+                    <label class="form-check-label" for="@($"listing-{org.OrganizationId}")">
+                        List me on <strong>@org.OrganizationName</strong>'s public pages
+                    </label>
+                </div>
+            }
+            @if (_error is not null)
+            {
+                <div class="alert alert-danger py-2 mt-2 mb-0 small">@_error</div>
+            }
+        }
+    </div>
+</div>
+
+@code {
+    private LoadResult<MyPublicListing> _result;
+    private List<MyPublicListing> _rows = [];
+    private bool _loaded;
+    private Guid? _saving;
+    private string? _error;
+
+    protected override async Task OnInitializedAsync()
+    {
+        if (!await UserState.WaitUntilAuthReadyAsync(RendererInfo.IsInteractive)) return;
+        _result = await AdminClient.GetMyPublicListingsAsync();
+        _rows = [.. _result.Items];
+        _loaded = true;
+    }
+
+    private async Task SetAsync(MyPublicListing row, bool show)
+    {
+        _saving = row.OrganizationId;
+        _error = null;
+        try
+        {
+            if (await AdminClient.SetMyPublicListingAsync(row.OrganizationId, show))
+                _rows[_rows.IndexOf(row)] = row with { ShowOnPublicPages = show };
+            else
+                _error = "That couldn't be saved. Try again in a moment.";
+        }
+        finally { _saving = null; }
+    }
+}

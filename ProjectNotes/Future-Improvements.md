@@ -13792,7 +13792,7 @@ Fixed on the way: the blink test's liveness check (the Signal layout hid the sid
 the phone room test (a "Work waiting" banner pushed the form below the fold), and three fixtures marked to
 run alone (store checkout and product stock, the seeded case's votes).
 
-## 256. Three CMS section kinds that show visitors a placeholder (OPEN — found 10/09/2026)
+## 256. Three CMS section kinds that show visitors a placeholder (CLOSED 10/09/2026 — built on feature/cms-sections-256)
 
 Found building the section picker's thumbnails (`feature/cms-editor-ux`). **Contact details**, **File
 gallery** and **Our members** save their settings, but the public renderer (`OrgPublicSection`) draws each
@@ -13811,4 +13811,9 @@ files, a roster from members who have agreed to be listed — would bring them b
 failing the request. Any other call site with mismatched shapes now writes an "Audit log write failed" error
 to the log and no audit row; a sweep of the 84 `LogUpdateAsync` calls for mismatched before/after would
 recover those rows.
+
+Closed the same day. `CmsGroupSections` resolves all three on every read: contact details through each record's
+public switch and each address's display mode; gallery files only when public; members only with the member's
+own consent (`OrganizationUserMembership.ShowOnPublicPages`, set from Profile → About; migration
+`MemberPublicListing`). The editor has a public-file picker with ordering and an everyone/chosen roster.
 

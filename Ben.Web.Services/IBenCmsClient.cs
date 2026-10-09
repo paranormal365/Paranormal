@@ -99,6 +99,9 @@ public interface IBenCmsClient
     /// <summary>The group's own investigations, for the embed picker, flagged by whether each is already public.</summary>
     Task<LoadResult<EmbeddableRecord>> GetEmbeddableInvestigationsAsync(Guid orgId, CancellationToken token = default);
 
+    /// <summary>The group's members for an "Our members" section, and whether each agreed to be named.</summary>
+    Task<LoadResult<RosterCandidate>> GetCmsRosterCandidatesAsync(Guid orgId, CancellationToken token = default);
+
     /// <summary>The group's own cases, same shape and same purpose.</summary>
     Task<LoadResult<EmbeddableRecord>> GetEmbeddableCasesAsync(Guid orgId, CancellationToken token = default);
 

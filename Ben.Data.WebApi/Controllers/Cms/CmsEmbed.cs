@@ -38,7 +38,11 @@ public static class CmsEmbed
                 or CmsSectionType.EventProgramme
                 or CmsSectionType.EventBooking
                 or CmsSectionType.EventGallery
-                or CmsSectionType.EventVenue;
+                or CmsSectionType.EventVenue
+                // Built from the group's own records on every read (backlog 256).
+                or CmsSectionType.ContactInfo
+                or CmsSectionType.FileGallery
+                or CmsSectionType.MemberRoster;
 
     // ── What the group stores ────────────────────────────────────────────────
 
@@ -257,6 +261,9 @@ public static class CmsEmbed
         BenDataContext db, Guid organizationId, CmsSectionType type, string? contentJson,
         CancellationToken ct)
     {
+        if (CmsGroupSections.Handles(type))
+            return await CmsGroupSections.ResolveAsync(db, organizationId, type, contentJson, ct);
+
         // An event (item 235 phase 11): one stored shape, {"eventId": …}, for all four sections.
         if (type is CmsSectionType.EventProgramme or CmsSectionType.EventBooking
                  or CmsSectionType.EventGallery or CmsSectionType.EventVenue)

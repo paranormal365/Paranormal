@@ -194,6 +194,12 @@ public interface IBenOrganizationClient
     Task<WebApi.LoadResult<OrgMembershipItem>> GetOrganizationMembersAsync(Guid orgId, CancellationToken token = default);
 
     Task<WebApi.LoadResult<MyMembershipOrgItem>> GetMyMembershipOrganizationsAsync(CancellationToken token = default);
+
+    /// <summary>My groups, and whether each may name me on its public pages (backlog 256).</summary>
+    Task<WebApi.LoadResult<MyPublicListing>> GetMyPublicListingsAsync(CancellationToken token = default);
+
+    /// <summary>Says yes or no to one group naming me on its public pages.</summary>
+    Task<bool> SetMyPublicListingAsync(Guid organizationId, bool show, CancellationToken token = default);
     Task<WebApi.LoadResult<OrgActionNeededItem>> GetActionNeededAsync(CancellationToken token = default);
     Task<WebApi.LoadResult<ShareableUserFileItem>> GetShareableUserFilesAsync(Guid orgId, CancellationToken token = default);
 
