@@ -13765,7 +13765,7 @@ talking. How often does the model match a known teammate correctly, how often do
 a stranger, and how short or whispered can a clip be before it gives up? Those numbers decide
 whether the feature is worth building and where the threshold sits.
 
-## 255. Browser tests that depend on what ran before them (OPEN — found 10/08/2026)
+## 255. Browser tests that depend on what ran before them (CLOSED 10/10/2026 — fix/order-dependent-tests-255, merged with the site audit)
 
 Found merging everything on 10/08/2026 (`integration/2026-10-08`). Every test passed in at least one full
 run, but these fail or pass by order:
@@ -13791,6 +13791,11 @@ switch is off unless another fixture turned it on first). The branch changed no 
 Fixed on the way: the blink test's liveness check (the Signal layout hid the sidebar filter it typed into),
 the phone room test (a "Work waiting" banner pushed the form below the fold), and three fixtures marked to
 run alone (store checkout and product stock, the seeded case's votes).
+
+Closed with a green full run (910 passed, 0 failed). The store menu test asked for any link named Store
+and found the shop's; the announcement test took the badge, which follows typing, for a saved setting; the
+time-zone test clicked before the profile could answer and left Pacific behind when it failed; demo events
+rolled past their dates; seeded store options were spelled Colour. Each is fixed where it was.
 
 ## 256. Three CMS section kinds that show visitors a placeholder (CLOSED 10/09/2026 — built on feature/cms-sections-256)
 
