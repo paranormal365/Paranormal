@@ -64,7 +64,7 @@ else
                                     @foreach (var item in _memberAccessList)
                                     {
                                         <div class="d-flex justify-content-between align-items-center py-1 border-bottom small">
-                                            <span class="font-monospace text-secondary">@item.OrganizationUserMembershipId.ToString()[..8]…</span>
+                                            <span>@MemberName(item.OrganizationUserMembershipId)</span>
                                             <button type="button" class="btn @(ThemeConstants.Button.FillMode.Flat == ThemeConstants.Button.FillMode.Solid ? "btn-danger" : "btn-outline-danger") btn-sm" @onclick="@(async () => await RemoveMemberAccessAsync(item.Id))"><BenIcon Name="trash-2" /></button>
                                         </div>
                                     }
@@ -77,6 +77,12 @@ else
                                     Add
                                 </button>
                             </div>
+                        </div>
+                    }
+                    else if (_formVisibility == OrganizationAddressVisibility.SpecificMembers)
+                    {
+                        <div class="col-12 mt-1">
+                            <div class="form-text">Save the address first, then choose the members who can see it.</div>
                         </div>
                     }
                     <div class="col-12">
@@ -232,6 +238,9 @@ else
 
     private sealed record OrgMemberOption(Guid MembershipId, string Display);
 
+    private string MemberName(Guid membershipId)
+        => _orgMembers.FirstOrDefault(m => m.MembershipId == membershipId)?.Display ?? "A former member";
+
     // ── Lifecycle ─────────────────────────────────────────────────────────────
 
     protected override async Task OnParametersSetAsync()
@@ -267,13 +276,21 @@ else
     private async Task LoadOrgMembersAsync()
     {
         var members = (await AdminClient.GetOrganizationMembersAsync(OrgId)).Items;
-        _orgMembers = members.Select(m => new OrgMemberOption(m.MembershipId, $"{m.Role} — {m.AppUserId.ToString()[..8]}…")).ToList();
+        // By name: the picker showed "Member — 3f2a9c1b…", which made it easy to grant the wrong person (site audit, 10/09/2026).
+        _orgMembers = members
+            .Select(m => new OrgMemberOption(m.MembershipId, string.IsNullOrWhiteSpace(m.DisplayName) ? $"A member ({m.Role})" : $"{m.DisplayName} ({m.Role})"))
+            .OrderBy(m => m.Display, StringComparer.CurrentCultureIgnoreCase)
+            .ToList();
     }
 
     private async Task AddMemberAccessAsync()
     {
         if (_editId is null || _selectedMembershipId == Guid.Empty) return;
-        await AdminClient.AddAddressMemberAccessAsync(OrgId, _editId.Value, _selectedMembershipId);
+        if (await AdminClient.AddAddressMemberAccessAsync(OrgId, _editId.Value, _selectedMembershipId) is null)
+        {
+            _errorMessage = "That member couldn't be added. Please try again.";
+            return;
+        }
         await LoadMemberAccessAsync();
         _selectedMembershipId = Guid.Empty;
     }
@@ -281,7 +298,11 @@ else
     private async Task RemoveMemberAccessAsync(Guid accessId)
     {
         if (_editId is null) return;
-        await AdminClient.RemoveAddressMemberAccessAsync(OrgId, _editId.Value, accessId);
+        if (!await AdminClient.RemoveAddressMemberAccessAsync(OrgId, _editId.Value, accessId))
+        {
+            _errorMessage = "That member couldn't be removed. Please try again.";
+            return;
+        }
         await LoadMemberAccessAsync();
     }
 

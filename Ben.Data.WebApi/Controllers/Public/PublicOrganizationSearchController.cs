@@ -87,7 +87,9 @@ public sealed class PublicOrganizationSearchController : ControllerBase
                 UrlName:                     org.UrlName,
                 DisplayLabel:                org.DisplayLabel,
                 RadiusMiles:                 (double)org.RadiusMiles,
-                DistanceFromSearchMiles:     Math.Round(dist, 1),
+                // In five-mile bands: the centre is private, and a tenth of a mile from three searches
+                // was enough to find it (site audit, 10/09/2026). The sort below still uses the true distance.
+                DistanceFromSearchMiles:     Math.Max(5, Math.Ceiling(dist / 5) * 5),
                 IsWithinRange:               withinRange,
                 AcceptsClientsOutsideRange:  org.AcceptsClientsOutsideRange,
                 ActiveLogoFileId:            org.ActiveLogoFileId,

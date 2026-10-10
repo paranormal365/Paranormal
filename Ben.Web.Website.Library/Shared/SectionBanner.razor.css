@@ -10,6 +10,9 @@
     box-shadow: var(--ben-shadow);
     display: flex;
     align-items: flex-end;
+    /* The dark of the scrim, under everything. The photograph and its scrim fade in together, so
+       until the picture arrived the white line sat on the page's own white (site audit, 10/09/2026). */
+    background-color: rgb(6, 10, 18);
 }
 
 .section-banner__photo {
@@ -40,7 +43,8 @@
     font-weight: 700;
     letter-spacing: .18em;
     text-transform: uppercase;
-    color: var(--ben-accent-2);
+    /* The accent, lifted toward white: the plain accent was hard to read over the darker photographs. */
+    color: color-mix(in srgb, var(--ben-accent-2) 55%, #fff);
     margin-bottom: .2rem;
 }
 

@@ -117,6 +117,13 @@ public sealed class PublicClientRequestController : ControllerBase
         if (string.IsNullOrWhiteSpace(request.StreetAddress1) || string.IsNullOrWhiteSpace(request.City)
             || string.IsNullOrWhiteSpace(request.State) || string.IsNullOrWhiteSpace(request.ZipCode))
             return BadRequest(new AnonymousSubmitResponse(false, "Please fill in the required address fields.", nameof(request.StreetAddress1)));
+        // Checked here, before an account exists. Too long for its column, an address failed the request's
+        // save AFTER the account was made, leaving an account with no request and no letter (site audit,
+        // 10/09/2026). The limits are the columns'.
+        if (email.Length > 256 || request.StreetAddress1!.Trim().Length > 256 || (request.StreetAddress2?.Trim().Length ?? 0) > 256
+            || request.City!.Trim().Length > 128 || request.State!.Trim().Length > 64 || request.ZipCode!.Trim().Length > 20
+            || (request.Country?.Trim().Length ?? 0) > 64)
+            return BadRequest(new AnonymousSubmitResponse(false, "Part of the address is longer than it can be. Please shorten it.", nameof(request.StreetAddress1)));
 
         List<Guid> orgIds = request.OrganizationIds is null ? [] : [.. request.OrganizationIds];
         var problem = ClientRequestRules.CheckSubmission(request.Latitude, request.Longitude, request.Description, orgIds);

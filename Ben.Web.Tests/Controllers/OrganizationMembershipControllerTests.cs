@@ -312,4 +312,40 @@ public class OrganizationMembershipControllerTests
 
         svc.Verify(x => x.RegisterOrganizationAsync(userId, "X", "x", default), Times.Once);
     }
+
+    // ── Site audit, 10/09/2026 ───────────────────────────────────────────────
+
+    /// <summary>
+    /// Somebody outside a group is told they may do nothing in it, and nothing about its plan. The full
+    /// answer said whether the group pays, whether its subscription had lapsed and what its plan
+    /// includes, to anybody signed in (site audit, 10/09/2026).
+    /// </summary>
+    [Fact]
+    public async Task GetMyPermissions_tells_a_non_member_nothing_about_the_group()
+    {
+        var userId  = Guid.NewGuid();
+        var orgId   = Guid.NewGuid();
+        var factory = CreateFactory();
+        var svc     = ServiceMock();
+        svc.Setup(x => x.BelongsToAsync(userId, orgId, It.IsAny<CancellationToken>())).ReturnsAsync(false);
+        var ctrl = Build(svc, userId);
+        // Supplied so that, were the guard missing, the full answer could be built and the test would
+        // fail on what it says rather than on a missing service.
+        var services = new ServiceCollection();
+        services.AddSingleton(factory);
+        services.AddSingleton(new Ben.Data.WebApi.Services.Billing.SubscriptionLimitGuard(factory));
+        ctrl.ControllerContext.HttpContext.RequestServices = services.BuildServiceProvider();
+
+        var result = await ctrl.GetMyPermissions(orgId, default);
+
+        var body = Assert.IsType<MyOrgPermissionsResponse>(Assert.IsType<OkObjectResult>(result.Result).Value);
+        Assert.False(body.CanReadCases);
+        Assert.False(body.CanReadInvestigations);
+        Assert.NotEmpty(body.Areas);
+        Assert.All(body.Areas.Values, a => Assert.Equal(new AreaActions(false, false, false, false), a));
+        Assert.Empty(body.Capabilities);
+        Assert.False(body.IsViewer);
+        Assert.False(body.PublicByDefault);
+        Assert.Null(body.ReadOnlyReason);
+    }
 }

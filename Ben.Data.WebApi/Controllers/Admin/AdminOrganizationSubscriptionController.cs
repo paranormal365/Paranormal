@@ -269,9 +269,9 @@ public sealed class AdminOrganizationSubscriptionController : BenControllerBase
         await db.SaveChangesAsync(ct);
 
         if (isNew)
-            await _auditLog.LogCreateAsync(nameof(OrganizationSubscription), sub.Id, sub, userId, AppSources.WebApi);
+            await TryAuditAsync(() => _auditLog.LogCreateAsync(nameof(OrganizationSubscription), sub.Id, sub, userId, AppSources.WebApi));
         else
-            await _auditLog.LogUpdateAsync(nameof(OrganizationSubscription), sub.Id, before, sub, userId, AppSources.WebApi);
+            await TryAuditAsync(() => _auditLog.LogUpdateAsync(nameof(OrganizationSubscription), sub.Id, before, sub, userId, AppSources.WebApi));
 
         return Ok(ToRecord(org, sub, members, tier,
             SubscriptionTierResolver.Validate(tiers) is null

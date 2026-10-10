@@ -221,6 +221,19 @@ public abstract class BenControllerBase : ControllerBase
         if (tx is not null) await tx.CommitAsync(ct);
     }
 
+    /// <summary>
+    /// The same, for a write that may throw before it returns a task. The audit is written after the change
+    /// is saved; a failure there answered 500 for a saved change and skipped whatever came after it, such as
+    /// a price list's notices to paying groups (site audit, 10/09/2026).
+    /// </summary>
+    protected Task TryAuditAsync(Func<Task> audit)
+    {
+        Task task;
+        try { task = audit(); }
+        catch (Exception ex) { task = Task.FromException(ex); }
+        return TryAuditAsync(task);
+    }
+
     protected async Task TryAuditAsync(Task auditTask)
     {
         try
@@ -229,7 +242,7 @@ public abstract class BenControllerBase : ControllerBase
         }
         catch (Exception ex)
         {
-            HttpContext?.RequestServices
+            HttpContext?.RequestServices?
                 .GetService<ILogger<BenControllerBase>>()?
                 .LogError(ex, "Audit log write failed for {Path}", HttpContext?.Request?.Path.Value);
         }

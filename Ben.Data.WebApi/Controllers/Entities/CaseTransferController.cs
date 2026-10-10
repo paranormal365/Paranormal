@@ -156,7 +156,10 @@ public sealed class CaseTransferController : BenControllerBase
 
         var log = await db.CaseTransferLogs
             .Include(l => l.FromOrganization).Include(l => l.ToOrganization).Include(l => l.ProposedByAppUser)
-            .FirstOrDefaultAsync(l => l.Id == logId && l.ToOrganizationId == orgId, ct);
+            // The transfer must be of the case in the address: the case below is loaded by that id, and a
+            // group with any transfer waiting could otherwise name somebody else's case and take it
+            // (site audit, 10/09/2026). The same for Cancel.
+            .FirstOrDefaultAsync(l => l.Id == logId && l.CaseId == caseId && l.ToOrganizationId == orgId, ct);
         if (log is null) return NotFound();
         if (log.Status != CaseTransferStatus.Pending) return BadRequest("Already responded.");
 
@@ -281,7 +284,7 @@ public sealed class CaseTransferController : BenControllerBase
 
         var log = await db.CaseTransferLogs
             .Include(l => l.FromOrganization).Include(l => l.ToOrganization).Include(l => l.ProposedByAppUser)
-            .FirstOrDefaultAsync(l => l.Id == logId && l.FromOrganizationId == orgId, ct);
+            .FirstOrDefaultAsync(l => l.Id == logId && l.CaseId == caseId && l.FromOrganizationId == orgId, ct);
         if (log is null) return NotFound();
         if (log.Status != CaseTransferStatus.Pending) return BadRequest("Transfer is not pending.");
 

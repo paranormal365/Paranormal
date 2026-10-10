@@ -131,11 +131,28 @@ public static class ApiResponseMapper
 
         return LooksLikeProse(body)
             ? body.Trim('"', ' ', '\n')
-            : $"The server answered {(int)response.StatusCode} ({response.ReasonPhrase}).";
+            : StatusSentence((int)response.StatusCode);
     }
 
-    /// <summary>The opening of the sentence <see cref="RefusalAsync"/> writes when there is no prose.</summary>
-    private const string StatusSentenceOpening = "The server answered ";
+    /// <summary>
+    /// What a status means, in words, with the number kept at the end for whoever is debugging.
+    /// </summary>
+    /// <remarks>
+    /// "The server answered 404 (Not Found)." was shown to people as it stood (site audit, 10/09/2026). The
+    /// number still matters to somebody checking a deployment, so it stays, after a sentence anyone can read.
+    /// </remarks>
+    internal static string StatusSentence(int status) => status switch
+    {
+        404 => "That couldn't be found.",
+        403 => "You don't have access to this.",
+        401 => "Your session has ended. Please sign in again.",
+        429 => "Too many tries just now. Please wait a moment and try again.",
+        >= 500 => "Something went wrong on our side. Please try again in a moment.",
+        _ => "That couldn't be loaded.",
+    } + $" {StatusSentenceMark}{status})";
+
+    /// <summary>The mark that ends the sentence <see cref="RefusalAsync"/> writes when there is no prose.</summary>
+    private const string StatusSentenceMark = "(error ";
 
     /// <summary>
     /// Whether a reason is the status sentence this class generated rather than something a
@@ -153,7 +170,7 @@ public static class ApiResponseMapper
     /// carry one — a screen is meant to act on the sentence, not on the number.</para>
     /// </remarks>
     public static bool IsGeneratedStatusSentence(string? reason)
-        => reason is not null && reason.StartsWith(StatusSentenceOpening, StringComparison.Ordinal);
+        => reason is not null && System.Text.RegularExpressions.Regex.IsMatch(reason, @" \(error \d{3}\)$");
 
     /// <summary>
     /// Whether a response body is a sentence we wrote rather than machinery.

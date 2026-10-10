@@ -464,6 +464,9 @@
             _participationKnown = true;
             _typeName ??= page.Posts.FirstOrDefault(p => p.ExperienceTypeId == TypeId)?.ExperienceTypeName;
             _placeName ??= page.Posts.FirstOrDefault(p => p.PlaceId == PlaceId)?.AboutPlaceName;
+            // A place with nothing posted yet still has a name; it was titled "A place" (site audit, 10/09/2026).
+            if (_placeName is null && PlaceId is Guid placeId)
+                _placeName = (await Feed.GetPublicPlaceAsync(placeId))?.Place.Name;
 
             // The weave's cards (item 186 F8) — main feed only, and only worth fetching when
             // there are enough posts for the first slot to exist.

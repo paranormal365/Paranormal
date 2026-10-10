@@ -45,6 +45,12 @@ public sealed class SearchController : ControllerBase
         [FromQuery] string? query = null,
         CancellationToken ct = default)
     {
+        // A position off the map is refused rather than cast to decimal, which threw for NaN or 1e30 and
+        // answered 500 (site audit, 10/09/2026).
+        if (!double.IsFinite(lat) || !double.IsFinite(lon) || Math.Abs(lat) > 90 || Math.Abs(lon) > 180
+            || !double.IsFinite(radiusMiles))
+            return BadRequest("That position isn't on the map.");
+
         var clampedRadius = Math.Clamp(radiusMiles, 0.1, 100);
 
         await using var db = await _db.CreateDbContextAsync(ct);
@@ -57,14 +63,17 @@ public sealed class SearchController : ControllerBase
         var lonMin = (decimal)(lon - lonDelta);
         var lonMax = (decimal)(lon + lonDelta);
 
+        // Groups without a pin are matched in five-mile bands (see below), so their box is five miles wider.
+        var bandLat = (decimal)(5 / 69.0);
+        var bandLon = (decimal)(5 / (69.0 * Math.Cos(lat * Math.PI / 180.0)));
         var addresses = await db.OrganizationAddresses
             .AsNoTracking()
             .Include(a => a.Organization)
             .Include(a => a.MapConfig)
             .Where(a => a.IsSearchable
                      && a.SearchVisibility == OrganizationAddressVisibility.Public
-                     && a.Latitude  >= latMin && a.Latitude  <= latMax
-                     && a.Longitude >= lonMin && a.Longitude <= lonMax)
+                     && a.Latitude  >= latMin - bandLat && a.Latitude  <= latMax + bandLat
+                     && a.Longitude >= lonMin - bandLon && a.Longitude <= lonMax + bandLon)
             .ToListAsync(ct);
 
         // Exact Haversine filter + SearchRadiusMiles check
@@ -73,24 +82,31 @@ public sealed class SearchController : ControllerBase
         {
             if (addr.Latitude is null || addr.Longitude is null) continue;
             var dist = HaversineDistance(lat, lon, (double)addr.Latitude, (double)addr.Longitude);
-            if (dist > clampedRadius) continue;
+            var pinned = addr.PublicDisplayMode is OrganizationAddressDisplayMode.FullAddressAndMap
+                                                 or OrganizationAddressDisplayMode.MapPinOnly;
+            // Without a pin, the radius is tested against the five-mile band too; otherwise narrowing the
+            // radius until the group drops out would measure the exact distance.
+            if ((pinned ? dist : Math.Floor(dist / 5) * 5) > clampedRadius) continue;
             if (addr.SearchRadiusMiles.HasValue && dist > addr.SearchRadiusMiles.Value) continue;
 
             var org = addr.Organization;
             if (!string.IsNullOrWhiteSpace(query) &&
                 !org.Name.Contains(query, StringComparison.OrdinalIgnoreCase)) continue;
 
+            // The pin only for a group that shows one. Every other mode used to hand back the exact
+            // position too, including Hidden, which is how a new investigation group's headquarters
+            // starts out and is often somebody's home (site audit, 10/09/2026). Without a pin the
+            // distance is rounded up to five miles, or three searches from chosen points would find
+            // the address anyway.
             results.Add(new NearbyOrgResult(
                 OrgId:             org.Id,
                 OrgName:           org.Name,
                 OrgUrlName:        org.UrlName,
-                DistanceMiles:     Math.Round(dist, 2),
+                DistanceMiles:     pinned ? Math.Round(dist, 2) : Math.Max(5, Math.Ceiling(dist / 5) * 5),
                 Visibility:        addr.Visibility,
                 PublicDisplayMode: addr.PublicDisplayMode,
-                Latitude:          addr.PublicDisplayMode == OrganizationAddressDisplayMode.RegionOnly
-                                       ? null : addr.Latitude,
-                Longitude:         addr.PublicDisplayMode == OrganizationAddressDisplayMode.RegionOnly
-                                       ? null : addr.Longitude,
+                Latitude:          pinned ? addr.Latitude : null,
+                Longitude:         pinned ? addr.Longitude : null,
                 RegionRadiusMiles: addr.MapConfig?.RegionRadiusMiles,
                 StreetAddress1:    addr.PublicDisplayMode == OrganizationAddressDisplayMode.FullAddressAndMap ||
                                    addr.PublicDisplayMode == OrganizationAddressDisplayMode.FullAddressOnly

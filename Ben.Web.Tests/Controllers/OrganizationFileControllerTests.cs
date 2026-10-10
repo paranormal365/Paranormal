@@ -411,4 +411,24 @@ public class OrganizationFileControllerTests
 
         Assert.IsType<ForbidResult>(result.Result);
     }
+    /// <summary>
+    /// Copying a member's file that is neither public nor shared with the group answered
+    /// Forbid("sentence"), which takes the sentence as an authentication scheme and threw when it ran,
+    /// so the refusal reached the caller as a 500 (site audit, 10/09/2026). It is a plain 403 with a
+    /// sentence, and nothing is copied.
+    /// </summary>
+    [Fact]
+    public async Task Copying_a_file_that_is_not_public_or_shared_answers_403_with_a_sentence()
+    {
+        var (factory, orgId, userId, fileTypeId) = await SeedAsync();
+        var privateId = await SeedUserFileAsync(factory, userId, fileTypeId, "private.png", isPublic: false);
+
+        var result = await Build(factory, userId).CopyFromUser(orgId, privateId, new CopyFromUserRequest(null), default);
+
+        var refusal = Assert.IsType<ObjectResult>(result.Result);
+        Assert.Equal(StatusCodes.Status403Forbidden, refusal.StatusCode);
+        Assert.IsType<string>(refusal.Value);
+        await using var db = await factory.CreateDbContextAsync();
+        Assert.False(await db.OrganizationFiles.AnyAsync(f => f.OrganizationId == orgId));
+    }
 }

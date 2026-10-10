@@ -198,6 +198,34 @@ public sealed class StripeSeatTests
 
         Assert.Empty(gateway.Charges);   // the seat simply runs out
     }
+
+    /// <summary>
+    /// Closing an account does not end its memberships, so a closed account's seat kept renewing
+    /// and its card kept being charged (site audit, 10/09/2026). A closed account counts as gone.
+    /// </summary>
+    [Fact]
+    public async Task A_closed_accounts_seat_is_not_renewed_or_charged()
+    {
+        var factory = Db();
+        var end = DateTime.UtcNow.AddHours(6);
+        var seed = await SeedSeatAsync(factory, SubscriptionStatus.Active, periodEnd: end);
+        await using (var db = await factory.CreateDbContextAsync())
+        {
+            var member = await db.AppUsers.SingleAsync(u => u.Id == seed.MemberId);
+            member.DateClosed = DateTime.UtcNow.AddDays(-1);
+            await db.SaveChangesAsync();
+        }
+
+        var gateway = new FakeGateway();
+        await new StripeRenewalJob(factory, gateway, Fulfillment(factory),
+            NullLogger<StripeRenewalJob>.Instance).RunAsync(default);
+
+        Assert.Empty(gateway.Charges);
+        await using var read = await factory.CreateDbContextAsync();
+        Assert.False(await read.BillingLedgerEntries.AnyAsync());
+        Assert.Equal(end, (await read.MemberSeatSubscriptions.SingleAsync()).CurrentPeriodEnd);
+    }
+
     // ── a seat the group's own plan now covers (2026-09-17 audit) ────────────
 
     /// <summary>Puts the group on a band with room for <paramref name="bandMax"/> members.</summary>

@@ -637,4 +637,40 @@ public class PublicCaseDiscoveryControllerTests
 
         Assert.Equal(1, Assert.Single(summaries).TotalVotes);
     }
+
+    // ── Site audit, 10/09/2026 ───────────────────────────────────────────────
+
+    /// <summary>
+    /// The map's box is tested against the rounded position the map draws, not the true one. Tested
+    /// against the true position, a box could be narrowed around a case until it fell out, and about
+    /// twenty-five requests gave its exact address (site audit, 10/09/2026). So a tiny box around the
+    /// true point finds nothing, and a tiny box around the published point finds the case.
+    /// </summary>
+    [Fact]
+    public async Task The_box_is_tested_against_the_published_point_not_the_true_one()
+    {
+        const decimal trueLat = 36.16m, trueLon = -86.78m;
+        var factory = CreateFactory();
+        await using (var db = await factory.CreateDbContextAsync())
+        {
+            var org = MakeOrg();
+            db.Organizations.Add(org);
+            db.Cases.Add(MakeCase(org.Id, "Haunted House", trueLat, trueLon));
+            await db.SaveChangesAsync();
+        }
+        var published = Assert.Single((await GetAsync(factory)).Items);
+        var pubLat = (double)published.ApproxLatitude!.Value;
+        var pubLon = (double)published.ApproxLongitude!.Value;
+        const double d = 0.001;
+        // The published point really is outside a box this small around the true one.
+        Assert.True(Math.Abs(pubLat - (double)trueLat) > d || Math.Abs(pubLon - (double)trueLon) > d);
+
+        var aroundTheTruth = await GetAsync(factory,
+            north: (double)trueLat + d, south: (double)trueLat - d, east: (double)trueLon + d, west: (double)trueLon - d);
+        var aroundThePin = await GetAsync(factory,
+            north: pubLat + d, south: pubLat - d, east: pubLon + d, west: pubLon - d);
+
+        Assert.Empty(aroundTheTruth.Items);
+        Assert.Single(aroundThePin.Items);
+    }
 }

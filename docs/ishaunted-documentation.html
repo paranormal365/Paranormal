@@ -355,6 +355,8 @@ with the distance dropdown.</p>
 <p><img alt="What's near you, with tours, events and groups on separate tabs" src=".print-media/Ben.Web.Website/wwwroot/help/media/getting-started/whats-near-you.jpg" />
 <em>Each tab shows a count, so you can see what was found before opening anything. A tab only appears
 when it has something in it.</em></p>
+<p>A group that keeps its address private shows how close it is in rounded steps, such as <strong>Within 10
+mi</strong>, and never a pin on the map.</p>
 <p><strong>Places</strong> is the fourth tab, and it works differently from the other three. A place is a location
 rather than a group or an event — a cave, a mill, a hotel. The tab lists places near you where
 groups have published their work. Opening one shows everything people have shared about that
@@ -1358,7 +1360,8 @@ identified in that cellar.</p>
    and <strong>Try again</strong> asks once more.</li>
 <li>If you're signed in and on an investigation, pick it. Investigations <strong>here</strong> and <strong>today</strong> are
    listed first and labeled that way, and if exactly one is both, it's already chosen for you. If
-   you're not on one, leave this blank; you can attach the session to an investigation later. If
+   you're not on one, leave this blank; you can attach the session to an investigation later. Once
+   a session is sent to an investigation, it stays with it, even if you send it again. If
    other people have published sessions recorded nearby, the sheet says how many — tap it to play
    what they found before you start.</li>
 </ol>
@@ -1745,7 +1748,9 @@ way in this field to tell those two apart.</p>
 <li><strong>Photos, video and audio</strong> are shared too, and any reader can flag them. A flagged session has its
   media hidden immediately until a moderator reviews it. The readings stay either way.</li>
 <li><strong>Public locations only.</strong> A session recorded at someone's home can never be archived. That work
-  stays with you and your group, which is what the paid plans are for.</li>
+  stays with you and your group, which is what the paid plans are for. A session sent to a group's
+  investigation can only go in the archive for the place that investigation was at, and never if
+  it was a private engagement.</li>
 <li><strong>Taking it back requires a paid plan.</strong> Anyone can publish, but only a paid plan lets you remove
   it afterward. A free account's contribution stays on the location's page — that's what makes the
   archive worth reading. What a paid plan gives you is the choice to keep your work to yourself in
@@ -2029,6 +2034,8 @@ places</strong>.</p>
   The page tells you how long that lasts before you commit — usually a couple of days.</li>
 <li><strong>If someone takes a seat a second before you do</strong>, you're told which seat it was, and
   everything else you chose stays yours. Pick another one and carry on.</li>
+<li><strong>To change held places, let them go and pick again.</strong> You can still change your note while
+  they're held. If a hold runs out, you can choose again straight away.</li>
 </ul>
 <p>On a phone, the summary and the button stay at the bottom of the screen the whole time, so you
 never have to scroll back through two hundred squares to check what you've picked.</p>
@@ -2741,8 +2748,9 @@ version never shows your name.</p>
 they collected has been lost</strong>, and you can still read all of it. If the group renews, the case
 picks up exactly where it left off. If your case had a public page, that page is taken off the
 public site while the subscription is lapsed, so your privacy never depends on the group's billing.</p>
-<p>You can also <strong>move your case to a different organization</strong> from the banner on the case page.
-Pick a group, and choose what they will be able to see:</p>
+<p>You can also <strong>move your case to a different organization</strong> from the banner on the case page. This
+is for the person who asked for the investigation; anyone else they added to the case sees that a
+move was asked for, but can't ask for one. Pick a group, and choose what they will be able to see:</p>
 <ul>
 <li>the <strong>history</strong> collected so far — reports, notes, evidence</li>
 <li>the <strong>investigations</strong> the previous group ran</li>
@@ -3521,7 +3529,8 @@ already holds keeps working, whatever your plan), and a client moving their own 
 depends only on the receiving group's plan, not yours.</p>
 <h3>If your subscription lapses</h3>
 <p>When a paid period ends without renewal, open work is paused and published private engagements are
-taken off the public site. Nothing is deleted: the case remembers it was public, and once the plan
+taken off the public site. If the renewal payment simply didn't go through, the plan keeps going for
+two weeks first while the card is tried again (once a year). Nothing is deleted: the case remembers it was public, and once the plan
 is renewed, its page shows a <strong>Republish</strong> banner that puts it back in one click. Cases at public
 places — landmarks, businesses — aren't affected by billing and stay published. Both renewal
 warnings explain all of this before it happens.</p>
@@ -3907,6 +3916,9 @@ where you can mark regions, view a spectrogram, scan for EVPs, and save clips of
 member, or public. Sharing lends the file to the group; it doesn't give it away. The group can
 attach it to a case, which makes a <strong>copy</strong> for that case, or copy it into its own Files. Those
 copies keep the file's location and camera details, marked as inherited.</p>
+<p>A member of a group can also <strong>ask</strong> to use one of your files for their group. The request waits in
+your notifications, and only you decide it. Approving shares the file with that group: with its
+members, or publicly if they asked to show it in public.</p>
 <h2>Replacing</h2>
 <p><strong>Replace</strong> swaps in a new version of the file and updates every copy of it on a case. The dialog
 lists the cases that hold a copy and how many comments and votes each one has, so you can see what
@@ -4922,7 +4934,7 @@ and the duty eligibility matrix.</p>
 anything — it is still one page you can read from top to bottom — but they let you see at a glance
 whether the setting you want is on this screen, and jump straight to it.</p>
 <p>The group's <strong>Edit</strong> screen — the button beside the group's name, not the Settings tab — holds its
-public identity: name, URL, contact details, and two switches worth understanding.</p>
+public identity: name, web address, contact details, and two switches worth understanding.</p>
 <p><strong>Accepting membership applications</strong> controls whether people can apply to join.</p>
 <h3>Your web address</h3>
 <p>Your group lives at <code>/o/your-address</code> — the link you put on a card, in a post, or in an email to a
@@ -5013,8 +5025,10 @@ Owners and administrators always see everything.</p>
 you don't manage), <strong>Client Requests</strong> (accepting or declining what clients send in), and
 <strong>Calendar</strong> (event types, and managing other people's attendance). These grants only add
 access: owners and administrators keep everything they had, and members who hold the grant can
-now do the same things. Grants in the other sections will take effect later; each section's own
-description says whether it is in effect yet.</p>
+now do the same things.</p>
+<p>Only the group's owners and administrators can create roles, change what a role allows, and choose
+who holds it. In the role editor, each area has four columns: <strong>Add</strong>, <strong>See</strong>, <strong>Change</strong> and
+<strong>Remove</strong>.</p>
 <h2>Banners for work that blocks other people</h2>
 <p>When a client's investigation request or a membership application is waiting on your group, a
 banner appears under the site-wide announcement on every page. Only you and others whose
@@ -6681,7 +6695,10 @@ time instead of quietly giving up.</p>
 <p>When <strong>Accepting Membership Applications</strong> is on (on the group's Edit screen), your public page
 shows an apply box to signed-in visitors. Applications arrive on the <strong>Members</strong> tab, where any
 member with the requests permission can Accept or Deny. Denying asks for a reason, and the
-applicant sees your answer.</p>
+applicant sees your answer. <strong>Allow this applicant to reapply in the future</strong> starts ticked; untick
+it and that person can't send your group another application.</p>
+<p>Somebody who left the group, or was removed, and comes back through your join link returns as an
+ordinary member on your starting role, not with the rank or roles they had before.</p>
 <h2>What kind of group you are</h2>
 <p>Every group is either an <strong>investigation group</strong> or a <strong>ghost walking tour</strong>. You choose when you
 create the group, and you can change it in <strong>Settings</strong>. The choice only decides what a NEW group
@@ -6758,6 +6775,12 @@ are better than what the pricing page shows, your Pricing page tells you:
 and public pages. If your group reaches one, the screen you were using tells you exactly which
 limit you hit and what your plan includes. Closed cases and retired equipment never count toward a
 limit. A larger plan raises the limit.</p>
+<p><strong>If a renewal payment doesn't go through</strong>, your plan keeps going for two more weeks while we try
+the card again each day. The people who look after your group's billing get a message saying so,
+and your billing page shows the date. Nothing changes during those two weeks. If the payment still
+hasn't gone through by then, the plan ends. You get these two weeks once a year: a second missed
+renewal within twelve months ends the plan on its renewal date. A plan you cancel ends on the date
+you chose.</p>
 <p>Have a coupon code? There's a box for it at checkout — enter it and the price updates before you
 confirm anything. Codes can be limited to first subscriptions, to renewals, to yearly billing, or
 to a specific account, so if a code is refused, the message tells you why.</p>

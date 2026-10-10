@@ -116,10 +116,20 @@ public sealed class PublicOrganizationJoinController : BenControllerBase
 
         if (already is not null)
         {
-            // A lapsed membership is revived rather than duplicated: the row carries history.
+            // A lapsed membership is revived rather than duplicated: the row carries history. It comes back
+            // as an ordinary member on the group's starting role. Revived as it was, a removed owner or
+            // administrator came back as one, with whatever roles and grants they had held, by opening the
+            // group's public join link (site audit, 10/09/2026).
             already.IsActive = true;
+            already.Role = OrganizationMemberRole.Member;
             already.DateUpdated = DateTime.UtcNow;
             already.UpdatedByAppUserId = userId.Value;
+            db.OrganizationRoleMemberships.RemoveRange(
+                db.OrganizationRoleMemberships.Where(rm => rm.OrganizationUserMembershipId == already.Id
+                                                        && rm.OrganizationRoleId != org.DefaultMemberRoleId));
+            db.OrganizationAccessGrants.RemoveRange(
+                db.OrganizationAccessGrants.Where(g => g.OrganizationId == org.Id && g.AppUserId == userId.Value));
+            await Ben.Data.Source.Services.MemberDefaultRole.ApplyAsync(db, org.Id, already, userId.Value, ct);
         }
         else
         {

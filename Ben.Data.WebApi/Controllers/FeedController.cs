@@ -1048,7 +1048,7 @@ public sealed class FeedController : BenControllerBase
             return "Two of those answers are the same.";
 
         if (poll.ClosesInHours is { } hours && (hours < 1 || hours > 24 * 14))
-            return "A poll runs between an hour and a fortnight.";
+            return "A poll runs between an hour and two weeks.";
 
         return null;
     }
@@ -1542,7 +1542,7 @@ public sealed class FeedController : BenControllerBase
         {
             var parts = System.Text.Encoding.UTF8.GetString(Convert.FromBase64String(cursor)).Split(':', 2);
             if (parts.Length != 2) return false;
-            if (!long.TryParse(parts[0], out var ticks)) return false;
+            if (!long.TryParse(parts[0], out var ticks) || ticks < DateTime.MinValue.Ticks || ticks > DateTime.MaxValue.Ticks) return false;
             if (!Guid.TryParse(parts[1], out beforeId)) return false;
 
             beforeUtc = new DateTime(ticks, DateTimeKind.Utc);

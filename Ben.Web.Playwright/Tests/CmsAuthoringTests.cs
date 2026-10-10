@@ -85,7 +85,7 @@ public class CmsAuthoringTests : BenTestBase
         await ClickUntilAsync(newPage, dialog);
 
         await dialog.GetByLabel("Title", new() { Exact = false }).First.FillAsync(title);
-        await dialog.GetByLabel("URL Slug", new() { Exact = false }).First.FillAsync(slug);
+        await dialog.GetByLabel("Web address", new() { Exact = false }).First.FillAsync(slug);
         await dialog.GetByLabel("Summary", new() { Exact = false }).First.FillAsync(intro);
 
         // "Visible to public" is what decides whether a visitor may see it at all.
@@ -173,7 +173,7 @@ public class CmsAuthoringTests : BenTestBase
 
         await ClickUntilAsync(newPage, dialog);
         await dialog.GetByLabel("Title", new() { Exact = false }).First.FillAsync(title);
-        await dialog.GetByLabel("URL Slug", new() { Exact = false }).First.FillAsync(slug);
+        await dialog.GetByLabel("Web address", new() { Exact = false }).First.FillAsync(slug);
         await dialog.GetByRole(AriaRole.Button, new() { Name = "Save", Exact = false }).First.ClickAsync();
         await Expect(dialog).ToBeHiddenAsync(new() { Timeout = 10_000 });
 

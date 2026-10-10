@@ -278,6 +278,11 @@ public sealed class MyCaseController : BenControllerBase
             DateCreated        = DateTime.UtcNow,
             CreatedByAppUserId = userId,
         };
+        // The tags are checked before anything is saved. Checked after, a bad tag answered 400 for an entry
+        // that had been saved, and the client's retry saved it again (site audit, 10/09/2026).
+        if (!await ExperienceTypesExistAsync(db, request.ExperienceTypeIds, ct))
+            return BadRequest("One or more experience types do not exist.");
+
         db.CaseTimelineEntries.Add(entry);
         await db.SaveChangesAsync(ct);
 
@@ -314,6 +319,9 @@ public sealed class MyCaseController : BenControllerBase
         if (entry is null || before is null) return NotFound();
         if (!await IsCaseClient(db, caseId, userId, ct)) return Forbid();
 
+        if (request.ExperienceTypeIds is not null && !await ExperienceTypesExistAsync(db, request.ExperienceTypeIds, ct))
+            return BadRequest("One or more experience types do not exist.");
+
         entry.EventDateTime      = request.EventDateTime;
         entry.Title              = request.Title?.Trim();
         entry.Body               = Entities.CaseController.CleanDescription(request.Body, _sanitizer);
@@ -346,6 +354,23 @@ public sealed class MyCaseController : BenControllerBase
     /// Replace-not-merge because the picker submits the full selection — unticking a tag has to
     /// be able to remove it.
     /// </remarks>
+    /// <summary>A visit's time as people at the place read it: in the investigation's zone, else its case's, else its group's.</summary>
+    internal static async Task<string> VisitTimeAsync(BenDataContext db, Guid investigationId, DateTime utc, CancellationToken ct)
+    {
+        var chain = await db.Investigations.AsNoTracking().Where(i => i.Id == investigationId)
+            .Select(i => new[] { i.TimeZoneId, i.Case != null ? i.Case.TimeZoneId : null, i.Organization.TimeZoneId })
+            .FirstOrDefaultAsync(ct) ?? [];
+        var zone = Ben.Data.Common.Helpers.Zones.Find(chain);
+        return $"{Ben.Data.Common.Helpers.Zones.ToZone(utc, zone):MMM d, yyyy h:mm tt} {Ben.Data.Common.Helpers.Zones.Abbreviation(zone, utc)}";
+    }
+
+    private static async Task<bool> ExperienceTypesExistAsync(
+        BenDataContext db, IReadOnlyList<Guid>? typeIds, CancellationToken ct)
+    {
+        var wanted = (typeIds ?? []).Distinct().ToList();
+        return wanted.Count == 0 || await db.ExperienceTypes.CountAsync(t => wanted.Contains(t.Id), ct) == wanted.Count;
+    }
+
     private static async Task<bool> ApplyExperienceTagsAsync(
         BenDataContext db, Guid entryId, IReadOnlyList<Guid>? typeIds, CancellationToken ct)
     {
@@ -508,10 +533,13 @@ public sealed class MyCaseController : BenControllerBase
         var slot = proposal.Slots.FirstOrDefault(s => s.Id == request.SlotId);
         if (slot is null) return BadRequest("Slot not found in this proposal.");
 
-        // Auto-create the Investigation
+        // The group is a column of its own, not read through the case, so it is copied here. It was
+        // left out, and the database refused the row: every client's "Accept" answered 500 (site audit,
+        // 10/09/2026). The staff-side Convert had already been fixed the same way.
+        var orgId = await db.Cases.Where(c => c.Id == caseId).Select(c => c.OrganizationId).FirstAsync(ct);
         var investigation = new Ben.Data.Source.Entities.Investigation
         {
-            Id = Guid.NewGuid(), CaseId = caseId,
+            Id = Guid.NewGuid(), OrganizationId = orgId, CaseId = caseId,
             Title = "Scheduled Investigation",
             ScheduledDateTime = slot.StartDateTime,
             EndDateTime = slot.EndDateTime,
@@ -772,6 +800,14 @@ public sealed class MyCaseController : BenControllerBase
         return Ok(ToRecord(msg));
     }
 
+    /// <summary>
+    /// The person whose request opened the case. Moving the case to another group, and the consent to
+    /// share its history that goes with it, is theirs alone; a co-client could do both until the site
+    /// audit of 10/09/2026, while every other primary-only action already asked this.
+    /// </summary>
+    private static Task<bool> IsPrimaryClient(Ben.Data.Source.Context.BenDataContext db, Guid caseId, Guid userId, CancellationToken ct)
+        => db.Cases.AnyAsync(c => c.Id == caseId && c.ClientRequest != null && c.ClientRequest.AppUserId == userId, ct);
+
     // ── Reassignment of a paused case (item 84) ───────────────────────────────
 
     public sealed record ReassignCaseRequest(
@@ -799,7 +835,7 @@ public sealed class MyCaseController : BenControllerBase
         if (userId == Guid.Empty) return Unauthorized();
 
         await using var db = await _db.CreateDbContextAsync(ct);
-        if (!await IsCaseClient(db, caseId, userId, ct)) return NotFound();
+        if (!await IsPrimaryClient(db, caseId, userId, ct)) return NotFound();
 
         var c = await db.Cases.FirstOrDefaultAsync(x => x.Id == caseId, ct);
         if (c is null) return NotFound();
@@ -880,7 +916,7 @@ public sealed class MyCaseController : BenControllerBase
         if (userId == Guid.Empty) return Unauthorized();
 
         await using var db = await _db.CreateDbContextAsync(ct);
-        if (!await IsCaseClient(db, caseId, userId, ct)) return NotFound();
+        if (!await IsPrimaryClient(db, caseId, userId, ct)) return NotFound();
 
         var pending = await db.CaseTransferLogs.FirstOrDefaultAsync(l =>
             l.CaseId == caseId && l.Status == CaseTransferStatus.Pending && l.ProposedByClient, ct);
@@ -1412,7 +1448,8 @@ public sealed class MyCaseController : BenControllerBase
         db.CaseMessages.Add(new Ben.Data.Source.Entities.CaseMessage
         {
             Id = Guid.NewGuid(), CaseId = caseId, AuthorAppUserId = userId,
-            Body = $"The client has canceled the investigation scheduled for {investigation.ScheduledDateTime.ToLocalTime():MMM d, yyyy h:mm tt}.",
+            // In the visit's own time. ToLocalTime gave the server's clock (site audit, 10/09/2026).
+            Body = $"The client has canceled the investigation scheduled for {await VisitTimeAsync(db, invId, investigation.ScheduledDateTime, ct)}.",
             SenderSide = Ben.Data.Common.Enums.CaseMessageSide.Client,
             IsReadByClient = true, IsReadByOrg = false,
             DateCreated = DateTime.UtcNow, CreatedByAppUserId = userId,

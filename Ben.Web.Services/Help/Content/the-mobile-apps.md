@@ -120,7 +120,8 @@ identified in that cellar.
    and **Try again** asks once more.
 3. If you're signed in and on an investigation, pick it. Investigations **here** and **today** are
    listed first and labeled that way, and if exactly one is both, it's already chosen for you. If
-   you're not on one, leave this blank; you can attach the session to an investigation later. If
+   you're not on one, leave this blank; you can attach the session to an investigation later. Once
+   a session is sent to an investigation, it stays with it, even if you send it again. If
    other people have published sessions recorded nearby, the sheet says how many — tap it to play
    what they found before you start.
 
@@ -624,7 +625,9 @@ way in this field to tell those two apart.
 - **Photos, video and audio** are shared too, and any reader can flag them. A flagged session has its
   media hidden immediately until a moderator reviews it. The readings stay either way.
 - **Public locations only.** A session recorded at someone's home can never be archived. That work
-  stays with you and your group, which is what the paid plans are for.
+  stays with you and your group, which is what the paid plans are for. A session sent to a group's
+  investigation can only go in the archive for the place that investigation was at, and never if
+  it was a private engagement.
 - **Taking it back requires a paid plan.** Anyone can publish, but only a paid plan lets you remove
   it afterward. A free account's contribution stays on the location's page — that's what makes the
   archive worth reading. What a paid plan gives you is the choice to keep your work to yourself in

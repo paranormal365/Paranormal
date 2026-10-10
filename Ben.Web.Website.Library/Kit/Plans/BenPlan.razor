@@ -209,7 +209,7 @@
             .OrderBy(g => g.Key, StringComparer.OrdinalIgnoreCase)
             .Select(g =>
             {
-                var name = g.Key.Length > 0 ? g.Key : "Unnamed";
+                var name = g.Key.Length > 0 ? g.Key : "No section";
                 var prices = g.Select(u => u.Price).Distinct().ToList();
                 var price = prices.Count == 1 && prices[0] is { } p ? $" · {p:C}" : "";
                 var noun = Model.Kind == HostedEventLayoutKind.Seats ? "seat" : "room";

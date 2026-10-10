@@ -145,6 +145,36 @@ public class ExternalSignInServiceTests
     }
 
     /// <summary>
+    /// Somebody could register another person's address with a password of their own, leave it unconfirmed,
+    /// and wait. When the real owner signed in with Apple the account joined, and the stranger's password
+    /// opened it (site audit, 10/09/2026). The password nobody proved goes when the address is proved.
+    /// </summary>
+    [Fact]
+    public async Task Joining_an_unconfirmed_account_removes_the_password_nobody_proved()
+    {
+        var planted = new AppUser { Id = Guid.NewGuid(), Email = "ada@example.test", EmailConfirmed = false };
+        var um = UserManagerMock();
+        um.Setup(m => m.FindByEmailAsync("ada@example.test")).ReturnsAsync(planted);
+        um.Setup(m => m.HasPasswordAsync(planted)).ReturnsAsync(true);
+        um.Setup(m => m.RemovePasswordAsync(planted)).ReturnsAsync(IdentityResult.Success);
+
+        Assert.IsType<ResolveResult.Found>(await Build(um).ResolveAsync(Apple));
+        um.Verify(m => m.RemovePasswordAsync(planted), Times.Once);
+    }
+
+    [Fact]
+    public async Task Joining_a_confirmed_account_keeps_its_password()
+    {
+        var owner = new AppUser { Id = Guid.NewGuid(), Email = "ada@example.test", EmailConfirmed = true };
+        var um = UserManagerMock();
+        um.Setup(m => m.FindByEmailAsync("ada@example.test")).ReturnsAsync(owner);
+        um.Setup(m => m.HasPasswordAsync(owner)).ReturnsAsync(true);
+
+        Assert.IsType<ResolveResult.Found>(await Build(um).ResolveAsync(Apple));
+        um.Verify(m => m.RemovePasswordAsync(It.IsAny<AppUser>()), Times.Never);
+    }
+
+    /// <summary>
     /// An UNVERIFIED address never auto-links — not for Apple, and not for Microsoft, whose claim we
     /// cannot call verified. It routes to the link door instead.
     /// </summary>

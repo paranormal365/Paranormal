@@ -110,6 +110,16 @@ public sealed class ExternalSignInService
                 // can already use on the phone.
                 if (!byEmail.EmailConfirmed)
                 {
+                    // Whoever made an unconfirmed account never proved the address, so its password is
+                    // nobody's proof either. Kept, it let somebody register another person's address,
+                    // wait for them to sign in with Apple or Microsoft, and then sign in to their
+                    // account with the password they had chosen (site audit, 10/09/2026). The owner can
+                    // set a password of their own with "Forgot password".
+                    if (await _userManager.HasPasswordAsync(byEmail))
+                    {
+                        var cleared = await _userManager.RemovePasswordAsync(byEmail);
+                        if (!cleared.Succeeded) return new ResolveResult.Failed(Describe(cleared));
+                    }
                     byEmail.EmailConfirmed = true;
                     await _userManager.UpdateAsync(byEmail);
                 }

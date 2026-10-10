@@ -55,12 +55,12 @@ public class EvidenceVoteControllerTests
         return ctrl;
     }
 
-    private static async Task AddMembershipAsync(IDbContextFactory<BenDataContext> factory, Guid userId)
+    private static async Task AddMembershipAsync(IDbContextFactory<BenDataContext> factory, Guid userId, Guid? orgId = null)
     {
         await using var db = await factory.CreateDbContextAsync();
         db.OrganizationUserMemberships.Add(new OrganizationUserMembership
         {
-            Id = Guid.NewGuid(), OrganizationId = Guid.NewGuid(), AppUserId = userId,
+            Id = Guid.NewGuid(), OrganizationId = orgId ?? Guid.NewGuid(), AppUserId = userId,
             Role = OrganizationMemberRole.Member, IsActive = true,
             DateCreated = DateTime.UtcNow, CreatedByAppUserId = userId,
         });
@@ -93,12 +93,12 @@ public class EvidenceVoteControllerTests
 
     private static async Task SeedVoteAsync(
         IDbContextFactory<BenDataContext> factory,
-        Guid fileId, Guid voterId, EvidenceVoteType voteType)
+        Guid fileId, Guid voterId, EvidenceVoteType voteType, Guid? voterOrgId = null)
     {
         await using var db = await factory.CreateDbContextAsync();
         db.EvidenceVotes.Add(new EvidenceVote
         {
-            Id = Guid.NewGuid(), UploadFileId = fileId, VoterAppUserId = voterId,
+            Id = Guid.NewGuid(), UploadFileId = fileId, VoterAppUserId = voterId, VoterOrganizationId = voterOrgId,
             VoteType = voteType, IsPublicVoter = true,
             DateVoted = DateTime.UtcNow,
         });
@@ -192,11 +192,12 @@ public class EvidenceVoteControllerTests
         var fileId   = await SeedFileAsync(factory);
         var voter1   = await SeedVoterAsync(factory);
         var voter2   = await SeedVoterAsync(factory);
-        await SeedVoteAsync(factory, fileId, voter1, EvidenceVoteType.Confirms);
-        await SeedVoteAsync(factory, fileId, voter2, EvidenceVoteType.Disputes);
+        var group    = Guid.NewGuid();
+        await SeedVoteAsync(factory, fileId, voter1, EvidenceVoteType.Confirms, group);
+        await SeedVoteAsync(factory, fileId, voter2, EvidenceVoteType.Disputes, group);
 
         var callerId = Guid.NewGuid();
-        await AddMembershipAsync(factory, callerId);
+        await AddMembershipAsync(factory, callerId, group);
         var result = await Build(factory, callerId).GetAll(fileId, CancellationToken.None);
         var ok     = Assert.IsType<OkObjectResult>(result.Result);
         var list   = Assert.IsAssignableFrom<IEnumerable<EvidenceVoteRecord>>(ok.Value).ToList();
@@ -212,17 +213,35 @@ public class EvidenceVoteControllerTests
         var fileId2  = await SeedFileAsync(factory);
         var voter1   = await SeedVoterAsync(factory);
         var voter2   = await SeedVoterAsync(factory);
-        await SeedVoteAsync(factory, fileId1, voter1, EvidenceVoteType.Confirms);
-        await SeedVoteAsync(factory, fileId2, voter2, EvidenceVoteType.Disputes);
+        var group    = Guid.NewGuid();
+        await SeedVoteAsync(factory, fileId1, voter1, EvidenceVoteType.Confirms, group);
+        await SeedVoteAsync(factory, fileId2, voter2, EvidenceVoteType.Disputes, group);
 
         var callerId = Guid.NewGuid();
-        await AddMembershipAsync(factory, callerId);
+        await AddMembershipAsync(factory, callerId, group);
         var result = await Build(factory, callerId).GetAll(fileId1, CancellationToken.None);
         var ok     = Assert.IsType<OkObjectResult>(result.Result);
         var list   = Assert.IsAssignableFrom<IEnumerable<EvidenceVoteRecord>>(ok.Value).ToList();
 
         Assert.Single(list);
         Assert.All(list, v => Assert.Equal(fileId1, v.UploadFileId));
+    }
+
+    /// <summary>
+    /// Belonging to some group was enough to read every voter on any file (site audit, 10/09/2026). Who voted is
+    /// for the groups involved; everybody else has the counts.
+    /// </summary>
+    [Fact]
+    public async Task GetAll_a_member_of_an_unrelated_group_sees_no_voters()
+    {
+        var factory = TestDbFactory.Create();
+        var fileId  = await SeedFileAsync(factory);
+        await SeedVoteAsync(factory, fileId, await SeedVoterAsync(factory), EvidenceVoteType.Confirms, Guid.NewGuid());
+
+        var callerId = Guid.NewGuid();
+        await AddMembershipAsync(factory, callerId);
+        var ok = Assert.IsType<OkObjectResult>((await Build(factory, callerId).GetAll(fileId, CancellationToken.None)).Result);
+        Assert.Empty(Assert.IsAssignableFrom<IEnumerable<EvidenceVoteRecord>>(ok.Value));
     }
 
     [Fact]

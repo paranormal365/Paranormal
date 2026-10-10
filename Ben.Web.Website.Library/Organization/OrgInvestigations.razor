@@ -376,7 +376,7 @@ else
                         </td>
                         <td>
                             @row.Title
-                            <span class="badge @StatusBadge(row.Status) ms-1">@row.Status</span>
+                            <span class="badge @StatusBadge(row.Status) ms-1">@Ben.Web.Website.Library.Organization.Cases.InvestigationPanel.StatusLabel(row.Status)</span>
                         </td>
                         <td>
                             @if (row.PlaceId is { } placeId)

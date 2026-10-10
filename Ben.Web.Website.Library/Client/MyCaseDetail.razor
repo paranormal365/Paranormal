@@ -22,9 +22,13 @@
 
 @if (_case is null)
 {
+    @* A failed load and a case that isn't yours arrive the same way, so this says both rather than
+       telling somebody whose case is fine that it doesn't exist (site audit, 10/09/2026). *@
     <div class="container py-5 text-center">
-        <h2 class="text-muted">Case not found</h2>
-        <a href="/my-cases" class="btn btn-outline-secondary mt-3">← Back to My Cases</a>
+        <h2 class="text-muted">This case couldn't be opened</h2>
+        <p class="text-secondary">It may have been removed, or the site may not have answered just now.</p>
+        <button type="button" class="btn btn-primary mt-2 me-2" @onclick="LoadAsync">Try again</button>
+        <a href="/my-cases" class="btn btn-outline-secondary mt-2">← Back to My Cases</a>
     </div>
     return;
 }
@@ -77,12 +81,32 @@
             @if (_pendingMove is not null)
             {
                 <hr />
-                <p class="mb-2">
-                    You've asked <strong>@_pendingMove.ToOrganizationName</strong> to take this
-                    case — waiting for their answer.
-                </p>
-                <button type="button" class="btn btn-outline-secondary btn-sm" disabled="@_moveBusy"
-                        @onclick="WithdrawMoveAsync">Withdraw the request</button>
+                @if (_isPrimaryClient)
+                {
+                    <p class="mb-2">
+                        You've asked <strong>@_pendingMove.ToOrganizationName</strong> to take this
+                        case — waiting for their answer.
+                    </p>
+                    <button type="button" class="btn btn-outline-secondary btn-sm" disabled="@_moveBusy"
+                            @onclick="WithdrawMoveAsync">Withdraw the request</button>
+                    @if (_moveError is not null)
+                    {
+                        <div class="alert alert-danger py-2 mt-2 mb-0">@_moveError</div>
+                    }
+                }
+                else
+                {
+                    <p class="mb-0">
+                        <strong>@_pendingMove.ToOrganizationName</strong> has been asked to take this
+                        case — waiting for their answer.
+                    </p>
+                }
+            }
+            else if (!_isPrimaryClient)
+            {
+                @* Moving the case is the decision of the person who asked for the investigation. *@
+                <hr />
+                <p class="mb-0">The person who asked for this investigation can move the case to a different organization.</p>
             }
             else if (!_showMoveForm)
             {
@@ -894,8 +918,11 @@
     private async Task WithdrawMoveAsync()
     {
         _moveBusy = true;
-        await AdminClient.CancelMyReassignAsync(CaseId);
-        _pendingMove = null;
+        _moveError = null;
+        // Cleared only when it was: a refused withdrawal left the request standing while the page said
+        // otherwise (site audit, 10/09/2026).
+        if (await AdminClient.CancelMyReassignAsync(CaseId)) _pendingMove = null;
+        else _moveError = "Your request couldn't be withdrawn. Please try again.";
         _moveBusy = false;
     }
 
@@ -1596,7 +1623,12 @@
     {
         try
         {
-            await AdminClient.DetachOccurrenceFileAsync(CaseId, entryId, fileId);
+            // Removed from the screen only when it was removed; it used to vanish and come back on the next visit.
+            if (!await AdminClient.DetachOccurrenceFileAsync(CaseId, entryId, fileId))
+            {
+                _error = "That file couldn't be removed. Please try again.";
+                return;
+            }
             var occ = _case?.Occurrences.FirstOrDefault(o => o.Id == entryId);
             if (occ is not null)
             {

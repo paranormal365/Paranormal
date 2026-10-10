@@ -256,7 +256,9 @@ public sealed class OrganizationFileController : ControllerBase
             || await db.UploadFileOrganizationShares.AnyAsync(
                 s => s.UploadFileId == uploadFileId && s.OrganizationId == orgId && s.IsActive, ct);
         if (!canAccess && !isSuperAdmin)
-            return Forbid("The source file is not public or shared with this organization.");
+            // A refusal with a sentence. Forbid(string) takes an authentication scheme, so this threw and
+            // answered 500 (site audit, 10/09/2026).
+            return StatusCode(StatusCodes.Status403Forbidden, "That file isn't public or shared with this group.");
 
         Stream? srcStream = null;
         if (!string.IsNullOrEmpty(source.StoragePath) && _storage.Exists(source.StoragePath))

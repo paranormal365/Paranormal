@@ -44,6 +44,13 @@ public static class InvestigationAccess
             .FirstOrDefaultAsync(ct);
         if (investigation is null) return false;
 
+        // Every route in below is somebody acting for the group, so it lasts only while they are in it.
+        // The creator, the case manager and the lead kept their say after leaving or being removed, and
+        // that say opens join codes and Field Kit launches (site audit, 10/09/2026).
+        if (!await db.OrganizationUserMemberships.AsNoTracking().AnyAsync(m =>
+                m.OrganizationId == investigation.OrganizationId && m.AppUserId == userId && m.IsActive, ct))
+            return false;
+
         // Whoever scheduled it. The commonest case by far, and checked first so the ordinary path
         // costs one query.
         if (investigation.CreatedByAppUserId == userId) return true;
@@ -122,6 +129,10 @@ public static class InvestigationAccess
             .Select(a => new { a.InvestigationId, a.IsLead })
             .ToListAsync(ct);
 
+        // The same rule as CanManageAsync: the creator, lead and case manager act for the group only while in it.
+        var isMember = isSuperAdmin || await db.OrganizationUserMemberships.AsNoTracking().AnyAsync(m =>
+            m.OrganizationId == organizationId && m.AppUserId == userId && m.IsActive, ct);
+
         var leadOf = myAttendances.Where(a => a.IsLead).Select(a => a.InvestigationId).ToHashSet();
         var attending = myAttendances.Select(a => a.InvestigationId).ToHashSet();
 
@@ -138,9 +149,9 @@ public static class InvestigationAccess
             r => new InvestigationPermissionFlags(
                 CanEditRecord:
                     hasOrgAuthority
-                    || r.CreatedByAppUserId == userId
-                    || leadOf.Contains(r.Id)
-                    || (r.CaseId is { } cid && managedCaseIds.Contains(cid)),
+                    || (isMember && (r.CreatedByAppUserId == userId
+                                     || leadOf.Contains(r.Id)
+                                     || (r.CaseId is { } cid && managedCaseIds.Contains(cid)))),
                 // Recording your own findings is a participant's right, not a manager's. Someone
                 // who was there has something to say about it whether or not they run anything.
                 CanCompleteMyFindings: attending.Contains(r.Id)));

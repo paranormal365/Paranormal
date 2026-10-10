@@ -414,7 +414,7 @@
                                                            id="venue-edit-street" @bind="_newVenue.StreetAddress1" />
                                                 </div>
                                                 <div class="col-6 col-md-5">
-                                                    <input class="form-control form-control-sm" placeholder="Town or city"
+                                                    <input class="form-control form-control-sm" placeholder="City"
                                                            id="venue-edit-city" @bind="_newVenue.City" />
                                                 </div>
                                                 <div class="col-3 col-md-3">
@@ -755,7 +755,7 @@
                                         <option value="1440">a day</option>
                                         <option value="2880">two days</option>
                                         <option value="10080">a week</option>
-                                        <option value="20160">a fortnight</option>
+                                        <option value="20160">two weeks</option>
                                     </select>
                                     <div class="form-text">
                                         Then it lapses and the seats go back, and the guest is told.
@@ -891,8 +891,8 @@
                             }
                             <p class="text-secondary">
                                 <strong>Archiving</strong> stops it counting and takes it off your
-                                list; everything that happened stays. It happens by itself a
-                                fortnight after the last @ev.DateNoun.
+                                list; everything that happened stays. It happens by itself
+                                two weeks after the last @ev.DateNoun.
                                 <strong>Calling it off</strong> is for one that was going to happen
                                 and now is not — the listing says so, and the people coming are told.
                             </p>

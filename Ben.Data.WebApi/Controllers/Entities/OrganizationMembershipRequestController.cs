@@ -139,11 +139,15 @@ public sealed class OrganizationMembershipRequestController : ControllerBase
         return Ok(requests.Select(_mapper.Map<OrganizationMembershipRequestRecord>).ToList());
     }
 
+    /// <summary>When a group's "may not apply again" began to be enforced (site audit, 10/09/2026).</summary>
+    internal static readonly DateTime ReapplyRuleEnforcedFrom = new(2026, 10, 10, 0, 0, 0, DateTimeKind.Utc);
+
     // ── POST /api/organizations/{orgId}/membership-requests ─────────────────
     /// <summary>
     /// Submits a membership application. The organization must have IsAcceptingApplications = true.
     /// A user can only have one active (Pending) request per organization.
     /// </summary>
+
     [HttpPost]
     public async Task<ActionResult<OrganizationMembershipRequestRecord>> Apply(
         Guid orgId, [FromBody] ApplyForMembershipRequest request, CancellationToken ct)
@@ -173,6 +177,20 @@ public sealed class OrganizationMembershipRequestController : ControllerBase
         var isMember = await db.OrganizationUserMemberships
             .AnyAsync(m => m.OrganizationId == orgId && m.AppUserId == userId.Value && m.IsActive, ct);
         if (isMember) return Conflict("You are already a member of this organization.");
+
+        // A group that declined somebody and said they may not apply again is taken at its word. The choice
+        // was saved and never read, so a declined applicant could apply again at once (site audit,
+        // 10/09/2026). The latest answer decides: a later approval or withdrawal reopens the door.
+        // Only for denials made since it was enforced: the box used to start unticked and do nothing, so
+        // earlier denials say "no" without anybody having chosen it.
+        var latest = await db.OrganizationMembershipRequests.AsNoTracking()
+            .Where(r => r.OrganizationId == orgId && r.AppUserId == userId)
+            .OrderByDescending(r => r.DateCreated)
+            .Select(r => new { r.Status, r.CanReapply, r.DateUpdated })
+            .FirstOrDefaultAsync(ct);
+        if (latest is { Status: OrganizationMembershipRequestStatus.Denied, CanReapply: false }
+            && latest.DateUpdated >= ReapplyRuleEnforcedFrom)
+            return Conflict("This group has asked not to receive another application from you.");
 
         var membershipRequest = new OrganizationMembershipRequest
         {

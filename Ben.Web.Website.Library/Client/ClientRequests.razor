@@ -126,7 +126,7 @@
                                 }
                             </div>
                             <div class="d-flex align-items-center gap-2">
-                                <span class="text-secondary small">@org.DistanceFromSearchMiles mi</span>
+                                <span class="text-secondary small">Within @org.DistanceFromSearchMiles.ToString("0") mi</span>
                                 <button type="button" class="btn btn-primary btn-sm" @onclick="@(() => SelectOrganizationAsync(org.OrganizationId))" disabled="@(!(!_isPickerBusy))">
                                     Select
                                 </button>

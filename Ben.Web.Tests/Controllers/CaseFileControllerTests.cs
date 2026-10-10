@@ -474,4 +474,42 @@ public class CaseFileControllerTests
 
         Assert.IsType<NotFoundObjectResult>(result.Result);
     }
+
+    // ── Site audit, 10/09/2026 ───────────────────────────────────────────────
+
+    /// <summary>
+    /// A member of one group cannot list another group's case files by putting that case's id under their
+    /// own group's address. GetAll asked only whether the caller was in the route group, never whether the
+    /// case was that group's (site audit, 10/09/2026).
+    /// </summary>
+    [Fact]
+    public async Task A_member_of_one_group_cannot_list_another_groups_case_files()
+    {
+        var (factory, orgId, _, userId) = await SeedAsync();
+        var otherOrgId  = Guid.NewGuid();
+        var otherCaseId = Guid.NewGuid();
+        var otherUserId = Guid.NewGuid();
+        var file = await SeedSourceFileAsync(factory, otherUserId);
+        await using (var db = await factory.CreateDbContextAsync())
+        {
+            db.Organizations.Add(new Organization { Id = otherOrgId, Name = "Other Org", UrlName = "other", DateCreated = DateTime.UtcNow, CreatedByAppUserId = otherUserId });
+            db.Cases.Add(new Case
+            {
+                Id = otherCaseId, OrganizationId = otherOrgId, Title = "Other Case",
+                CaseYear = 2026, OrgCaseNumber = 1,
+                StreetAddress1 = "2 Main", City = "Nashville", State = "TN", ZipCode = "37201", Country = "US",
+                DateCreated = DateTime.UtcNow, CreatedByAppUserId = otherUserId,
+            });
+            db.CaseFiles.Add(new CaseFile
+            {
+                Id = Guid.NewGuid(), CaseId = otherCaseId, UploadFileId = file.Id,
+                DateCreated = DateTime.UtcNow, CreatedByAppUserId = otherUserId,
+            });
+            await db.SaveChangesAsync();
+        }
+
+        var result = await BuildController(factory, userId).GetAll(orgId, otherCaseId, default);
+
+        Assert.IsType<NotFoundResult>(result.Result);
+    }
 }

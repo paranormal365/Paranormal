@@ -144,7 +144,7 @@
             <div class="dialog-footer-actions">
             <span class="dialog-footer-spacer"></span>
 
-            <button type="button" class="btn @(ThemeConstants.Button.FillMode.Outline == ThemeConstants.Button.FillMode.Solid ? "btn-secondary" : "btn-outline-secondary")" @onclick="@(() => { _showDenyDialog = false; _pendingDeny = null; _denyNote = string.Empty; _canReapply = false; })">
+            <button type="button" class="btn @(ThemeConstants.Button.FillMode.Outline == ThemeConstants.Button.FillMode.Solid ? "btn-secondary" : "btn-outline-secondary")" @onclick="@(() => { _showDenyDialog = false; _pendingDeny = null; _denyNote = string.Empty; _canReapply = true; })">
                 Cancel
             </button>
             <button type="button" class="btn btn-danger" @onclick="ConfirmDenyAsync">
@@ -212,7 +212,7 @@
     private bool _showDenyDialog;
     private OrganizationMembershipRequestRecord? _pendingDeny;
     private string _denyNote = string.Empty;
-    private bool _canReapply;
+    private bool _canReapply = true;
 
     // Phase 3: committee vote
     private bool _showVoteDialog;
@@ -257,7 +257,8 @@
     {
         _pendingDeny = r;
         _denyNote    = string.Empty;
-        _canReapply  = false;
+        // Allowed unless the group unticks it: saying no to somebody for good is the choice to make on purpose.
+        _canReapply  = true;
         _showDenyDialog = true;
     }
 

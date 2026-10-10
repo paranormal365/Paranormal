@@ -139,9 +139,12 @@ public sealed class StripeRenewalJob : IScheduledJob
         // A member who left the group is not charged for a seat they no longer occupy — the
         // seat simply runs out. Nothing lapses it; an expired seat with an inactive membership
         // is its own explanation on the admin screen.
+        // A closed account counts as gone too. Closing does not end memberships, so a closed account's
+        // seat kept renewing and its card kept being charged (site audit, 10/09/2026).
         var stillMember = await db.OrganizationUserMemberships.AsNoTracking()
             .AnyAsync(m => m.OrganizationId == seat.OrganizationId
-                        && m.AppUserId == seat.AppUserId && m.IsActive, ct);
+                        && m.AppUserId == seat.AppUserId && m.IsActive, ct)
+            && await db.AppUsers.AsNoTracking().AnyAsync(u => u.Id == seat.AppUserId && u.DateClosed == null, ct);
         if (!stillMember)
         {
             _log.LogInformation(

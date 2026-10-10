@@ -190,6 +190,18 @@ public sealed class OrgMessageController : BenControllerBase
         var userId = GetCurrentUserId();
         await using var db = await _db.CreateDbContextAsync(ct);
 
+        // Public posts are made through the feed, which screens them and asks whether the author may
+        // post. Accepted here, a member could publish to the public feed past all of that by naming
+        // the channel (site audit, 10/09/2026). A reply and a case must be this group's too.
+        if (request.ChannelType == OrgMessageChannel.PublicFeed)
+            return BadRequest("Public posts are made from the community feed.");
+        if (request.ParentMessageId is Guid parentId
+            && !await db.OrgMessages.AnyAsync(m => m.Id == parentId && m.OrganizationId == orgId, ct))
+            return NotFound();
+        if (request.CaseId is Guid caseId
+            && !await db.Cases.AnyAsync(c => c.Id == caseId && c.OrganizationId == orgId, ct))
+            return NotFound();
+
         var message = new OrgMessage
         {
             Id                 = Guid.NewGuid(),
@@ -216,6 +228,11 @@ public sealed class OrgMessageController : BenControllerBase
         // Add recipients
         var now = DateTime.UtcNow;
         var recipientIds = request.RecipientUserIds.Distinct().Where(id => id != userId).ToList();
+        // Only this group's own people receive its messages.
+        if (recipientIds.Count > 0)
+            recipientIds = await db.OrganizationUserMemberships.AsNoTracking()
+                .Where(m => m.OrganizationId == orgId && m.IsActive && recipientIds.Contains(m.AppUserId))
+                .Select(m => m.AppUserId).Distinct().ToListAsync(ct);
 
         if (request.ChannelType == OrgMessageChannel.OrgBroadcast && !recipientIds.Any())
         {

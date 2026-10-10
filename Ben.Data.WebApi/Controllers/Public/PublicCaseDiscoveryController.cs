@@ -135,18 +135,38 @@ public sealed class PublicCaseDiscoveryController : ControllerBase
                      && ((c.IsPublic && (c.Status == CaseStatus.Public || c.Status == CaseStatus.Haunted))
                          || mine.Contains(c.Id)));
 
+        // The box is tested against the published, rounded position, the same one the map draws.
+        // Tested against the true position, a box could be narrowed around one case until it fell
+        // out, and about twenty-five requests gave its exact address (site audit, 10/09/2026). The
+        // database narrows first with a box one rounding cell wider on every side.
+        decimal n = 0, so = 0, e = 0, w = 0;
         if (bounded)
         {
-            var n  = (decimal)Math.Max(north!.Value, south!.Value);
-            var so = (decimal)Math.Min(north!.Value, south!.Value);
-            var e  = (decimal)Math.Max(east!.Value,  west!.Value);
-            var w  = (decimal)Math.Min(east!.Value,  west!.Value);
+            if (!double.IsFinite(north!.Value) || !double.IsFinite(south!.Value)
+                || !double.IsFinite(east!.Value) || !double.IsFinite(west!.Value)
+                || Math.Abs(north.Value) > 90 || Math.Abs(south.Value) > 90
+                || Math.Abs(east.Value) > 180 || Math.Abs(west.Value) > 180)
+                return BadRequest("Those bounds aren't on the map.");
+
+            n  = (decimal)Math.Max(north.Value, south.Value);
+            so = (decimal)Math.Min(north.Value, south.Value);
+            e  = (decimal)Math.Max(east.Value,  west.Value);
+            w  = (decimal)Math.Min(east.Value,  west.Value);
+            decimal nWide = n + 0.2m, sWide = so - 0.2m, eWide = e + 2m, wWide = w - 2m;
             query = query.Where(c => c.Latitude != null && c.Longitude != null
-                                  && c.Latitude <= n && c.Latitude >= so
-                                  && c.Longitude <= e && c.Longitude >= w);
+                                  && c.Latitude <= nWide && c.Latitude >= sWide
+                                  && c.Longitude <= eWide && c.Longitude >= wWide);
         }
 
         var cases = await query.ToListAsync(ct);
+        if (bounded)
+        {
+            cases = cases.Where(c =>
+            {
+                var (lat, lon) = PublicCoordinates.Approximate(c.Latitude, c.Longitude);
+                return lat is decimal la && lon is decimal lo && la <= n && la >= so && lo <= e && lo >= w;
+            }).ToList();
+        }
 
         if (cases.Count == 0)
             return Ok(new PublicCaseDiscoveryPagedResponse([], 0, page, pageSize));

@@ -18,7 +18,7 @@
     @if (_record is { } r)
     {
         <p class="text-secondary small mb-3">
-            @r.OrganizationName · ended @r.EndsOn.ToString("MM/dd/yyyy")
+            @r.OrganizationName · @(r.IsOver ? "ended" : "ends") @r.EndsOn.ToString("MM/dd/yyyy")
             @if (r.EventUrlName is { } slug)
             {
                 <text> · </text><a href="@($"/o/{r.OrganizationUrlName}/events/{slug}")">The event's page</a>
@@ -31,6 +31,14 @@
     }
 
     <HostedEventReviews HostedEventId="EventId" Loaded="OnLoaded" />
+
+    @* The reviews section stays quiet for somebody who wasn't there, which is right on the event's own page
+       and left this one blank (site audit, 10/09/2026). This page is for writing a review, so it says why. *@
+    @if (_record is { IsOver: true } over && over.Reviews.Reviews.Count == 0 && !over.Reviews.MayReview
+         && over.Reviews.WhyNot is { Length: > 0 } whyNot)
+    {
+        <div class="alert alert-light border" id="review-why-not">@whyNot</div>
+    }
 </div>
 
 @code {

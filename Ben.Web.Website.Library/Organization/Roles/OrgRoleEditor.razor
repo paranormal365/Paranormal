@@ -85,11 +85,11 @@ else if (_role is not null)
             <table class="table table-sm table-bordered align-middle">
                 <thead class="table-light">
                     <tr>
-                        <th>Resource</th>
-                        <th class="text-center" style="width:50px">C</th>
-                        <th class="text-center" style="width:50px">R</th>
-                        <th class="text-center" style="width:50px">U</th>
-                        <th class="text-center" style="width:50px">D</th>
+                        <th>What it covers</th>
+                        <th class="text-center" style="width:64px">Add</th>
+                        <th class="text-center" style="width:64px">See</th>
+                        <th class="text-center" style="width:64px">Change</th>
+                        <th class="text-center" style="width:64px">Remove</th>
                     </tr>
                 </thead>
                 <tbody>
@@ -238,48 +238,48 @@ else if (_role is not null)
     // pins both directions; restore a row only together with the write path that reads it.
     private static readonly IReadOnlyList<PermissionSection> Sections =
     [
-        new("Organization Settings",   OrganizationSecurityTable.Organization,            null,
-            "Edit the organization's core profile — name, description, and general details."),
-        new("Org Settings (Map/Dir)",   OrganizationSecurityTable.OrganizationSettings,    OrganizationSecurityTable.Organization,
-            "Manage org-level display settings, such as whether the address map and directions link are shown."),
+        new("Group details",           OrganizationSecurityTable.Organization,            null,
+            "The group's name, description and general details."),
+        new("Map and directions",      OrganizationSecurityTable.OrganizationSettings,    OrganizationSecurityTable.Organization,
+            "Whether the group's address map and directions link are shown."),
         new("Addresses",               OrganizationSecurityTable.OrganizationAddress,     null,
-            "Manage the organization's street addresses."),
-        new("Address: Member Access",  OrganizationSecurityTable.OrganizationAddressMemberAccess, OrganizationSecurityTable.OrganizationAddress,
-            "Manage which specific members can see an address marked visible to Specific Members only."),
-        new("Pages (CMS)",             OrganizationSecurityTable.OrganizationPage,        null,
-            "Create and edit the organization's public CMS pages."),
-        new("CMS Sections",            OrganizationSecurityTable.CmsSection,              OrganizationSecurityTable.OrganizationPage,
-            "Edit the content sections within a CMS page."),
-        new("Member Groups",           OrganizationSecurityTable.OrgMemberGroup,          null,
-            "Manage member sub-groups within the organization."),
-        new("Membership Applications", OrganizationSecurityTable.MembershipRequests,      null,
-            "Review and respond to applications to join the organization."),
+            "The group's street addresses."),
+        new("Who sees an address",     OrganizationSecurityTable.OrganizationAddressMemberAccess, OrganizationSecurityTable.OrganizationAddress,
+            "Which members can see an address that is shown to chosen members only."),
+        new("Website pages",           OrganizationSecurityTable.OrganizationPage,        null,
+            "The pages of the group's public website."),
+        new("Page sections",           OrganizationSecurityTable.CmsSection,              OrganizationSecurityTable.OrganizationPage,
+            "The sections on each website page."),
+        new("Member groups",           OrganizationSecurityTable.OrgMemberGroup,          null,
+            "Smaller groups of members inside the group."),
+        new("Membership applications", OrganizationSecurityTable.MembershipRequests,      null,
+            "Applications to join the group."),
         new("Files",                   OrganizationSecurityTable.OrganizationFiles,       null,
-            "Manage files the organization has uploaded."),
+            "The group's files."),
         new("Investigations",          OrganizationSecurityTable.Investigation,           null,
-            "Schedule and edit the organization's investigations. Case managers, visit leads, and org owners/administrators can also edit their own regardless of this permission."),
+            "The group's investigations. Case managers, visit leads, owners and administrators can change their own whatever this says."),
         new("Cases",                   OrganizationSecurityTable.Case,                    null,
-            "Work the organization's cases — the case record and what hangs off it. Today case access follows membership; this grant becomes the deciding rule as the roles arc lands (item 156), so setting it now is setting it for then."),
-        new("Client Requests",         OrganizationSecurityTable.ClientRequest,           null,
-            "Handle incoming requests from clients — reviewing, accepting, declining, and corresponding. Currently governed by org-admin checks; this grant takes over as the roles arc lands."),
+            "The group's cases: the case record, its notes, files and timeline."),
+        new("Client requests",         OrganizationSecurityTable.ClientRequest,           null,
+            "Requests from people asking for an investigation: reviewing, accepting, declining and replying."),
         new("Calendar",                OrganizationSecurityTable.OrgCalendar,             null,
-            "Manage the group calendar — creating and editing events and event types. Creating events is currently org-admin only; this grant opens it to role holders as the roles arc lands."),
+            "The group calendar: its events and event types."),
         new("Equipment",               OrganizationSecurityTable.Equipment,               null,
-            "Manage the organization's own equipment — adding and editing gear, its photos, and its service history. Covers the group's own property only; any active member can already view it."),
-        new("Equipment Checkouts",     OrganizationSecurityTable.EquipmentCheckout,       OrganizationSecurityTable.Equipment,
-            "Approve or deny checkout requests and hand equipment out and back in. Separate from Equipment so someone can run the loans desk without managing the catalog."),
-        new("Hosted Events",           OrganizationSecurityTable.HostedEvent,             null,
-            "Create and edit the group's hosted events — their dates, description, venue and whether they are published. Separate from Calendar: an event is a product with guests and staff, and handing somebody the calendar to let them run one would hand them every date the group has."),
-        new("Event Bookings",          OrganizationSecurityTable.EventBooking,            OrganizationSecurityTable.HostedEvent,
-            "See who has asked for a place and decide it — confirming a party into a room, turning one down, editing what they booked. The site never takes the money; confirming says the host and the guest have settled it."),
-        new("Event Program",         OrganizationSecurityTable.EventSession,            OrganizationSecurityTable.HostedEvent,
-            "Build the program: the sessions and classes inside an event, their times, rooms, leaders and how many people each can take."),
-        new("Event Files",             OrganizationSecurityTable.EventFile,               OrganizationSecurityTable.HostedEvent,
-            "Keep files with an event — running orders, slides, floor plans — and choose whether each is for the staff, the guests, or anybody."),
-        new("Event Door",              OrganizationSecurityTable.EventCheckIn,            OrganizationSecurityTable.HostedEvent,
-            "Record who arrived and who left. The narrowest grant here and the one most often given on its own: somebody standing at a table with a list needs to tick names and nothing else."),
-        new("Event Checklists",        OrganizationSecurityTable.EventChecklist,          OrganizationSecurityTable.HostedEvent,
-            "Keep the event's to-do lists and tick things off them."),
+            "The group's own equipment, its photos and service history. Every member can already see it."),
+        new("Equipment checkouts",     OrganizationSecurityTable.EquipmentCheckout,       OrganizationSecurityTable.Equipment,
+            "Checkout requests, and handing equipment out and back in."),
+        new("Hosted events",           OrganizationSecurityTable.HostedEvent,             null,
+            "The group's hosted events: dates, description, venue and whether each is published."),
+        new("Event bookings",          OrganizationSecurityTable.EventBooking,            OrganizationSecurityTable.HostedEvent,
+            "Bookings: confirming a party into a room, turning one down, changing what they booked."),
+        new("Event program",         OrganizationSecurityTable.EventSession,            OrganizationSecurityTable.HostedEvent,
+            "The sessions inside an event: their times, rooms, leaders and how many people each can take."),
+        new("Event files",             OrganizationSecurityTable.EventFile,               OrganizationSecurityTable.HostedEvent,
+            "An event's files, and whether each is for the staff, the guests or anybody."),
+        new("Event door",              OrganizationSecurityTable.EventCheckIn,            OrganizationSecurityTable.HostedEvent,
+            "Checking guests in and out at the door."),
+        new("Event checklists",        OrganizationSecurityTable.EventChecklist,          OrganizationSecurityTable.HostedEvent,
+            "The event's to-do lists."),
     ];
 
     private sealed record PermissionSection(

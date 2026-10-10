@@ -411,4 +411,42 @@ public class CaseTransferControllerTests
         var ok  = Assert.IsType<OkObjectResult>(result.Result);
         Assert.Equal(CaseTransferStatus.Rejected, ((CaseTransferLogRecord)ok.Value!).Status);
     }
+
+    // ── Site audit, 10/09/2026 ───────────────────────────────────────────────
+
+    /// <summary>
+    /// A group with a transfer waiting for it cannot use that transfer to take a different case. Respond
+    /// found the transfer by its id and the receiving group only, then moved whichever case was in the
+    /// address, so any pending transfer let a group take somebody else's case (site audit, 10/09/2026).
+    /// </summary>
+    [Fact]
+    public async Task A_pending_transfer_cannot_be_accepted_under_another_cases_id()
+    {
+        var (factory, fromOrgId, toOrgId, caseId, fromUserId, toUserId) = await SeedAsync();
+        var victimOrgId  = Guid.NewGuid();
+        var victimCaseId = Guid.NewGuid();
+        await using (var db = await factory.CreateDbContextAsync())
+        {
+            db.Organizations.Add(new Organization { Id = victimOrgId, Name = "Victim Org", UrlName = "victim", DateCreated = DateTime.UtcNow, CreatedByAppUserId = fromUserId });
+            db.Cases.Add(new Case
+            {
+                Id = victimCaseId, OrganizationId = victimOrgId, Title = "Somebody Else's Case",
+                CaseYear = 2026, OrgCaseNumber = 7, Status = CaseStatus.Accepted,
+                StreetAddress1 = "9 Elm", City = "Nashville", State = "TN", ZipCode = "37201", Country = "US",
+                DateCreated = DateTime.UtcNow, CreatedByAppUserId = fromUserId,
+            });
+            await db.SaveChangesAsync();
+        }
+        var propResult = await BuildController(factory, fromUserId)
+            .Propose(fromOrgId, caseId, new ProposeCaseTransferRequest(toOrgId, null), default);
+        var logId = ((CaseTransferLogRecord)((CreatedAtActionResult)propResult.Result!).Value!).Id;
+
+        var result = await BuildController(factory, toUserId)
+            .Respond(toOrgId, victimCaseId, logId, new RespondTransferRequest(true, null), default);
+
+        Assert.IsType<NotFoundResult>(result.Result);
+        await using var check = await factory.CreateDbContextAsync();
+        Assert.Equal(victimOrgId, (await check.Cases.FindAsync(victimCaseId))!.OrganizationId);
+        Assert.Equal(CaseTransferStatus.Pending, (await check.CaseTransferLogs.FindAsync(logId))!.Status);
+    }
 }

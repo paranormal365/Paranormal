@@ -268,6 +268,24 @@ public sealed class FieldSessionPublishController : BenControllerBase
                 "Only public locations have an open archive. A session recorded at somebody's "
               + "home stays with you and your group — that is what the private lane is for.");
 
+        // A session filed with a group's investigation was recorded where that investigation was, and
+        // the group's own rules about it apply. Only its sender was asked before (site audit,
+        // 10/09/2026), so readings from a client's home under a private engagement could be published
+        // to the open archive by naming a new public place.
+        if (session.InvestigationId is Guid investigationId
+            && await db.Investigations.AsNoTracking().Where(i => i.Id == investigationId)
+                   .Select(i => new { i.PlaceId, CasePlaceId = i.Case != null ? i.Case.PlaceId : null,
+                                      Private = i.Case != null && i.Case.IsPrivateEngagement })
+                   .FirstOrDefaultAsync(ct) is { } filed)
+        {
+            if (filed.Private)
+                return BadRequest("This session was recorded for a private engagement, so it stays with the group "
+                                + "and can't go in a public archive.");
+            if ((filed.PlaceId ?? filed.CasePlaceId) is Guid recordedAt && recordedAt != place.Id)
+                return BadRequest("This session belongs to an investigation at another place. It can only go in "
+                                + "that place's archive.");
+        }
+
         session.PlaceId = place.Id;
         // Re-publishing an already-public session keeps its original date: the answer to "when
         // did this become public" must not move because somebody pressed the button twice.

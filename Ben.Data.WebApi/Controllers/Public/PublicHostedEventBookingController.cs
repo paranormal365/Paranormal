@@ -650,7 +650,8 @@ public sealed class PublicHostedEventBookingController : BenControllerBase
         var existing = await db.HostedEventBookings
             .Include(b => b.Nights).Include(b => b.Guests)
             .FirstOrDefaultAsync(b => b.HostedEventId == eventId && b.LeadAppUserId == userId
-                                   && b.Status != HostedEventBookingStatus.Cancelled, ct);
+                                   && b.Status != HostedEventBookingStatus.Cancelled
+                                   && b.Status != HostedEventBookingStatus.Expired, ct);
         if (existing is not null)
             return Conflict("You have already asked for a place at this event.");
 
@@ -722,10 +723,17 @@ public sealed class PublicHostedEventBookingController : BenControllerBase
         var booking = await db.HostedEventBookings
             .Include(b => b.Nights).Include(b => b.Guests)
             .FirstOrDefaultAsync(b => b.HostedEventId == eventId && b.LeadAppUserId == userId
-                                   && b.Status != HostedEventBookingStatus.Cancelled, ct);
+                                   && b.Status != HostedEventBookingStatus.Cancelled
+                                   && b.Status != HostedEventBookingStatus.Expired, ct);
         if (booking is null) return NotFound();
         if (booking.Status == HostedEventBookingStatus.TurnedDown)
             return Conflict("This booking was turned down. Ask the venue if anything has changed.");
+        // Held places are the ones picked on the plan. Changed here they were let go without a word and the
+        // booking kept saying Held, so the venue's later yes collided with somebody else's (site audit,
+        // 10/09/2026). A note can still change.
+        if (booking.Status == HostedEventBookingStatus.Held
+            && (request.Nights is not null || (request.PartySize is int held && EventCapacity.ClampPartySize(held) != booking.PartySize)))
+            return Conflict("Your places are held while the venue decides. To change them, let them go and pick again.");
 
         var wasConfirmed = booking.Status == HostedEventBookingStatus.Confirmed;
         var changesWhatWasAgreed =
@@ -841,7 +849,8 @@ public sealed class PublicHostedEventBookingController : BenControllerBase
         var booking = await db.HostedEventBookings
             .Include(b => b.Nights).Include(b => b.Guests)
             .FirstOrDefaultAsync(b => b.HostedEventId == eventId && b.LeadAppUserId == userId
-                                   && b.Status != HostedEventBookingStatus.Cancelled, ct);
+                                   && b.Status != HostedEventBookingStatus.Cancelled
+                                   && b.Status != HostedEventBookingStatus.Expired, ct);
         if (booking is null) return NotFound();
 
         if (booking.Status == HostedEventBookingStatus.Requested)
@@ -974,7 +983,10 @@ public sealed class PublicHostedEventBookingController : BenControllerBase
         BenDataContext db, HostedEventBooking booking, IReadOnlyList<HostedEventBookingGuestInput> guests)
     {
         var order = 0;
-        foreach (var guest in guests)
+        // No more names than the party has people, and an account only when it is the lead's own. Any
+        // account id was taken as given, and each one named counted as attending and could review the
+        // event (site audit, 10/09/2026); nothing on the site links a guest to an account.
+        foreach (var guest in guests.Take(Math.Max(1, booking.PartySize)))
         {
             var name = Trimmed(guest.DisplayName);
             if (name is null) continue;
@@ -984,7 +996,7 @@ public sealed class PublicHostedEventBookingController : BenControllerBase
                 Id = Guid.NewGuid(),
                 HostedEventBookingId = booking.Id,
                 DisplayName = name,
-                AppUserId = guest.AppUserId,
+                AppUserId = guest.AppUserId == booking.LeadAppUserId ? guest.AppUserId : null,
                 DietaryNotes = Trimmed(guest.DietaryNotes),
                 SortOrder = order++,
                 DateCreated = DateTime.UtcNow,

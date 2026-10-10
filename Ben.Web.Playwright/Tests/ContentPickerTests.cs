@@ -110,7 +110,7 @@ public class ContentPickerTests : BenTestBase
         var dialog = Page.Locator(".modal.show");
         await ClickUntilAsync(Main.GetByRole(AriaRole.Button, new() { Name = "New Page" }).First, dialog);
         await dialog.GetByLabel("Title", new() { Exact = false }).First.FillAsync(title);
-        await dialog.GetByLabel("URL Slug", new() { Exact = false }).First.FillAsync($"playwright-banner-{stamp}");
+        await dialog.GetByLabel("Web address", new() { Exact = false }).First.FillAsync($"playwright-banner-{stamp}");
         await dialog.GetByRole(AriaRole.Button, new() { Name = "Save", Exact = false }).First.ClickAsync();
         await Expect(dialog).ToBeHiddenAsync(new() { Timeout = 10_000 });
 

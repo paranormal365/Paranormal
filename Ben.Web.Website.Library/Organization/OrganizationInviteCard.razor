@@ -36,7 +36,7 @@
             </div>
         }
 
-        @if (_link?.Token is { Length: > 0 } token)
+        @if (_link?.Token is { Length: > 0 } token && !Expired)
         {
             <p class="text-secondary small">
                 Anybody with this link can join <strong>@OrgName</strong> as a member. Share it with
@@ -49,7 +49,7 @@
             </div>
 
             <p class="text-secondary small mb-3" id="invite-expires">
-                It stops working @(_link.ExpiresUtc is { } until ? until.ToViewerLocalTime(UserState).ToString("MMMM d, yyyy") : "in a fortnight").
+                It stops working @(_link.ExpiresUtc is { } until ? until.ToViewerLocalTime(UserState).ToString("MMMM d, yyyy") : "in two weeks").
             </p>
 
             <div class="d-flex flex-wrap gap-2">
@@ -69,10 +69,22 @@
         }
         else
         {
-            <p class="text-secondary small">
-                Your group has no invitation link. Make one and share it with the people you work
-                with — they open it, sign in, and they are in.
-            </p>
+            @if (Expired && _link?.ExpiresUtc is { } ended)
+            {
+                @* 10/09/2026: an expired link used to sit here looking current, and whoever copied it sent
+                   people to "This link isn't working". *@
+                <p class="text-secondary small" id="invite-expired">
+                    Your group's last invitation link stopped working on
+                    @ended.ToViewerLocalTime(UserState).ToString("MMMM d, yyyy"). Make a new one to share.
+                </p>
+            }
+            else
+            {
+                <p class="text-secondary small">
+                    Your group has no invitation link. Make one and share it with the people you work
+                    with — they open it, sign in, and they are in.
+                </p>
+            }
             <button type="button" class="btn btn-primary btn-sm" id="invite-make"
                     @onclick="IssueAsync" disabled="@_busy">
                 @(_busy ? "Making it…" : "Make an invitation link")
@@ -86,6 +98,9 @@
     [Parameter] public string OrgName { get; set; } = "this group";
 
     private OrganizationJoinLinkRecord? _link;
+
+    /// <summary>The group's link has run out: it is shown as gone, with the way to make another.</summary>
+    private bool Expired => _link?.ExpiresUtc is { } until && until <= DateTime.UtcNow;
     private bool _busy;
     private string? _error;
 

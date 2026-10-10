@@ -126,6 +126,9 @@ with the distance dropdown.
 *Each tab shows a count, so you can see what was found before opening anything. A tab only appears
 when it has something in it.*
 
+A group that keeps its address private shows how close it is in rounded steps, such as **Within 10
+mi**, and never a pin on the map.
+
 **Places** is the fourth tab, and it works differently from the other three. A place is a location
 rather than a group or an event — a cave, a mill, a hotel. The tab lists places near you where
 groups have published their work. Opening one shows everything people have shared about that

@@ -226,7 +226,13 @@ public sealed class StoreRefundService(
         await using (var tx = db.Database.IsRelational() ? await db.Database.BeginTransactionAsync(ct) : null)
         {
             var rows = await db.StoreRefunds
-                .Where(r => r.Id == refundId && r.Status == StoreRefundStatus.Pending && (r.StripeRefundId == null || r.StripeRefundId == stripeRefundId))
+                // Failed counts too. A refund marked Failed because Stripe didn't answer in time may well have
+                // gone through, and when Stripe says it has, it has. Only Pending was accepted, so such a
+                // refund could never complete, the order never showed it, and Retry said "done" while doing
+                // nothing (site audit, 10/09/2026).
+                .Where(r => r.Id == refundId
+                         && (r.Status == StoreRefundStatus.Pending || r.Status == StoreRefundStatus.Failed)
+                         && (r.StripeRefundId == null || r.StripeRefundId == stripeRefundId))
                 .ExecuteUpdateAsync(s => s.SetProperty(r => r.Status, StoreRefundStatus.Succeeded)
                     .SetProperty(r => r.StripeRefundId, stripeRefundId).SetProperty(r => r.CompletedUtc, now), ct);
             if (rows == 0) return false;   // the webhook or the admin's branch already finished it
@@ -318,8 +324,13 @@ public sealed class StoreRefundService(
     public async Task RecordPendingAsync(Guid refundId, string stripeRefundId, CancellationToken ct = default)
     {
         await using var db = await dbFactory.CreateDbContextAsync(ct);
-        var rows = await db.StoreRefunds.Where(r => r.Id == refundId && r.Status == StoreRefundStatus.Pending && r.StripeRefundId == null)
-            .ExecuteUpdateAsync(s => s.SetProperty(r => r.StripeRefundId, stripeRefundId), ct);
+        // A refund marked Failed for want of an answer is Pending again once Stripe says it is processing it.
+        var rows = await db.StoreRefunds
+            .Where(r => r.Id == refundId && r.StripeRefundId == null
+                     && (r.Status == StoreRefundStatus.Pending || r.Status == StoreRefundStatus.Failed))
+            .ExecuteUpdateAsync(s => s.SetProperty(r => r.StripeRefundId, stripeRefundId)
+                                      .SetProperty(r => r.Status, StoreRefundStatus.Pending)
+                                      .SetProperty(r => r.FailureReason, (string?)null), ct);
         if (rows == 0) return;
         var orderId = await db.StoreRefunds.Where(r => r.Id == refundId).Select(r => r.OrderId).SingleAsync(ct);
         db.StoreOrderEvents.Add(Event(orderId, StoreOrderEventKind.RefundPending, "Stripe is processing the refund", null, null, Now));

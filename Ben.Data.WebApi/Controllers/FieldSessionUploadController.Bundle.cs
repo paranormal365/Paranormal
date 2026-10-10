@@ -54,6 +54,15 @@ public sealed partial class FieldSessionUploadController
 
         await using var db = await _db.CreateDbContextAsync(ct);
 
+        // A session already filed with a group stays where it was filed. See HeldLinksAsync.
+        if (await HeldLinksAsync(db, userId, deviceSessionId, ct) is { } held)
+        {
+            investigationId = held.InvestigationId;
+            orgCalendarEventId = held.OrgCalendarEventId;
+            hostedEventId = held.HostedEventId;
+            fieldLaunchId = held.FieldLaunchId;
+        }
+
         // Where it goes: an investigation, a tour date or event, a hosted event, or wherever the
         // lead's launch it was joined from points. An investigation that is not the sender's to
         // write to is answered as absent — whether somebody else's exists is not for probing.
@@ -193,6 +202,7 @@ public sealed partial class FieldSessionUploadController
                                    && s.DeviceSessionId == deviceSessionId, ct);
 
         string? replacedPath = null;
+        Guid? replacedFileId = null;
         if (session is null)
         {
             session = new FieldSessionUpload
@@ -219,6 +229,7 @@ public sealed partial class FieldSessionUploadController
                     .Where(f => f.Id == session.DocumentUploadFileId)
                     .Select(f => f.StoragePath)
                     .FirstOrDefaultAsync(ct);
+                replacedFileId = session.DocumentUploadFileId;
             }
             db.FieldSessionUploadFiles.RemoveRange(session.Files);
         }
@@ -295,6 +306,23 @@ public sealed partial class FieldSessionUploadController
 
         await db.SaveChangesAsync(ct);
         await db.Entry(session).Collection(s => s.Files).LoadAsync(ct);
+
+        // The replaced bundle's row goes with its bytes. Left behind, it pointed at a deleted file and kept
+        // counting toward the person's storage, once more for every resend (site audit, 10/09/2026).
+        if (replacedFileId is Guid oldFileId && oldFileId != uploadFile.Id
+            && await db.UploadFiles.FirstOrDefaultAsync(f => f.Id == oldFileId, ct) is { } oldRow)
+        {
+            try
+            {
+                db.UploadFiles.Remove(oldRow);
+                await db.SaveChangesAsync(ct);
+            }
+            catch (DbUpdateException stillUsed)
+            {
+                db.Entry(oldRow).State = EntityState.Unchanged;
+                _log.LogWarning(stillUsed, "The replaced session bundle's file row {FileId} is still referenced; left in place.", oldFileId);
+            }
+        }
 
         if (replacedPath is { Length: > 0 } old && old != storagePath)
         {

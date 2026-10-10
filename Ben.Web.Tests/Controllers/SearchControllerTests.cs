@@ -190,4 +190,49 @@ public class SearchControllerTests
         Assert.Equal("Near Org", list[0].OrgName);  // closer first
         Assert.Equal("Far Org",  list[1].OrgName);
     }
+
+    // ── Site audit, 10/09/2026 ───────────────────────────────────────────────
+
+    /// <summary>
+    /// A group that shows no pin gets no position in the results and only a five-mile band for its
+    /// distance. Every mode but RegionOnly used to hand back the exact position, including Hidden, which
+    /// is how a new group's headquarters starts out and is often somebody's home; and an exact distance
+    /// from three chosen points gives the address anyway (site audit, 10/09/2026).
+    /// </summary>
+    [Theory]
+    [InlineData(OrganizationAddressDisplayMode.Hidden)]
+    [InlineData(OrganizationAddressDisplayMode.RegionOnly)]
+    [InlineData(OrganizationAddressDisplayMode.FullAddressOnly)]
+    public async Task A_group_without_a_pin_gets_no_position_and_a_five_mile_distance(OrganizationAddressDisplayMode mode)
+    {
+        var factory = CreateFactory();
+        // About three miles north of the search point.
+        await SeedAsync(factory, "Quiet Org", "quiet-org", 36.0435m, -86.0m, displayMode: mode);
+
+        var result = await Build(factory).Nearby(36.0, -86.0, 25);
+
+        var org = Assert.Single(Assert.IsType<NearbyResults>(Assert.IsType<OkObjectResult>(result.Result).Value).Organizations);
+        Assert.Null(org.Latitude);
+        Assert.Null(org.Longitude);
+        Assert.Equal(5.0, org.DistanceMiles);
+    }
+
+    /// <summary>
+    /// A group that shows a pin still gets its exact position and distance (site audit, 10/09/2026).
+    /// </summary>
+    [Theory]
+    [InlineData(OrganizationAddressDisplayMode.FullAddressAndMap)]
+    [InlineData(OrganizationAddressDisplayMode.MapPinOnly)]
+    public async Task A_group_with_a_pin_gets_its_exact_position_and_distance(OrganizationAddressDisplayMode mode)
+    {
+        var factory = CreateFactory();
+        await SeedAsync(factory, "Pinned Org", "pinned-org", 36.0435m, -86.0m, displayMode: mode);
+
+        var result = await Build(factory).Nearby(36.0, -86.0, 25);
+
+        var org = Assert.Single(Assert.IsType<NearbyResults>(Assert.IsType<OkObjectResult>(result.Result).Value).Organizations);
+        Assert.Equal(36.0435m, org.Latitude);
+        Assert.Equal(-86.0m, org.Longitude);
+        Assert.InRange(org.DistanceMiles, 2.9, 3.1);
+    }
 }

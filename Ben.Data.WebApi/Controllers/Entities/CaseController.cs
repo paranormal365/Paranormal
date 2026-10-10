@@ -579,6 +579,11 @@ public sealed class CaseController : BenControllerBase
         if (application.Status is ClientOrgRequestStatus.Accepted or ClientOrgRequestStatus.Cancelled)
             return BadRequest("This application has already been responded to.");
         if (application.ClientRequest is null) return NotFound("Client request not found.");
+        // A request the client withdrew, or never sent, can't be taken on. Only the application's own
+        // status was asked, so a group that had declined could still open a case holding the home
+        // address of somebody who had since withdrawn (site audit, 10/09/2026).
+        if (application.ClientRequest.Status is ClientRequestStatus.Withdrawn or ClientRequestStatus.Closed or ClientRequestStatus.Draft)
+            return BadRequest("This request is no longer open.");
 
         // Ben, 2026-08-26: any group who accepts first wins. This check answers the common case
         // politely; the unique filtered index UX_ClientRequestOrganizations_OneAcceptedPerRequest
@@ -700,8 +705,11 @@ public sealed class CaseController : BenControllerBase
         var entity = await db.Cases.FirstOrDefaultAsync(c => c.Id == caseId && c.OrganizationId == orgId, ct);
         if (entity is null) return NotFound();
 
-        // Case manager can update their own case; org admin/super can update any
-        bool isCaseManager = entity.CaseManagerAppUserId == userId;
+        // Case manager can update their own case while they are still in the group; org admin/super can
+        // update any. Being named manager used to outlast leaving the group (site audit, 10/09/2026).
+        bool isCaseManager = entity.CaseManagerAppUserId == userId
+            && await db.OrganizationUserMemberships.AsNoTracking()
+                   .AnyAsync(m => m.OrganizationId == orgId && m.AppUserId == userId && m.IsActive, ct);
         if (!isCaseManager && !await IsAdminOrHasAsync(orgId, OrganizationSecurityTable.Case, OrganizationSecurityAction.Update, ct)) return Forbid();
 
         // ── Item 184: the plan a group holds TODAY governs what it may publish today ──

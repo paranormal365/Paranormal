@@ -171,4 +171,55 @@ public class ScheduleProposalControllerTests
         var proposal = await verifyDb.InvestigationScheduleProposals.FindAsync([proposalId]);
         Assert.Equal(ScheduleProposalStatus.Pending, proposal!.Status);
     }
+
+    // ── Converting (site audit, 10/09/2026) ───────────────────────────────────
+
+    /// <summary>
+    /// Every repeat call to Convert created another investigation and mailed the client again
+    /// (site audit, 10/09/2026). The second call is refused and only one investigation exists.
+    /// </summary>
+    [Fact]
+    public async Task Converting_a_proposal_twice_creates_only_one_investigation()
+    {
+        var (factory, orgId, caseId, userId) = await SeedBasicCase();
+        var ctrl = BuildController(factory, userId);
+        var created = await ctrl.Create(orgId, caseId,
+            new CreateProposalRequest(null, [new SlotInput(DateTime.UtcNow.AddDays(7), null)]), CancellationToken.None);
+        var proposalId = ((ScheduleProposalDto)((OkObjectResult)created.Result!).Value!).Id;
+
+        var first  = await ctrl.Convert(orgId, caseId, proposalId, new ConvertProposalRequest(null, "Visit"), CancellationToken.None);
+        var second = await ctrl.Convert(orgId, caseId, proposalId, new ConvertProposalRequest(null, "Visit again"), CancellationToken.None);
+
+        Assert.IsType<OkObjectResult>(first.Result);
+        Assert.IsType<BadRequestObjectResult>(second.Result);
+        await using var db = await factory.CreateDbContextAsync();
+        Assert.Equal(1, await db.Investigations.CountAsync(i => i.CaseId == caseId));
+    }
+
+    /// <summary>
+    /// A proposal with no dates made Convert call First() on an empty list and answer 500
+    /// (site audit, 10/09/2026). It now answers 400 with a sentence.
+    /// </summary>
+    [Fact]
+    public async Task Converting_a_proposal_with_no_dates_answers_bad_request()
+    {
+        var (factory, orgId, caseId, userId) = await SeedBasicCase();
+        var proposalId = Guid.NewGuid();
+        await using (var db = await factory.CreateDbContextAsync())
+        {
+            db.InvestigationScheduleProposals.Add(new InvestigationScheduleProposal
+            {
+                Id = proposalId, CaseId = caseId, Status = ScheduleProposalStatus.Pending,
+                DateCreated = DateTime.UtcNow, CreatedByAppUserId = userId,
+            });
+            await db.SaveChangesAsync();
+        }
+        var ctrl = BuildController(factory, userId);
+
+        var result = await ctrl.Convert(orgId, caseId, proposalId, new ConvertProposalRequest(null, "Visit"), CancellationToken.None);
+
+        Assert.IsType<BadRequestObjectResult>(result.Result);
+        await using var verify = await factory.CreateDbContextAsync();
+        Assert.False(await verify.Investigations.AnyAsync(i => i.CaseId == caseId));
+    }
 }

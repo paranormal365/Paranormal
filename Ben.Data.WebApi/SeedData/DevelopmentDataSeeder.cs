@@ -856,14 +856,36 @@ internal static class DevelopmentDataSeeder
         Console.WriteLine("[DevDataSeeder] Seeded the past public event with Daniel as a confirmed attendee (item 111).");
         }
 
-        if (await db.OrgCalendarEvents.AnyAsync(e => e.IsPublic && e.StartDateTime > now)) return;
+        // The two demo events stay upcoming (backlog 255, 10/09/2026). They were made once, dated two and four
+        // weeks out, and skipped whenever any future public event existed — so on a test database a few weeks
+        // old they had passed, and the nearby-search and What's On tests had nothing to find. Now each start
+        // moves a demo event that has passed back to the same distance ahead.
+        var walkTitle = "Bell Witch Cave — Public Night Walk";
+        var talkTitle = "Open Meeting — What We Found This Year";
+        var keptWalk = await db.OrgCalendarEvents.FirstOrDefaultAsync(e => e.OrganizationId == tgh.Id && e.Title == walkTitle);
+        var keptTalk = await db.OrgCalendarEvents.FirstOrDefaultAsync(e => e.OrganizationId == nps.Id && e.Title == talkTitle);
+        if (keptWalk is not null || keptTalk is not null)
+        {
+            void Roll(OrgCalendarEvent? ev, int days, int hour)
+            {
+                if (ev is null || ev.StartDateTime > now) return;
+                var length = ev.EndDateTime - ev.StartDateTime;
+                ev.StartDateTime = TennesseeTimeToUtc(now.AddDays(days).Date.AddHours(hour));
+                ev.EndDateTime = ev.StartDateTime + length;
+                ev.DateUpdated = now;
+            }
+            Roll(keptWalk, 14, 20);
+            Roll(keptTalk, 28, 19);
+            await db.SaveChangesAsync();
+            return;
+        }
 
         // Dated from "now" rather than fixed, so the panel — which shows upcoming events only —
         // does not quietly empty out as the seed data ages.
         var walk = new OrgCalendarEvent
         {
             Id = Guid.NewGuid(), OrganizationId = tgh.Id,
-            Title = "Bell Witch Cave — Public Night Walk",
+            Title = walkTitle,
             Description = "<p>An open evening at the cave. Bring a flashlight; we supply the recorders.</p>",
             PlaceId = placeId,
             StartDateTime = TennesseeTimeToUtc(now.AddDays(14).Date.AddHours(20)),
@@ -886,7 +908,7 @@ internal static class DevelopmentDataSeeder
         var talk = new OrgCalendarEvent
         {
             Id = Guid.NewGuid(), OrganizationId = nps.Id,
-            Title = "Open Meeting — What We Found This Year",
+            Title = talkTitle,
             Description = "<p>Our annual public review of the season's investigations. Anyone welcome.</p>",
             // No PlaceId: an event may name an organization address instead, and VisibleEvents
             // allows a null Place. The nearby projection falls back to the address for coordinates.

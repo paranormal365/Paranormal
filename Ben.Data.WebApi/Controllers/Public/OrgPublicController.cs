@@ -128,11 +128,18 @@ public sealed class OrgPublicController : ControllerBase
                           && (c.Status == CaseStatus.Public || c.Status == CaseStatus.Haunted), ct);
 
         var now = DateTime.UtcNow;
-        var next = await db.OrgCalendarEvents.AsNoTracking()
-            .Where(e => e.OrganizationId == org.Id && e.IsPublic && e.StartDateTime >= now)
+        // The same events the public calendar shows, and the town rather than the address when the
+        // organizer hid it. This read the raw table, so a case's event or one at a private home could
+        // appear here, with its location written out whatever the organizer chose (site audit, 10/09/2026).
+        var next = await PublicEventController.VisibleEvents(db)
+            .Where(e => e.OrganizationId == org.Id && e.StartDateTime >= now)
             .OrderBy(e => e.StartDateTime)
             .Select(e => new OrgPublicNextEvent(
-                e.Id, e.Title, e.UrlName, e.StartDateTime, e.IsAllDay, e.Location, null,
+                e.Id, e.Title, e.UrlName, e.StartDateTime, e.IsAllDay,
+                e.HideExactLocation && e.TourId == null
+                    ? (e.Place != null ? e.Place.City : e.OrganizationAddress != null ? e.OrganizationAddress.City : null)
+                    : e.Location,
+                null,
                 e.AttendeeCapacity, e.Attendees.Count(a => a.RsvpStatus == RsvpStatus.Accepted),
                 e.TimeZoneId ?? (e.Tour != null ? e.Tour.TimeZoneId : null)))
             .FirstOrDefaultAsync(ct);

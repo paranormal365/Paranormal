@@ -78,6 +78,7 @@
                              Pageable="true"
                              PageSize="25"
                              Sortable="false">
+                    <NoDataTemplate>No pages yet. Use <strong>+ New Page</strong> to start your website.</NoDataTemplate>
                     <GridColumns>
                         <GridColumn Field="@nameof(PageRow.Title)" Title="Page">
                             <Template>
@@ -175,6 +176,7 @@
                              TItem="OrganizationLogoRecord"
                              Pageable="false"
                              Sortable="false">
+                    <NoDataTemplate>No logos yet.</NoDataTemplate>
                     <GridColumns>
                         <GridColumn Title="Preview" Width="120px">
                             <Template>
@@ -230,6 +232,7 @@
                              TItem="OrgMemberGroupRecord"
                              Sortable="true"
                              Pageable="false">
+                    <NoDataTemplate>No member groups yet.</NoDataTemplate>
                     <GridColumns>
                         <GridColumn Field="@nameof(OrgMemberGroupRecord.Name)" Title="Name" />
                         <GridColumn Field="@nameof(OrgMemberGroupRecord.Description)" Title="Description" />
@@ -301,7 +304,7 @@
                 <div class="form-text">Shown at the top of the page and as its name in your site's menu. Type your own, or pick one from Ideas.</div>
             </div>
             <div class="col-12">
-                <label class="form-label fw-semibold" for="orgcmseditor-url-slug-d5ae">URL Slug <span class="text-danger">*</span></label>
+                <label class="form-label fw-semibold" for="orgcmseditor-url-slug-d5ae">Web address <span class="text-danger">*</span></label>
                 <input id="orgcmseditor-url-slug-d5ae" type="text" class="form-control" value="@_pageForm.UrlName"
                        @oninput="@(e => { _pageForm.UrlName = e.Value?.ToString() ?? ""; _slugTouched = true; })" />
                 <div class="form-text">
@@ -573,6 +576,7 @@
             else
             {
                 <TelerikGrid Data="@_groupMembers" TItem="GroupMemberRow" Pageable="false">
+                    <NoDataTemplate>Nobody is in this group yet.</NoDataTemplate>
                     <GridColumns>
                         <GridColumn Title="Member" Field="@nameof(GroupMemberRow.DisplayName)" />
                         <GridColumn Title="Role" Field="@nameof(GroupMemberRow.Role)" Width="110px" />
@@ -834,7 +838,7 @@
     {
         if (string.IsNullOrWhiteSpace(_pageForm.PageTitle) || string.IsNullOrWhiteSpace(_pageForm.UrlName))
         {
-            _dialogError = "Title and URL Slug are required.";
+            _dialogError = "Give the page a title and a web address.";
             return;
         }
 
@@ -941,7 +945,7 @@
             }
             else
             {
-                builder.AddMarkupContent(0, $"<em class=\"text-secondary\">[{section.SectionType} section]</em>");
+                builder.AddMarkupContent(0, $"<em class=\"text-secondary\">{System.Net.WebUtility.HtmlEncode(CmsSectionTypes.Label(section.SectionType))} section</em>");
             }
         };
     }
@@ -1217,8 +1221,11 @@
     private async Task ExecuteDeleteGroupAsync()
     {
         if (_deletingGroup is null) return;
-        await AdminClient.DeleteGroupAsync(OrgId, _deletingGroup.Id);
-        _groups = [..(_groups ?? []).Where(g => g.Id != _deletingGroup.Id)];
+        // Taken off the list only when it was deleted; a refused delete used to look done until reload.
+        if (await AdminClient.DeleteGroupAsync(OrgId, _deletingGroup.Id))
+            _groups = [..(_groups ?? []).Where(g => g.Id != _deletingGroup.Id)];
+        else
+            _errorMessage = $"\"{_deletingGroup.Name}\" couldn't be deleted. Please try again.";
         _showDeleteGroupDialog = false;
         _deletingGroup = null;
     }

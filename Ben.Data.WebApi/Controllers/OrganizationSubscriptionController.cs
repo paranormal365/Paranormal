@@ -99,7 +99,9 @@ public sealed class OrganizationSubscriptionController : OrgCmsControllerBase
             sub.CurrentPeriodEnd,
             sub.CancelAtPeriodEnd,
             limits,
-            priceFromContract || limits.Any(l => l.FromContract)));
+            priceFromContract || limits.Any(l => l.FromContract),
+            sub.Status == SubscriptionStatus.Active && sub.GraceForPeriodEnd == sub.CurrentPeriodEnd
+                && sub.GraceUntilUtc > DateTime.UtcNow ? sub.GraceUntilUtc : null));
     }
 
     /// <summary>Prices one period at one cadence, applying a typed coupon code when one is sent.</summary>

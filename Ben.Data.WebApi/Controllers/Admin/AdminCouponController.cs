@@ -167,7 +167,7 @@ public sealed class AdminCouponController : BenControllerBase
 
         db.Coupons.Add(coupon);
         await db.SaveChangesAsync(ct);
-        await _auditLog.LogCreateAsync(nameof(Coupon), coupon.Id, coupon, userId, AppSources.WebApi);
+        await TryAuditAsync(() => _auditLog.LogCreateAsync(nameof(Coupon), coupon.Id, coupon, userId, AppSources.WebApi));
 
         return Ok(ToRecord(coupon));
     }
@@ -214,7 +214,7 @@ public sealed class AdminCouponController : BenControllerBase
         if (CouponMath.Misconfiguration(coupon) is { } bad) return BadRequest(bad);
 
         await db.SaveChangesAsync(ct);
-        await _auditLog.LogUpdateAsync(nameof(Coupon), coupon.Id, before, coupon, userId, AppSources.WebApi);
+        await TryAuditAsync(() => _auditLog.LogUpdateAsync(nameof(Coupon), coupon.Id, before, coupon, userId, AppSources.WebApi));
 
         return Ok(ToRecord(coupon));
     }
@@ -285,10 +285,10 @@ public sealed class AdminCouponController : BenControllerBase
         db.CouponCodes.AddRange(rows);
         await db.SaveChangesAsync(ct);
 
-        await _auditLog.LogCreateAsync(
+        await TryAuditAsync(() => _auditLog.LogCreateAsync(
             nameof(CouponCode), coupon.Id,
             new { coupon.Name, Generated = rows.Count, request.Prefix, request.MaxRedemptionsPerCode },
-            userId, AppSources.WebApi);
+            userId, AppSources.WebApi));
 
         return Ok(rows.Select(r => new CouponCodeAdminRecord(
             r.Id, r.Code, r.MaxRedemptions, 0, r.IssuedTo, r.RestrictedToAppUserId, null,
@@ -332,7 +332,7 @@ public sealed class AdminCouponController : BenControllerBase
         code.UpdatedByAppUserId    = userId;
 
         await db.SaveChangesAsync(ct);
-        await _auditLog.LogUpdateAsync(nameof(CouponCode), code.Id, before, code, userId, AppSources.WebApi);
+        await TryAuditAsync(() => _auditLog.LogUpdateAsync(nameof(CouponCode), code.Id, before, code, userId, AppSources.WebApi));
 
         var ownerName = code.RestrictedToAppUserId is null ? null : await db.Users
             .Where(u => u.Id == code.RestrictedToAppUserId)

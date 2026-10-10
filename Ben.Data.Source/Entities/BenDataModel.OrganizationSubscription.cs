@@ -77,6 +77,26 @@ namespace Ben.Data.Source.Entities
         public DateTime? LapsedAtUtc { get; set; }
 
         /// <summary>
+        /// The period end a renewal grace was given for, once (Ben, 10/09/2026).
+        /// </summary>
+        /// <remarks>
+        /// A plan meant to renew whose period ends unpaid (a declined card, or no card) keeps going for two
+        /// weeks while the renewal is retried, instead of lapsing that night. Keyed to the period end, like
+        /// the notices: each missed renewal can have one grace, and a grace is never extended.
+        /// </remarks>
+        public DateTime? GraceForPeriodEnd { get; set; }
+
+        /// <summary>When the current grace runs out and the plan lapses if it is still unpaid.</summary>
+        public DateTime? GraceUntilUtc { get; set; }
+
+        /// <summary>When the grace was given, and to whom: one per paying person in any twelve months, across
+        /// all their groups (Ben, 10/09/2026: "once per user per year").</summary>
+        public DateTime? GraceGrantedUtc { get; set; }
+
+        /// <summary>The person the grace counted against: whoever set the plan up, who renewals are charged to.</summary>
+        public Guid? GraceGrantedToAppUserId { get; set; }
+
+        /// <summary>
         /// The period end the two-week warning was sent for. Not-equal-to-current means unsent.
         /// </summary>
         /// <remarks>

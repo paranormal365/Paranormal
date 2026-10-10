@@ -385,6 +385,38 @@ public sealed class SubscriptionLapseJob : IScheduledJob
 
         foreach (var sub in expired)
         {
+            // ── a missed renewal gets two weeks, once a year (Ben, 10/09/2026) ──
+            // A plan that was meant to renew (Stripe, not cancelled) and reached its end unpaid keeps going
+            // while the renewal job retries it, instead of lapsing the night the card declined. Never
+            // extended, and one per paying person in any twelve months across all their groups ("once per
+            // user per year"); after that a missed renewal lapses on its date. A group that cancelled ends on
+            // the date it chose.
+            if (sub.ProviderName == "Stripe" && !sub.CancelAtPeriodEnd)
+            {
+                if (sub.GraceForPeriodEnd == sub.CurrentPeriodEnd)
+                {
+                    if (sub.GraceUntilUtc > now) continue;   // still inside its two weeks
+                }
+                else
+                {
+                    var payer = sub.UpdatedByAppUserId ?? sub.CreatedByAppUserId;
+                    var yearAgo = now.AddDays(-365);
+                    var hadOneThisYear = await db.OrganizationSubscriptions.AsNoTracking()
+                        .AnyAsync(o => o.GraceGrantedToAppUserId == payer && o.GraceGrantedUtc > yearAgo, ct);
+                    if (!hadOneThisYear)
+                    {
+                        sub.GraceForPeriodEnd       = sub.CurrentPeriodEnd;
+                        sub.GraceUntilUtc           = now.Add(RenewalGrace);
+                        sub.GraceGrantedUtc         = now;
+                        sub.GraceGrantedToAppUserId = payer;
+                        sub.DateUpdated             = now;
+                        await db.SaveChangesAsync(ct);
+                        await TellOfGraceAsync(sub, ct);
+                        continue;
+                    }
+                }
+            }
+
             sub.Status      = SubscriptionStatus.Lapsed;
             sub.LapsedAtUtc = now;
 
@@ -443,6 +475,33 @@ public sealed class SubscriptionLapseJob : IScheduledJob
             _logger.LogInformation(
                 "Subscription for organization {OrgId} lapsed; paused {Count} open case(s), unpublished {Unpublished} private case(s).",
                 sub.OrganizationId, openCases.Count, publishedPrivate.Count);
+        }
+    }
+
+    /// <summary>How long a missed renewal keeps the plan going while the payment is retried.</summary>
+    public static readonly TimeSpan RenewalGrace = TimeSpan.FromDays(14);
+
+    /// <summary>Tells the people who handle the group's money that the renewal didn't go through, and until when.</summary>
+    private async Task TellOfGraceAsync(Ben.Data.Source.Entities.OrganizationSubscription sub, CancellationToken ct)
+    {
+        try
+        {
+            var recipients = await _messages.BillingRecipientsAsync(sub.OrganizationId, ct);
+            if (recipients.Count == 0) return;
+            var until = sub.GraceUntilUtc!.Value;
+            await _messages.SendAsync(
+                $"{sub.Organization.Name}'s plan payment didn't go through",
+                $"The payment to renew {sub.Organization.Name}'s plan didn't go through, so your plan is "
+              + $"continuing for two more weeks, until {until:MM/dd/yyyy}, while we try again each day.\n\n"
+              + "Nothing changes in the meantime. To keep the plan, check the card on your group's billing "
+              + "page. If the payment still hasn't gone through by then, the plan ends: your group keeps "
+              + "everything it has recorded, open cases are paused, and renewing starts them again.",
+                recipients, sub.CreatedByAppUserId, ct);
+        }
+        catch (Exception ex) when (ex is not OperationCanceledException)
+        {
+            // The grace is already given, which is the part that matters; a letter that will not send must not undo it.
+            _logger.LogWarning(ex, "Renewal grace given to organization {OrgId}, but nobody could be told.", sub.OrganizationId);
         }
     }
 

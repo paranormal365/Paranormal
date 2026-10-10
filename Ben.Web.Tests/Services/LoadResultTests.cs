@@ -210,7 +210,8 @@ public sealed class LoadResultTests
 
         Assert.True(result.Failed);
         Assert.False(result.SessionExpired);
-        Assert.Equal("The server answered 403 (Forbidden).", result.Reason);
+        Assert.Equal("You don't have access to this. (error 403)", result.Reason);
+        Assert.True(Ben.Web.Services.WebApi.ApiResponseMapper.IsGeneratedStatusSentence(result.Reason));
     }
 
     /// <summary>An unreachable server is not an ended session either.</summary>

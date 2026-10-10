@@ -317,6 +317,12 @@ public sealed class OrganizationController : EntityReadControllerBase<Organizati
         var org = await db.Organizations.FirstOrDefaultAsync(o => o.Id == id, ct);
         if (org is null) return NotFound();
 
+        // One transaction for the whole delete. The save below that clears the role pointer also saved the
+        // event types, levels and duties already staged, so a group the final save then refused (it still has
+        // cases or files) lost those for good (site audit, 10/09/2026). A refusal now puts everything back.
+        // InMemory has no transactions, hence the check.
+        await using var tx = db.Database.IsRelational() ? await db.Database.BeginTransactionAsync(ct) : null;
+
         // The rows created WITH the organization, which therefore cannot be anyone's reason to
         // keep it: the founder's own membership, and the default calendar event types stamped at
         // registration. Every foreign key onto Organizations is NoAction by convention here, so
@@ -366,9 +372,11 @@ public sealed class OrganizationController : EntityReadControllerBase<Organizati
         try
         {
             await db.SaveChangesAsync(ct);
+            if (tx is not null) await tx.CommitAsync(ct);
         }
         catch (DbUpdateException)
         {
+            if (tx is not null) await tx.RollbackAsync(ct);
             // Everything else hanging off a group — cases, files, events, publications — is real
             // work, and refusing to delete a group that still has some is right. Saying so is the
             // part that was missing: this used to surface as an unhandled 500, which tells the

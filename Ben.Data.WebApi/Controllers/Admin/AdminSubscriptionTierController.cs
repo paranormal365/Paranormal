@@ -113,7 +113,7 @@ public sealed class AdminSubscriptionTierController : BenControllerBase
         if (await WouldBreakThePriceList(db, tier, ct) is { } problem) return BadRequest(problem);
 
         await db.SaveChangesAsync(ct);
-        await _auditLog.LogCreateAsync(nameof(SubscriptionTier), tier.Id, tier, userId, AppSources.WebApi);
+        await TryAuditAsync(() => _auditLog.LogCreateAsync(nameof(SubscriptionTier), tier.Id, tier, userId, AppSources.WebApi));
 
         return Ok(ToRecord(tier, 0));
     }
@@ -149,7 +149,7 @@ public sealed class AdminSubscriptionTierController : BenControllerBase
         if (await WouldBreakThePriceList(db, tier, ct) is { } problem) return BadRequest(problem);
 
         await db.SaveChangesAsync(ct);
-        await _auditLog.LogUpdateAsync(nameof(SubscriptionTier), tier.Id, before, tier, userId, AppSources.WebApi);
+        await TryAuditAsync(() => _auditLog.LogUpdateAsync(nameof(SubscriptionTier), tier.Id, before, tier, userId, AppSources.WebApi));
 
         // The fan-out runs AFTER the save: a message about a change that then failed to commit
         // would be the worst kind of notice. Improvements go out now, reductions are queued to
@@ -441,9 +441,9 @@ public sealed class AdminSubscriptionTierController : BenControllerBase
         foreach (var tier in touched)
         {
             if (beforeRows.TryGetValue(tier.Id, out var wasRow))
-                await _auditLog.LogUpdateAsync(nameof(SubscriptionTier), tier.Id, wasRow, tier, userId, AppSources.WebApi);
+                await TryAuditAsync(() => _auditLog.LogUpdateAsync(nameof(SubscriptionTier), tier.Id, wasRow, tier, userId, AppSources.WebApi));
             else
-                await _auditLog.LogCreateAsync(nameof(SubscriptionTier), tier.Id, tier, userId, AppSources.WebApi);
+                await TryAuditAsync(() => _auditLog.LogCreateAsync(nameof(SubscriptionTier), tier.Id, tier, userId, AppSources.WebApi));
 
             var after   = TierChangeAnalyzer.TermsOf(tier);
             var before  = beforeTerms.TryGetValue(tier.Id, out var b) ? b : after;

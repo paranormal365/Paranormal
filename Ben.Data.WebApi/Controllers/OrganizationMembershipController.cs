@@ -113,6 +113,19 @@ public class OrganizationMembershipController : BenControllerBase
         var appUserId = GetCurrentUserIdOrThrow();
         var isSuperAdmin = User.IsInRole(Ben.Data.Common.Constants.RoleNames.SuperAdmin);
 
+        // Somebody outside the group may do nothing in it, and is told nothing about its plan. The full
+        // answer said whether the group pays, whether its subscription had lapsed and what its plan
+        // includes, to anybody signed in (site audit, 10/09/2026) — what included-areas already withheld.
+        if (!isSuperAdmin && !await _organizationSecurityService.BelongsToAsync(appUserId, organizationId, cancellationToken))
+        {
+            var none = new AreaActions(false, false, false, false);
+            return Ok(new MyOrgPermissionsResponse(
+                CanReadCases: false, CanReadInvestigations: false,
+                Areas: AreaProbeTables.ToDictionary(p => p.Area, _ => none),
+                Capabilities: new Dictionary<Ben.Data.Common.Enums.TierCapability, bool>(),
+                IsViewer: false, PublicByDefault: false, ReadOnlyReason: null));
+        }
+
         var areas = new Dictionary<Ben.Data.Common.Enums.OrganizationPermissionArea, AreaActions>();
         foreach (var (area, table) in AreaProbeTables)
         {

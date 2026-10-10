@@ -461,9 +461,9 @@
 
     private static string Placeholder(string key) => key switch
     {
-        DefaultAvatarKey => "UploadFile id (GUID)",
+        DefaultAvatarKey => "Upload an image",
         "org.allow-self-registration" => "true or false",
         "site.public-contact-email" => "contact@example.com",
-        _ => "Leave empty to unset",
+        _ => "Leave blank to use the default",
     };
 }

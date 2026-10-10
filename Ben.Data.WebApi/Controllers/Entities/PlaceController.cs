@@ -396,8 +396,23 @@ public sealed class PlaceController : BenControllerBase
 
         var nearby = await query.ToListAsync(ct);
 
-        var matches = nearby
+        // A private residence is offered only to somebody who typed its street: they already know the
+        // address. Matched on a name alone, any signed-in person could learn the street of somebody's
+        // home (site audit, 10/09/2026).
+        var matched = nearby
             .Where(p => PlaceMatcher.IsProbableMatch(p, street, city, state, zip, name, latitude, longitude))
+            .Where(p => p.Kind != PlaceKind.PrivateResidence || !string.IsNullOrWhiteSpace(street))
+            .ToList();
+
+        // Counted in one query rather than one per place.
+        var ids = matched.Select(p => p.Id).ToList();
+        var counts = await db.Investigations.AsNoTracking()
+            .Where(i => i.PlaceId != null && ids.Contains(i.PlaceId.Value))
+            .GroupBy(i => i.PlaceId!.Value)
+            .Select(g => new { g.Key, Count = g.Count() })
+            .ToDictionaryAsync(g => g.Key, g => g.Count, ct);
+
+        var matches = matched
             .Select(p => new PlaceCandidate(
                 p.Id,
                 p.Name,
@@ -408,7 +423,7 @@ public sealed class PlaceController : BenControllerBase
                 DistanceMiles(p, latitude, longitude),
                 // Counted so the caller can tell an established place from a stray row, which is
                 // usually the difference between "yes, that one" and "no, mine is new".
-                db.Investigations.Count(i => i.PlaceId == p.Id)))
+                counts.GetValueOrDefault(p.Id)))
             .OrderBy(c => c.DistanceMiles ?? double.MaxValue)
             .ToList();
 

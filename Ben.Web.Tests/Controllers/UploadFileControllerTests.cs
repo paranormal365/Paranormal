@@ -134,6 +134,22 @@ public class UploadFileControllerTests
         return ctrl;
     }
 
+    /// <summary>A file whose bytes are what its first bytes say: a JPEG, or an SVG pretending to be one.</summary>
+    private static IFormFile MakeUpload(string fileName, byte[] bytes, string contentType)
+    {
+        var fileMock = new Mock<IFormFile>();
+        fileMock.Setup(f => f.FileName).Returns(fileName);
+        fileMock.Setup(f => f.Length).Returns(bytes.Length);
+        fileMock.Setup(f => f.ContentType).Returns(contentType);
+        fileMock.Setup(f => f.OpenReadStream()).Returns(() => new MemoryStream(bytes));
+        fileMock.Setup(f => f.CopyToAsync(It.IsAny<Stream>(), It.IsAny<CancellationToken>()))
+                .Returns<Stream, CancellationToken>((s, _) => { s.Write(bytes, 0, bytes.Length); return Task.CompletedTask; });
+        return fileMock.Object;
+    }
+
+    private static IFormFile MakeJpeg(string fileName)
+        => MakeUpload(fileName, [0xFF, 0xD8, 0xFF, 0xE0, 0, 0x10, 0x4A, 0x46, 0x49, 0x46, 0, 1, 0, 0, 0, 0], "image/jpeg");
+
     private static IFormFile MakeFile(string fileName, long size = 256)
     {
         var fileMock = new Mock<IFormFile>();
@@ -547,6 +563,26 @@ public class UploadFileControllerTests
         Assert.False(await db.UploadFiles.AnyAsync(f => f.ParentFileId == fileId));
     }
 
+    /// <summary>
+    /// The version's type came from the browser, so an SVG with a script in it was stored and then served
+    /// inline from the API's own address (site audit, 10/09/2026). An edited version is a picture.
+    /// </summary>
+    [Fact]
+    public async Task SaveAsVersion_refuses_anything_that_is_not_a_picture()
+    {
+        var factory = CreateFactory();
+        var ownerId = Guid.NewGuid();
+        var fileId  = await SeedPhotoAsync(factory, ownerId);
+        var svg = System.Text.Encoding.UTF8.GetBytes("<svg xmlns='http://www.w3.org/2000/svg'><script>alert(1)</script></svg>");
+
+        var result = await BuildController(factory, ownerId)
+            .SaveAsVersion(fileId, MakeUpload("edited.jpg", svg, "image/jpeg"), default);
+
+        Assert.IsType<BadRequestObjectResult>(result.Result);
+        await using var db = await factory.CreateDbContextAsync();
+        Assert.False(await db.UploadFiles.AnyAsync(f => f.ParentFileId == fileId));
+    }
+
     [Theory]
     [InlineData(false)]
     [InlineData(true)]
@@ -558,7 +594,7 @@ public class UploadFileControllerTests
         var caller  = asSuperAdmin ? Guid.NewGuid() : ownerId;
 
         var result = await BuildController(factory, caller, isSuperAdmin: asSuperAdmin)
-            .SaveAsVersion(fileId, MakeFile("edited.jpg"), default);
+            .SaveAsVersion(fileId, MakeJpeg("edited.jpg"), default);
 
         Assert.IsType<CreatedAtActionResult>(result.Result);
         await using var db = await factory.CreateDbContextAsync();

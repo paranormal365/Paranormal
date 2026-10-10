@@ -8603,6 +8603,18 @@ namespace Ben.Data.Source.Migrations
                     b.Property<DateTime?>("FirstPaidPeriodStartUtc")
                         .HasColumnType("datetime2");
 
+                    b.Property<DateTime?>("GraceForPeriodEnd")
+                        .HasColumnType("datetime2");
+
+                    b.Property<Guid?>("GraceGrantedToAppUserId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<DateTime?>("GraceGrantedUtc")
+                        .HasColumnType("datetime2");
+
+                    b.Property<DateTime?>("GraceUntilUtc")
+                        .HasColumnType("datetime2");
+
                     b.Property<int>("Interval")
                         .HasColumnType("int");
 

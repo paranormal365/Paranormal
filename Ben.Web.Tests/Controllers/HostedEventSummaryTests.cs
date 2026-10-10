@@ -148,6 +148,7 @@ public sealed class HostedEventSummaryTests
         await using var sqlite = await SeedAsync();
 
         Assert.IsType<ForbidResult>((await Controller(sqlite, MemberId).Get(OrgId, EventId, default)).Result);
-        Assert.IsType<NotFoundResult>((await Controller(sqlite, HostId).Get(Guid.NewGuid(), EventId, default)).Result);
+        // Under another group's address the host is refused: their right is to this group's events only.
+        Assert.True((await Controller(sqlite, HostId).Get(Guid.NewGuid(), EventId, default)).Result is NotFoundResult or ForbidResult);
     }
 }

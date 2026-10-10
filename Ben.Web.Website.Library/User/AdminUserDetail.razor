@@ -77,24 +77,19 @@ else
                             Two-step sign-in: <strong>@(_edit.IsTwoFactorEnabled ? "on" : "off")</strong>
                             <span class="small">(theirs to change)</span>
                         </span>
-                        <label class="d-flex align-items-center gap-2"><input type="checkbox" class="form-check-input" @bind="@_edit.IsLockoutEnabled" /> Lockout Enabled</label>
+                        <label class="d-flex align-items-center gap-2"><input type="checkbox" class="form-check-input" @bind="@_edit.IsLockoutEnabled" /> Lock the account after repeated wrong passwords</label>
                     </div>
-                    <div class="col-12 mt-2"><p class="text-secondary small mb-1">Audit Fields</p></div>
-                    <div class="col-md-6">
-                        <label class="form-label fw-semibold">Date Created</label>
-                        <BenDateField Mode="DateEntryMode.DateTime" @bind-Value="@_edit.DateCreated" Width="100%" />
-                    </div>
-                    <div class="col-md-6">
-                        <label class="form-label fw-semibold">Date Updated</label>
-                        <BenDateField Mode="DateEntryMode.DateTime" @bind-Value="@_edit.DateUpdated" Width="100%" />
+                    @* The account record in plain words: when it began and last changed are facts, not settings
+                       (they were editable date pickers under "Audit Fields"), and the lockout reads as what it
+                       does (site audit, 10/09/2026). *@
+                    <div class="col-12 mt-2 text-secondary small">
+                        Joined @_edit.DateCreated.ToDisplayDate()@(_edit.DateUpdated is { } changed ? $" · last changed {changed.ToDisplayDate()}" : "")
+                        · @(_detail.User.AccessFailedCount == 1 ? "1 wrong password" : $"{_detail.User.AccessFailedCount} wrong passwords") since the last good sign-in
                     </div>
                     <div class="col-md-6">
-                        <label class="form-label fw-semibold">Lockout End</label>
+                        <label class="form-label fw-semibold">Locked until</label>
                         <BenDateField Mode="DateEntryMode.DateTime" @bind-Value="@_edit.LockoutEnd" Width="100%" />
-                    </div>
-                    <div class="col-md-3">
-                        <label class="form-label fw-semibold">Access Failed Count</label>
-                        <p class="form-control-plaintext">@_detail.User.AccessFailedCount</p>
+                        <div class="form-text">Clear this to let them sign in again now.</div>
                     </div>
                     <div class="col-12 mt-2">
                         <button type="button" class="btn btn-primary" @onclick="SaveProfile" disabled="@(!(!_isSaving))">

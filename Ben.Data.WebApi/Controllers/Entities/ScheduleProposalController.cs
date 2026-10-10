@@ -117,9 +117,15 @@ public sealed class ScheduleProposalController : BenControllerBase
         var proposal = await db.InvestigationScheduleProposals.Include(p => p.Slots)
             .FirstOrDefaultAsync(p => p.Id == proposalId && p.CaseId == caseId, ct);
         if (proposal is null) return NotFound();
+        // Once only, and only while it is still open. Every repeat call created another investigation and
+        // mailed the client again (site audit, 10/09/2026).
+        if (proposal.InvestigationId is not null
+            || proposal.Status is not (ScheduleProposalStatus.Pending or ScheduleProposalStatus.Countered))
+            return BadRequest("This proposal has already been settled.");
 
         var slot = proposal.Slots.FirstOrDefault(s => s.Id == request.SlotId)
-                ?? proposal.Slots.OrderBy(s => s.SortOrder).First();
+                ?? proposal.Slots.OrderBy(s => s.SortOrder).FirstOrDefault();
+        if (slot is null) return BadRequest("This proposal has no dates to choose from.");
 
         var investigation = new Investigation
         {

@@ -6,6 +6,7 @@
 
 @inject IBenAdminClient AdminClient
 @inject NavigationManager NavManager
+@inject IBenUserState UserState
 
 <PageTitle>Cases — @(_orgName ?? UrlName)</PageTitle>
 
@@ -52,10 +53,12 @@ else
                             <span class="case-card__title">@c.Title</span>
                             <span class="case-card__where">@c.City, @c.State</span>
                             <span class="case-card__when">
-                                Opened @c.DateCaseOpened.ToDisplayDate()
+                                @* In the reader's own time, as the case's page shows it; the list showed the UTC date,
+                                   so an evening opening read as the next day here (site audit, 10/09/2026). *@
+                                Opened @c.DateCaseOpened.ToViewerLocalTime(UserState).ToDisplayDate()
                                 @if (c.DateCaseClosed is { } closed)
                                 {
-                                    <text> · closed @closed.ToDisplayDate()</text>
+                                    <text> · closed @closed.ToViewerLocalTime(UserState).ToDisplayDate()</text>
                                 }
                             </span>
                         </a>

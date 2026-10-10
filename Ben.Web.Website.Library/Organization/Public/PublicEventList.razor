@@ -15,7 +15,7 @@
 @* Signal phase 2: the photograph, the title, the clock switch and the figures in one frame, where
    there used to be the section band and then a second, plain heading saying the same thing. *@
 <PageHero Photo="v6-ballroom" TestId="events-hero"
-          Kicker="@(UrlName is null ? "Open to anyone" : UrlName)"
+          Kicker="@(UrlName is null ? "Open to anyone" : GroupName)"
           Title="@(UrlName is null ? "What's on" : "Events")"
           Lede="@(UrlName is null
                   ? "Ghost walks, public investigations, meetings and haunted weekends — opened to anyone by the groups that run them."
@@ -166,7 +166,10 @@
 </FeatureGate>
 
 @code {
-    private RenderFragment BackLink => @<a href="@($"/o/{UrlName}")">&larr; Back to @UrlName</a>;
+    private RenderFragment BackLink => @<a href="@($"/o/{UrlName}")">&larr; Back to @GroupName</a>;
+
+    // The group's own name, which comes with its events; the web address ("paranormal365") was shown before.
+    private string GroupName => _events.Items?.FirstOrDefault()?.OrganizationName ?? "the group";
 
     /// <summary>Null on the site-wide route, set when showing one group's events.</summary>
     [Parameter] public string? UrlName { get; set; }

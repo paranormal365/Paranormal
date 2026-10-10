@@ -291,6 +291,9 @@ public sealed partial class FieldSessionUploadController : BenControllerBase
             .Where(s => s.SubmittedByAppUserId == userId
                      && s.PositionResolved && s.Latitude != null && s.Longitude != null);
 
+        if (bounded && new[] { north!.Value, south!.Value, east!.Value, west!.Value }.Any(v => !double.IsFinite(v) || Math.Abs(v) > 180))
+            return BadRequest("Those bounds aren't on the map.");   // cast to decimal, they threw (site audit, 10/09/2026)
+
         if (bounded)
         {
             // Normalised, so a caller that hands the corners over in the other order — and map
@@ -553,6 +556,28 @@ public sealed partial class FieldSessionUploadController : BenControllerBase
                     Path.GetFileName(file.RelativePath), enableRangeProcessing: true);
     }
 
+    private sealed record HeldLinks(Guid? InvestigationId, Guid? OrgCalendarEventId, Guid? HostedEventId, Guid? FieldLaunchId);
+
+    /// <summary>
+    /// Where the sender's earlier copy of this session was filed, when it was filed with a group's record.
+    /// </summary>
+    /// <remarks>
+    /// Re-sending a session sets its links from whatever the new send carries. A personal session is
+    /// attached to an investigation that way, which stays. But a session already filed with an
+    /// investigation or event was detached by re-sending it with nothing, and could then be deleted past
+    /// the rule that keeps a group's evidence from being removed (site audit, 10/09/2026). Once filed, a
+    /// re-send keeps the filing.
+    /// </remarks>
+    private static async Task<HeldLinks?> HeldLinksAsync(BenDataContext db, Guid userId, Guid deviceSessionId, CancellationToken ct)
+    {
+        var held = await db.FieldSessionUploads.AsNoTracking()
+            .Where(s => s.SubmittedByAppUserId == userId && s.DeviceSessionId == deviceSessionId)
+            .Select(s => new HeldLinks(s.InvestigationId, s.OrgCalendarEventId, s.HostedEventId, s.FieldLaunchId))
+            .FirstOrDefaultAsync(ct);
+        return held is { InvestigationId: not null } or { OrgCalendarEventId: not null } or { HostedEventId: not null }
+            ? held : null;
+    }
+
     // ── The document ──────────────────────────────────────────────────────────
 
     /// <summary>
@@ -574,6 +599,10 @@ public sealed partial class FieldSessionUploadController : BenControllerBase
             return BadRequest("The session is missing its own identifier.");
 
         await using var db = await _db.CreateDbContextAsync(ct);
+
+        // A session already filed with a group stays where it was filed. See HeldLinksAsync.
+        if (await HeldLinksAsync(db, userId, deviceSessionId, ct) is { InvestigationId: Guid kept })
+            investigationId = kept;
 
         // No investigation is an ordinary case, not a missing value: somebody scouting a
         // building, or a tour guide walking a route. It belongs to their account until there is
@@ -670,6 +699,9 @@ public sealed partial class FieldSessionUploadController : BenControllerBase
 
         await ApplyRecordedByAsync(db, session, userId, recordedByAppUserId, recordedByName, ct);
 
+        // The document this one replaces, removed once the new one is saved.
+        Guid? replacedDocumentId = session.IsBundle ? null : session.DocumentUploadFileId;
+
         // Set on every submission, so choosing an investigation later is simply re-sending.
         session.InvestigationId = investigationId;
         session.DocumentUploadFileId = uploadFile.Id;
@@ -689,6 +721,24 @@ public sealed partial class FieldSessionUploadController : BenControllerBase
 
         await db.SaveChangesAsync(ct);
         await db.Entry(session).Collection(s => s.Files).LoadAsync(ct);
+
+        // The replaced document's row and bytes go. Kept, each resend left a row pointing at a document
+        // nothing used, counted toward the person's storage (site audit, 10/09/2026).
+        if (replacedDocumentId is Guid oldDocId && oldDocId != uploadFile.Id
+            && await db.UploadFiles.FirstOrDefaultAsync(f => f.Id == oldDocId, ct) is { } oldDoc)
+        {
+            var oldPath = oldDoc.StoragePath;
+            try
+            {
+                db.UploadFiles.Remove(oldDoc);
+                await db.SaveChangesAsync(ct);
+                if (!string.IsNullOrEmpty(oldPath)) await _fileStorage.DeleteAsync(oldPath, ct);
+            }
+            catch (Exception tidy) when (tidy is DbUpdateException or IOException)
+            {
+                _log.LogWarning(tidy, "The replaced session document {FileId} was left in place.", oldDocId);
+            }
+        }
 
         _log.LogInformation(
             "Field session {DeviceSessionId} uploaded to investigation {InvestigationId} "
@@ -777,11 +827,13 @@ public sealed partial class FieldSessionUploadController : BenControllerBase
             .FirstOrDefaultAsync(s => s.Id == sessionId, ct);
         if (session is null) return NotFound();
 
-        // Files follow the session's own door: whoever may contribute to its investigation, or
-        // the person whose session it is when there isn't one.
-        var allowed = session.InvestigationId is Guid linked
-            ? await MayWriteAsync(db, linked, userId, ct)
-            : session.SubmittedByAppUserId == userId;
+        // A session's files come from the person who sent it, and only while they may still contribute
+        // to its investigation. Contributing alone used to be enough, so on a public investigation any
+        // signed-in person could replace a file in somebody else's session by re-sending its path
+        // (site audit, 10/09/2026). Sessions are only ever created by their sender, so nobody else
+        // has a reason to add to one.
+        var allowed = session.SubmittedByAppUserId == userId
+            && (session.InvestigationId is not Guid linked || await MayWriteAsync(db, linked, userId, ct));
         if (!allowed) return NotFound();
 
         // The name and the declared type are the client's word; the first bytes are not. A file

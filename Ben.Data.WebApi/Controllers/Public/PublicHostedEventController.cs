@@ -322,6 +322,13 @@ public sealed class PublicHostedEventController : BenControllerBase
         // twice is how they eventually disagree.
         var closed = WhyNothingCanBeBooked(r.Event, DateTime.UtcNow);
 
+        // A hidden address hides the pin as well. The street was withheld while the exact position
+        // went out beside it (site audit, 10/09/2026); now the map gets the same rounded spot a
+        // public calendar event's does.
+        var (latitude, longitude) = hidden
+            ? PublicCoordinates.Approximate(r.Place?.Latitude, r.Place?.Longitude)
+            : (r.Place?.Latitude, r.Place?.Longitude);
+
         return new PublicHostedEventRecord(
             r.Event.Id,
             r.UmbrellaId,
@@ -341,8 +348,8 @@ public sealed class PublicHostedEventController : BenControllerBase
             r.Place?.State,
             exact is { Length: > 0 } ? exact : null,
             hidden,
-            r.Place?.Latitude,
-            r.Place?.Longitude,
+            latitude,
+            longitude,
             r.Event.DayPassCapacity,
             r.Event.ContactLine,
             r.Event.CoverUploadFileId,

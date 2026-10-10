@@ -79,6 +79,11 @@ public sealed class TourDoorController : BenControllerBase
         var who = seat!.AppUser?.DisplayName ?? "This guest";
         var seats = Math.Max(1, seat.Seats);
 
+        // The guide reads the time on the tour's clock, not the server's (site audit, 10/09/2026).
+        var zone = Ben.Data.Common.Helpers.Zones.Find(await db.OrgCalendarEvents.AsNoTracking().Where(e => e.Id == eventId)
+            .Select(e => new[] { e.TimeZoneId, e.Tour != null ? e.Tour.TimeZoneId : null, e.Organization.TimeZoneId })
+            .FirstOrDefaultAsync(ct) ?? []);
+
         return Ok(new TourScanResult
         {
             Admitted = true,
@@ -88,7 +93,7 @@ public sealed class TourDoorController : BenControllerBase
             // Said, not implied. A guide needs "already here" out loud so they can tell a
             // queue-jumper from somebody whose friend scanned their code a minute ago.
             Says = alreadyIn
-                ? $"{who} is already in — scanned at {at.ToLocalTime():h:mm tt}."
+                ? $"{who} is already in — scanned at {Ben.Data.Common.Helpers.Zones.ToZone(at, zone):h:mm tt}."
                 : seats > 1
                     ? $"{who} — {seats} places. Let them in."
                     : $"{who}. Let them in.",

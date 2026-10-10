@@ -345,7 +345,17 @@ public sealed class VideoProjectController : BenControllerBase
             .FirstOrDefaultAsync(ct);
         if (orgId is null) return false;
 
-        return await db.OrganizationUserMemberships.AsNoTracking()
-            .AnyAsync(m => m.OrganizationId == orgId && m.AppUserId == userId.Value, ct);
+        // An active member who may read the group's cases. Any membership row used to do, including one
+        // ended when the person left or was removed, and a member with no case access too (site audit,
+        // 10/09/2026).
+        if (!await db.OrganizationUserMemberships.AsNoTracking()
+                .AnyAsync(m => m.OrganizationId == orgId && m.AppUserId == userId.Value && m.IsActive, ct))
+            return false;
+        var security = HttpContext?.RequestServices?
+            .GetService(typeof(Ben.Service.RepositoryService.GenericInterfaces.IOrganizationSecurityService))
+            as Ben.Service.RepositoryService.GenericInterfaces.IOrganizationSecurityService;
+        return security is null
+            || await security.HasAccessAsync(userId.Value, orgId.Value,
+                   Ben.Data.Common.Enums.OrganizationSecurityTable.Case, Ben.Data.Common.Enums.OrganizationSecurityAction.Read, ct);
     }
 }

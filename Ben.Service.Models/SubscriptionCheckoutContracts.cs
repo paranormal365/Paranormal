@@ -104,7 +104,9 @@ public record OrgSubscriptionView(
     DateTime? CurrentPeriodEnd,
     bool CancelAtPeriodEnd,
     IReadOnlyList<OrgEffectiveLimit> Limits,
-    bool AnyTermsHeldByContract);
+    bool AnyTermsHeldByContract,
+    // When a missed renewal's two-week grace runs out; null when the plan isn't in one (Ben, 10/09/2026).
+    DateTime? GraceUntilUtc = null);
 
 /// <summary>Starts a paid checkout: the cadence, and whatever coupon was typed.</summary>
 public record StartCheckoutRequest(BillingInterval Interval, string? CouponCode);

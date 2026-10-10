@@ -254,6 +254,143 @@ public sealed class SubscriptionLapseJobTests
         Assert.Null(closed.StatusBeforePause);
     }
 
+    // ── a missed renewal's two weeks (Ben, 10/09/2026) ───────────────────────
+
+    private static async Task RenewsByCardAsync(World w, bool cancelled = false)
+    {
+        await using var db = await w.F.CreateDbContextAsync();
+        var sub = await db.OrganizationSubscriptions.SingleAsync();
+        sub.ProviderName = "Stripe";
+        sub.CancelAtPeriodEnd = cancelled;
+        await db.SaveChangesAsync();
+    }
+
+    /// <summary>
+    /// A plan meant to renew whose payment didn't go through keeps going for two weeks while the renewal is
+    /// retried, and its billing people are told until when. Ben, 10/09/2026: "add a one time 2-week grace
+    /// period for lapsed renewals" — "once per user per year".
+    /// </summary>
+    [Fact]
+    public async Task A_missed_renewal_gets_two_weeks_once_and_is_told()
+    {
+        var w = await SeedAsync(periodEnd: DateTime.UtcNow.AddMinutes(-5));
+        await RenewsByCardAsync(w);
+
+        await Job(w.F).RunAsync(default);
+        await Job(w.F).RunAsync(default);   // a second pass neither lapses, nor extends, nor writes again
+
+        await using var db = await w.F.CreateDbContextAsync();
+        var sub = await db.OrganizationSubscriptions.SingleAsync();
+        Assert.Equal(SubscriptionStatus.Active, sub.Status);
+        Assert.Equal(sub.CurrentPeriodEnd, sub.GraceForPeriodEnd);
+        Assert.InRange(sub.GraceUntilUtc!.Value, DateTime.UtcNow.AddDays(13.9), DateTime.UtcNow.AddDays(14.1));
+        Assert.Equal(CaseStatus.Active, (await db.Cases.SingleAsync(c => c.Id == w.ActiveCaseId)).Status);
+        Assert.Equal(1, (await NoticeSubjectsAsync(w)).Count(x => x.Contains("didn't go through")));
+    }
+
+    [Fact]
+    public async Task When_the_two_weeks_run_out_unpaid_the_plan_lapses()
+    {
+        var w = await SeedAsync(periodEnd: DateTime.UtcNow.AddDays(-15));
+        await RenewsByCardAsync(w);
+        await using (var db = await w.F.CreateDbContextAsync())
+        {
+            var sub = await db.OrganizationSubscriptions.SingleAsync();
+            sub.GraceForPeriodEnd = sub.CurrentPeriodEnd;
+            sub.GraceUntilUtc = DateTime.UtcNow.AddMinutes(-1);
+            await db.SaveChangesAsync();
+        }
+
+        await Job(w.F).RunAsync(default);
+
+        await using var after = await w.F.CreateDbContextAsync();
+        Assert.Equal(SubscriptionStatus.Lapsed, (await after.OrganizationSubscriptions.SingleAsync()).Status);
+        Assert.Equal(CaseStatus.Paused, (await after.Cases.SingleAsync(c => c.Id == w.ActiveCaseId)).Status);
+    }
+
+    /// <summary>Once per paying person per year: a second missed renewal inside the year lapses on its date.</summary>
+    [Fact]
+    public async Task A_second_missed_renewal_within_the_year_gets_no_grace()
+    {
+        var w = await SeedAsync(periodEnd: DateTime.UtcNow.AddMinutes(-5));
+        await RenewsByCardAsync(w);
+        await using (var db = await w.F.CreateDbContextAsync())
+        {
+            var sub = await db.OrganizationSubscriptions.SingleAsync();
+            // A grace for an earlier period, four months ago, counted against the same payer.
+            sub.GraceForPeriodEnd = sub.CurrentPeriodEnd!.Value.AddMonths(-4);
+            sub.GraceGrantedUtc = DateTime.UtcNow.AddMonths(-4);
+            sub.GraceGrantedToAppUserId = w.OwnerId;
+            await db.SaveChangesAsync();
+        }
+
+        await Job(w.F).RunAsync(default);
+
+        await using var after = await w.F.CreateDbContextAsync();
+        Assert.Equal(SubscriptionStatus.Lapsed, (await after.OrganizationSubscriptions.SingleAsync()).Status);
+    }
+
+    /// <summary>"Per user": the same payer's other group, inside the year, has no grace left either.</summary>
+    [Fact]
+    public async Task The_year_counts_across_all_the_payers_groups()
+    {
+        var w = await SeedAsync(periodEnd: DateTime.UtcNow.AddMinutes(-5));
+        await RenewsByCardAsync(w);
+        await using (var db = await w.F.CreateDbContextAsync())
+        {
+            var otherOrg = Guid.NewGuid();
+            db.Organizations.Add(new Organization { Id = otherOrg, Name = "Other", UrlName = "other", DateCreated = DateTime.UtcNow, CreatedByAppUserId = w.OwnerId });
+            db.OrganizationSubscriptions.Add(new OrganizationSubscription
+            {
+                Id = Guid.NewGuid(), OrganizationId = otherOrg, Status = SubscriptionStatus.Active, ProviderName = "Stripe",
+                CurrentPeriodStart = DateTime.UtcNow, CurrentPeriodEnd = DateTime.UtcNow.AddMonths(1),
+                GraceGrantedUtc = DateTime.UtcNow.AddMonths(-2), GraceGrantedToAppUserId = w.OwnerId,
+                DateCreated = DateTime.UtcNow, CreatedByAppUserId = w.OwnerId,
+            });
+            await db.SaveChangesAsync();
+        }
+
+        await Job(w.F).RunAsync(default);
+
+        await using var after = await w.F.CreateDbContextAsync();
+        Assert.Equal(SubscriptionStatus.Lapsed, (await after.OrganizationSubscriptions.SingleAsync(x => x.OrganizationId == w.OrgId)).Status);
+    }
+
+    /// <summary>A grace more than a year ago doesn't count.</summary>
+    [Fact]
+    public async Task A_grace_more_than_a_year_ago_leaves_one_for_now()
+    {
+        var w = await SeedAsync(periodEnd: DateTime.UtcNow.AddMinutes(-5));
+        await RenewsByCardAsync(w);
+        await using (var db = await w.F.CreateDbContextAsync())
+        {
+            var sub = await db.OrganizationSubscriptions.SingleAsync();
+            sub.GraceForPeriodEnd = sub.CurrentPeriodEnd!.Value.AddMonths(-13);
+            sub.GraceGrantedUtc = DateTime.UtcNow.AddMonths(-13);
+            sub.GraceGrantedToAppUserId = w.OwnerId;
+            await db.SaveChangesAsync();
+        }
+
+        await Job(w.F).RunAsync(default);
+
+        await using var after = await w.F.CreateDbContextAsync();
+        Assert.Equal(SubscriptionStatus.Active, (await after.OrganizationSubscriptions.SingleAsync()).Status);
+    }
+
+    [Fact]
+    public async Task A_plan_the_group_cancelled_ends_on_its_date_with_no_grace()
+    {
+        var w = await SeedAsync(periodEnd: DateTime.UtcNow.AddMinutes(-5));
+        await RenewsByCardAsync(w, cancelled: true);
+
+        await Job(w.F).RunAsync(default);
+
+        await using var db = await w.F.CreateDbContextAsync();
+        var sub = await db.OrganizationSubscriptions.SingleAsync();
+        Assert.Equal(SubscriptionStatus.Lapsed, sub.Status);
+        Assert.Null(sub.GraceUntilUtc);
+    }
+
     [Fact]
     public async Task The_lapse_messages_the_paused_cases_clients()
     {
