@@ -58,6 +58,8 @@ places**.
   The page tells you how long that lasts before you commit — usually a couple of days.
 - **If someone takes a seat a second before you do**, you're told which seat it was, and
   everything else you chose stays yours. Pick another one and carry on.
+- **To change held places, let them go and pick again.** You can still change your note while
+  they're held. If a hold runs out, you can choose again straight away.
 
 On a phone, the summary and the button stay at the bottom of the screen the whole time, so you
 never have to scroll back through two hundred squares to check what you've picked.

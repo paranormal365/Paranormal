@@ -26,6 +26,10 @@ member, or public. Sharing lends the file to the group; it doesn't give it away.
 attach it to a case, which makes a **copy** for that case, or copy it into its own Files. Those
 copies keep the file's location and camera details, marked as inherited.
 
+A member of a group can also **ask** to use one of your files for their group. The request waits in
+your notifications, and only you decide it. Approving shares the file with that group: with its
+members, or publicly if they asked to show it in public.
+
 ## Replacing
 
 **Replace** swaps in a new version of the file and updates every copy of it on a case. The dialog

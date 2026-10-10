@@ -28,7 +28,7 @@ anything — it is still one page you can read from top to bottom — but they l
 whether the setting you want is on this screen, and jump straight to it.
 
 The group's **Edit** screen — the button beside the group's name, not the Settings tab — holds its
-public identity: name, URL, contact details, and two switches worth understanding.
+public identity: name, web address, contact details, and two switches worth understanding.
 
 **Accepting membership applications** controls whether people can apply to join.
 
@@ -117,8 +117,11 @@ Three sections of the role editor are now in effect: **Cases** (creating a case,
 you don't manage), **Client Requests** (accepting or declining what clients send in), and
 **Calendar** (event types, and managing other people's attendance). These grants only add
 access: owners and administrators keep everything they had, and members who hold the grant can
-now do the same things. Grants in the other sections will take effect later; each section's own
-description says whether it is in effect yet.
+now do the same things.
+
+Only the group's owners and administrators can create roles, change what a role allows, and choose
+who holds it. In the role editor, each area has four columns: **Add**, **See**, **Change** and
+**Remove**.
 
 ## Banners for work that blocks other people
 
@@ -2282,7 +2285,11 @@ time instead of quietly giving up.
 When **Accepting Membership Applications** is on (on the group's Edit screen), your public page
 shows an apply box to signed-in visitors. Applications arrive on the **Members** tab, where any
 member with the requests permission can Accept or Deny. Denying asks for a reason, and the
-applicant sees your answer.
+applicant sees your answer. **Allow this applicant to reapply in the future** starts ticked; untick
+it and that person can't send your group another application.
+
+Somebody who left the group, or was removed, and comes back through your join link returns as an
+ordinary member on your starting role, not with the rank or roles they had before.
 
 ## What kind of group you are
 
@@ -2378,6 +2385,13 @@ are better than what the pricing page shows, your Pricing page tells you:
 and public pages. If your group reaches one, the screen you were using tells you exactly which
 limit you hit and what your plan includes. Closed cases and retired equipment never count toward a
 limit. A larger plan raises the limit.
+
+**If a renewal payment doesn't go through**, your plan keeps going for two more weeks while we try
+the card again each day. The people who look after your group's billing get a message saying so,
+and your billing page shows the date. Nothing changes during those two weeks. If the payment still
+hasn't gone through by then, the plan ends. You get these two weeks once a year: a second missed
+renewal within twelve months ends the plan on its renewal date. A plan you cancel ends on the date
+you chose.
 
 Have a coupon code? There's a box for it at checkout — enter it and the price updates before you
 confirm anything. Codes can be limited to first subscriptions, to renewals, to yearly billing, or

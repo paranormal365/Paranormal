@@ -58,8 +58,9 @@ they collected has been lost**, and you can still read all of it. If the group r
 picks up exactly where it left off. If your case had a public page, that page is taken off the
 public site while the subscription is lapsed, so your privacy never depends on the group's billing.
 
-You can also **move your case to a different organization** from the banner on the case page.
-Pick a group, and choose what they will be able to see:
+You can also **move your case to a different organization** from the banner on the case page. This
+is for the person who asked for the investigation; anyone else they added to the case sees that a
+move was asked for, but can't ask for one. Pick a group, and choose what they will be able to see:
 
 - the **history** collected so far — reports, notes, evidence
 - the **investigations** the previous group ran

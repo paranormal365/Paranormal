@@ -66,10 +66,24 @@ history in role descriptions, raw device codes, MIME types, account-system field
 public case list's dates; fact tiles overflowing on phones; tables too wide for phones; squashed filter
 boxes; place feed titled "A place"; "Back to paranormal365".
 
-## Left for Ben
+**Renewal grace** (Ben, 10/09/2026: "add a one time 2-week grace period for lapsed renewals", then
+"once per user per year"). A Stripe plan that wasn't cancelled and reaches its period end unpaid keeps
+going for 14 days while the renewal job retries daily (Stripe forgets the idempotency key after a day,
+so each retry is real). One grace per paying person (the plan's setter-up, who renewals are charged to)
+in any 365 days, across their groups; never extended. The billing people get a message and the billing
+page shows the date. Migration `RenewalGracePeriod` adds four nullable columns to
+OrganizationSubscriptions. Seats are not covered.
 
-- **A declined renewal lapses the group.** The renewal's idempotency key is fixed for the period on
-  purpose (it prevents double charges), so Stripe replays the first decline and the group lapses at
-  period end with no grace. Whether to add a grace period or a second attempt is a billing decision.
+**Browser pass.** The hero placeholders were dark because app.css colors every placeholder from
+`--ben-placeholder-color` with `!important`; the hero now sets the variable. The phone logo's white disc
+was an old under-992px rule giving the bare mark a backing, which the tile's white filter whitened.
+`PageProbe` (BEN_PROBE=1) settled the "blank" screenshots: most were caught mid-load.
+
+**Docs.** Help: organization-administration (roles, applications, join link, grace), working-a-case,
+your-case, your-files, getting-started, going-to-an-event, the-mobile-apps. Changelog 2.19.0. Product
+documentation PDF and the seat guides rebuilt; getting-started and member/viewer/owner screenshots
+re-captured.
+
+## Left for Ben
 - The calendar's "MultiDay" button label is Telerik's own text; changing it means a Telerik localization
   file.

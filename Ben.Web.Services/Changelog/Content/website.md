@@ -22,6 +22,23 @@ it carry no number.
 The history before 2026-08-22 is summarized rather than listed: the site was not yet open, and a
 day-by-day account of building it would say nothing to anyone using it now.
 
+## 2026-10-10 · 2.19.0
+
+- If your group's renewal payment doesn't go through, your plan keeps going for two weeks while the
+  card is tried again each day, once a year. Your billing page shows the date.
+- Groups that keep their address private show how close they are in rounded steps, such as "Within
+  10 mi".
+- A file someone asks to use for their group is shared with that group when its owner approves.
+- When you decline a membership application, you can say whether that person may apply again, and
+  the site keeps to it.
+- When a save doesn't go through, the page says so, instead of showing it as done or ending your
+  session.
+- Plainer wording across the site: program, ZIP code, web address, In Progress and Canceled, and the
+  role editor's Add, See, Change and Remove.
+- Phone fixes: the logo in the light theme, case figures that fit their tiles, billing tables that
+  scroll, and search boxes you can read on the dark pages.
+- A public case list now shows dates in your own time, matching the case's page.
+
 ## 2026-10-09 · 2.18.0
 
 - Three more kinds of section for your group's public pages: your contact details, a gallery of your

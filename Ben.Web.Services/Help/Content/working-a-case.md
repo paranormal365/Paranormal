@@ -782,7 +782,8 @@ depends only on the receiving group's plan, not yours.
 ### If your subscription lapses
 
 When a paid period ends without renewal, open work is paused and published private engagements are
-taken off the public site. Nothing is deleted: the case remembers it was public, and once the plan
+taken off the public site. If the renewal payment simply didn't go through, the plan keeps going for
+two weeks first while the card is tried again (once a year). Nothing is deleted: the case remembers it was public, and once the plan
 is renewed, its page shows a **Republish** banner that puts it back in one click. Cases at public
 places — landmarks, businesses — aren't affected by billing and stay published. Both renewal
 warnings explain all of this before it happens.
