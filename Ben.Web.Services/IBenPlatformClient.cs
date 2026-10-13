@@ -99,8 +99,12 @@ public interface IBenPlatformClient
     Task<EmailTemplatePreviewRecord?> PreviewEmailTemplateAsync(
         string kind, SaveEmailTemplateBody body, CancellationToken token = default);
 
-    /// <summary>Sends one real test message and reports what the server said.</summary>
-    Task<MailTestResultRecord?> SendTestEmailAsync(string to, CancellationToken token = default);
+    /// <summary>
+    /// Sends one real test message, recorded under Recent letters, and reports what the server
+    /// said. <paramref name="kind"/> picks one of the site's letters to fill in with made-up
+    /// details; null sends a plain test message.
+    /// </summary>
+    Task<MailTestResultRecord?> SendTestEmailAsync(string to, string? kind = null, CancellationToken token = default);
 
     /// <summary>Re-arms the one-time notice for a limit, so the next burst sends a fresh message.</summary>
     Task<bool> ReArmRateLimitNoticeAsync(string policyName, CancellationToken token = default);

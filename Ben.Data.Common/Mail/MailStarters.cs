@@ -26,12 +26,15 @@ public static class MailStarters
 {
     private static string Join(params string[] parts) => string.Join("\n", parts);
 
-    /// <summary>The site's own shell: name at the top, small print at the bottom.</summary>
+    /// <summary>The site's own shell: the standard header at the top, small print at the bottom.</summary>
+    /// <remarks>
+    /// The header is <see cref="MailHeader"/>'s, the one every other letter opens with. It used to be
+    /// a row of its own with the older icon, which the outbox didn't recognize as a header, so a
+    /// letter started from here arrived with two (found 10/13/2026 by the Outgoing Mail test).
+    /// </remarks>
     private static string Branded(params string[] middle)
         => Join(
-            MailBlocks.TwoColumns(
-                wide: "<strong>{SiteName}</strong>",
-                logoOnTheRight: true),
+            MailHeader.Html("{SiteUrl}" + MailHeader.IconFileName, "{SiteName}"),
             Join(middle),
             MailBlocks.Footer());
 

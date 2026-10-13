@@ -1,6 +1,9 @@
+using Ben.Data.Common;
 using Ben.Data.Common.Constants;
 using Ben.Data.Common.Interfaces;
+using Ben.Data.Common.Mail;
 using Ben.Data.WebApi.Services;
+using Ben.Data.WebApi.Services.Mail;
 using System.Security.Claims;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
@@ -39,20 +42,34 @@ public sealed class AdminMailDiagnosticsController : ControllerBase
     // The RAW sender, deliberately, and one of only three things that may hold it (item 239). A
     // diagnostic that queued the letter would prove that queueing works and nothing about whether
     // this machine can post — which is the only question this controller exists to answer.
-    private readonly SmtpEmailService _email;
+    private readonly IEmailService _email;
     private readonly SmtpOptions _options;
+    private readonly SiteIdentity _site;
     private readonly IDbContextFactory<Ben.Data.Source.Context.BenDataContext> _db;
     private readonly ILogger<AdminMailDiagnosticsController> _logger;
     private readonly Ben.Service.RepositoryService.GenericInterfaces.IAuditLogService _audit;
 
     public AdminMailDiagnosticsController(SmtpEmailService email,
                                           IOptions<SmtpOptions> options,
+                                          IOptions<SiteIdentity> site,
                                           IDbContextFactory<Ben.Data.Source.Context.BenDataContext> db,
                                           Ben.Service.RepositoryService.GenericInterfaces.IAuditLogService audit,
                                           ILogger<AdminMailDiagnosticsController> logger)
+        : this((IEmailService)email, options, site, db, audit, logger)
+    {
+    }
+
+    /// <summary>For a test that needs to see what was handed to the mail server.</summary>
+    internal AdminMailDiagnosticsController(IEmailService email,
+                                            IOptions<SmtpOptions> options,
+                                            IOptions<SiteIdentity> site,
+                                            IDbContextFactory<Ben.Data.Source.Context.BenDataContext> db,
+                                            Ben.Service.RepositoryService.GenericInterfaces.IAuditLogService audit,
+                                            ILogger<AdminMailDiagnosticsController> logger)
     {
         _email = email;
         _options = options.Value;
+        _site = site.Value;
         _db = db;
         _audit = audit;
         _logger = logger;
@@ -72,17 +89,26 @@ public sealed class AdminMailDiagnosticsController : ControllerBase
         HasPassword:     !string.IsNullOrEmpty(_options.Password)));
 
     /// <summary>
-    /// Sends one real message and reports exactly what the server said.
+    /// Sends one real message, records it under Recent letters, and reports exactly what the
+    /// server said.
     /// </summary>
     /// <remarks>
-    /// A real send, not a connection test, because the failures that matter here happen after the
-    /// socket opens — authentication rejected, sender not permitted, relay denied. Those only
-    /// appear when a message is actually offered.
+    /// <para>A real send, not a connection test, because the failures that matter here happen after
+    /// the socket opens — authentication rejected, sender not permitted, relay denied. Those only
+    /// appear when a message is actually offered. So it goes straight to the mail server rather than
+    /// through the queue, and the server's answer comes back on this request.</para>
     ///
-    /// The SMTP error text is returned verbatim to the caller. That is safe because the route is
-    /// SuperAdmin-only, and it is the entire value of the endpoint: "535 authentication failed"
-    /// and "connection timed out" call for completely different fixes, and a tidied-up
-    /// "could not send" tells you neither.
+    /// <para><b>It is still written down.</b> Ben, 10/13/2026: the test said sent, nothing arrived,
+    /// and nothing appeared in Recent letters, so there was nothing to read back. The row is saved
+    /// AFTER the attempt, already accepted or already given up: saved first, it would sit in the
+    /// queue as waiting and the sender could post it a second time.</para>
+    ///
+    /// <para><b>A picked letter is filled in with made-up details</b> and says at the top that it
+    /// is a test (<see cref="MailTestLetter"/>).</para>
+    ///
+    /// <para>The SMTP error text is returned verbatim. That is safe because the route is
+    /// SuperAdmin-only, and it is the entire value of the endpoint: "535 authentication failed" and
+    /// "connection timed out" call for completely different fixes.</para>
     /// </remarks>
     [HttpPost("test")]
     public async Task<ActionResult<MailTestResult>> SendTest(
@@ -91,35 +117,74 @@ public sealed class AdminMailDiagnosticsController : ControllerBase
         if (string.IsNullOrWhiteSpace(request.To))
             return BadRequest("Give an address to send to.");
 
-        if (!_email.IsConfigured)
-            return Ok(new MailTestResult(false,
-                "SMTP is not configured on this machine — Smtp:Host is empty, so nothing is even "
-              + "attempted. Every confirmation and invitation is silently going nowhere.", null));
+        MailKindInfo? kind = null;
+        if (!string.IsNullOrWhiteSpace(request.Kind) && (kind = MailKinds.Find(request.Kind)) is null)
+            return BadRequest("The site doesn't send a letter by that name.");
 
-        var stamp = DateTime.UtcNow.ToString("u");
+        var to = request.To.Trim();
+        var now = DateTime.UtcNow;
+
+        await using var db = await _db.CreateDbContextAsync(ct);
+        var letter = await MailTestLetter.ComposeAsync(db, _site, kind, now, ct);
+
+        // The same row any letter becomes, so it carries the same header and reads back the same way.
+        // The kind is set on the row, not the message: the letter is already filled in, and a kind
+        // on the message is what asks for a template to be applied to it.
+        var row = OutboxEmailService.Row(new EmailMessage(to, letter.Subject, letter.Html), now, _site);
+        row.Kind = letter.Kind;
+        row.Attempts = 1;
+
+        MailTestResult result;
+        if (!_email.IsConfigured)
+        {
+            row.FailedUtc = now;
+            row.LastError = "Mail is switched off on this machine: no mail server is set.";
+            result = new MailTestResult(false,
+                "Mail is switched off on this machine — no mail server is set, so nothing was even "
+              + "attempted. Every confirmation and invitation is going nowhere.", null);
+        }
+        else
+        {
+            try
+            {
+                await _email.SendAsync(new EmailMessage(row.To, row.Subject, row.HtmlBody ?? ""), ct);
+                row.AcceptedBySmtpUtc = DateTime.UtcNow;
+
+                _logger.LogInformation("Mail diagnostic sent a test message to {Recipient}.", to);
+                result = new MailTestResult(true,
+                    $"The mail server accepted it for {to}. It's at the top of Recent letters below. "
+                  + "If it hasn't arrived in a few minutes, look in the junk or spam folder. If it isn't "
+                  + "there either, the mail server or the recipient's provider stopped it after "
+                  + "accepting it.", null);
+            }
+            catch (Exception ex)
+            {
+                // Error, so it survives in the Logs table. This is the line somebody reads a week
+                // later when asking whether mail has ever worked here.
+                _logger.LogError(ex, "Mail diagnostic could not send to {Recipient}.", to);
+                row.FailedUtc = DateTime.UtcNow;
+                row.LastError = ex.Message.Length <= 1000 ? ex.Message : ex.Message[..1000];
+                result = new MailTestResult(false,
+                    "The mail server refused it. The text below is what it said.", ex.Message);
+            }
+        }
+
         try
         {
-            await _email.SendAsync(request.To,
-                "Test message from IsHaunted.com",
-                $"""
-                 <p>Outgoing mail is working.</p>
-                 <p>Sent {stamp} from the admin mail diagnostic.</p>
-                 """, ct);
-
-            _logger.LogInformation("Mail diagnostic sent a test message to {Recipient}.", request.To);
-            return Ok(new MailTestResult(true,
-                $"Sent to {request.To}. If it does not arrive, the message left this server and the "
-              + "problem is delivery — spam filtering, or the recipient's provider rejecting it "
-              + "after acceptance.", null));
+            db.OutboxEmails.Add(row);
+            await db.SaveChangesAsync(CancellationToken.None);
         }
         catch (Exception ex)
         {
-            // Error, so it survives in the Logs table. This is the line somebody reads a week
-            // later when asking whether mail has ever worked here.
-            _logger.LogError(ex, "Mail diagnostic could not send to {Recipient}.", request.To);
-            return Ok(new MailTestResult(false,
-                "The server refused it. The text below is what it said.", ex.Message));
+            // The send happened either way; the answer about it is still worth giving.
+            _logger.LogError(ex, "Could not record the test letter to {Recipient}.", to);
+            result = result with
+            {
+                Message = result.Message + " It couldn't be added to Recent letters.",
+            };
         }
+
+        return Ok(result with { UsedPublished = letter.UsedPublished });
     }
 
     // ── The outbox (item 239) ────────────────────────────────────────────────
@@ -332,9 +397,13 @@ public sealed record OutboxLetterBody(
     string? Html,
     DateTime? BodyScrubbedUtc);
 
-public sealed record MailTestRequest(string To);
+/// <param name="Kind">Which of the site's letters to send, filled in with made-up details; null
+/// for a plain test message.</param>
+public sealed record MailTestRequest(string To, string? Kind = null);
 
-public sealed record MailTestResult(bool Sent, string Message, string? ServerSaid);
+/// <param name="UsedPublished">Whether a picked letter used the template somebody published,
+/// rather than the ready-made one.</param>
+public sealed record MailTestResult(bool Sent, string Message, string? ServerSaid, bool UsedPublished = false);
 
 public sealed record MailSettingsView(
     bool IsConfigured, string? Host, int Port, string Security,

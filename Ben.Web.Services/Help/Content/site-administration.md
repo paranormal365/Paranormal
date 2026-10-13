@@ -374,12 +374,26 @@ three states to know about:
 connection. The failures that matter happen after the connection opens (authentication rejected,
 sender not permitted, relay denied), and none of them show up until a message is actually sent.
 
+**Letter** chooses what to send. Leave it on *A plain test message* to check that mail gets through,
+or pick one of the site's letters (a receipt, a booking confirmation, a password reset) to see how it
+looks when it arrives. A picked letter uses the version you published in **Email templates**, or the
+ready-made version there if you haven't published your own. Either way it's filled in with made-up
+names, places and links, so nothing real goes out and its buttons don't work.
+
+![Sending a test of the receipt letter](help-media:site-administration/mail-test-send.png)
+
+Every test says at the top that it's a test, and its subject starts with **[Test]**. It's also added
+to **Recent letters** below, so you can open it with **Read it** and see exactly what was sent.
+
 If the test fails, you see the server's exact error, not a tidied-up "could not send".
 *"535 authentication failed"* and *"connection timed out"* need completely different fixes, and a
 polite summary wouldn't tell you which one you need.
 
-If the test succeeds but the message still doesn't arrive, the mail left this server and the
-problem is delivery: spam filtering, or the recipient's provider rejecting it after accepting it.
+If the test succeeds but the message still doesn't arrive, look in the junk or spam folder first.
+If it isn't there either, the mail left this server and the problem is delivery: the recipient's
+provider rejected or filtered it after accepting it. The most common cause is mail sent through a
+server the domain doesn't list as one of its senders. The site's own domain only allows its email
+hosting's mail server, so mail must go out through that server.
 
 ### Every letter the site meant to send
 

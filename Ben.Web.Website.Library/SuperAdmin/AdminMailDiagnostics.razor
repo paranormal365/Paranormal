@@ -109,18 +109,30 @@
             <div class="card-header fw-semibold">Send a test message</div>
             <div class="card-body">
                 <p class="text-secondary small">
-                    A real send, not a connection check — the failures that matter happen after the
-                    socket opens: authentication rejected, sender not permitted, relay denied. None
-                    of those appear until a message is actually offered.
+                    This really sends a message, because the problems that matter (password
+                    refused, sender not allowed, relay denied) only show up when a message is
+                    offered. The message says at the top that it's a test, and it's added to
+                    Recent letters below.
                 </p>
 
                 <div class="row g-2 align-items-end">
-                    <div class="col-sm-6">
+                    <div class="col-sm-6 col-lg-4">
                         <label class="form-label" for="mail-test-to">Send to</label>
                         <input id="mail-test-to" type="email" class="form-control"
                                data-testid="mail-test-to"
                                @bind="@_to" @bind:event="oninput"
                                placeholder="you@example.com" />
+                    </div>
+                    <div class="col-sm-6 col-lg-4">
+                        <label class="form-label" for="mail-test-kind">Letter</label>
+                        <select id="mail-test-kind" class="form-select" data-testid="mail-test-kind"
+                                @bind="@_kind">
+                            <option value="">A plain test message</option>
+                            @foreach (var letter in _letters)
+                            {
+                                <option value="@letter.Kind">@letter.Title@(letter.IsLive ? " (your version)" : "")</option>
+                            }
+                        </select>
                     </div>
                     <div class="col-sm-auto">
                         <button class="btn btn-primary text-nowrap" data-testid="mail-test-send"
@@ -130,6 +142,24 @@
                         </button>
                     </div>
                 </div>
+
+                @if (_letters.FirstOrDefault(l => l.Kind == _kind) is { } picked)
+                {
+                    <p class="text-secondary small mt-2 mb-0" data-testid="mail-test-kind-note">
+                        @(picked.Description + " ")
+                        @if (picked.IsLive)
+                        {
+                            <text>It uses the version you published in Email templates, filled in
+                            with made-up names, places and links.</text>
+                        }
+                        else
+                        {
+                            <text>You haven't published your own version, so it uses the ready-made
+                            one from Email templates, filled in with made-up names, places and links.
+                            The site's own wording for this letter may differ.</text>
+                        }
+                    </p>
+                }
 
                 @if (_test is not null)
                 {
@@ -368,7 +398,12 @@
     private MailSettingsRecord?   _settings;
     private MailTestResultRecord? _test;
     private string  _to      = "";
+    private string  _kind    = "";
     private bool    _loading = true;
+
+    /// <summary>The site's letters, for the test's letter picker. Empty if they can't be read; the
+    /// plain test still works.</summary>
+    private readonly List<EmailTemplateSummaryRecord> _letters = [];
     private bool    _sending;
     private string? _error;
 
@@ -557,6 +592,10 @@
         try
         {
             _settings = await AdminClient.GetMailSettingsAsync();
+
+            var letters = await AdminClient.GetEmailTemplatesAsync();
+            _letters.Clear();
+            _letters.AddRange(letters.Items);
         }
         catch (Exception ex)
         {
@@ -575,17 +614,25 @@
         _error   = null;
         try
         {
-            _test = await AdminClient.SendTestEmailAsync(_to.Trim());
+            _test = await AdminClient.SendTestEmailAsync(
+                _to.Trim(), string.IsNullOrEmpty(_kind) ? null : _kind);
 
             // A refusal the UI discards is worse than no rule at all — say so rather than
             // re-rendering an unchanged page and letting it read as success.
             if (_test is null)
-                _error = "The API did not answer the test send. Nothing can be concluded from that "
-                       + "except that the request itself failed.";
+            {
+                _error = "The test couldn't be sent: the server didn't answer. Try again.";
+                return;
+            }
+
+            // Shown in the list straight away. "Everything" rather than accepted or given up, so
+            // the new row is on top whichever way it went.
+            _outboxState = null;
+            await LoadOutboxAsync();
         }
         catch (Exception ex)
         {
-            _error = $"The test send could not be attempted: {ex.Message}";
+            _error = $"The test couldn't be sent: {ex.Message}";
         }
         finally
         {

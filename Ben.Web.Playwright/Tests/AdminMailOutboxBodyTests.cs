@@ -92,6 +92,39 @@ public class AdminMailOutboxBodyTests : BenTestBase
     }
 
     [Test]
+    [Description("A test send of a picked letter appears in Recent letters, marked as a test.")]
+    public async Task A_test_send_is_listed_and_says_it_is_a_test()
+    {
+        // An address of its own, so the row found is this run's whatever else is in the list.
+        var to = $"mail-test-{Guid.NewGuid():N}@example.test";
+
+        await LoginAsync(SuperAdminEmail, SuperAdminPassword);
+        await Page.GotoAsync($"{BaseUrl}/admin/mail");
+        await WaitForTheCircuitAsync();
+
+        await Expect(Page.Locator("[data-testid=mail-test-to]")).ToBeVisibleAsync(new() { Timeout = 20_000 });
+        await FillAndConfirmAsync("[data-testid=mail-test-to]", to);
+
+        var picker = Page.Locator("[data-testid=mail-test-kind]");
+        await Expect(picker.Locator("option[value='confirm-your-address']")).ToHaveCountAsync(1, new() { Timeout = 20_000 });
+        await picker.SelectOptionAsync("confirm-your-address");
+        await Expect(Page.Locator("[data-testid=mail-test-kind-note]")).ToBeVisibleAsync();
+
+        await Page.Locator("[data-testid=mail-test-send]").ClickAsync();
+        await Expect(Page.Locator("[data-testid=mail-test-result]")).ToBeVisibleAsync(new() { Timeout = 60_000 });
+
+        // Whether this machine can send or not, the test is written down — accepted or given up.
+        var row = Page.Locator("[data-testid=outbox-table] tr").Filter(new() { HasText = to });
+        await Expect(row).ToHaveCountAsync(1, new() { Timeout = 20_000 });
+        await Expect(row).ToContainTextAsync("[Test] Confirm your email");
+
+        await ClickUntilAsync(row.Locator("[data-testid=outbox-view]"), Page.Locator("[data-testid=letter-body]"));
+        var inside = Page.FrameLocator("[data-testid=letter-body]").Locator("body");
+        await Expect(inside).ToContainTextAsync("This is a test.", new() { Timeout = 15_000 });
+        await Expect(inside).ToContainTextAsync("Marguerite");
+    }
+
+    [Test]
     [Description("Somebody who is not a SuperAdmin cannot reach the mail screen at all.")]
     public async Task An_ordinary_member_cannot_reach_the_letters()
     {

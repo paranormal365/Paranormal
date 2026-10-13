@@ -1982,7 +1982,7 @@ public sealed record MailSettingsRecord(
 /// The SMTP error verbatim. Kept because "535 authentication failed" and "connection timed out"
 /// call for completely different fixes, and a tidied-up "could not send" tells you neither.
 /// </param>
-public sealed record MailTestResultRecord(bool Sent, string Message, string? ServerSaid);
+public sealed record MailTestResultRecord(bool Sent, string Message, string? ServerSaid, bool UsedPublished = false);
 
 /// <summary>
 /// One session file on the server, as listed on /admin/session-files.
