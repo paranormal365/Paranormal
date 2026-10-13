@@ -141,6 +141,19 @@
                 </div>
             </div>
 
+            @if (_booking is { } booking)
+            {
+                @* The party's names and what each of them can't eat, changeable from here as well
+                   as from the event's page. Left off the print: the pass is what the door needs. *@
+                <div class="card mt-3 d-print-none" id="pass-party">
+                    <div class="card-body">
+                        <div class="fw-semibold mb-1">Who's coming</div>
+                        <BookingPartyPanel Booking="booking" IdPrefix="pass"
+                                           OnSaved="saved => _booking = saved" />
+                    </div>
+                </div>
+            }
+
             <div class="d-flex flex-wrap gap-2 mt-3 d-print-none">
                 <button type="button" class="btn btn-outline-secondary" id="pass-email"
                         disabled="@_busy" @onclick="EmailItAsync">
@@ -164,6 +177,7 @@
 
     private ItemResult<MyHostedEventPassRecord> _result;
     private MyHostedEventPassRecord? _pass;
+    private MyHostedEventBookingRecord? _booking;
     private bool _loading = true;
     private bool _busy;
     private string? _note;
@@ -187,6 +201,9 @@
         _loading = true;
         _result = await AdminClient.GetMyHostedEventPassAsync(EventId);
         _pass = _result.Item;
+        // The booking behind the pass, for its party. Nothing is lost without it: the pass still
+        // shows, only the names don't.
+        _booking = _pass is null ? null : (await AdminClient.GetMyHostedEventBookingAsync(EventId)).Item;
         _loading = false;
     }
 

@@ -79,6 +79,10 @@
                                     }
                                 </ul>
                             }
+                            <div class="mt-1">
+                                <BookingPartyPanel Booking="mine" IdPrefix="@($"my-event-{mine.HostedEventId:N}")"
+                                                   OnSaved="Replace" />
+                            </div>
                         </div>
 
                         <div class="my-event__state">
@@ -175,6 +179,18 @@
         _bookings = await AdminClient.GetMyHostedEventBookingsAsync();
         _loading = false;
     }
+
+    /// <summary>
+    /// Puts a changed booking back in the list where it was, keeping what only this list carries.
+    /// </summary>
+    /// <remarks>
+    /// The answer to a change is the booking alone; the sessions and the review links are filled
+    /// for this list only, so they are kept from the row being replaced rather than lost.
+    /// </remarks>
+    private void Replace(MyHostedEventBookingRecord saved)
+        => _bookings = LoadResult<MyHostedEventBookingRecord>.Ok([.. _bookings.Items.Select(b => b.Id == saved.Id
+            ? saved with { Sessions = b.Sessions, MayReview = b.MayReview, HasReviewed = b.HasReviewed }
+            : b)]);
 
     /// <summary>The event's own page, which is where everything about it is done.</summary>
     /// <remarks>

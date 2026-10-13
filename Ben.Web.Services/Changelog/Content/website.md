@@ -30,6 +30,9 @@ day-by-day account of building it would say nothing to anyone using it now.
 - Published menus are on the event's page beside the dates they're served, with a PDF to download.
   A menu can be served at several meals, or on offer throughout the event, like a snack table.
 - The event's page says which meals the event's price includes.
+- When you ask for a place at an event or hold places, you can name each person in your party and say
+  what they can't eat. You can change it later on the event's page, on What I'm going to, or on
+  your pass.
 - The Pricing page shows what each plan includes, each plan's differences from the free one, and
   what a hosted event includes. The free plan no longer says "No limits" without saying it means
   public work.

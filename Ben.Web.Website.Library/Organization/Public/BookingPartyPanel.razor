@@ -1,0 +1,127 @@
+@namespace Ben.Web.Website.Library.Organization.Public
+
+@inject IBenAdminClient AdminClient
+
+@using Ben.Data.Common.Enums
+@using Ben.Service.Models.Entities
+
+@* The party on a booking, by name, with what each person can't eat, and a way to change it.
+
+   On the event's page, on What I'm going to and on the pass, because those are the three places a
+   guest looks for their booking. A party changes: somebody drops out, somebody new turns out to be
+   vegan the week before.
+
+   CHANGING NAMES OR NOTES CHANGES NOTHING THE VENUE AGREED TO. The party size and the places stay
+   as they are, so a confirmed booking stays confirmed; the kitchen's sheet simply reads the new
+   notes. *@
+
+<div class="booking-party-panel" id="@($"{IdPrefix}-party-panel")">
+    @if (_error is { Length: > 0 })
+    {
+        <div class="alert alert-danger py-2 mb-2" id="@($"{IdPrefix}-party-error")" role="alert">@_error</div>
+    }
+
+    @if (_draft is null)
+    {
+        @if (Booking.Guests.Count > 0)
+        {
+            <ul class="list-unstyled small mb-1" id="@($"{IdPrefix}-party-list")">
+                @foreach (var guest in Booking.Guests.OrderBy(g => g.SortOrder))
+                {
+                    <li>
+                        <span class="fw-semibold">@guest.DisplayName</span>
+                        @if (guest.DietaryNotes is { Length: > 0 } notes)
+                        {
+                            <span class="text-secondary"> · @notes</span>
+                        }
+                    </li>
+                }
+            </ul>
+        }
+        else
+        {
+            <p class="text-secondary small mb-1" id="@($"{IdPrefix}-party-none")">
+                Nobody in your party is named yet.
+            </p>
+        }
+
+        @if (_saved)
+        {
+            <p class="text-success small mb-1" id="@($"{IdPrefix}-party-saved")" role="status">Saved.</p>
+        }
+
+        @if (CanChange)
+        {
+            <button type="button" class="btn btn-link btn-sm p-0" id="@($"{IdPrefix}-party-change")"
+                    @onclick="Open">
+                @(Booking.Guests.Count > 0 ? "Change names and dietary needs" : "Add names and dietary needs")
+            </button>
+        }
+    }
+    else
+    {
+        <BookingPartyFields Draft="_draft" IdPrefix="@IdPrefix" OrganizationName="@Booking.OrganizationName"
+                            Changed="StateHasChanged" />
+
+        <div class="d-flex flex-wrap gap-2 mt-2">
+            <button type="button" class="btn btn-primary btn-sm" id="@($"{IdPrefix}-party-save")"
+                    disabled="@(_busy || _draft.HasANoteWithoutAName)" @onclick="SaveAsync">
+                @(_busy ? "Saving…" : "Save")
+            </button>
+            <button type="button" class="btn btn-outline-secondary btn-sm" id="@($"{IdPrefix}-party-cancel")"
+                    disabled="@_busy" @onclick="() => _draft = null">Cancel</button>
+        </div>
+    }
+</div>
+
+@code {
+    [Parameter, EditorRequired] public MyHostedEventBookingRecord Booking { get; set; } = null!;
+
+    /// <summary>Prefixes every id, so two bookings on one page never share a label.</summary>
+    [Parameter, EditorRequired] public string IdPrefix { get; set; } = "";
+
+    /// <summary>Told the booking as it now stands, so the page can show it.</summary>
+    [Parameter] public EventCallback<MyHostedEventBookingRecord> OnSaved { get; set; }
+
+    private BookingPartyDraft? _draft;
+    private bool _busy;
+    private bool _saved;
+    private string? _error;
+
+    /// <summary>
+    /// A booking that is still live. One that was turned down, ran out or was released has no party
+    /// for a kitchen to cook for, and the server refuses a change to it.
+    /// </summary>
+    private bool CanChange
+        => Booking.Status is HostedEventBookingStatus.Requested
+                          or HostedEventBookingStatus.Held
+                          or HostedEventBookingStatus.Confirmed;
+
+    private void Open()
+    {
+        _draft = BookingPartyDraft.From(Booking);
+        _saved = false;
+        _error = null;
+    }
+
+    private async Task SaveAsync()
+    {
+        if (_draft is null) return;
+
+        _busy = true;
+        _error = null;
+
+        // Only the party is sent. Every field of the change is optional and what is left out stays
+        // as it was, so the places and the party size the venue agreed to are untouched.
+        var (saved, error) = await AdminClient.UpdateMyHostedEventBookingAsync(
+            Booking.HostedEventId, new EditHostedEventBookingRequest(Guests: _draft.Sent()));
+
+        _busy = false;
+
+        if (saved is null) { _error = error ?? "That couldn't be saved just now."; return; }
+
+        _draft = null;
+        _saved = true;
+        await OnSaved.InvokeAsync(saved);
+    }
+}

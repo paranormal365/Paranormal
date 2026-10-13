@@ -3130,6 +3130,16 @@ public sealed class HelpMediaCapture : BenTestBase
         await ShootAsync("going-to-an-event", "choosing-seats.png",
             gated: false, selector: "#hosted-places", proves: "a party of 3");
 
+        // Who's coming: a row for each of the three, with what each can't eat (10/13/2026). The
+        // first row is the person booking, so it is filled from the account when it can be.
+        await Page.Locator("#picker-guest-name-0").FillAsync("Daniel Park");
+        await Page.Locator("#picker-guest-name-1").FillAsync("Maya Park");
+        await Page.Locator("#picker-guest-notes-1").FillAsync("vegetarian");
+        await Page.Locator("#picker-guest-name-2").FillAsync("Leo Park");
+        await Page.Locator("#picker-guest-notes-2").FillAsync("nut allergy");
+        await ShootAsync("going-to-an-event", "whos-coming.png",
+            gated: false, selector: "#picker-guests", proves: "Dietary needs");
+
         await ShootAsync("going-to-an-event", "choosing-seats-phone.png",
             gated: false, proves: "Hold these places", width: 375);
     }
