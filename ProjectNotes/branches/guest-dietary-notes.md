@@ -54,6 +54,11 @@ the booking is Requested, Held or Confirmed.
 
 ## Tests
 
+`Ben.Web.Tests/Website/BookingPartyTests.cs` (unit): the draft's resize, lead name, note-without-a-
+name, trimming, the lead's account link kept on a change, an empty list (not null) when every name
+is cleared; the panel lists a party, offers to add names, and offers no change on a booking that
+is over (checked to fail with the state rule removed).
+
 `Ben.Web.Playwright/Tests/HostedEventPartyTests.cs`:
 
 - asking names two people with notes, and the venue's board has both;
