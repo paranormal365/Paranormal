@@ -57,59 +57,6 @@ public struct MySessionPlace: Sendable, Codable, Equatable {
     public var position: Int?
 }
 
-// ── menus ────────────────────────────────────────────────────────────────────
-
-/// `GET api/public/hosted-events/{id}/menus`.
-public struct HostedEventMenus: Sendable, Codable, Equatable {
-    public var hostedEventId: UUID
-    public var menus: [HostedEventMenu]
-}
-
-public struct HostedEventMenu: Sendable, Codable, Equatable, Identifiable {
-    public var id: UUID
-    public var hostedEventNightId: UUID
-    /// The night's calendar date; no time of day.
-    public var nightDate: Date
-    public var nightTitle: String?
-    public var title: String
-    /// The venue's local time as the server's TimeSpan, "19:00:00". Null when the host gave none.
-    public var servedAtLocal: String?
-    public var notes: String?
-    public var sortOrder: Int
-    public var items: [HostedEventMenuItem]
-
-    /// "7:00 PM" from "19:00:00" — a time on the venue's clock, never converted.
-    public var servedAtText: String? {
-        guard let servedAtLocal else { return nil }
-        let parts = servedAtLocal.split(separator: ":").compactMap { Int($0) }
-        guard parts.count >= 2, (0..<24).contains(parts[0]), (0..<60).contains(parts[1]) else { return nil }
-        var components = DateComponents()
-        components.hour = parts[0]
-        components.minute = parts[1]
-        var calendar = Calendar(identifier: .gregorian)
-        calendar.timeZone = .gmt
-        guard let date = calendar.date(from: components) else { return nil }
-        let style = Date.FormatStyle(date: .omitted, time: .shortened, timeZone: .gmt)
-        return date.formatted(style)
-    }
-}
-
-public struct HostedEventMenuItem: Sendable, Codable, Equatable, Identifiable {
-    public var id: UUID
-    public var course: String?
-    public var name: String
-    public var description: String?
-    /// Comma-separated, as the host typed them ("vegan, gluten-free").
-    public var dietaryTags: String?
-    public var sortOrder: Int
-
-    public var tags: [String] {
-        (dietaryTags ?? "").split(separator: ",")
-            .map { $0.trimmingCharacters(in: .whitespaces) }
-            .filter { !$0.isEmpty }
-    }
-}
-
 // ── downloads ────────────────────────────────────────────────────────────────
 
 public enum EventFileAudience: Int, Sendable, Codable, Equatable {

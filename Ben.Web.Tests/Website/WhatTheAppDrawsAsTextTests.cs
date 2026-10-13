@@ -43,11 +43,6 @@ public sealed class WhatTheAppDrawsAsTextTests
             "REAL, fixed 2026-09-20. ClientCaseOccurrence.Body is converted and BodyHtml carries "
           + "the formatting. CaseMessage.Body was already plain by the same reasoning, guarded by "
           + "CaseMessageBodiesArePlainTextTests.",
-
-        ["Notes"] =
-            "Different fields sharing a word. The site renders an Investigation's Notes as HTML "
-          + "on a group screen the app has no equivalent of; the app's notes belongs to a hosted "
-          + "event hub record and never passes through that screen.",
     };
 
     private static string RepoRoot()

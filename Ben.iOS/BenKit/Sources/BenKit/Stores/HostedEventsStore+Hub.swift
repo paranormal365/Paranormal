@@ -43,11 +43,45 @@ extension HostedEventsStore {
         Endpoint(.get, "\(base(eventId))/programme.ics", requiresAuth: false)
     }
 
-    // ── menus ────────────────────────────────────────────────────────────────
+    // ── designed menus (10/13/2026) ──────────────────────────────────────────
 
-    /// Nil when the venue does not publish menus to this reader yet (their place is not agreed).
-    public func loadMenus(_ eventId: UUID) async -> LoadResult<HostedEventMenus?> {
-        absentIsNil(await api.load(Endpoint(.get, "\(Self.base(eventId))/menus"), as: HostedEventMenus.self))
+    /// The event's published menus, in the order a guest reads them. Anybody may read these, booked or
+    /// not, as on the website; an event that isn't on the public site, or has none, is an empty list.
+    public func loadPublishedMenus(_ eventId: UUID) async -> LoadResult<[EventMenu]> {
+        switch await api.load(Endpoint(.get, "\(Self.base(eventId))/published-menus", requiresAuth: false), as: [EventMenu].self) {
+        case .ok(let menus): return .ok(menus)
+        case .failed(_, 404): return .ok([])
+        case .failed(let reason, let status): return .failed(reason: reason, statusCode: status)
+        case .sessionEnded: return .sessionEnded
+        case .rateLimited(let after): return .rateLimited(retryAfter: after)
+        }
+    }
+
+    /// Every design and font file, so the app draws a menu in its own look.
+    public func loadMenuDesigns() async -> LoadResult<MenuDesignCatalog> {
+        await api.load(Endpoint(.get, "api/public/menu-designs", requiresAuth: false), as: MenuDesignCatalog.self)
+    }
+
+    /// One of the menu fonts.
+    public static func menuFontEndpoint(_ file: String) -> Endpoint {
+        Endpoint(.get, "api/public/menu-fonts/\(file.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed) ?? file)",
+                 requiresAuth: false)
+    }
+
+    /// A menu item's photo or a menu's logo, once the menu is published.
+    public static func menuImageEndpoint(_ uploadFileId: UUID) -> Endpoint {
+        Endpoint(.get, "api/public/menu-image/\(id(uploadFileId))", requiresAuth: false)
+    }
+
+    /// A published menu as its PDF, in Caches under a readable name, for Quick Look and the share sheet.
+    public func downloadMenuPdf(_ menu: EventMenu) async -> LoadResult<URL> {
+        let folder = FileManager.default.urls(for: .cachesDirectory, in: .userDomainMask)[0]
+            .appendingPathComponent("EventMenus/\(Self.id(menu.id))", isDirectory: true)
+        try? FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
+        let destination = folder.appendingPathComponent(Self.safeFileName("\(menu.shownHeading) menu.pdf"))
+        return await api.download(
+            Endpoint(.get, "\(Self.base(menu.hostedEventId))/published-menus/\(Self.id(menu.id))/pdf", requiresAuth: false),
+            to: destination)
     }
 
     // ── downloads ────────────────────────────────────────────────────────────

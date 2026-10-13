@@ -4,7 +4,7 @@ import Testing
 import BenKitTestSupport
 
 /// What a guest reads and does during a hosted event: programme, menus, downloads, the room (item 235 phase 14b).
-@Suite("Hosted events — program, menus, downloads and the room")
+@Suite("Hosted events — program, downloads and the room")
 @MainActor
 struct HostedEventHubTests {
 
@@ -50,15 +50,6 @@ struct HostedEventHubTests {
         #expect(!dinner.isFull)
     }
 
-    @Test func menusDecodeWithTheVenuesOwnTimeAndTags() throws {
-        let menus = try BenJSON.decoder.decode(HostedEventMenus.self, from: fixture("hosted-menus"))
-        let dinner = try #require(menus.menus.first { $0.title == "Dinner" })
-        #expect(dinner.servedAtLocal == "19:00:00")
-        #expect(dinner.servedAtText?.contains("7:00") == true)
-        let soup = try #require(dinner.items.first { $0.name == "Tomato soup" })
-        #expect(soup.tags == ["vegan"])
-    }
-
     @Test func aFileForGuestsDecodes() throws {
         let files = try BenJSON.decoder.decode([HostedEventFile].self, from: fixture("hosted-files"))
         let pack = try #require(files.first)
@@ -88,11 +79,6 @@ struct HostedEventHubTests {
         guard case .ok(nil) = await Self.store(MockTransport(status: 404)).loadProgramme(Self.eventId) else {
             Issue.record("a 404 program should read as none"); return
         }
-    }
-
-    @Test func menusNotYetPublishedToThisGuestAreNothingToShow() async {
-        let store = Self.store(Self.sentences(403, "The venue publishes the menu once your place is agreed."))
-        guard case .ok(nil) = await store.loadMenus(Self.eventId) else { Issue.record("a 403 menu should read as none"); return }
     }
 
     @Test func somebodyNotAtTheEventHasNoRoomAndNoFiles() async {
@@ -173,14 +159,6 @@ struct HostedEventHubTests {
         #expect(HostedEventsStore.safeFileName("../../etc/passwd") == "download..-..-etc-passwd")
         #expect(HostedEventsStore.safeFileName("a:b/c.pdf") == "a-b-c.pdf")
         #expect(HostedEventsStore.safeFileName("   ") == "download")
-    }
-
-    @Test func aTimeOnTheVenuesClockIsNeverShifted() {
-        var menu = HostedEventMenu(id: UUID(), hostedEventNightId: UUID(), nightDate: Date(), nightTitle: nil,
-                                   title: "Breakfast", servedAtLocal: "08:30:00", notes: nil, sortOrder: 0, items: [])
-        #expect(menu.servedAtText?.contains("8:30") == true)
-        menu.servedAtLocal = "nonsense"
-        #expect(menu.servedAtText == nil)
     }
 
     // ── links ────────────────────────────────────────────────────────────────
