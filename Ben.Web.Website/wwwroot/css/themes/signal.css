@@ -376,6 +376,12 @@ h1, h2, h3, .h1, .h2, .h3, .display-1, .display-2, .display-3, .display-4 {
    chain broken, a wide table scrolls inside its own box instead of stretching the page. */
 .app-body, .app-content, .app-shell { min-width: 0; }
 .app-content { overflow-x: clip; }
+/* The template gives .content-wrapper `overflow-x: hidden` to keep wide content from scrolling
+   the page sideways. But `hidden` on one axis turns the other into `auto`, so the wrapper became
+   a scroll container that never scrolls (.app-body does the scrolling), and every position:sticky
+   inside a page stuck to it instead — which is to say, never stuck. `clip` cuts off the same
+   overflow without making a scroll container. */
+.app-content .content-wrapper { overflow-x: clip; }
 
 .app-rail {
     flex: none;

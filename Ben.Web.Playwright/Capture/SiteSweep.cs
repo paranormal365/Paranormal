@@ -296,11 +296,15 @@ public sealed class SiteSweep : BenTestBase
                 const inner = main ? (main.innerText || '') : '';
                 const chrome = inner ? body.split(inner).join(' ') : body;
                 const err = document.querySelector('#blazor-error-ui');
+                // The layout scrolls inside main.app-body, so a page that is too wide scrolls THAT
+                // sideways and leaves the document exactly the width of the window.
+                const scroller = document.querySelector('main.app-body');
                 return {
                     content: main ? inner.trim().length : 0,
                     unhandled: /An unhandled error has occurred/i.test(chrome),
                     circuitDown: !!err && getComputedStyle(err).display !== 'none',
                     wide: document.documentElement.scrollWidth > window.innerWidth + 2
+                       || (!!scroller && scroller.scrollWidth > scroller.clientWidth + 2)
                 };
             }");
 

@@ -25,9 +25,9 @@
 
 <div class="container-fluid py-3 case-edit" id="case-edit-page" style="max-width:1200px;">
     @* Save and Cancel sit in the header, where they are on screen the moment the page opens at any width, and again
-       after the form. Not a sticky bar: the site's .content-wrapper sets overflow-x:hidden, which makes it the
-       scrolling box a sticky child pins to — the bottom of the whole page, not the window (the seat picker's
-       stylesheet records the same finding). *@
+       after the form. Not a sticky bar: when this was built the site's .content-wrapper had overflow-x:hidden,
+       which made it the scrolling box a sticky child pins to — the bottom of the whole page, not the window. That
+       was fixed 10/13/2026 (overflow-x: clip, signal.css), so a sticky bar would now work; this layout stays. *@
     <div class="d-flex flex-wrap align-items-center gap-2 mb-3">
         <a class="btn btn-outline-secondary" href="@CaseHref"><BenIcon Name="chevron-left" Class="me-1" />Back to the case</a>
         <h4 class="mb-0 me-auto">Edit case@(_case is null ? "" : $" — {_case.DisplayLabel}")</h4>

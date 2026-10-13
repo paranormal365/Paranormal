@@ -263,8 +263,9 @@
 .ben-summary__row { display: flex; justify-content: space-between; gap: 1rem; padding: .3rem 0; }
 .ben-summary__total { border-top: 1px solid var(--bs-border-color); margin-top: .5rem; padding-top: .75rem; font-weight: 700; font-size: 1.15rem; }
 /* Pinned to the bottom of a phone, as Smarty's is (position-fixed … bottom-0 start-0 end-0). It was
-   sticky, which the layout's scrolling container defeats: the bar sat at the end of the page, seen
-   by eye 09/24. The spacer keeps it from covering the last of the page. */
+   sticky, which the layout's scrolling container defeated: the bar sat at the end of the page, seen
+   by eye 09/24 (that container was fixed 10/13/2026 — see .content-wrapper in signal.css). The
+   spacer keeps it from covering the last of the page. */
 .ben-checkout-bar-spacer { height: 5rem; }
 @media (min-width: 992px) { .ben-checkout-bar-spacer { display: none; } }
 .ben-checkout-bar {
