@@ -267,6 +267,9 @@ public sealed class AdminPlaceMergeController : BenControllerBase
             x => x.PlaceId = request.IntoPlaceId, ct);
         await RepointAsync(db.VenuePlaceClaims.Where(x => x.PlaceId == id),
             x => x.PlaceId = request.IntoPlaceId, ct);
+        // Menu items kept at the venue (10/13/2026) belong to the place, so they follow it.
+        await RepointAsync(db.MenuLibraryItems.Where(x => x.PlaceId == id),
+            x => x.PlaceId = request.IntoPlaceId, ct);
 
         var survivingProfiles = await db.OrganizationVenueProfiles
             .Where(v => v.PlaceId == request.IntoPlaceId).ToListAsync(ct);

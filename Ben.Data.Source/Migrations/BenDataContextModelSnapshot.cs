@@ -2960,6 +2960,185 @@ namespace Ben.Data.Source.Migrations
                     b.ToTable("EventEvidenceSubmissions");
                 });
 
+            modelBuilder.Entity("Ben.Data.Source.Entities.EventMenu", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<Guid?>("ConvertedFromHostedEventMenuId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<Guid?>("CopiedFromEventMenuId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<Guid>("CreatedByAppUserId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<DateTime>("DateCreated")
+                        .HasColumnType("datetime2");
+
+                    b.Property<DateTime?>("DateUpdated")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("DesignKey")
+                        .IsRequired()
+                        .HasMaxLength(60)
+                        .HasColumnType("nvarchar(60)");
+
+                    b.Property<string>("Heading")
+                        .HasMaxLength(120)
+                        .HasColumnType("nvarchar(120)");
+
+                    b.Property<Guid>("HostedEventId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<string>("Intro")
+                        .HasMaxLength(500)
+                        .HasColumnType("nvarchar(500)");
+
+                    b.Property<Guid?>("LogoUploadFileId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<int?>("Meal")
+                        .HasColumnType("int");
+
+                    b.Property<string>("PriceNote")
+                        .HasMaxLength(300)
+                        .HasColumnType("nvarchar(300)");
+
+                    b.Property<DateTime?>("PublishedUtc")
+                        .HasColumnType("datetime2");
+
+                    b.Property<bool>("ThroughoutTheEvent")
+                        .HasColumnType("bit");
+
+                    b.Property<string>("Title")
+                        .IsRequired()
+                        .HasMaxLength(120)
+                        .HasColumnType("nvarchar(120)");
+
+                    b.Property<Guid?>("UpdatedByAppUserId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("ConvertedFromHostedEventMenuId")
+                        .IsUnique()
+                        .HasFilter("[ConvertedFromHostedEventMenuId] IS NOT NULL");
+
+                    b.HasIndex("HostedEventId");
+
+                    b.HasIndex("LogoUploadFileId");
+
+                    b.ToTable("EventMenus");
+                });
+
+            modelBuilder.Entity("Ben.Data.Source.Entities.EventMenuEntry", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<Guid>("EventMenuSectionId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<Guid>("MenuLibraryItemId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<string>("Note")
+                        .HasMaxLength(200)
+                        .HasColumnType("nvarchar(200)");
+
+                    b.Property<decimal?>("Price")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("decimal(18,2)");
+
+                    b.Property<int>("Pricing")
+                        .HasColumnType("int");
+
+                    b.Property<int>("SortOrder")
+                        .HasColumnType("int");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("EventMenuSectionId");
+
+                    b.HasIndex("MenuLibraryItemId");
+
+                    b.ToTable("EventMenuEntries");
+                });
+
+            modelBuilder.Entity("Ben.Data.Source.Entities.EventMenuPrice", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<decimal>("Amount")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("decimal(18,2)");
+
+                    b.Property<Guid>("EventMenuId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<string>("Label")
+                        .HasMaxLength(80)
+                        .HasColumnType("nvarchar(80)");
+
+                    b.Property<int>("SortOrder")
+                        .HasColumnType("int");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("EventMenuId");
+
+                    b.ToTable("EventMenuPrices");
+                });
+
+            modelBuilder.Entity("Ben.Data.Source.Entities.EventMenuSection", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<Guid>("EventMenuId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<string>("Heading")
+                        .HasMaxLength(80)
+                        .HasColumnType("nvarchar(80)");
+
+                    b.Property<Guid>("MenuCategoryId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<int>("SortOrder")
+                        .HasColumnType("int");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("EventMenuId");
+
+                    b.HasIndex("MenuCategoryId");
+
+                    b.ToTable("EventMenuSections");
+                });
+
+            modelBuilder.Entity("Ben.Data.Source.Entities.EventMenuServing", b =>
+                {
+                    b.Property<Guid>("EventMenuId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<Guid>("HostedEventMenuId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.HasKey("EventMenuId", "HostedEventMenuId");
+
+                    b.HasIndex("HostedEventMenuId");
+
+                    b.ToTable("EventMenuServings");
+                });
+
             modelBuilder.Entity("Ben.Data.Source.Entities.EventPhotoConsent", b =>
                 {
                     b.Property<Guid>("Id")
@@ -6169,6 +6348,115 @@ namespace Ben.Data.Source.Migrations
                         .IsUnique();
 
                     b.ToTable("MembershipReviewVotes");
+                });
+
+            modelBuilder.Entity("Ben.Data.Source.Entities.MenuCategory", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<Guid?>("CreatedByAppUserId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<DateTime>("DateCreated")
+                        .HasColumnType("datetime2");
+
+                    b.Property<bool>("IsStarter")
+                        .HasColumnType("bit");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(60)
+                        .HasColumnType("nvarchar(60)");
+
+                    b.Property<string>("NameKey")
+                        .IsRequired()
+                        .HasMaxLength(60)
+                        .HasColumnType("nvarchar(60)");
+
+                    b.Property<int>("SortOrder")
+                        .HasColumnType("int");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("NameKey")
+                        .IsUnique();
+
+                    b.ToTable("MenuCategories");
+                });
+
+            modelBuilder.Entity("Ben.Data.Source.Entities.MenuLibraryItem", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<int>("Allergens")
+                        .HasColumnType("int");
+
+                    b.Property<Guid>("CreatedByAppUserId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<DateTime>("DateCreated")
+                        .HasColumnType("datetime2");
+
+                    b.Property<DateTime?>("DateUpdated")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("Description")
+                        .HasMaxLength(1000)
+                        .HasColumnType("nvarchar(1000)");
+
+                    b.Property<int>("Dietary")
+                        .HasColumnType("int");
+
+                    b.Property<string>("DietaryNote")
+                        .HasMaxLength(300)
+                        .HasColumnType("nvarchar(300)");
+
+                    b.Property<Guid?>("HostedEventId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<Guid?>("ImageUploadFileId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<Guid>("MenuCategoryId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("nvarchar(200)");
+
+                    b.Property<Guid>("OrganizationId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<Guid?>("PlaceId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<DateTime?>("RetiredUtc")
+                        .HasColumnType("datetime2");
+
+                    b.Property<int>("Scope")
+                        .HasColumnType("int");
+
+                    b.Property<Guid?>("UpdatedByAppUserId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("HostedEventId");
+
+                    b.HasIndex("ImageUploadFileId");
+
+                    b.HasIndex("MenuCategoryId");
+
+                    b.HasIndex("PlaceId");
+
+                    b.HasIndex("OrganizationId", "Scope");
+
+                    b.ToTable("MenuLibraryItems");
                 });
 
             modelBuilder.Entity("Ben.Data.Source.Entities.MessagePoll", b =>
@@ -16224,6 +16512,92 @@ namespace Ben.Data.Source.Migrations
                     b.Navigation("UploadFile");
                 });
 
+            modelBuilder.Entity("Ben.Data.Source.Entities.EventMenu", b =>
+                {
+                    b.HasOne("Ben.Data.Source.Entities.HostedEvent", "HostedEvent")
+                        .WithMany()
+                        .HasForeignKey("HostedEventId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("Ben.Data.Source.Entities.UploadFile", "LogoUploadFile")
+                        .WithMany()
+                        .HasForeignKey("LogoUploadFileId")
+                        .OnDelete(DeleteBehavior.NoAction);
+
+                    b.Navigation("HostedEvent");
+
+                    b.Navigation("LogoUploadFile");
+                });
+
+            modelBuilder.Entity("Ben.Data.Source.Entities.EventMenuEntry", b =>
+                {
+                    b.HasOne("Ben.Data.Source.Entities.EventMenuSection", "EventMenuSection")
+                        .WithMany("Entries")
+                        .HasForeignKey("EventMenuSectionId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("Ben.Data.Source.Entities.MenuLibraryItem", "MenuLibraryItem")
+                        .WithMany()
+                        .HasForeignKey("MenuLibraryItemId")
+                        .OnDelete(DeleteBehavior.NoAction)
+                        .IsRequired();
+
+                    b.Navigation("EventMenuSection");
+
+                    b.Navigation("MenuLibraryItem");
+                });
+
+            modelBuilder.Entity("Ben.Data.Source.Entities.EventMenuPrice", b =>
+                {
+                    b.HasOne("Ben.Data.Source.Entities.EventMenu", "EventMenu")
+                        .WithMany("Prices")
+                        .HasForeignKey("EventMenuId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("EventMenu");
+                });
+
+            modelBuilder.Entity("Ben.Data.Source.Entities.EventMenuSection", b =>
+                {
+                    b.HasOne("Ben.Data.Source.Entities.EventMenu", "EventMenu")
+                        .WithMany("Sections")
+                        .HasForeignKey("EventMenuId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("Ben.Data.Source.Entities.MenuCategory", "MenuCategory")
+                        .WithMany()
+                        .HasForeignKey("MenuCategoryId")
+                        .OnDelete(DeleteBehavior.NoAction)
+                        .IsRequired();
+
+                    b.Navigation("EventMenu");
+
+                    b.Navigation("MenuCategory");
+                });
+
+            modelBuilder.Entity("Ben.Data.Source.Entities.EventMenuServing", b =>
+                {
+                    b.HasOne("Ben.Data.Source.Entities.EventMenu", "EventMenu")
+                        .WithMany("Servings")
+                        .HasForeignKey("EventMenuId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("Ben.Data.Source.Entities.HostedEventMenu", "Meal")
+                        .WithMany()
+                        .HasForeignKey("HostedEventMenuId")
+                        .OnDelete(DeleteBehavior.NoAction)
+                        .IsRequired();
+
+                    b.Navigation("EventMenu");
+
+                    b.Navigation("Meal");
+                });
+
             modelBuilder.Entity("Ben.Data.Source.Entities.EventPhotoConsent", b =>
                 {
                     b.HasOne("Ben.Data.Source.Entities.AppUser", "AppUser")
@@ -17725,6 +18099,46 @@ namespace Ben.Data.Source.Migrations
                     b.Navigation("MembershipRequest");
 
                     b.Navigation("VoterAppUser");
+                });
+
+            modelBuilder.Entity("Ben.Data.Source.Entities.MenuLibraryItem", b =>
+                {
+                    b.HasOne("Ben.Data.Source.Entities.HostedEvent", "HostedEvent")
+                        .WithMany()
+                        .HasForeignKey("HostedEventId")
+                        .OnDelete(DeleteBehavior.NoAction);
+
+                    b.HasOne("Ben.Data.Source.Entities.UploadFile", "ImageUploadFile")
+                        .WithMany()
+                        .HasForeignKey("ImageUploadFileId")
+                        .OnDelete(DeleteBehavior.NoAction);
+
+                    b.HasOne("Ben.Data.Source.Entities.MenuCategory", "MenuCategory")
+                        .WithMany()
+                        .HasForeignKey("MenuCategoryId")
+                        .OnDelete(DeleteBehavior.NoAction)
+                        .IsRequired();
+
+                    b.HasOne("Ben.Data.Source.Entities.Organization", "Organization")
+                        .WithMany()
+                        .HasForeignKey("OrganizationId")
+                        .OnDelete(DeleteBehavior.NoAction)
+                        .IsRequired();
+
+                    b.HasOne("Ben.Data.Source.Entities.Place", "Place")
+                        .WithMany()
+                        .HasForeignKey("PlaceId")
+                        .OnDelete(DeleteBehavior.NoAction);
+
+                    b.Navigation("HostedEvent");
+
+                    b.Navigation("ImageUploadFile");
+
+                    b.Navigation("MenuCategory");
+
+                    b.Navigation("Organization");
+
+                    b.Navigation("Place");
                 });
 
             modelBuilder.Entity("Ben.Data.Source.Entities.MessagePoll", b =>
@@ -21813,6 +22227,20 @@ namespace Ben.Data.Source.Migrations
             modelBuilder.Entity("Ben.Data.Source.Entities.EquipmentModel", b =>
                 {
                     b.Navigation("EquipmentItems");
+                });
+
+            modelBuilder.Entity("Ben.Data.Source.Entities.EventMenu", b =>
+                {
+                    b.Navigation("Prices");
+
+                    b.Navigation("Sections");
+
+                    b.Navigation("Servings");
+                });
+
+            modelBuilder.Entity("Ben.Data.Source.Entities.EventMenuSection", b =>
+                {
+                    b.Navigation("Entries");
                 });
 
             modelBuilder.Entity("Ben.Data.Source.Entities.EvpScan", b =>

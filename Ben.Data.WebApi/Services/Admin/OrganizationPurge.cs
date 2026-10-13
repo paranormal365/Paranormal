@@ -401,6 +401,23 @@ public sealed class OrganizationPurge
             await db.HostedEventRemovals
                 .Where(x => x.HostedEvent.OrganizationId == organizationId)
                 .ExecuteDeleteAsync(ct);
+            // Designed menus (10/13/2026). A menu's attachment to a meal has no cascade from the meal,
+            // so it goes first. Then any menu entry offering one of this group's items — including on
+            // another group's menu at a shared venue, which loses that line — and then the items, which
+            // point at the group, its events and its files with NoAction. The menus themselves cascade
+            // from their events.
+            await db.EventMenuServings
+                .Where(x => x.EventMenu.HostedEvent.OrganizationId == organizationId
+                         || x.Meal.HostedEventNight.HostedEvent.OrganizationId == organizationId)
+                .ExecuteDeleteAsync(ct);
+            await db.EventMenuEntries
+                .Where(x => x.MenuLibraryItem.OrganizationId == organizationId
+                         || x.EventMenuSection.EventMenu.HostedEvent.OrganizationId == organizationId)
+                .ExecuteDeleteAsync(ct);
+            await db.MenuLibraryItems
+                .Where(x => x.OrganizationId == organizationId
+                         || (x.HostedEventId != null && x.HostedEvent!.OrganizationId == organizationId))
+                .ExecuteDeleteAsync(ct);
             await db.HostedEventDiningSeats
                 .Where(x => x.HostedEventDiningTable.HostedEvent.OrganizationId == organizationId
                          || x.HostedEventBooking.HostedEvent.OrganizationId == organizationId)

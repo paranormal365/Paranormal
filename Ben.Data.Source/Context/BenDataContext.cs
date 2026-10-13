@@ -131,6 +131,15 @@ namespace Ben.Data.Source.Context
         public virtual DbSet<HostedEventBookingGuest> HostedEventBookingGuests { get; set; }
         public virtual DbSet<HostedEventMenu> HostedEventMenus { get; set; }
         public virtual DbSet<HostedEventMenuItem> HostedEventMenuItems { get; set; }
+
+        // Designed menus (Ben, 10/13/2026): the category list, the item library, and the menus.
+        public virtual DbSet<MenuCategory> MenuCategories { get; set; }
+        public virtual DbSet<MenuLibraryItem> MenuLibraryItems { get; set; }
+        public virtual DbSet<EventMenu> EventMenus { get; set; }
+        public virtual DbSet<EventMenuPrice> EventMenuPrices { get; set; }
+        public virtual DbSet<EventMenuSection> EventMenuSections { get; set; }
+        public virtual DbSet<EventMenuEntry> EventMenuEntries { get; set; }
+        public virtual DbSet<EventMenuServing> EventMenuServings { get; set; }
         public virtual DbSet<HostedEventPass> HostedEventPasses { get; set; }
         public virtual DbSet<HostedEventStaff> HostedEventStaff { get; set; }
         public virtual DbSet<HostedEventCheckIn> HostedEventCheckIns { get; set; }
@@ -1701,6 +1710,89 @@ namespace Ben.Data.Source.Context
             modelBuilder.Entity<HostedEventMenuItem>()
                 .HasOne(i => i.HostedEventMenu).WithMany(m => m.Items)
                 .HasForeignKey(i => i.HostedEventMenuId).OnDelete(DeleteBehavior.Cascade);
+
+            // ── Designed menus (Ben, 10/13/2026) ─────────────────────────────
+            // Categories are one list for the site, unique by NameKey. Items are a library a menu
+            // points into; menus belong to the event and cascade with it; a menu's sections,
+            // entries, prices and servings cascade with the menu. Nothing cascades INTO an item
+            // from a menu, so taking an item off a menu never deletes the item, and an item on a
+            // menu can't be deleted out from under it (retired instead).
+            modelBuilder.Entity<MenuCategory>().Property(c => c.Name).HasMaxLength(60).IsRequired();
+            modelBuilder.Entity<MenuCategory>().Property(c => c.NameKey).HasMaxLength(60).IsRequired();
+            modelBuilder.Entity<MenuCategory>().HasIndex(c => c.NameKey).IsUnique();
+
+            modelBuilder.Entity<MenuLibraryItem>().Property(i => i.Name).HasMaxLength(200).IsRequired();
+            modelBuilder.Entity<MenuLibraryItem>().Property(i => i.Description).HasMaxLength(1000);
+            modelBuilder.Entity<MenuLibraryItem>().Property(i => i.DietaryNote).HasMaxLength(300);
+            modelBuilder.Entity<MenuLibraryItem>().HasIndex(i => new { i.OrganizationId, i.Scope });
+            modelBuilder.Entity<MenuLibraryItem>().HasIndex(i => i.HostedEventId);
+            modelBuilder.Entity<MenuLibraryItem>().HasIndex(i => i.PlaceId);
+            modelBuilder.Entity<MenuLibraryItem>()
+                .HasOne(i => i.Organization).WithMany()
+                .HasForeignKey(i => i.OrganizationId).OnDelete(DeleteBehavior.NoAction);
+            modelBuilder.Entity<MenuLibraryItem>()
+                .HasOne(i => i.HostedEvent).WithMany()
+                .HasForeignKey(i => i.HostedEventId).OnDelete(DeleteBehavior.NoAction);
+            modelBuilder.Entity<MenuLibraryItem>()
+                .HasOne(i => i.Place).WithMany()
+                .HasForeignKey(i => i.PlaceId).OnDelete(DeleteBehavior.NoAction);
+            modelBuilder.Entity<MenuLibraryItem>()
+                .HasOne(i => i.MenuCategory).WithMany()
+                .HasForeignKey(i => i.MenuCategoryId).OnDelete(DeleteBehavior.NoAction);
+            modelBuilder.Entity<MenuLibraryItem>()
+                .HasOne(i => i.ImageUploadFile).WithMany()
+                .HasForeignKey(i => i.ImageUploadFileId).OnDelete(DeleteBehavior.NoAction);
+
+            modelBuilder.Entity<EventMenu>().Property(m => m.Title).HasMaxLength(120).IsRequired();
+            modelBuilder.Entity<EventMenu>().Property(m => m.Heading).HasMaxLength(120);
+            modelBuilder.Entity<EventMenu>().Property(m => m.Intro).HasMaxLength(500);
+            modelBuilder.Entity<EventMenu>().Property(m => m.PriceNote).HasMaxLength(300);
+            modelBuilder.Entity<EventMenu>().Property(m => m.DesignKey).HasMaxLength(60).IsRequired();
+            modelBuilder.Entity<EventMenu>().HasIndex(m => m.HostedEventId);
+            modelBuilder.Entity<EventMenu>().HasIndex(m => m.ConvertedFromHostedEventMenuId)
+                .IsUnique().HasFilter("[ConvertedFromHostedEventMenuId] IS NOT NULL");
+            modelBuilder.Entity<EventMenu>()
+                .HasOne(m => m.HostedEvent).WithMany()
+                .HasForeignKey(m => m.HostedEventId).OnDelete(DeleteBehavior.Cascade);
+            modelBuilder.Entity<EventMenu>()
+                .HasOne(m => m.LogoUploadFile).WithMany()
+                .HasForeignKey(m => m.LogoUploadFileId).OnDelete(DeleteBehavior.NoAction);
+
+            modelBuilder.Entity<EventMenuPrice>().Property(p => p.Label).HasMaxLength(80);
+            modelBuilder.Entity<EventMenuPrice>().Property(p => p.Amount).HasPrecision(18, 2);
+            modelBuilder.Entity<EventMenuPrice>()
+                .HasOne(p => p.EventMenu).WithMany(m => m.Prices)
+                .HasForeignKey(p => p.EventMenuId).OnDelete(DeleteBehavior.Cascade);
+
+            modelBuilder.Entity<EventMenuSection>().Property(s => s.Heading).HasMaxLength(80);
+            modelBuilder.Entity<EventMenuSection>()
+                .HasOne(s => s.EventMenu).WithMany(m => m.Sections)
+                .HasForeignKey(s => s.EventMenuId).OnDelete(DeleteBehavior.Cascade);
+            modelBuilder.Entity<EventMenuSection>()
+                .HasOne(s => s.MenuCategory).WithMany()
+                .HasForeignKey(s => s.MenuCategoryId).OnDelete(DeleteBehavior.NoAction);
+
+            modelBuilder.Entity<EventMenuEntry>().Property(e => e.Price).HasPrecision(18, 2);
+            modelBuilder.Entity<EventMenuEntry>().Property(e => e.Note).HasMaxLength(200);
+            modelBuilder.Entity<EventMenuEntry>()
+                .HasOne(e => e.EventMenuSection).WithMany(s => s.Entries)
+                .HasForeignKey(e => e.EventMenuSectionId).OnDelete(DeleteBehavior.Cascade);
+            modelBuilder.Entity<EventMenuEntry>()
+                .HasOne(e => e.MenuLibraryItem).WithMany()
+                .HasForeignKey(e => e.MenuLibraryItemId).OnDelete(DeleteBehavior.NoAction);
+
+            // A serving goes with its menu, and with its meal: a meal removed (a night dropped from
+            // the event) takes the fact that this menu was served at it, not the menu. NoAction on the
+            // meal side, because SQL Server refuses two cascade paths from HostedEvent to one row;
+            // the meal's removal clears its servings in code (HostedEventController.ReconcileNightsAsync
+            // and the menus save), and the test pins that.
+            modelBuilder.Entity<EventMenuServing>().HasKey(s => new { s.EventMenuId, s.HostedEventMenuId });
+            modelBuilder.Entity<EventMenuServing>()
+                .HasOne(s => s.EventMenu).WithMany(m => m.Servings)
+                .HasForeignKey(s => s.EventMenuId).OnDelete(DeleteBehavior.Cascade);
+            modelBuilder.Entity<EventMenuServing>()
+                .HasOne(s => s.Meal).WithMany()
+                .HasForeignKey(s => s.HostedEventMenuId).OnDelete(DeleteBehavior.NoAction);
 
             // ── The pass a door scans (item 235 phase 3) ────────────────────
             // The token is the whole of the secret and it is looked up rather than decoded, so the
