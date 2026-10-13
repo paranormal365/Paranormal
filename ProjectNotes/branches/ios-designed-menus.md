@@ -66,7 +66,9 @@ menu record had. With the record gone, the guard asked for its entry to go too.
 
 ## Docs
 
-Help (`the-mobile-apps.md`, `going-to-an-event.md`), the help screenshot `iphone-event-menus.png`, the
+The help (`the-mobile-apps.md`, `going-to-an-event.md`) and its screenshot `iphone-event-menus.png` were
+written, then held back until 1.1.3 is live, like the rest of 1.1.3's help: the text is in
+`Ben.iOS/APP-STORE-1.1.3-HELP.md` and the picture in `Ben.iOS/help-1.1.3/`. Also the
 apps changelog (listed under 1.1.3, Ben's call on 10/13), the iPhone and iPad guides with new menus pictures, and the product documentation PDF.
 
 ## Not done

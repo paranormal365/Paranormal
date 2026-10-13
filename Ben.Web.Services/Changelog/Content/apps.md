@@ -30,6 +30,12 @@ move the last number, new things the middle one, a whole new part of the app the
 - Anyone can see an event's published menus, without signing in. The event's page shows what its
   price includes and a link to **See the menus**.
 
+## 2026-10-03 · 1.1.3
+
+- A new violet app icon, to match the website.
+- Profile shows which version of the app you have, under **App**, and checks whether a newer one is
+  in the App Store. When there is, **Update in the App Store** takes you straight there.
+
 ## 2026-10-02 · 1.1.2
 
 - The app has the website's new look, in light and in dark: the same colors, buttons and cards.

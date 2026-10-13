@@ -149,8 +149,7 @@ a snack table, is marked **Throughout the event**.
 A menu says how each thing is paid for. A price beside a dish means it's paid for on its own, such as
 a drink from the bar. **Included** means the event's price covers it. A price at the top, such as
 *Adults $25*, is the price of the meal. Under the dates, **Included with the event** says which meals
-your place covers. **Download this menu as a PDF** saves a copy to print or keep. The iPhone and
-iPad app shows the same menus, in the same look, with the same PDF.
+your place covers. **Download this menu as a PDF** saves a copy to print or keep.
 
 The marks on a menu describe the food. If there's something you can't eat, tell the venue, so they
 can note it on your booking for the kitchen.
