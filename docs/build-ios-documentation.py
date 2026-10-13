@@ -411,8 +411,16 @@ A change the guest has not seen yet is badged on the hub.</p>
 """),
 
     ("Menus", "65-event-menus", """
-<p>Each meal, course by course, with the venue's dietary labels, shown once the venue shares them
-with guests.</p>
+<p>Each published menu drawn in its own design (<code>DesignedMenuView</code>): the design's paper
+and inks, frame, ornament and typefaces, with the same words the website and the PDF print
+(<code>EventMenuWording</code>, ported from the server's <code>EventMenuPresentation</code>). The
+designs and the list of font files come from <code>GET api/public/menu-designs</code>;
+<code>MenuFontLibrary</code> fetches only the files a design uses from
+<code>api/public/menu-fonts/{file}</code>, keeps them in Caches and registers them for the process,
+so a design added on the server reaches the app without an update. Until a face arrives the menu is
+drawn in the system face of the same kind. <b>PDF</b> opens the server's own PDF in Quick Look.
+Published menus are public, so the calls are anonymous and the event's page links to them for
+anyone.</p>
 """),
 
     ("Running the door", "66-door", """

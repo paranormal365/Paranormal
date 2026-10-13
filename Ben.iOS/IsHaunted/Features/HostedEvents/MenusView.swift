@@ -1,28 +1,62 @@
 import SwiftUI
 import BenKit
 
-/// What is being served, meal by meal, in the order the venue arranged it (item 235 phase 14b).
+/// The event's published menus, each drawn in the design its host chose (10/13/2026; first built in item 235
+/// phase 14b as plain lists).
 ///
-/// Times are the venue's own, as the host typed them — "Breakfast, 8:30 AM" is never converted to wherever the
-/// phone happens to be.
+/// **Anyone can read them.** A published menu is public on the website, so the app shows it signed out
+/// too, the same as the event page. Each one can be saved or shared as the same PDF the website gives.
 struct MenusView: View {
     let hostedEventId: UUID
 
     @Environment(AppDependencies.self) private var dependencies
 
-    @State private var menus: HostedEventMenus?
+    @State private var menus: [EventMenu] = []
     @State private var loaded = false
     @State private var failure: String?
+    @State private var fetching: UUID?
+    @State private var preview: URL?
+    @State private var pdfFailure: String?
+
+    private var fonts: MenuFontLibrary { MenuFontLibrary.shared }
 
     var body: some View {
         Group {
-            if let menus, !menus.menus.isEmpty {
-                SignalList {
-                    ForEach(menus.menus.sorted(by: order)) { menu in
-                        Section { meal(menu) } header: { Text(nightTitle(menu)) }
+            if !menus.isEmpty {
+                ScrollView {
+                    LazyVStack(spacing: 22) {
+                        if let included = EventMenuWording.includedWithTheEvent(menus) {
+                            Label { Text("**Included with the event:** \(included).") } icon: { Image(systemName: "checkmark.seal") }
+                                .font(.subheadline)
+                                .foregroundStyle(Theme.bone)
+                                .frame(maxWidth: .infinity, alignment: .leading)
+                                .accessibilityIdentifier("menus-included")
+                        }
+                        ForEach(menus) { menu in
+                            VStack(alignment: .trailing, spacing: 8) {
+                                DesignedMenuView(menu: menu, design: fonts.catalog?.design(menu.designKey))
+                                    .accessibilityIdentifier("menu-\(menu.id.uuidString)")
+                                Button {
+                                    Task { await openPdf(menu) }
+                                } label: {
+                                    if fetching == menu.id {
+                                        ProgressView()
+                                    } else {
+                                        Label("PDF", systemImage: "doc.richtext")
+                                    }
+                                }
+                                .buttonStyle(.bordered)
+                                .disabled(fetching != nil)
+                                .accessibilityLabel("Open the \(menu.shownHeading) menu as a PDF")
+                            }
+                        }
                     }
+                    // A menu is a sheet of paper: on an iPad it stays a menu's width, not the screen's.
+                    .frame(maxWidth: 640)
+                    .padding(16)
+                    .frame(maxWidth: .infinity)
                 }
-                .listStyle(.insetGrouped)
+                .background(Theme.ink)
             } else if !loaded {
                 ProgressView("Loading the menus…").frame(maxWidth: .infinity, maxHeight: .infinity)
             } else if let failure {
@@ -35,73 +69,24 @@ struct MenusView: View {
                 }
             } else {
                 ContentUnavailableView("No menus yet", systemImage: "fork.knife",
-                                       description: Text("The venue shares its menus once your place is agreed."))
+                                       description: Text("Menus appear here once the organizers publish them."))
             }
         }
         .navigationTitle("Menus")
         .navigationBarTitleDisplayMode(.inline)
         .refreshable { await load() }
         .task { await load() }
-    }
-
-    @ViewBuilder
-    private func meal(_ menu: HostedEventMenu) -> some View {
-        VStack(alignment: .leading, spacing: 4) {
-            HStack(alignment: .firstTextBaseline) {
-                Text(menu.title).font(.headline)
-                Spacer()
-                if let time = menu.servedAtText { Text(time).font(.subheadline.monospacedDigit()).foregroundStyle(Theme.fog) }
-            }
-            if let notes = menu.notes, !notes.isEmpty { Text(notes).font(.footnote).foregroundStyle(Theme.fog) }
+        .quickLookPreview($preview)
+        .alert("Couldn't open the PDF", isPresented: Binding(get: { pdfFailure != nil }, set: { if !$0 { pdfFailure = nil } })) {
+            Button("OK", role: .cancel) {}
+        } message: {
+            Text(pdfFailure ?? "")
         }
-        ForEach(courses(menu), id: \.name) { course in
-            VStack(alignment: .leading, spacing: 6) {
-                if !course.name.isEmpty {
-                    Text(course.name.uppercased()).font(.caption2.weight(.semibold)).foregroundStyle(Theme.fog)
-                }
-                ForEach(course.items) { item in
-                    VStack(alignment: .leading, spacing: 2) {
-                        Text(item.name)
-                        if let description = item.description, !description.isEmpty {
-                            Text(description).font(.caption).foregroundStyle(Theme.fog)
-                        }
-                        if !item.tags.isEmpty {
-                            HStack(spacing: 4) {
-                                ForEach(item.tags, id: \.self) { StatusBadge(text: $0, colour: Theme.ecto) }
-                            }
-                        }
-                    }
-                }
-            }
-        }
-    }
-
-    private struct Course { let name: String; let items: [HostedEventMenuItem] }
-
-    /// Courses in the order their first item appears, so a host's "Starter, Main, Pudding" stays in that order.
-    private func courses(_ menu: HostedEventMenu) -> [Course] {
-        var order: [String] = []
-        var grouped: [String: [HostedEventMenuItem]] = [:]
-        for item in menu.items.sorted(by: { $0.sortOrder < $1.sortOrder }) {
-            let name = item.course ?? ""
-            if grouped[name] == nil { order.append(name) }
-            grouped[name, default: []].append(item)
-        }
-        return order.map { Course(name: $0, items: grouped[$0]!) }
-    }
-
-    private func order(_ a: HostedEventMenu, _ b: HostedEventMenu) -> Bool {
-        a.nightDate == b.nightDate ? a.sortOrder < b.sortOrder : a.nightDate < b.nightDate
-    }
-
-    private func nightTitle(_ menu: HostedEventMenu) -> String {
-        let date = menu.nightDate.formatted(Date.FormatStyle(timeZone: .gmt).weekday(.abbreviated).month(.twoDigits).day(.twoDigits))
-        guard let title = menu.nightTitle, !title.isEmpty else { return date }
-        return "\(date) · \(title)"
     }
 
     private func load() async {
-        switch await HostedEventsStore(api: dependencies.api).loadMenus(hostedEventId) {
+        await fonts.loadCatalog(dependencies.api)
+        switch await HostedEventsStore(api: dependencies.api).loadPublishedMenus(hostedEventId) {
         case .ok(let value):
             menus = value
             failure = nil
@@ -110,8 +95,18 @@ struct MenusView: View {
         case .sessionEnded:
             failure = "Sign in again to see the menus."
         case .rateLimited:
-            failure = "Too many requests — try again shortly."
+            failure = "Too many requests. Try again shortly."
         }
         loaded = true
+    }
+
+    private func openPdf(_ menu: EventMenu) async {
+        fetching = menu.id
+        defer { fetching = nil }
+        switch await HostedEventsStore(api: dependencies.api).downloadMenuPdf(menu) {
+        case .ok(let url): preview = url
+        case .failed(let reason, _): pdfFailure = reason ?? "Check your connection and try again."
+        case .sessionEnded, .rateLimited: pdfFailure = "Try again shortly."
+        }
     }
 }

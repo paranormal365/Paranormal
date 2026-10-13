@@ -4,8 +4,8 @@ import BenKit
 /// Everything for one hosted event, in one place (item 235 phase 14b): the pass, the programme, the menus, the
 /// downloads and the room.
 ///
-/// **A row appears only when there is something behind it.** No programme published, menus not yet shared with
-/// this guest, no files for guests, not one of the people in the room — each of those leaves its row out rather
+/// **A row appears only when there is something behind it.** No programme published, no menu published,
+/// no files for guests, not one of the people in the room — each of those leaves its row out rather
 /// than leading to an empty screen or a refusal. A server that cannot be reached is said as such.
 struct EventHubView: View {
     let hostedEventId: UUID
@@ -16,7 +16,7 @@ struct EventHubView: View {
     @State private var event: PublicHostedEvent?
     @State private var booking: MyHostedEventBooking?
     @State private var programme: HostedEventProgramme?
-    @State private var menus: HostedEventMenus?
+    @State private var menus: [EventMenu] = []
     @State private var files: [HostedEventFile] = []
     @State private var room: EventRoom?
     @State private var loaded = false
@@ -48,9 +48,9 @@ struct EventHubView: View {
                         }
                         .accessibilityIdentifier("hub-programme")
                     }
-                    if let menus, !menus.menus.isEmpty {
+                    if !menus.isEmpty {
                         NavigationLink(value: AppRoute.eventMenus(hostedEventId)) {
-                            row("Menus", detail: menus.menus.count == 1 ? "1 meal" : "\(menus.menus.count) meals", icon: "fork.knife")
+                            row("Menus", detail: menus.count == 1 ? "1 menu" : "\(menus.count) menus", icon: "fork.knife")
                         }
                         .accessibilityIdentifier("hub-menus")
                     }
@@ -155,7 +155,7 @@ struct EventHubView: View {
         async let eventRead = store.loadEvent(hostedEventId)
         async let bookingRead = store.loadMyBooking(hostedEventId)
         async let programmeRead = store.loadProgramme(hostedEventId)
-        async let menusRead = store.loadMenus(hostedEventId)
+        async let menusRead = store.loadPublishedMenus(hostedEventId)
         async let filesRead = store.loadFiles(hostedEventId)
         async let roomRead = store.loadRoom(hostedEventId)
 

@@ -193,7 +193,7 @@ figure img { max-height: 6.6in; max-width: 3.4in; }
     <h1>IsHaunted for <span class='accent-text'>iPhone</span></h1>
     <p class="lede">What the app does, how it is built, and how to run it — written for a developer joining the project.</p>
   </div>
-  <div class="facts"><div class="fact"><b>Device</b><span>iPhone</span></div><div class="fact"><b>Screens</b><span>36</span></div><div class="fact"><b>Built</b><span>10/05/2026</span></div></div>
+  <div class="facts"><div class="fact"><b>Device</b><span>iPhone</span></div><div class="fact"><b>Screens</b><span>36</span></div><div class="fact"><b>Built</b><span>10/13/2026</span></div></div>
   <div class="about"><b>Every screenshot in this document shows simulated data.</b> The accounts, cases, feed posts and recordings are seeded; the photographs and audio waveforms are generated, and each is captioned <span class='mono'>SIMULATED</span>. Nothing here is a real investigation or a real person. Screens were captured on an iPhone simulator in dark mode.</div>
   <div class="foot"><span>ishaunted.com</span><span>iPhone developer guide</span></div>
 </section>
@@ -584,8 +584,16 @@ A change the guest has not seen yet is badged on the hub.</p>
 <figure><img src='ios-media/iphone/64-event-programme.png'><figcaption>The program &mdash; iPhone, dark mode</figcaption></figure>
 <h2>Menus</h2>
 
-<p>Each meal, course by course, with the venue's dietary labels, shown once the venue shares them
-with guests.</p>
+<p>Each published menu drawn in its own design (<code>DesignedMenuView</code>): the design's paper
+and inks, frame, ornament and typefaces, with the same words the website and the PDF print
+(<code>EventMenuWording</code>, ported from the server's <code>EventMenuPresentation</code>). The
+designs and the list of font files come from <code>GET api/public/menu-designs</code>;
+<code>MenuFontLibrary</code> fetches only the files a design uses from
+<code>api/public/menu-fonts/{file}</code>, keeps them in Caches and registers them for the process,
+so a design added on the server reaches the app without an update. Until a face arrives the menu is
+drawn in the system face of the same kind. <b>PDF</b> opens the server's own PDF in Quick Look.
+Published menus are public, so the calls are anonymous and the event's page links to them for
+anyone.</p>
 
 <figure><img src='ios-media/iphone/65-event-menus.png'><figcaption>Menus &mdash; iPhone, dark mode</figcaption></figure>
 <h2>Running the door</h2>

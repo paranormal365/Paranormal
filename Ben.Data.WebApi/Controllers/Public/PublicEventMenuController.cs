@@ -65,6 +65,26 @@ public sealed class PublicEventMenuController : BenControllerBase
         return File(await _storage.OpenReadAsync(path, ct), file.ContentType ?? "image/jpeg");
     }
 
+    /// <summary>
+    /// Every design and font file, for the iPhone app, which draws a menu itself (10/13/2026).
+    /// </summary>
+    [HttpGet("menu-designs")]
+    public ActionResult<MenuDesignCatalog> Designs()
+    {
+        Response.Headers.CacheControl = "public, max-age=3600";
+        return Ok(new MenuDesignCatalog(MenuDesigns.All, MenuFonts.Files));
+    }
+
+    /// <summary>One of the menu fonts, the same bytes the website serves and the PDF embeds.</summary>
+    [HttpGet("menu-fonts/{file}")]
+    [Microsoft.AspNetCore.RateLimiting.DisableRateLimiting]
+    public IActionResult Font(string file)
+    {
+        if (MenuFonts.Read(file) is not { } bytes) return NotFound();
+        Response.Headers.CacheControl = "public, max-age=31536000, immutable";
+        return File(bytes, "font/ttf");
+    }
+
     /// <summary>The published menus of an event that is on the public site, as guests read them.</summary>
     public static async Task<IReadOnlyList<EventMenuRecord>> PublishedAsync(BenDataContext db, Guid eventId, CancellationToken ct)
     {

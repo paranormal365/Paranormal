@@ -219,3 +219,9 @@ public static class MenuDesigns
     /// <summary>The credit at the foot of every menu (Ben, 10/13/2026).</summary>
     public static string Credit(int year) => $"Menu made with IsHaunted.com · © {year} ISHAUNTED LLC";
 }
+
+/// <summary>
+/// Every design and every font file, for an app that draws menus itself (10/13/2026: the iPhone app).
+/// </summary>
+/// <remarks>Sent rather than copied into the app, so a design added here reaches the app with no update.</remarks>
+public sealed record MenuDesignCatalog(IReadOnlyList<MenuDesign> Designs, IReadOnlyList<MenuFonts.FontFile> Fonts);

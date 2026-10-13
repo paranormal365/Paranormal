@@ -1,0 +1,654 @@
+[
+    {
+        "id": "578d9839-0b76-4000-bb80-e0573d282ced",
+        "hostedEventId": "40000002-0000-0000-0000-000000000002",
+        "title": "Breakfast, 10/16/2026",
+        "heading": "Breakfast",
+        "shownHeading": "Breakfast",
+        "intro": "The morning after \u2014 yes, this is still Friday's night.",
+        "meal": 1,
+        "throughoutTheEvent": false,
+        "designKey": "classic-bistro",
+        "logoUploadFileId": null,
+        "priceNote": null,
+        "publishedUtc": "2026-10-13T16:26:18.31143",
+        "prices": [],
+        "sections": [
+            {
+                "id": "c7215ba7-0d95-408b-b3b3-4273d3d4e6db",
+                "menuCategoryId": "ce7df01b-4990-4457-8947-ba38423a2278",
+                "categoryName": "Dishes",
+                "heading": null,
+                "title": "Dishes",
+                "entries": [
+                    {
+                        "id": "070c4def-30dc-42a9-98a2-a4ed270c3d46",
+                        "menuLibraryItemId": "3d58f42f-de6e-488b-9073-ddf0fd1e8136",
+                        "pricing": 2,
+                        "price": null,
+                        "note": null,
+                        "item": {
+                            "id": "3d58f42f-de6e-488b-9073-ddf0fd1e8136",
+                            "scope": 1,
+                            "organizationId": "afc81ae7-98fa-44b5-aa04-5ef24fe6c2d5",
+                            "organizationName": "Paranormal365",
+                            "hostedEventId": "40000002-0000-0000-0000-000000000002",
+                            "placeId": null,
+                            "menuCategoryId": "ce7df01b-4990-4457-8947-ba38423a2278",
+                            "categoryName": "Dishes",
+                            "name": "Eggs, bacon and toast",
+                            "description": null,
+                            "imageUploadFileId": null,
+                            "dietary": 0,
+                            "allergens": 0,
+                            "dietaryNote": null,
+                            "canEdit": false,
+                            "retiredUtc": null
+                        }
+                    },
+                    {
+                        "id": "92392792-7b2e-41fc-980d-abf2269b7a09",
+                        "menuLibraryItemId": "351572e0-5593-4029-b0be-82f2a4defbae",
+                        "pricing": 2,
+                        "price": null,
+                        "note": null,
+                        "item": {
+                            "id": "351572e0-5593-4029-b0be-82f2a4defbae",
+                            "scope": 1,
+                            "organizationId": "afc81ae7-98fa-44b5-aa04-5ef24fe6c2d5",
+                            "organizationName": "Paranormal365",
+                            "hostedEventId": "40000002-0000-0000-0000-000000000002",
+                            "placeId": null,
+                            "menuCategoryId": "ce7df01b-4990-4457-8947-ba38423a2278",
+                            "categoryName": "Dishes",
+                            "name": "Fruit and yogurt",
+                            "description": null,
+                            "imageUploadFileId": null,
+                            "dietary": 2,
+                            "allergens": 0,
+                            "dietaryNote": null,
+                            "canEdit": false,
+                            "retiredUtc": null
+                        }
+                    }
+                ]
+            }
+        ],
+        "meals": [
+            {
+                "hostedEventMenuId": "3eeade52-6c2f-4728-91f6-98a42c47566c",
+                "nightDate": "2026-10-16T00:00:00",
+                "nightTitle": "Friday \u2014 arrival and first hunt",
+                "mealTitle": "Breakfast",
+                "servedAtLocal": "08:00:00"
+            }
+        ],
+        "eventName": "Thomas House S\u00e9ance Weekend",
+        "venueName": "The Thomas House Hotel",
+        "dateUpdated": null
+    },
+    {
+        "id": "b324bb12-9ab0-45f5-8133-88bec9fed2a7",
+        "hostedEventId": "40000002-0000-0000-0000-000000000002",
+        "title": "Dinner, 10/16/2026",
+        "heading": "Dinner",
+        "shownHeading": "Dinner",
+        "intro": "In the dining room, before we start.",
+        "meal": 5,
+        "throughoutTheEvent": false,
+        "designKey": "classic-bistro",
+        "logoUploadFileId": null,
+        "priceNote": null,
+        "publishedUtc": "2026-10-13T16:26:18.31143",
+        "prices": [],
+        "sections": [
+            {
+                "id": "b5718090-ef8c-4036-b380-d0732ca99185",
+                "menuCategoryId": "fab63636-eed6-4844-944e-1b1d00ca12e4",
+                "categoryName": "Appetizers",
+                "heading": null,
+                "title": "Appetizers",
+                "entries": [
+                    {
+                        "id": "5b2885f4-fb6f-4257-aabe-3fdec883610d",
+                        "menuLibraryItemId": "e698e683-f3ae-4d84-b210-d50afe1a20fd",
+                        "pricing": 2,
+                        "price": null,
+                        "note": null,
+                        "item": {
+                            "id": "e698e683-f3ae-4d84-b210-d50afe1a20fd",
+                            "scope": 1,
+                            "organizationId": "afc81ae7-98fa-44b5-aa04-5ef24fe6c2d5",
+                            "organizationName": "Paranormal365",
+                            "hostedEventId": "40000002-0000-0000-0000-000000000002",
+                            "placeId": null,
+                            "menuCategoryId": "fab63636-eed6-4844-944e-1b1d00ca12e4",
+                            "categoryName": "Appetizers",
+                            "name": "Tomato soup",
+                            "description": null,
+                            "imageUploadFileId": null,
+                            "dietary": 1,
+                            "allergens": 0,
+                            "dietaryNote": null,
+                            "canEdit": false,
+                            "retiredUtc": null
+                        }
+                    }
+                ]
+            },
+            {
+                "id": "b145f41e-473b-4197-9128-2084ec7c817a",
+                "menuCategoryId": "48024676-b116-4348-8b85-440bf6350e22",
+                "categoryName": "Main Course",
+                "heading": null,
+                "title": "Main Course",
+                "entries": [
+                    {
+                        "id": "4dc680d5-637b-4754-9bab-95f34bc9c213",
+                        "menuLibraryItemId": "dabb758b-069a-4951-89c2-8dee4066579b",
+                        "pricing": 2,
+                        "price": null,
+                        "note": null,
+                        "item": {
+                            "id": "dabb758b-069a-4951-89c2-8dee4066579b",
+                            "scope": 1,
+                            "organizationId": "afc81ae7-98fa-44b5-aa04-5ef24fe6c2d5",
+                            "organizationName": "Paranormal365",
+                            "hostedEventId": "40000002-0000-0000-0000-000000000002",
+                            "placeId": null,
+                            "menuCategoryId": "48024676-b116-4348-8b85-440bf6350e22",
+                            "categoryName": "Main Course",
+                            "name": "Roast chicken, greens and potatoes",
+                            "description": null,
+                            "imageUploadFileId": null,
+                            "dietary": 0,
+                            "allergens": 0,
+                            "dietaryNote": null,
+                            "canEdit": false,
+                            "retiredUtc": null
+                        }
+                    },
+                    {
+                        "id": "ecda3af2-3d4b-4ef6-aeb4-be2f7fca70a4",
+                        "menuLibraryItemId": "d11cc8ff-ba66-4132-986a-dcd05cb97a0e",
+                        "pricing": 2,
+                        "price": null,
+                        "note": null,
+                        "item": {
+                            "id": "d11cc8ff-ba66-4132-986a-dcd05cb97a0e",
+                            "scope": 1,
+                            "organizationId": "afc81ae7-98fa-44b5-aa04-5ef24fe6c2d5",
+                            "organizationName": "Paranormal365",
+                            "hostedEventId": "40000002-0000-0000-0000-000000000002",
+                            "placeId": null,
+                            "menuCategoryId": "48024676-b116-4348-8b85-440bf6350e22",
+                            "categoryName": "Main Course",
+                            "name": "Mushroom pie",
+                            "description": null,
+                            "imageUploadFileId": null,
+                            "dietary": 2,
+                            "allergens": 0,
+                            "dietaryNote": null,
+                            "canEdit": false,
+                            "retiredUtc": null
+                        }
+                    }
+                ]
+            },
+            {
+                "id": "438a61b6-8604-46db-9102-85d245f29f83",
+                "menuCategoryId": "0a86cf01-bb70-4b63-b41a-0fde35889d04",
+                "categoryName": "Desserts",
+                "heading": null,
+                "title": "Desserts",
+                "entries": [
+                    {
+                        "id": "7fab85ab-941f-4f87-a21b-e8d1c3b29404",
+                        "menuLibraryItemId": "4c8e3750-7793-402b-ac2d-75c23b490152",
+                        "pricing": 2,
+                        "price": null,
+                        "note": null,
+                        "item": {
+                            "id": "4c8e3750-7793-402b-ac2d-75c23b490152",
+                            "scope": 1,
+                            "organizationId": "afc81ae7-98fa-44b5-aa04-5ef24fe6c2d5",
+                            "organizationName": "Paranormal365",
+                            "hostedEventId": "40000002-0000-0000-0000-000000000002",
+                            "placeId": null,
+                            "menuCategoryId": "0a86cf01-bb70-4b63-b41a-0fde35889d04",
+                            "categoryName": "Desserts",
+                            "name": "Apple crumble",
+                            "description": null,
+                            "imageUploadFileId": null,
+                            "dietary": 0,
+                            "allergens": 16,
+                            "dietaryNote": null,
+                            "canEdit": false,
+                            "retiredUtc": null
+                        }
+                    }
+                ]
+            }
+        ],
+        "meals": [
+            {
+                "hostedEventMenuId": "322873dd-3194-4cdb-bde9-1cf3b287e09f",
+                "nightDate": "2026-10-16T00:00:00",
+                "nightTitle": "Friday \u2014 arrival and first hunt",
+                "mealTitle": "Dinner",
+                "servedAtLocal": "19:00:00"
+            }
+        ],
+        "eventName": "Thomas House S\u00e9ance Weekend",
+        "venueName": "The Thomas House Hotel",
+        "dateUpdated": null
+    },
+    {
+        "id": "18ed9311-6dda-422e-8b40-a9b22b9fd126",
+        "hostedEventId": "40000002-0000-0000-0000-000000000002",
+        "title": "Late supper, 10/16/2026",
+        "heading": "Late supper",
+        "shownHeading": "Late supper",
+        "intro": "Between the two hunts.",
+        "meal": 4,
+        "throughoutTheEvent": false,
+        "designKey": "classic-bistro",
+        "logoUploadFileId": null,
+        "priceNote": null,
+        "publishedUtc": "2026-10-13T16:26:18.31143",
+        "prices": [],
+        "sections": [
+            {
+                "id": "30382bc7-1646-45c8-893c-091d168af679",
+                "menuCategoryId": "ce7df01b-4990-4457-8947-ba38423a2278",
+                "categoryName": "Dishes",
+                "heading": null,
+                "title": "Dishes",
+                "entries": [
+                    {
+                        "id": "43f496de-4b51-4fcf-aa5e-9e12ad6a3d85",
+                        "menuLibraryItemId": "eaef247e-8b17-47b5-b528-a08929adc97e",
+                        "pricing": 2,
+                        "price": null,
+                        "note": null,
+                        "item": {
+                            "id": "eaef247e-8b17-47b5-b528-a08929adc97e",
+                            "scope": 1,
+                            "organizationId": "afc81ae7-98fa-44b5-aa04-5ef24fe6c2d5",
+                            "organizationName": "Paranormal365",
+                            "hostedEventId": "40000002-0000-0000-0000-000000000002",
+                            "placeId": null,
+                            "menuCategoryId": "ce7df01b-4990-4457-8947-ba38423a2278",
+                            "categoryName": "Dishes",
+                            "name": "Sandwiches",
+                            "description": null,
+                            "imageUploadFileId": null,
+                            "dietary": 0,
+                            "allergens": 0,
+                            "dietaryNote": null,
+                            "canEdit": false,
+                            "retiredUtc": null
+                        }
+                    },
+                    {
+                        "id": "f9baf1c7-2b7d-485d-8a0b-7c15721b6938",
+                        "menuLibraryItemId": "fb416886-7b27-4388-b4eb-bdb21aee4958",
+                        "pricing": 2,
+                        "price": null,
+                        "note": null,
+                        "item": {
+                            "id": "fb416886-7b27-4388-b4eb-bdb21aee4958",
+                            "scope": 1,
+                            "organizationId": "afc81ae7-98fa-44b5-aa04-5ef24fe6c2d5",
+                            "organizationName": "Paranormal365",
+                            "hostedEventId": "40000002-0000-0000-0000-000000000002",
+                            "placeId": null,
+                            "menuCategoryId": "ce7df01b-4990-4457-8947-ba38423a2278",
+                            "categoryName": "Dishes",
+                            "name": "Tea and coffee",
+                            "description": null,
+                            "imageUploadFileId": null,
+                            "dietary": 0,
+                            "allergens": 0,
+                            "dietaryNote": null,
+                            "canEdit": false,
+                            "retiredUtc": null
+                        }
+                    }
+                ]
+            }
+        ],
+        "meals": [
+            {
+                "hostedEventMenuId": "82a805af-3a11-4425-9334-eff69876d9c2",
+                "nightDate": "2026-10-16T00:00:00",
+                "nightTitle": "Friday \u2014 arrival and first hunt",
+                "mealTitle": "Late supper",
+                "servedAtLocal": "23:30:00"
+            }
+        ],
+        "eventName": "Thomas House S\u00e9ance Weekend",
+        "venueName": "The Thomas House Hotel",
+        "dateUpdated": null
+    },
+    {
+        "id": "a949c60b-ba87-4ae9-8686-c1af46026745",
+        "hostedEventId": "40000002-0000-0000-0000-000000000002",
+        "title": "Dinner, 10/17/2026",
+        "heading": "Dinner",
+        "shownHeading": "Dinner",
+        "intro": "Early, because the s\u00e9ance is at nine.",
+        "meal": 5,
+        "throughoutTheEvent": false,
+        "designKey": "classic-bistro",
+        "logoUploadFileId": null,
+        "priceNote": null,
+        "publishedUtc": "2026-10-13T16:26:18.31143",
+        "prices": [],
+        "sections": [
+            {
+                "id": "f8a59b6c-e241-4a42-93f1-3fe35f8f9d71",
+                "menuCategoryId": "fab63636-eed6-4844-944e-1b1d00ca12e4",
+                "categoryName": "Appetizers",
+                "heading": null,
+                "title": "Appetizers",
+                "entries": [
+                    {
+                        "id": "cb880c91-f9fe-47b9-a9bf-27f81280d314",
+                        "menuLibraryItemId": "c9fd24ba-528b-4942-a3e9-d3b6c1a96a40",
+                        "pricing": 2,
+                        "price": null,
+                        "note": null,
+                        "item": {
+                            "id": "c9fd24ba-528b-4942-a3e9-d3b6c1a96a40",
+                            "scope": 1,
+                            "organizationId": "afc81ae7-98fa-44b5-aa04-5ef24fe6c2d5",
+                            "organizationName": "Paranormal365",
+                            "hostedEventId": "40000002-0000-0000-0000-000000000002",
+                            "placeId": null,
+                            "menuCategoryId": "fab63636-eed6-4844-944e-1b1d00ca12e4",
+                            "categoryName": "Appetizers",
+                            "name": "Cornbread and honey butter",
+                            "description": null,
+                            "imageUploadFileId": null,
+                            "dietary": 2,
+                            "allergens": 0,
+                            "dietaryNote": null,
+                            "canEdit": false,
+                            "retiredUtc": null
+                        }
+                    }
+                ]
+            },
+            {
+                "id": "b08edef0-ba90-4c76-b54d-c30eb88e41cc",
+                "menuCategoryId": "48024676-b116-4348-8b85-440bf6350e22",
+                "categoryName": "Main Course",
+                "heading": null,
+                "title": "Main Course",
+                "entries": [
+                    {
+                        "id": "18464a7b-f89f-4e38-a611-ef291a92abbe",
+                        "menuLibraryItemId": "6260cb97-95b7-429a-b6f6-cdc9d57d1d80",
+                        "pricing": 2,
+                        "price": null,
+                        "note": null,
+                        "item": {
+                            "id": "6260cb97-95b7-429a-b6f6-cdc9d57d1d80",
+                            "scope": 1,
+                            "organizationId": "afc81ae7-98fa-44b5-aa04-5ef24fe6c2d5",
+                            "organizationName": "Paranormal365",
+                            "hostedEventId": "40000002-0000-0000-0000-000000000002",
+                            "placeId": null,
+                            "menuCategoryId": "48024676-b116-4348-8b85-440bf6350e22",
+                            "categoryName": "Main Course",
+                            "name": "Beef stew",
+                            "description": null,
+                            "imageUploadFileId": null,
+                            "dietary": 0,
+                            "allergens": 0,
+                            "dietaryNote": null,
+                            "canEdit": false,
+                            "retiredUtc": null
+                        }
+                    },
+                    {
+                        "id": "ec91a6cc-23a5-4ee1-acd0-377641894c33",
+                        "menuLibraryItemId": "2b3013b9-b797-4b9c-acb0-d2ace93a35f4",
+                        "pricing": 2,
+                        "price": null,
+                        "note": null,
+                        "item": {
+                            "id": "2b3013b9-b797-4b9c-acb0-d2ace93a35f4",
+                            "scope": 1,
+                            "organizationId": "afc81ae7-98fa-44b5-aa04-5ef24fe6c2d5",
+                            "organizationName": "Paranormal365",
+                            "hostedEventId": "40000002-0000-0000-0000-000000000002",
+                            "placeId": null,
+                            "menuCategoryId": "48024676-b116-4348-8b85-440bf6350e22",
+                            "categoryName": "Main Course",
+                            "name": "Butternut squash risotto",
+                            "description": null,
+                            "imageUploadFileId": null,
+                            "dietary": 1,
+                            "allergens": 0,
+                            "dietaryNote": null,
+                            "canEdit": false,
+                            "retiredUtc": null
+                        }
+                    }
+                ]
+            },
+            {
+                "id": "cb2c1350-9999-487b-bc18-7d1f68dc1109",
+                "menuCategoryId": "0a86cf01-bb70-4b63-b41a-0fde35889d04",
+                "categoryName": "Desserts",
+                "heading": null,
+                "title": "Desserts",
+                "entries": [
+                    {
+                        "id": "7f8b78ac-7b28-4b3c-8db0-407a50833775",
+                        "menuLibraryItemId": "a87a69f7-2508-4fe7-a5bd-ea087a0c0f72",
+                        "pricing": 2,
+                        "price": null,
+                        "note": null,
+                        "item": {
+                            "id": "a87a69f7-2508-4fe7-a5bd-ea087a0c0f72",
+                            "scope": 1,
+                            "organizationId": "afc81ae7-98fa-44b5-aa04-5ef24fe6c2d5",
+                            "organizationName": "Paranormal365",
+                            "hostedEventId": "40000002-0000-0000-0000-000000000002",
+                            "placeId": null,
+                            "menuCategoryId": "0a86cf01-bb70-4b63-b41a-0fde35889d04",
+                            "categoryName": "Desserts",
+                            "name": "Pecan pie",
+                            "description": null,
+                            "imageUploadFileId": null,
+                            "dietary": 0,
+                            "allergens": 16,
+                            "dietaryNote": null,
+                            "canEdit": false,
+                            "retiredUtc": null
+                        }
+                    }
+                ]
+            }
+        ],
+        "meals": [
+            {
+                "hostedEventMenuId": "8f0bf47a-a997-4714-8527-4ba231615528",
+                "nightDate": "2026-10-17T00:00:00",
+                "nightTitle": "Saturday \u2014 dinner and the s\u00e9ance",
+                "mealTitle": "Dinner",
+                "servedAtLocal": "18:30:00"
+            }
+        ],
+        "eventName": "Thomas House S\u00e9ance Weekend",
+        "venueName": "The Thomas House Hotel",
+        "dateUpdated": null
+    },
+    {
+        "id": "b2dea49a-c6de-40b4-be93-118528b4491e",
+        "hostedEventId": "40000002-0000-0000-0000-000000000002",
+        "title": "Snack table, all weekend",
+        "heading": "Snack table",
+        "shownHeading": "Snack table",
+        "intro": "On offer all weekend, at the table by the stairs.",
+        "meal": 6,
+        "throughoutTheEvent": true,
+        "designKey": "chalkboard-cafe",
+        "logoUploadFileId": null,
+        "priceNote": null,
+        "publishedUtc": "2026-10-13T14:48:30.59464",
+        "prices": [],
+        "sections": [
+            {
+                "id": "afbd2b1c-5384-45ed-9c76-d65d2f9582b1",
+                "menuCategoryId": "95ea8e61-954e-412d-b913-66da8f2f89e6",
+                "categoryName": "Candy",
+                "heading": null,
+                "title": "Candy",
+                "entries": [
+                    {
+                        "id": "b9462ad9-5cc9-4f82-8164-675f5946bf70",
+                        "menuLibraryItemId": "de310023-19cd-4630-a4b6-61095ca46a8d",
+                        "pricing": 3,
+                        "price": 2.0,
+                        "note": null,
+                        "item": {
+                            "id": "de310023-19cd-4630-a4b6-61095ca46a8d",
+                            "scope": 2,
+                            "organizationId": "afc81ae7-98fa-44b5-aa04-5ef24fe6c2d5",
+                            "organizationName": "Paranormal365",
+                            "hostedEventId": null,
+                            "placeId": null,
+                            "menuCategoryId": "95ea8e61-954e-412d-b913-66da8f2f89e6",
+                            "categoryName": "Candy",
+                            "name": "Full-size candy bars",
+                            "description": "Assorted.",
+                            "imageUploadFileId": null,
+                            "dietary": 0,
+                            "allergens": 0,
+                            "dietaryNote": null,
+                            "canEdit": false,
+                            "retiredUtc": null
+                        }
+                    },
+                    {
+                        "id": "68617a1f-63f9-4af8-97cc-39fefcbcc469",
+                        "menuLibraryItemId": "b9ba30ca-701b-4f82-b44d-3497c2b4a774",
+                        "pricing": 3,
+                        "price": 1.5,
+                        "note": null,
+                        "item": {
+                            "id": "b9ba30ca-701b-4f82-b44d-3497c2b4a774",
+                            "scope": 2,
+                            "organizationId": "afc81ae7-98fa-44b5-aa04-5ef24fe6c2d5",
+                            "organizationName": "Paranormal365",
+                            "hostedEventId": null,
+                            "placeId": null,
+                            "menuCategoryId": "95ea8e61-954e-412d-b913-66da8f2f89e6",
+                            "categoryName": "Candy",
+                            "name": "Gummy ghosts",
+                            "description": "A bag.",
+                            "imageUploadFileId": null,
+                            "dietary": 1,
+                            "allergens": 0,
+                            "dietaryNote": null,
+                            "canEdit": false,
+                            "retiredUtc": null
+                        }
+                    }
+                ]
+            },
+            {
+                "id": "9c51b7b0-a049-476b-86fa-4972882a0822",
+                "menuCategoryId": "7e4eee1f-ea28-426c-9c64-be7110830cc9",
+                "categoryName": "Soft Drinks",
+                "heading": null,
+                "title": "Soft Drinks",
+                "entries": [
+                    {
+                        "id": "16c1e3c2-7bbe-43d1-9a68-c6ea92c3782c",
+                        "menuLibraryItemId": "beb58001-c744-4394-9526-a20486b64781",
+                        "pricing": 2,
+                        "price": null,
+                        "note": null,
+                        "item": {
+                            "id": "beb58001-c744-4394-9526-a20486b64781",
+                            "scope": 2,
+                            "organizationId": "afc81ae7-98fa-44b5-aa04-5ef24fe6c2d5",
+                            "organizationName": "Paranormal365",
+                            "hostedEventId": null,
+                            "placeId": null,
+                            "menuCategoryId": "7e4eee1f-ea28-426c-9c64-be7110830cc9",
+                            "categoryName": "Soft Drinks",
+                            "name": "Bottled water",
+                            "description": "As much as you like.",
+                            "imageUploadFileId": null,
+                            "dietary": 0,
+                            "allergens": 0,
+                            "dietaryNote": null,
+                            "canEdit": false,
+                            "retiredUtc": null
+                        }
+                    },
+                    {
+                        "id": "8230e1f0-2821-410f-81ee-a36422f9c3dd",
+                        "menuLibraryItemId": "f1b5ff09-d620-4b1e-bf3b-5bf7992e79f7",
+                        "pricing": 3,
+                        "price": 1.5,
+                        "note": null,
+                        "item": {
+                            "id": "f1b5ff09-d620-4b1e-bf3b-5bf7992e79f7",
+                            "scope": 2,
+                            "organizationId": "afc81ae7-98fa-44b5-aa04-5ef24fe6c2d5",
+                            "organizationName": "Paranormal365",
+                            "hostedEventId": null,
+                            "placeId": null,
+                            "menuCategoryId": "7e4eee1f-ea28-426c-9c64-be7110830cc9",
+                            "categoryName": "Soft Drinks",
+                            "name": "Soft drinks",
+                            "description": "Cans, from the cooler.",
+                            "imageUploadFileId": null,
+                            "dietary": 0,
+                            "allergens": 0,
+                            "dietaryNote": null,
+                            "canEdit": false,
+                            "retiredUtc": null
+                        }
+                    },
+                    {
+                        "id": "57c0153e-3091-4aa0-887f-d6fd7dbe1caa",
+                        "menuLibraryItemId": "8a471688-8a43-49f0-b922-b3ce6e79915b",
+                        "pricing": 3,
+                        "price": 3.0,
+                        "note": null,
+                        "item": {
+                            "id": "8a471688-8a43-49f0-b922-b3ce6e79915b",
+                            "scope": 2,
+                            "organizationId": "afc81ae7-98fa-44b5-aa04-5ef24fe6c2d5",
+                            "organizationName": "Paranormal365",
+                            "hostedEventId": null,
+                            "placeId": null,
+                            "menuCategoryId": "7e4eee1f-ea28-426c-9c64-be7110830cc9",
+                            "categoryName": "Soft Drinks",
+                            "name": "Energy drinks",
+                            "description": "For the 3 a.m. session.",
+                            "imageUploadFileId": null,
+                            "dietary": 0,
+                            "allergens": 0,
+                            "dietaryNote": null,
+                            "canEdit": false,
+                            "retiredUtc": null
+                        }
+                    }
+                ]
+            }
+        ],
+        "meals": [],
+        "eventName": "Thomas House S\u00e9ance Weekend",
+        "venueName": "The Thomas House Hotel",
+        "dateUpdated": null
+    }
+]

@@ -66,6 +66,7 @@ struct EventDetailView: View {
                 if let hostedEventId = event.hostedEventId {
                     // Item 235: a hosted event's places are booked on its own page, not by RSVP.
                     HostedBookingPanel(hostedEventId: hostedEventId)
+                    HostedEventMenusLink(hostedEventId: hostedEventId)
                 } else {
                     seatPanel(event)
                 }
@@ -337,5 +338,41 @@ private extension String {
         replacingOccurrences(of: "<[^>]+>", with: "", options: .regularExpression)
             .replacingOccurrences(of: "&nbsp;", with: " ")
             .trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+}
+
+/// A hosted event's published menus, for anyone reading the event (10/13/2026): what the event's price
+/// already covers, and the way to the menus themselves. Nothing shows until a menu is published.
+private struct HostedEventMenusLink: View {
+    let hostedEventId: UUID
+
+    @Environment(AppDependencies.self) private var dependencies
+    @State private var menus: [EventMenu] = []
+
+    var body: some View {
+        Group {
+            if !menus.isEmpty {
+                VStack(alignment: .leading, spacing: 8) {
+                    if let included = EventMenuWording.includedWithTheEvent(menus) {
+                        Label { Text("**Included with the event:** \(included).") } icon: { Image(systemName: "checkmark.seal") }
+                            .font(.subheadline).foregroundStyle(Theme.bone)
+                            .accessibilityIdentifier("event-included")
+                    }
+                    NavigationLink(value: AppRoute.eventMenus(hostedEventId)) {
+                        Label(menus.count == 1 ? "See the menu" : "See the \(menus.count) menus", systemImage: "fork.knife")
+                    }
+                    .buttonStyle(.bordered)
+                    .accessibilityIdentifier("event-menus")
+                }
+            } else {
+                // Something must be on screen for `.task` to run; an empty Group never appears.
+                Color.clear.frame(height: 0)
+            }
+        }
+        .task(id: hostedEventId) {
+            if case .ok(let value) = await HostedEventsStore(api: dependencies.api).loadPublishedMenus(hostedEventId) {
+                menus = value
+            }
+        }
     }
 }
