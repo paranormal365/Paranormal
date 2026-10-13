@@ -872,6 +872,21 @@ app.MapGet("/media/event-photo/{fileId:guid}", async (
         accessToken: null, httpFactory, ctx, ct);
 }).AllowAnonymous();
 
+// The menu designs' fonts (10/13/2026): one copy, embedded in Ben.Data.Common, also what the API
+// embeds into the PDFs, so a menu's page and its PDF are set in the same type. Free (OFL / Apache).
+app.MapGet("/menu-fonts.css", (HttpContext ctx) =>
+{
+    ctx.Response.Headers.CacheControl = "public, max-age=86400";
+    return Results.Text(Ben.Data.Common.Menus.MenuFonts.FontFaceCss("/menu-fonts/"), "text/css");
+}).AllowAnonymous();
+
+app.MapGet("/menu-fonts/{file}", (string file, HttpContext ctx) =>
+{
+    if (Ben.Data.Common.Menus.MenuFonts.Read(file) is not { } bytes) return Results.NotFound();
+    ctx.Response.Headers.CacheControl = "public, max-age=31536000, immutable";
+    return Results.Bytes(bytes, "font/ttf");
+}).AllowAnonymous();
+
 // A menu item's photo or a menu's logo (10/13/2026). Anyone once the menu is published; before that the
 // ticket carries the planner, so the builder's preview shows it. The API decides either way.
 app.MapGet("/media/menu-image/{fileId:guid}", async (

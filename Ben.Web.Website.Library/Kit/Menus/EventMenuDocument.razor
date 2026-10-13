@@ -136,7 +136,9 @@
     };
 
     private static string Palette(MenuDesign d)
-        => $"--m-paper:{d.Paper};--m-ink:{d.Ink};--m-accent:{d.Accent};--m-muted:{d.Muted};";
+        => $"--m-paper:{d.Paper};--m-ink:{d.Ink};--m-accent:{d.Accent};--m-muted:{d.Muted};"
+         + $"--m-body-font:{MenuFonts.Stack(d.BodyFace, d.Font)};--m-head-font:{MenuFonts.Stack(d.HeadingFace, d.Font)};"
+         + $"--m-head-weight:{d.HeadingWeight};--m-head-scale:{(d.HeadingFace is null ? 1.0 : d.HeadingScale).ToString(System.Globalization.CultureInfo.InvariantCulture)};";
 
     /// <summary>The same small drawings the PDF makes, as SVG in the accent color.</summary>
     private static RenderFragment Ornament(MenuOrnament ornament) => __builder =>
@@ -163,6 +165,12 @@
                 break;
             case MenuOrnament.Leaf:
                 <svg class="menu-doc__ornament" viewBox="0 0 120 16" aria-hidden="true"><path d="M52 8 C48 0 40 2 38 8 C40 14 48 16 52 8 Z M68 8 C72 0 80 2 82 8 C80 14 72 16 68 8 Z" fill="currentColor" /><path d="M10 8 H36 M84 8 H110" stroke="currentColor" stroke-width="1" /></svg>
+                break;
+            case MenuOrnament.Ghost:
+                <svg class="menu-doc__ornament" viewBox="0 0 120 26" aria-hidden="true"><path d="M51 24 V12 C51 0 69 0 69 12 V24 C67 20 65 20 63 24 C61 20 59 20 57 24 C55 20 53 20 51 24 Z" fill="currentColor" /><circle cx="56.8" cy="11" r="1.6" fill="var(--m-paper)" /><circle cx="63.2" cy="11" r="1.6" fill="var(--m-paper)" /><path d="M14 18 H44 M76 18 H106" stroke="currentColor" stroke-width="1" /></svg>
+                break;
+            case MenuOrnament.Bat:
+                <svg class="menu-doc__ornament" viewBox="0 0 120 16" aria-hidden="true"><path d="M60 5 L63 2 L66 5 L76 1 L82 6 L76 8 L73 12 L68 9 L64 13 L60 10 L56 13 L52 9 L47 12 L44 8 L38 6 L44 1 L54 5 L57 2 Z" fill="currentColor" /></svg>
                 break;
             case MenuOrnament.Stamp:
                 <div class="menu-doc__stamp" aria-hidden="true">Evidence · Menu</div>

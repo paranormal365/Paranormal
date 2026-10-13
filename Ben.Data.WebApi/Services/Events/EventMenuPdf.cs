@@ -71,7 +71,8 @@ public static class EventMenuPdf
         private readonly int _year;
         private readonly RadFixedDocument _doc = new();
         private readonly RgbColor _paper, _ink, _accent, _muted;
-        private readonly FontBase _regular, _bold, _italic;
+        private readonly FontBase _regular, _bold, _italic, _heading;
+        private readonly double _headingScale;
 
         private RadFixedPage _page = null!;
         private FixedContentEditor _editor = null!;
@@ -84,12 +85,18 @@ public static class EventMenuPdf
         {
             _menu = menu; _d = design; _images = images; _year = year;
             _paper = Rgb(design.Paper); _ink = Rgb(design.Ink); _accent = Rgb(design.Accent); _muted = Rgb(design.Muted);
-            (_regular, _bold, _italic) = design.Font switch
+            var (regular, bold, italic) = design.Font switch
             {
                 MenuFont.Sans => (FontsRepository.Helvetica, FontsRepository.HelveticaBold, FontsRepository.HelveticaOblique),
                 MenuFont.Typewriter => (FontsRepository.Courier, FontsRepository.CourierBold, FontsRepository.CourierOblique),
                 _ => (FontsRepository.TimesRoman, FontsRepository.TimesBold, FontsRepository.TimesItalic),
             };
+            // The design's own faces (10/13/2026), with the standard ones only if a file can't be read.
+            _regular = MenuPdfFonts.Get(design.BodyFace, 400, false) ?? regular;
+            _bold = MenuPdfFonts.Get(design.BodyFace, 700, false) ?? bold;
+            _italic = MenuPdfFonts.Get(design.BodyFace, 400, true) ?? italic;
+            _heading = MenuPdfFonts.Get(design.HeadingFace, design.HeadingWeight, false) ?? bold;
+            _headingScale = design.HeadingFace is null ? 1.0 : design.HeadingScale;
         }
 
         public byte[] Render()
@@ -146,7 +153,7 @@ public static class EventMenuPdf
             }
             Frame();
 
-            _x = Margin; _width = PageWidth - 2 * Margin; _y = Margin; _bottom = PageHeight - Margin - 18;
+            _x = Margin; _width = PageWidth - 2 * Margin; _y = Margin; _bottom = PageHeight - FrameInset - 30;
         }
 
         private double _columnTop;
@@ -257,7 +264,7 @@ public static class EventMenuPdf
 
             Text(Spaced(_menu.EventName.ToUpperInvariant()), _regular, 8.5, _muted, HorizontalAlignment.Center);
             _y += 4;
-            Text(_menu.ShownHeading, _bold, 28, _accent, HorizontalAlignment.Center);
+            Text(_menu.ShownHeading, _heading, 28 * _headingScale, _accent, HorizontalAlignment.Center);
             _y += 2;
 
             foreach (var line in EventMenuPresentation.WhenLines(_menu))
@@ -292,11 +299,11 @@ public static class EventMenuPdf
         private string SectionTitle(EventMenuSectionRecord s) => _d.UpperHeadings ? Spaced(s.Title.ToUpperInvariant()) : s.Title;
 
         private double SectionHeadingHeight(EventMenuSectionRecord s)
-            => Measure(SectionTitle(s), _bold, 13, _width) + 16;
+            => Measure(SectionTitle(s), _heading, 13 * _headingScale, _width) + 16;
 
         private void SectionHeading(EventMenuSectionRecord s)
         {
-            Text(SectionTitle(s), _bold, 13, _accent, HorizontalAlignment.Center);
+            Text(SectionTitle(s), _heading, 13 * _headingScale, _accent, HorizontalAlignment.Center);
             _y += 3;
             var mid = _x + _width / 2;
             Rule(mid - 22, mid + 22, _y);
@@ -503,6 +510,39 @@ public static class EventMenuPdf
                         _editor.DrawLine(new Point(cx - 50 * s, cy), new Point(cx - 22 * s, cy));
                         _editor.DrawLine(new Point(cx + 22 * s, cy), new Point(cx + 50 * s, cy));
                         break;
+                    case MenuOrnament.Ghost:
+                    {
+                        _editor.GraphicProperties.IsStroked = false;
+                        _editor.GraphicProperties.IsFilled = true;
+                        var path = new PathGeometry();
+                        var figure = path.Figures.AddPathFigure();
+                        figure.StartPoint = new Point(cx - 9 * s, cy + 10 * s);
+                        figure.Segments.AddLineSegment(new Point(cx - 9 * s, cy - 2 * s));
+                        figure.Segments.AddBezierSegment(new Point(cx - 9 * s, cy - 14 * s), new Point(cx + 9 * s, cy - 14 * s), new Point(cx + 9 * s, cy - 2 * s));
+                        figure.Segments.AddLineSegment(new Point(cx + 9 * s, cy + 10 * s));
+                        figure.Segments.AddBezierSegment(new Point(cx + 7 * s, cy + 6 * s), new Point(cx + 5 * s, cy + 6 * s), new Point(cx + 3 * s, cy + 10 * s));
+                        figure.Segments.AddBezierSegment(new Point(cx + 1 * s, cy + 6 * s), new Point(cx - 1 * s, cy + 6 * s), new Point(cx - 3 * s, cy + 10 * s));
+                        figure.Segments.AddBezierSegment(new Point(cx - 5 * s, cy + 6 * s), new Point(cx - 7 * s, cy + 6 * s), new Point(cx - 9 * s, cy + 10 * s));
+                        figure.IsClosed = true;
+                        _editor.DrawPath(path);
+                        _editor.GraphicProperties.FillColor = _paper;
+                        _editor.DrawCircle(new Point(cx - 3.2 * s, cy - 3 * s), 1.6 * s);
+                        _editor.DrawCircle(new Point(cx + 3.2 * s, cy - 3 * s), 1.6 * s);
+                        _editor.GraphicProperties.IsFilled = false;
+                        _editor.GraphicProperties.IsStroked = true;
+                        _editor.DrawLine(new Point(cx - 46 * s, cy + 4 * s), new Point(cx - 16 * s, cy + 4 * s));
+                        _editor.DrawLine(new Point(cx + 16 * s, cy + 4 * s), new Point(cx + 46 * s, cy + 4 * s));
+                        break;
+                    }
+                    case MenuOrnament.Bat:
+                        _editor.GraphicProperties.IsStroked = false;
+                        _editor.GraphicProperties.IsFilled = true;
+                        Polygon((cx, cy - 3 * s), (cx + 3 * s, cy - 6 * s), (cx + 6 * s, cy - 3 * s), (cx + 16 * s, cy - 7 * s),
+                                (cx + 22 * s, cy - 2 * s), (cx + 16 * s, cy), (cx + 13 * s, cy + 4 * s), (cx + 8 * s, cy + 1 * s),
+                                (cx + 4 * s, cy + 5 * s), (cx, cy + 2 * s), (cx - 4 * s, cy + 5 * s), (cx - 8 * s, cy + 1 * s),
+                                (cx - 13 * s, cy + 4 * s), (cx - 16 * s, cy), (cx - 22 * s, cy - 2 * s), (cx - 16 * s, cy - 7 * s),
+                                (cx - 6 * s, cy - 3 * s), (cx - 3 * s, cy - 6 * s));
+                        break;
                     case MenuOrnament.Stamp:
                         _editor.GraphicProperties.IsFilled = false;
                         _editor.GraphicProperties.IsStroked = true;
@@ -569,4 +609,61 @@ public static class EventMenuPdf
             return new RgbColor(Convert.ToByte(h[..2], 16), Convert.ToByte(h.Substring(2, 2), 16), Convert.ToByte(h.Substring(4, 2), 16));
         }
     }
+}
+
+/// <summary>
+/// The menu fonts, registered with the PDF writer once per process (10/13/2026).
+/// </summary>
+/// <remarks>
+/// Each file is registered under its family, style and weight, and a design asks for the cut
+/// <see cref="MenuFonts.Closest"/> picks, so a face that has no bold or italic gives the one it has
+/// rather than Telerik inventing one. A file that can't be read or registered is skipped, and the
+/// design falls back to the standard font of its kind.
+/// </remarks>
+internal static class MenuPdfFonts
+{
+    private static readonly object Gate = new();
+    private static bool _registered;
+
+    private static void EnsureRegistered()
+    {
+        if (_registered) return;
+        lock (Gate)
+        {
+            if (_registered) return;
+            // The PDF writer knows two weights, so the semibold cuts are the page's alone.
+            foreach (var file in MenuFonts.Files.Where(f => f.Weight != 600))
+            {
+                try
+                {
+                    if (MenuFonts.Read(file.File) is not { } bytes) continue;
+                    FontsRepository.RegisterFont(new Telerik.Documents.Core.Fonts.FontFamily(file.Family),
+                        file.Italic ? Telerik.Documents.Core.Fonts.FontStyles.Italic : Telerik.Documents.Core.Fonts.FontStyles.Normal,
+                        Weight(file.Weight), bytes);
+                }
+                catch (Exception)
+                {
+                    // Left out; the design uses its standard font instead.
+                }
+            }
+            _registered = true;
+        }
+    }
+
+    public static FontBase? Get(string? family, int weight, bool italic)
+    {
+        if (family is null || MenuFonts.Closest(family, weight >= 650 ? 700 : 400, italic) is not { } file) return null;
+        EnsureRegistered();
+        return FontsRepository.TryCreateFont(new Telerik.Documents.Core.Fonts.FontFamily(file.Family),
+                   file.Italic ? Telerik.Documents.Core.Fonts.FontStyles.Italic : Telerik.Documents.Core.Fonts.FontStyles.Normal,
+                   Weight(file.Weight), out var font)
+            ? font
+            : null;
+    }
+
+    private static Telerik.Documents.Core.Fonts.FontWeight Weight(int weight) => weight switch
+    {
+        >= 650 => Telerik.Documents.Core.Fonts.FontWeights.Bold,
+        _ => Telerik.Documents.Core.Fonts.FontWeights.Normal,
+    };
 }

@@ -14,9 +14,9 @@
     margin-inline: auto;
 }
 
-.menu-doc--serif { font-family: Georgia, "Times New Roman", Times, serif; }
-.menu-doc--sans { font-family: "Helvetica Neue", Helvetica, Arial, sans-serif; }
-.menu-doc--typewriter { font-family: "Courier New", Courier, monospace; }
+/* The design's own faces (10/13/2026, MenuFonts), with a plain fallback of the same kind until the
+   font file arrives. */
+.menu-doc { font-family: var(--m-body-font); }
 
 .menu-doc__page {
     position: relative;
@@ -86,9 +86,9 @@
 
 .menu-doc__title {
     margin: .2rem 0 .3rem;
-    font-family: inherit;
-    font-size: clamp(1.6rem, 6cqi, 2.4rem);
-    font-weight: 700;
+    font-family: var(--m-head-font);
+    font-size: calc(clamp(1.6rem, 6cqi, 2.4rem) * var(--m-head-scale, 1));
+    font-weight: var(--m-head-weight, 700);
     line-height: 1.1;
     color: var(--m-accent);
 }
@@ -138,9 +138,9 @@
 
 .menu-doc__section-title {
     margin: 0 0 .7rem;
-    font-family: inherit;
-    font-size: 1.05rem;
-    font-weight: 700;
+    font-family: var(--m-head-font);
+    font-size: calc(1.05rem * var(--m-head-scale, 1));
+    font-weight: var(--m-head-weight, 700);
     text-align: center;
     color: var(--m-accent);
 }
@@ -156,7 +156,7 @@
 .menu-doc--caps .menu-doc__section-title {
     text-transform: uppercase;
     letter-spacing: .14em;
-    font-size: .95rem;
+    font-size: calc(.95rem * var(--m-head-scale, 1));
 }
 
 .menu-doc__item {
@@ -253,18 +253,14 @@
     opacity: .85;
 }
 
-/* The design gallery's small card: the whole menu drawn, scaled down, never reflowed. */
+/* The design gallery's small card: the whole menu drawn at full size and scaled down as one, so a
+   card shows the design's real proportions rather than a reflowed squeeze. */
 .menu-doc--compact {
-    padding: .5rem;
-    font-size: .55rem;
-    box-shadow: 0 .25rem .75rem rgba(0, 0, 0, .18);
+    width: 34rem;
+    max-width: none;
+    zoom: .4;
+    box-shadow: none;
 }
-
-.menu-doc--compact .menu-doc__page { padding: 1rem .9rem .6rem; min-height: 0; }
-.menu-doc--compact .menu-doc__title { font-size: 1.15rem; }
-.menu-doc--compact .menu-doc__ornament { width: 4rem; }
-.menu-doc--compact .menu-doc__item { margin-bottom: .35rem; }
-.menu-doc--compact .menu-doc__picture { flex-basis: 1.5rem; width: 1.5rem; height: 1.5rem; }
 
 @media (max-width: 575.98px) {
     .menu-doc { padding: .5rem; }

@@ -22,4 +22,11 @@
     <PackageReference Include="Newtonsoft.Json" Version="13.0.4" />
   </ItemGroup>
 
+  <!-- The menu designs' fonts (10/13/2026): free, from Google Fonts, under the SIL Open Font
+       License (Special Elite: Apache 2.0); licenses beside them. Embedded once here so the API
+       draws PDFs with them and the website serves them to the page, from one copy. -->
+  <ItemGroup>
+    <EmbeddedResource Include="Menus\Fonts\*.ttf" LogicalName="MenuFont.%(Filename)%(Extension)" />
+  </ItemGroup>
+
 </Project>
