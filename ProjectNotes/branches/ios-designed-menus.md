@@ -67,8 +67,7 @@ menu record had. With the record gone, the guard asked for its entry to go too.
 ## Docs
 
 Help (`the-mobile-apps.md`, `going-to-an-event.md`), the help screenshot `iphone-event-menus.png`, the
-apps changelog (listed under 1.2.0, the next build that carries it: new things move the middle
-number), the iPhone and iPad guides with new menus pictures, and the product documentation PDF.
+apps changelog (listed under 1.1.3, Ben's call on 10/13), the iPhone and iPad guides with new menus pictures, and the product documentation PDF.
 
 ## Not done
 

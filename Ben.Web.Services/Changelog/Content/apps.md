@@ -22,11 +22,11 @@ on somebody's own phone. Several days can share a number, because one build carr
 work. A change not yet on the App Store is listed under the number the next build will have. Fixes
 move the last number, new things the middle one, a whole new part of the app the first.
 
-## 2026-10-13 · 1.2.0
+## 2026-10-13 · 1.1.3
 
 - Event menus look the way the hosts designed them, just as on the website: their colors, typefaces,
   border and drawing, with prices, what the event covers, and the marks for each dish.
-- **PDF** under a menu opens the same PDF the website gives, to save, print or share.
+- The **PDF** button under a menu opens the same PDF the website gives, to save, print or share.
 - Anyone can see an event's published menus, without signing in. The event's page shows what its
   price includes and a link to **See the menus**.
 
