@@ -6,7 +6,9 @@
    own `.content-wrapper` sets `overflow-x: hidden`, which makes it a scrolling box on BOTH axes,
    so a sticky child pins to the bottom of that wrapper — the whole page — rather than to the
    bottom of the window. It is off-screen from the first tap, which is exactly the failure the bar
-   exists to prevent, and Playwright reported it as "viewport ratio 0".
+   exists to prevent, and Playwright reported it as "viewport ratio 0". (Fixed 10/13/2026: the
+   wrapper now uses `overflow-x: clip`, which is not a scrolling box — see signal.css. What follows
+   is kept because it does not depend on that.)
 
    So the plan takes a ceiling and scrolls inside it, the way it already scrolls sideways, and the
    summary is ordinary flow immediately below. A guest can always see what they have chosen and
