@@ -39,14 +39,15 @@ public static class PlaceUsageCensus
     /// <param name="VenueGrants">Permissions given to groups to host here.</param>
     /// <param name="Contacts">Recorded ways to reach whoever runs it.</param>
     /// <param name="Claims">Outstanding or settled claims to run it.</param>
+    /// <param name="MenuItems">Menu items kept at the venue (10/13/2026).</param>
     public sealed record Usage(
         int Cases, int Investigations, int Evidence, int FieldSessions, int CalendarEvents,
         int HostedEvents, int Posts, int Rooms, int VenueProfiles, int VenueGrants,
-        int Contacts, int Claims)
+        int Contacts, int Claims, int MenuItems = 0)
     {
         private int[] All =>
             [Cases, Investigations, Evidence, FieldSessions, CalendarEvents, HostedEvents,
-             Posts, Rooms, VenueProfiles, VenueGrants, Contacts, Claims];
+             Posts, Rooms, VenueProfiles, VenueGrants, Contacts, Claims, MenuItems];
 
         /// <summary>Nothing anywhere points at this place.</summary>
         public bool IsEmpty => Total == 0;
@@ -84,6 +85,7 @@ public static class PlaceUsageCensus
             Say(VenueGrants, "hosting permission", "hosting permissions");
             Say(Contacts, "contact", "contacts");
             Say(Claims, "claim", "claims");
+            Say(MenuItems, "menu item", "menu items");
 
             return parts.Count == 1
                 ? parts[0]
@@ -105,5 +107,6 @@ public static class PlaceUsageCensus
             await db.OrganizationVenueProfiles.CountAsync(x => x.PlaceId == placeId, ct),
             await db.OrganizationVenueGrants.CountAsync(x => x.PlaceId == placeId, ct),
             await db.PlaceContacts.CountAsync(x => x.PlaceId == placeId, ct),
-            await db.VenuePlaceClaims.CountAsync(x => x.PlaceId == placeId, ct));
+            await db.VenuePlaceClaims.CountAsync(x => x.PlaceId == placeId, ct),
+            await db.MenuLibraryItems.CountAsync(x => x.PlaceId == placeId, ct));
 }

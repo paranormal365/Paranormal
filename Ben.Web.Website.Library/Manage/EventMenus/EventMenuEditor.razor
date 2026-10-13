@@ -1,0 +1,651 @@
+@page "/organizations/{OrgId:guid}/events/{EventId:guid}/menu-builder/{MenuId:guid}"
+@namespace Ben.Web.Website.Library.Manage.EventMenus
+
+@inject IBenAdminClient AdminClient
+@inject IBenUserState UserState
+@inject NavigationManager Nav
+@inject IJSRuntime JS
+
+@using Ben.Data.Common.Enums
+@using Ben.Data.Common.Menus
+@using Ben.Service.Models.Entities
+@using Ben.Web.Services.WebApi
+@using Ben.Web.Website.Library.Kit
+@using Ben.Web.Website.Library.Kit.Menus
+@using Microsoft.AspNetCore.Components.Forms
+@using Microsoft.JSInterop
+
+@* One menu, built beside its own preview (Ben, 10/13/2026).
+
+   "While creating the menu, allow them to preview it at any time. Let them change the format or
+   look and feel to see if they like it better one way or another." So the preview is always there,
+   drawn from what is typed rather than what was saved, and the look can be flipped from right above
+   it. Nothing reaches guests until the menu is saved and published. *@
+
+<PageTitle>@(_title is { Length: > 0 } t ? $"{t} — Menu" : "Menu")</PageTitle>
+
+<div class="container-fluid py-3">
+    <div class="text-secondary small">
+        <a href="@($"/organizations/{OrgId}/events")">Events</a>
+        @if (_workspace is { } crumb)
+        {
+            <text> · </text><a href="@($"/organizations/{OrgId}/events/{EventId}")">@crumb.EventName</a>
+        }
+        <text> · </text><a href="@BuilderHref">Menus</a>
+    </div>
+
+    <div class="d-flex flex-wrap align-items-center gap-2 mb-2">
+        <h1 class="h3 mb-0">@(_title is { Length: > 0 } t2 ? t2 : "Menu")</h1>
+        @if (_menu?.PublishedUtc is not null)
+        {
+            <span class="badge text-bg-success" id="menu-state">Published</span>
+        }
+        else if (_menu is not null)
+        {
+            <span class="badge text-bg-secondary" id="menu-state">Draft</span>
+        }
+        <HelpLink Slug="organization-administration" Anchor="hosted-events" />
+    </div>
+
+    @if (_note is { Length: > 0 }) { <div class="alert alert-success py-2" id="menu-editor-note" role="status">@_note</div> }
+    @if (_error is { Length: > 0 }) { <div class="alert alert-danger py-2" id="menu-editor-error" role="alert">@_error</div> }
+
+    <BenItemState TItem="EventMenuRecord" Result="_result" Loading="_loading" LoadingText="Opening the menu…" OnRetry="LoadAsync">
+        <ChildContent Context="loaded">
+            @if (_workspace is { } ws)
+            {
+                <div class="d-flex flex-wrap gap-2 mb-3 menu-editor__actions">
+                    <button type="button" class="btn btn-primary" id="menu-save" disabled="@_busy" @onclick="SaveAsync">
+                        @(_busy ? "Saving…" : "Save")
+                    </button>
+                    @if (loaded.PublishedUtc is null)
+                    {
+                        <button type="button" class="btn btn-success" id="menu-publish" disabled="@_busy" @onclick="PublishAsync">Save and publish</button>
+                    }
+                    else
+                    {
+                        <button type="button" class="btn btn-outline-secondary" id="menu-unpublish" disabled="@_busy" @onclick="UnpublishAsync">Unpublish</button>
+                    }
+                    <button type="button" class="btn btn-outline-secondary" id="menu-pdf" disabled="@_busy" @onclick="PdfAsync">Download the PDF</button>
+                    <button type="button" class="btn btn-outline-secondary" id="menu-copy" disabled="@_busy" @onclick="CopyAsync">Make a copy</button>
+                    @if (_dirty)
+                    {
+                        <span class="align-self-center small text-secondary" id="menu-unsaved">Not saved yet.</span>
+                    }
+                </div>
+
+                <div class="row g-4">
+                    @* ── the form ─────────────────────────────────────────────── *@
+                    <div class="col-12 col-xl-6 menu-editor__pane" id="menu-form">
+                        <div class="card mb-3">
+                            <div class="card-header fw-semibold">About this menu</div>
+                            <div class="card-body">
+                                <div class="row g-2">
+                                    <div class="col-12 col-md-6">
+                                        <label class="form-label small mb-1" for="menu-title">Its name, for you</label>
+                                        <input id="menu-title" class="form-control" maxlength="120" value="@_title" @oninput="@(e => Set(() => _title = e.Value?.ToString() ?? ""))" />
+                                        <div class="form-text">Guests never see this.</div>
+                                    </div>
+                                    <div class="col-12 col-md-6">
+                                        <label class="form-label small mb-1" for="menu-heading">The heading guests see</label>
+                                        <input id="menu-heading" class="form-control" maxlength="120" placeholder="@MenuWords.MealName(_meal)"
+                                               value="@_heading" @oninput="@(e => Set(() => _heading = e.Value?.ToString()))" />
+                                    </div>
+                                    <div class="col-12">
+                                        <label class="form-label small mb-1" for="menu-intro">A line under it <span class="text-secondary">(optional)</span></label>
+                                        <input id="menu-intro" class="form-control" maxlength="500" placeholder="Such as Served in the long dining room"
+                                               value="@_intro" @oninput="@(e => Set(() => _intro = e.Value?.ToString()))" />
+                                    </div>
+                                    <div class="col-12 col-md-6">
+                                        <label class="form-label small mb-1" for="menu-meal">Which meal it is</label>
+                                        <select id="menu-meal" class="form-select" value="@(_meal?.ToString() ?? "")"
+                                                @onchange="@(e => Set(() => _meal = Enum.TryParse<MenuMeal>(e.Value?.ToString(), out var m) ? m : null))">
+                                            <option value="">Not chosen yet</option>
+                                            @foreach (var (meal, name) in MenuWords.Meals)
+                                            {
+                                                <option value="@meal">@name</option>
+                                            }
+                                        </select>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="card mb-3">
+                            <div class="card-header fw-semibold">When it's served</div>
+                            <div class="card-body">
+                                <div class="form-check mb-2">
+                                    <input class="form-check-input" type="checkbox" id="menu-throughout" checked="@_throughout"
+                                           @onchange="@(e => Set(() => _throughout = (bool)e.Value!))" />
+                                    <label class="form-check-label" for="menu-throughout">
+                                        <strong>Throughout the event.</strong>
+                                        <span class="small text-secondary">For what's on offer the whole time: candy, bottled water and soft drinks, sold or free with the event.</span>
+                                    </label>
+                                </div>
+                                @if (!_throughout)
+                                {
+                                    @if (ws.Meals.Count == 0)
+                                    {
+                                        <p class="small text-secondary mb-0">
+                                            The event has no meals yet. <a href="@($"/organizations/{OrgId}/events/{EventId}/menus")">Add the meals</a>,
+                                            then choose them here.
+                                        </p>
+                                    }
+                                    <div class="d-flex flex-column gap-1" id="menu-meals">
+                                        @foreach (var meal in ws.Meals)
+                                        {
+                                            var id = meal.HostedEventMenuId;
+                                            <div class="form-check">
+                                                <input class="form-check-input" type="checkbox" id="@($"meal-{id}")" checked="@_mealIds.Contains(id)"
+                                                       @onchange="@(e => Set(() => { if ((bool)e.Value!) _mealIds.Add(id); else _mealIds.Remove(id); }))" />
+                                                <label class="form-check-label" for="@($"meal-{id}")">
+                                                    @meal.NightDate.ToString("dddd, MM/dd") · @meal.MealTitle@(meal.ServedAtLocal is { } at ? $", {DateTime.Today.Add(at):h:mm tt}" : "")
+                                                </label>
+                                            </div>
+                                        }
+                                    </div>
+                                    @if (ws.Meals.Count > 0)
+                                    {
+                                        <div class="form-text">A menu can be served at several meals, and a meal can show several menus, such as a children's menu beside the main one.</div>
+                                    }
+                                }
+                            </div>
+                        </div>
+
+                        <div class="card mb-3">
+                            <div class="card-header fw-semibold">Prices</div>
+                            <div class="card-body">
+                                <p class="small text-secondary">
+                                    The price of the meal, for the items that are "in the meal's price". One price for everybody,
+                                    or one for each kind of guest. Leave it empty if the event's price covers the food.
+                                </p>
+                                @for (var i = 0; i < _prices.Count; i++)
+                                {
+                                    var p = _prices[i];
+                                    var at = i;
+                                    <div class="row g-2 align-items-center mb-2" data-testid="menu-price">
+                                        <div class="col-7">
+                                            <input class="form-control form-control-sm" maxlength="80" placeholder="@(i == 0 ? "Everybody, or Adults" : "Such as Children under 12")"
+                                                   aria-label="Who the price is for" value="@p.Label" @oninput="@(e => Set(() => p.Label = e.Value?.ToString()))" />
+                                        </div>
+                                        <div class="col-3">
+                                            <div class="input-group input-group-sm">
+                                                <span class="input-group-text">$</span>
+                                                <input class="form-control" type="number" min="0" step="0.01" aria-label="The price"
+                                                       value="@p.Amount" @oninput="@(e => Set(() => p.Amount = decimal.TryParse(e.Value?.ToString(), out var a) ? a : 0))" />
+                                            </div>
+                                        </div>
+                                        <div class="col-2 text-end">
+                                            <button type="button" class="btn btn-sm btn-outline-danger" title="Remove this price" @onclick="() => Set(() => _prices.RemoveAt(at))">
+                                                <BenIcon Name="x" Title="Remove this price" />
+                                            </button>
+                                        </div>
+                                    </div>
+                                }
+                                <button type="button" class="btn btn-sm btn-outline-primary" id="menu-price-add" @onclick="() => Set(() => _prices.Add(new PriceForm()))">Add a price</button>
+                                <div class="mt-2">
+                                    <label class="form-label small mb-1" for="menu-price-note">A note under the prices <span class="text-secondary">(optional)</span></label>
+                                    <input id="menu-price-note" class="form-control form-control-sm" maxlength="300" placeholder="Such as Gratuity not included"
+                                           value="@_priceNote" @oninput="@(e => Set(() => _priceNote = e.Value?.ToString()))" />
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="card mb-3">
+                            <div class="card-header fw-semibold">What's on it</div>
+                            <div class="card-body">
+                                @for (var s = 0; s < _sections.Count; s++)
+                                {
+                                    var section = _sections[s];
+                                    var sAt = s;
+                                    var category = _categories.FirstOrDefault(c => c.Id == section.CategoryId);
+                                    var offered = ws.Library.Where(i => i.MenuCategoryId == section.CategoryId && section.Entries.All(e => e.ItemId != i.Id)).ToList();
+
+                                    <div class="menu-editor__section" data-testid="menu-section">
+                                        <div class="d-flex flex-wrap align-items-center gap-2 mb-2">
+                                            <strong>@(category?.Name ?? "A category")</strong>
+                                            <input class="form-control form-control-sm" style="max-width:16rem;" maxlength="80"
+                                                   placeholder="Its own heading (optional)" aria-label="This section's own heading"
+                                                   value="@section.Heading" @oninput="@(e => Set(() => section.Heading = e.Value?.ToString()))" />
+                                            <div class="ms-auto btn-group btn-group-sm">
+                                                <button type="button" class="btn btn-outline-secondary" disabled="@(sAt == 0)" title="Move this section up" @onclick="() => Move(_sections, sAt, -1)"><BenIcon Name="arrow-up" Title="Move this section up" /></button>
+                                                <button type="button" class="btn btn-outline-secondary" disabled="@(sAt == _sections.Count - 1)" title="Move this section down" @onclick="() => Move(_sections, sAt, 1)"><BenIcon Name="arrow-down" Title="Move this section down" /></button>
+                                                <button type="button" class="btn btn-outline-danger" title="Remove this section" @onclick="() => Set(() => _sections.RemoveAt(sAt))"><BenIcon Name="trash-2" Title="Remove this section" /></button>
+                                            </div>
+                                        </div>
+
+                                        @for (var e = 0; e < section.Entries.Count; e++)
+                                        {
+                                            var entry = section.Entries[e];
+                                            var eAt = e;
+                                            var item = ws.Library.FirstOrDefault(i => i.Id == entry.ItemId) ?? _onMenu.GetValueOrDefault(entry.ItemId);
+                                            <div class="menu-editor__entry" data-testid="menu-entry">
+                                                <div class="d-flex flex-wrap align-items-center gap-2">
+                                                    <span class="fw-semibold flex-grow-1">@(item?.Name ?? "An item")</span>
+                                                    <select class="form-select form-select-sm" style="max-width:13rem;" aria-label="How it's paid for"
+                                                            value="@entry.Pricing" @onchange="@(ev => Set(() => entry.Pricing = Enum.Parse<MenuPricing>(ev.Value!.ToString()!)))">
+                                                        @foreach (var (pricing, name, _) in MenuWords.Pricings)
+                                                        {
+                                                            <option value="@pricing">@name</option>
+                                                        }
+                                                    </select>
+                                                    @if (entry.Pricing == MenuPricing.PricedSeparately)
+                                                    {
+                                                        <div class="input-group input-group-sm" style="max-width:7rem;">
+                                                            <span class="input-group-text">$</span>
+                                                            <input class="form-control" type="number" min="0" step="0.01" aria-label="Its price"
+                                                                   value="@entry.Price" @oninput="@(ev => Set(() => entry.Price = decimal.TryParse(ev.Value?.ToString(), out var pr) ? pr : null))" />
+                                                        </div>
+                                                    }
+                                                    <div class="btn-group btn-group-sm">
+                                                        <button type="button" class="btn btn-outline-secondary" disabled="@(eAt == 0)" title="Move up" @onclick="() => Move(section.Entries, eAt, -1)"><BenIcon Name="arrow-up" Title="Move up" /></button>
+                                                        <button type="button" class="btn btn-outline-secondary" disabled="@(eAt == section.Entries.Count - 1)" title="Move down" @onclick="() => Move(section.Entries, eAt, 1)"><BenIcon Name="arrow-down" Title="Move down" /></button>
+                                                        <button type="button" class="btn btn-outline-danger" title="Take it off the menu" @onclick="() => Set(() => section.Entries.RemoveAt(eAt))"><BenIcon Name="x" Title="Take it off the menu" /></button>
+                                                    </div>
+                                                </div>
+                                                <input class="form-control form-control-sm mt-1" maxlength="200" placeholder="A note for this menu only (optional), such as Add blue cheese"
+                                                       aria-label="A note for this menu" value="@entry.Note" @oninput="@(ev => Set(() => entry.Note = ev.Value?.ToString()))" />
+                                            </div>
+                                        }
+
+                                        <div class="d-flex flex-wrap gap-2 align-items-center mt-2">
+                                            @if (offered.Count > 0)
+                                            {
+                                                <select class="form-select form-select-sm" style="max-width:18rem;" aria-label="@($"Add an item to {category?.Name}")"
+                                                        @onchange="@(ev => AddEntry(section, ev.Value?.ToString()))">
+                                                    <option value="">Add an item…</option>
+                                                    @foreach (var choice in offered)
+                                                    {
+                                                        <option value="@choice.Id">@choice.Name</option>
+                                                    }
+                                                </select>
+                                            }
+                                            <button type="button" class="btn btn-sm btn-outline-primary" @onclick="() => NewItemFor(section)">A new item</button>
+                                        </div>
+                                    </div>
+                                }
+
+                                <div class="d-flex flex-wrap gap-2 align-items-center mt-3">
+                                    <select class="form-select" style="max-width:18rem;" id="menu-section-category" aria-label="The category of the new section"
+                                            value="@_newSectionCategory" @onchange="@(e => _newSectionCategory = Guid.TryParse(e.Value?.ToString(), out var g) ? g : null)">
+                                        <option value="">Add a section…</option>
+                                        @foreach (var c in _categories.Where(c => _sections.All(x => x.CategoryId != c.Id)))
+                                        {
+                                            <option value="@c.Id">@c.Name</option>
+                                        }
+                                    </select>
+                                    <button type="button" class="btn btn-outline-primary" id="menu-section-add" disabled="@(_newSectionCategory is null)" @onclick="AddSection">Add the section</button>
+                                </div>
+                                <div class="form-text">Sections are the categories items are made in. Missing one? Make a new item and add a category from its form.</div>
+                            </div>
+                        </div>
+
+                        <div class="card mb-3">
+                            <div class="card-header fw-semibold">A logo or picture at the top</div>
+                            <div class="card-body d-flex flex-wrap align-items-center gap-3">
+                                @if (loaded.LogoUploadFileId is { } logo)
+                                {
+                                    <img src="@Media.MenuImage(logo)" alt="" style="max-height:3.5rem;max-width:10rem;object-fit:contain;" />
+                                    <button type="button" class="btn btn-sm btn-outline-secondary" disabled="@_busy" @onclick="RemoveLogoAsync">Remove it</button>
+                                }
+                                <InputFile id="menu-logo" class="form-control" style="max-width:22rem;" accept="image/*" OnChange="LogoPickedAsync" />
+                            </div>
+                        </div>
+                    </div>
+
+                    @* ── the preview ──────────────────────────────────────────── *@
+                    <div class="col-12 col-xl-6 menu-editor__pane" id="menu-preview-pane">
+                        <div class="menu-editor__preview">
+                            <div class="d-flex flex-wrap align-items-center gap-2 mb-2">
+                                <label class="form-label small mb-0 fw-semibold" for="menu-design">Look</label>
+                                <select id="menu-design" class="form-select form-select-sm" style="max-width:16rem;" value="@_design"
+                                        @onchange="@(e => Set(() => _design = e.Value?.ToString() ?? _design))">
+                                    @foreach (var family in new[] { MenuDesigns.GhostHunting, MenuDesigns.General })
+                                    {
+                                        <optgroup label="@family">
+                                            @foreach (var d in MenuDesigns.All.Where(d => d.Family == family))
+                                            {
+                                                <option value="@d.Key">@d.Name</option>
+                                            }
+                                        </optgroup>
+                                    }
+                                </select>
+                                <div class="btn-group btn-group-sm" role="group" aria-label="Try the next or previous look">
+                                    <button type="button" class="btn btn-outline-secondary" title="The previous look" @onclick="() => Step(-1)"><BenIcon Name="chevron-left" Title="The previous look" /></button>
+                                    <button type="button" class="btn btn-outline-secondary" title="The next look" @onclick="() => Step(1)"><BenIcon Name="chevron-right" Title="The next look" /></button>
+                                </div>
+                                <span class="small text-secondary">@MenuDesigns.FindOrDefault(_design).Description</span>
+                            </div>
+                            <div data-testid="menu-preview">
+                                <EventMenuDocument Menu="@Preview(loaded, ws)" />
+                            </div>
+                            <p class="small text-secondary mt-2 mb-0">This is how it looks with what's typed now, saved or not.</p>
+                        </div>
+                    </div>
+                </div>
+
+                <MenuItemForm @bind-Visible="_itemOpen" OrgId="@OrgId" EventId="@EventId" Categories="@_categories"
+                              StartingCategoryId="@_itemFor?.CategoryId" VenueKnown="@ws.VenueIsKnownToTheSite"
+                              OnSaved="ItemMadeAsync" OnCategoryAdded="CategoryAdded" />
+            }
+        </ChildContent>
+    </BenItemState>
+</div>
+
+@code {
+    [Parameter] public Guid OrgId { get; set; }
+    [Parameter] public Guid EventId { get; set; }
+    [Parameter] public Guid MenuId { get; set; }
+
+    [Inject] private Ben.Web.Services.IMediaUrlBuilder Media { get; set; } = default!;
+
+    private sealed class PriceForm { public string? Label { get; set; } public decimal Amount { get; set; } }
+    private sealed class EntryForm { public Guid ItemId { get; init; } public MenuPricing Pricing { get; set; } public decimal? Price { get; set; } public string? Note { get; set; } }
+    private sealed class SectionForm { public Guid CategoryId { get; init; } public string? Heading { get; set; } public List<EntryForm> Entries { get; } = []; }
+
+    private ItemResult<EventMenuRecord> _result;
+    private EventMenuRecord? _menu;
+    private EventMenuWorkspaceRecord? _workspace;
+    private List<MenuCategoryRecord> _categories = [];
+
+    /// <summary>Items already on this menu, kept so one retired since still shows by name.</summary>
+    private Dictionary<Guid, MenuLibraryItemRecord> _onMenu = [];
+
+    private string _title = "";
+    private string? _heading;
+    private string? _intro;
+    private MenuMeal? _meal;
+    private bool _throughout;
+    private string _design = MenuDesigns.Default.Key;
+    private string? _priceNote;
+    private List<PriceForm> _prices = [];
+    private List<SectionForm> _sections = [];
+    private HashSet<Guid> _mealIds = [];
+    private Guid? _newSectionCategory;
+
+    private bool _loading = true;
+    private bool _busy;
+    private bool _dirty;
+    private string? _note;
+    private string? _error;
+    private bool _itemOpen;
+    private SectionForm? _itemFor;
+
+    private string BuilderHref => $"/organizations/{OrgId}/events/{EventId}/menu-builder";
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (!firstRender) return;
+        if (!await UserState.WaitUntilAuthReadyAsync(RendererInfo.IsInteractive)) return;
+        await LoadAsync();
+        StateHasChanged();
+    }
+
+    private async Task LoadAsync()
+    {
+        _loading = true;
+        var workspace = await AdminClient.GetMenuWorkspaceAsync(OrgId, EventId);
+        _workspace = workspace.Item;
+        _categories = [.. _workspace?.Categories ?? []];
+        _result = await AdminClient.GetEventMenuAsync(OrgId, EventId, MenuId);
+        if (_result.Item is { } menu) Fill(menu);
+        _loading = false;
+    }
+
+    private void Fill(EventMenuRecord m)
+    {
+        _menu = m;
+        _title = m.Title;
+        _heading = m.Heading;
+        _intro = m.Intro;
+        _meal = m.Meal;
+        _throughout = m.ThroughoutTheEvent;
+        _design = m.DesignKey;
+        _priceNote = m.PriceNote;
+        _prices = [.. m.Prices.Select(p => new PriceForm { Label = p.Label, Amount = p.Amount })];
+        _sections = [.. m.Sections.Select(s =>
+        {
+            var form = new SectionForm { CategoryId = s.MenuCategoryId, Heading = s.Heading };
+            form.Entries.AddRange(s.Entries.Select(e => new EntryForm { ItemId = e.MenuLibraryItemId, Pricing = e.Pricing, Price = e.Price, Note = e.Note }));
+            return form;
+        })];
+        _mealIds = [.. m.Meals.Select(x => x.HostedEventMenuId)];
+        _onMenu = m.Sections.SelectMany(s => s.Entries).GroupBy(e => e.MenuLibraryItemId).ToDictionary(g => g.Key, g => g.First().Item);
+        _dirty = false;
+    }
+
+    /// <summary>Any change to the form: made, then marked as not saved.</summary>
+    private void Set(Action change)
+    {
+        change();
+        _dirty = true;
+    }
+
+    private void Move<T>(List<T> list, int at, int by)
+    {
+        var to = at + by;
+        if (to < 0 || to >= list.Count) return;
+        (list[at], list[to]) = (list[to], list[at]);
+        _dirty = true;
+    }
+
+    private void Step(int by)
+    {
+        var all = MenuDesigns.All.ToList();
+        var at = all.FindIndex(d => d.Key == _design);
+        _design = all[(at + by + all.Count) % all.Count].Key;
+        _dirty = true;
+    }
+
+    private void AddSection()
+    {
+        if (_newSectionCategory is not { } id) return;
+        _sections.Add(new SectionForm { CategoryId = id });
+        _newSectionCategory = null;
+        _dirty = true;
+    }
+
+    /// <summary>A new item starts priced the way the menu suggests: in the meal's price when it has one.</summary>
+    private MenuPricing DefaultPricing => _prices.Count > 0 ? MenuPricing.IncludedInMeal : _throughout ? MenuPricing.PricedSeparately : MenuPricing.IncludedInEvent;
+
+    private void AddEntry(SectionForm section, string? itemId)
+    {
+        if (!Guid.TryParse(itemId, out var id)) return;
+        section.Entries.Add(new EntryForm { ItemId = id, Pricing = DefaultPricing });
+        _dirty = true;
+    }
+
+    private void NewItemFor(SectionForm section)
+    {
+        _itemFor = section;
+        _itemOpen = true;
+    }
+
+    private async Task ItemMadeAsync(MenuLibraryItemRecord item)
+    {
+        // Back in the list this menu chooses from, and onto the section it was made for.
+        var workspace = await AdminClient.GetMenuWorkspaceAsync(OrgId, EventId);
+        if (workspace.Item is { } ws) _workspace = ws;
+
+        var target = _sections.FirstOrDefault(s => s.CategoryId == item.MenuCategoryId);
+        if (target is null)
+        {
+            target = new SectionForm { CategoryId = item.MenuCategoryId };
+            _sections.Add(target);
+        }
+        if (target.Entries.All(e => e.ItemId != item.Id)) target.Entries.Add(new EntryForm { ItemId = item.Id, Pricing = DefaultPricing });
+        _dirty = true;
+        _itemFor = null;
+    }
+
+    private void CategoryAdded(MenuCategoryRecord category)
+    {
+        if (_categories.All(c => c.Id != category.Id)) _categories.Add(category);
+    }
+
+    /// <summary>The menu as it would look with what's typed now.</summary>
+    private EventMenuRecord Preview(EventMenuRecord saved, EventMenuWorkspaceRecord ws)
+    {
+        MenuLibraryItemRecord? Lookup(Guid id) => ws.Library.FirstOrDefault(i => i.Id == id) ?? _onMenu.GetValueOrDefault(id);
+
+        var sections = _sections.Select(s =>
+        {
+            var name = _categories.FirstOrDefault(c => c.Id == s.CategoryId)?.Name ?? "";
+            var entries = s.Entries
+                .Select(e => (e, item: Lookup(e.ItemId)))
+                .Where(x => x.item is not null)
+                .Select(x => new EventMenuEntryRecord(Guid.Empty, x.e.ItemId, x.e.Pricing,
+                    x.e.Pricing == MenuPricing.PricedSeparately ? x.e.Price : null, x.e.Note, x.item!))
+                .ToList();
+            return new EventMenuSectionRecord(Guid.Empty, s.CategoryId, name, s.Heading,
+                string.IsNullOrWhiteSpace(s.Heading) ? name : s.Heading.Trim(), entries);
+        }).ToList();
+
+        var shown = !string.IsNullOrWhiteSpace(_heading) ? _heading.Trim()
+                  : _throughout && _meal is null ? "Throughout the event"
+                  : _meal is not null ? MenuWords.MealName(_meal) : "Menu";
+
+        return saved with
+        {
+            Title = _title, Heading = _heading, ShownHeading = shown, Intro = _intro, Meal = _meal,
+            ThroughoutTheEvent = _throughout, DesignKey = _design, PriceNote = _priceNote,
+            Prices = [.. _prices.Select(p => new EventMenuPriceRecord(p.Label, p.Amount))],
+            Sections = sections,
+            Meals = _throughout ? [] : [.. ws.Meals.Where(m => _mealIds.Contains(m.HostedEventMenuId))],
+        };
+    }
+
+    private SaveEventMenuRequest Request()
+        => new(_title, _heading, _intro, _meal, _throughout, _design, _priceNote,
+               [.. _prices.Select(p => new EventMenuPriceRecord(p.Label, p.Amount))],
+               [.. _sections.Select(s => new SaveEventMenuSection(s.CategoryId, s.Heading,
+                   [.. s.Entries.Select(e => new SaveEventMenuEntry(e.ItemId, e.Pricing, e.Price, e.Note))]))],
+               [.. _mealIds]);
+
+    private async Task<bool> SaveCoreAsync()
+    {
+        var (saved, error) = await AdminClient.SaveEventMenuAsync(OrgId, EventId, MenuId, Request());
+        if (saved is null) { _error = error ?? "The menu couldn't be saved just now."; return false; }
+        Fill(saved);
+        _result = ItemResult<EventMenuRecord>.Ok(saved);
+        return true;
+    }
+
+    private async Task SaveAsync()
+    {
+        _busy = true; _error = null; _note = null;
+        try { if (await SaveCoreAsync()) _note = "Saved."; }
+        finally { _busy = false; }
+    }
+
+    private async Task PublishAsync()
+    {
+        _busy = true; _error = null; _note = null;
+        try
+        {
+            if (!await SaveCoreAsync()) return;
+            var (published, error) = await AdminClient.PublishEventMenuAsync(OrgId, EventId, MenuId);
+            if (published is null) { _error = error ?? "Saved, but it couldn't be published just now."; return; }
+            Fill(published);
+            _result = ItemResult<EventMenuRecord>.Ok(published);
+            _note = "Saved and published. Everyone looking at the event can read it now.";
+        }
+        finally { _busy = false; }
+    }
+
+    private async Task UnpublishAsync()
+    {
+        _busy = true; _error = null; _note = null;
+        try
+        {
+            var (done, error) = await AdminClient.UnpublishEventMenuAsync(OrgId, EventId, MenuId);
+            if (done is null) { _error = error ?? "It couldn't be unpublished just now."; return; }
+            var keep = _dirty;
+            var form = Request();
+            Fill(done);
+            _result = ItemResult<EventMenuRecord>.Ok(done);
+            _note = keep ? "Unpublished. Your changes aren't saved yet." : "Unpublished. Guests no longer see it.";
+            if (keep) RestoreUnsaved(form);
+        }
+        finally { _busy = false; }
+    }
+
+    /// <summary>Puts back what was typed after a reload that didn't include it.</summary>
+    private void RestoreUnsaved(SaveEventMenuRequest r)
+    {
+        _title = r.Title; _heading = r.Heading; _intro = r.Intro; _meal = r.Meal; _throughout = r.ThroughoutTheEvent;
+        _design = r.DesignKey; _priceNote = r.PriceNote;
+        _prices = [.. r.Prices.Select(p => new PriceForm { Label = p.Label, Amount = p.Amount })];
+        _sections = [.. r.Sections.Select(s =>
+        {
+            var form = new SectionForm { CategoryId = s.MenuCategoryId, Heading = s.Heading };
+            form.Entries.AddRange(s.Entries.Select(e => new EntryForm { ItemId = e.MenuLibraryItemId, Pricing = e.Pricing, Price = e.Price, Note = e.Note }));
+            return form;
+        })];
+        _mealIds = [.. r.MealIds];
+        _dirty = true;
+    }
+
+    private async Task PdfAsync()
+    {
+        _busy = true; _error = null; _note = null;
+        try
+        {
+            // The PDF is made from what is saved, so what's typed is saved first.
+            if (_dirty && !await SaveCoreAsync()) return;
+            var pdf = await AdminClient.GetEventMenuPdfAsync(OrgId, EventId, MenuId);
+            if (pdf is not { } file) { _error = "The PDF couldn't be made just now."; return; }
+            await JS.InvokeVoidAsync("downloadFileFromBase64", Convert.ToBase64String(file.Data), "application/pdf", file.FileName);
+        }
+        finally { _busy = false; }
+    }
+
+    private async Task CopyAsync()
+    {
+        _busy = true; _error = null; _note = null;
+        try
+        {
+            if (_dirty && !await SaveCoreAsync()) return;
+            var (copy, error) = await AdminClient.CopyEventMenuAsync(OrgId, EventId, MenuId);
+            if (copy is null) { _error = error ?? "The copy couldn't be made just now."; return; }
+            Nav.NavigateTo($"{BuilderHref}/{copy.Id}");
+        }
+        finally { _busy = false; }
+    }
+
+    private async Task LogoPickedAsync(InputFileChangeEventArgs e)
+    {
+        _busy = true; _error = null; _note = null;
+        try
+        {
+            var unsaved = _dirty ? Request() : null;
+            using var content = new MultipartFormDataContent();
+            var stream = new StreamContent(e.File.OpenReadStream(50L * 1024 * 1024));
+            stream.Headers.ContentType = new System.Net.Http.Headers.MediaTypeHeaderValue(
+                string.IsNullOrWhiteSpace(e.File.ContentType) ? "image/jpeg" : e.File.ContentType);
+            content.Add(stream, "file", e.File.Name);
+            var (done, error) = await AdminClient.SetEventMenuLogoAsync(OrgId, EventId, MenuId, content);
+            if (done is null) { _error = error ?? "The picture couldn't be added just now."; return; }
+            Fill(done);
+            _result = ItemResult<EventMenuRecord>.Ok(done);
+            if (unsaved is not null) RestoreUnsaved(unsaved);
+            _note = "The picture is on the menu.";
+        }
+        finally { _busy = false; }
+    }
+
+    private async Task RemoveLogoAsync()
+    {
+        _busy = true; _error = null; _note = null;
+        try
+        {
+            var unsaved = _dirty ? Request() : null;
+            var (done, error) = await AdminClient.RemoveEventMenuLogoAsync(OrgId, EventId, MenuId);
+            if (done is null) { _error = error ?? "The picture couldn't be removed just now."; return; }
+            Fill(done);
+            _result = ItemResult<EventMenuRecord>.Ok(done);
+            if (unsaved is not null) RestoreUnsaved(unsaved);
+        }
+        finally { _busy = false; }
+    }
+}

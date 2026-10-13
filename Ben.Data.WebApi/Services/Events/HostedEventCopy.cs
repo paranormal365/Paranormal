@@ -174,35 +174,79 @@ public static class HostedEventCopy
             copy.LayoutKind = source.LayoutKind;
         }
 
-        // ── the menus, onto the same night by position ────────────────────────
+        // ── the meals onto the same night by position, and the designed menus ──
+        // Meals carry their time and note; the dishes now live on designed menus (10/13/2026), which
+        // come across as drafts served at the copied meals. A meal's old typed dishes come across only
+        // while that meal hasn't been converted yet, so the conversion makes the new event's menu from
+        // them; once converted, copying them would only make a second menu.
         if (request.Menus)
         {
-            var oldMenus = await db.HostedEventMenus.AsNoTracking()
+            var oldMeals = await db.HostedEventMenus.AsNoTracking()
                 .Include(m => m.Items)
                 .Where(m => m.HostedEventNight.HostedEventId == source.Id).ToListAsync(ct);
+            var converted = (await db.EventMenus.AsNoTracking()
+                .Where(m => m.HostedEventId == source.Id && m.ConvertedFromHostedEventMenuId != null)
+                .Select(m => m.ConvertedFromHostedEventMenuId!.Value).ToListAsync(ct)).ToHashSet();
 
-            foreach (var menu in oldMenus)
+            var mealMap = new Dictionary<Guid, Guid>();
+            foreach (var meal in oldMeals)
             {
-                if (!nightMap.TryGetValue(menu.HostedEventNightId, out var nightId)) continue;
+                if (!nightMap.TryGetValue(meal.HostedEventNightId, out var nightId)) continue;
 
                 var copied = new HostedEventMenu
                 {
-                    Id = Guid.NewGuid(), HostedEventNightId = nightId, Title = menu.Title,
-                    ServedAtLocal = menu.ServedAtLocal, Notes = menu.Notes, SortOrder = menu.SortOrder,
+                    Id = Guid.NewGuid(), HostedEventNightId = nightId, Title = meal.Title,
+                    ServedAtLocal = meal.ServedAtLocal, Notes = meal.Notes, SortOrder = meal.SortOrder,
                     DateCreated = now, CreatedByAppUserId = actorId,
                 };
-                foreach (var item in menu.Items)
-                {
-                    copied.Items.Add(new HostedEventMenuItem
-                    {
-                        Id = Guid.NewGuid(), HostedEventMenuId = copied.Id, Course = item.Course, Name = item.Name,
-                        Description = item.Description, DietaryTags = item.DietaryTags, SortOrder = item.SortOrder,
-                        DateCreated = now,
-                    });
-                }
+                if (!converted.Contains(meal.Id))
+                    foreach (var item in meal.Items)
+                        copied.Items.Add(new HostedEventMenuItem
+                        {
+                            Id = Guid.NewGuid(), HostedEventMenuId = copied.Id, Course = item.Course, Name = item.Name,
+                            Description = item.Description, DietaryTags = item.DietaryTags, SortOrder = item.SortOrder,
+                            DateCreated = now,
+                        });
+                mealMap[meal.Id] = copied.Id;
                 db.HostedEventMenus.Add(copied);
-                menus++;
             }
+
+            var designed = await db.EventMenus.AsNoTracking()
+                .Include(m => m.Prices).Include(m => m.Servings)
+                .Include(m => m.Sections).ThenInclude(s => s.Entries)
+                .Where(m => m.HostedEventId == source.Id).ToListAsync(ct);
+
+            // Items kept for the old event only are copied for the new one; the group's and the
+            // venue's are the same items, shared.
+            var usedIds = designed.SelectMany(m => m.Sections).SelectMany(s => s.Entries).Select(e => e.MenuLibraryItemId).Distinct().ToList();
+            var eventOnly = await db.MenuLibraryItems.AsNoTracking()
+                .Where(i => usedIds.Contains(i.Id) && i.Scope == Ben.Data.Common.Enums.MenuItemScope.Event)
+                .ToListAsync(ct);
+            var itemMap = new Dictionary<Guid, Guid>();
+            foreach (var item in eventOnly)
+            {
+                var copiedItem = new MenuLibraryItem
+                {
+                    Id = Guid.NewGuid(), OrganizationId = copy.OrganizationId, Scope = item.Scope, HostedEventId = copy.Id,
+                    MenuCategoryId = item.MenuCategoryId, Name = item.Name, Description = item.Description,
+                    ImageUploadFileId = item.ImageUploadFileId, Dietary = item.Dietary, Allergens = item.Allergens,
+                    DietaryNote = item.DietaryNote, DateCreated = now, CreatedByAppUserId = actorId,
+                };
+                itemMap[item.Id] = copiedItem.Id;
+                db.MenuLibraryItems.Add(copiedItem);
+            }
+
+            foreach (var menu in designed)
+            {
+                var copiedMenu = EventMenus.Copy(menu, menu.Title, copy.Id, actorId, now, itemMap);
+                copiedMenu.CopiedFromEventMenuId = null;
+                foreach (var serving in menu.Servings)
+                    if (mealMap.TryGetValue(serving.HostedEventMenuId, out var mealId))
+                        copiedMenu.Servings.Add(new EventMenuServing { EventMenuId = copiedMenu.Id, HostedEventMenuId = mealId });
+                db.EventMenus.Add(copiedMenu);
+            }
+
+            menus = oldMeals.Count(m => mealMap.ContainsKey(m.Id));
         }
 
         // ── the programme, unpublished, with nobody signed up ─────────────────

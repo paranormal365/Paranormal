@@ -136,6 +136,24 @@ bell shows **The program changed**, and the session is marked **Changed** until 
 The iPhone and iPad app has the same program, menus, downloads and room under **Profile → What I'm going
 to → The event**. See [the mobile apps](/help/the-mobile-apps#during-the-event).
 
+## The menus
+
+When the venue has published its menus, they're on the event's page, under **Menu**. Each date in the
+list of dates shows what's served that night, and each menu says when it's served, its price, and
+what each dish is: **V** vegetarian, **VG** vegan, **GF** gluten free and so on, with a key at the
+bottom, and what it contains, such as *Contains milk, eggs*. Anything on offer the whole time, like
+a snack table, is marked **Throughout the event**.
+
+![A menu on the event's page](/help/media/going-to-an-event/event-menus-for-guests.png)
+
+A menu says how each thing is paid for. A price beside a dish means it's paid for on its own, such as
+a drink from the bar. **Included** means the event's price covers it. A price at the top, such as
+*Adults $25*, is the price of the meal. Under the dates, **Included with the event** says which meals
+your place covers. **Download this menu as a PDF** saves a copy to print or keep.
+
+The marks on a menu describe the food. If there's something you can't eat, tell the venue, so they
+can note it on your booking for the kitchen.
+
 ## Downloads
 
 An event can share files — for example, a poster anyone can download, and a guest pack with the

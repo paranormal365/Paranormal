@@ -192,7 +192,8 @@ public sealed class PublicHostedEventBookingController : BenControllerBase
             return StatusCode(StatusCodes.Status403Forbidden,
                 "The venue publishes the menu once your place is agreed.");
 
-        return Ok(await Entities.HostedEventMenuController.MenusAsync(db, eventId, ct));
+        // The published designed menus, in the shape released copies of the app read (10/13/2026).
+        return Ok(await Services.Events.EventMenuLegacyShape.ComposeAsync(db, eventId, ct));
     }
 
     /// <summary>

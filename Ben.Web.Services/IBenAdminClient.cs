@@ -35,6 +35,7 @@ public interface IBenAdminClient :
     IBenPublicationClient,
     IBenBillingClient,
     IBenEventBookingClient,
+    IBenEventMenuClient,
     IBenVenueClient,
     IBenProgrammeClient,
     IBenEventFileClient,

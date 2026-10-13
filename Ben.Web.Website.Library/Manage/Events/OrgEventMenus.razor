@@ -18,9 +18,12 @@
    THE ORDER IS THE HOST'S AND NEVER THE CLOCK'S. A night runs from the evening through the next
    morning, so sorting sittings by the time they are served prints an eight o'clock breakfast
    before the seven o'clock dinner it followed. The arrows move a sitting; where it sits in the
-   list is where it is served. *@
+   list is where it is served.
 
-<PageTitle>@(_event?.Name is { Length: > 0 } n ? $"Menus — {n}" : "Menus")</PageTitle>
+   MEALS, NOT MENUS (10/13/2026). What's on a meal is now its designed menus, made under Menus and
+   attached to the meals here; this page keeps the schedule the dining tables are laid out against. *@
+
+<PageTitle>@(_event?.Name is { Length: > 0 } n ? $"Meals — {n}" : "Meals")</PageTitle>
 
 <div class="container-fluid py-3">
 
@@ -33,12 +36,13 @@
     </div>
 
     <h1 class="h3 mb-1">
-        Menus
+        Meals
         <HelpLink Slug="organization-administration" Anchor="hosted-events" />
     </h1>
     <p class="text-secondary small mb-3">
-        Every sitting you are serving, under the night it belongs to. Guests read this, and the
-        kitchen's sheet lists what they cannot eat.
+        Every meal you're serving, under the night it belongs to: its name, when it's served and a note.
+        What's on it is the menu, made under <a href="@($"/organizations/{OrgId}/events/{EventId}/menu-builder")">Menus</a>
+        and served at the meals you choose there. The dining tables are laid out meal by meal.
     </p>
 
     @if (_note is { Length: > 0 })
@@ -51,7 +55,7 @@
     }
 
     <BenItemState TItem="HostedEventMenusRecord" Result="_menus" Loading="_loading"
-                  LoadingText="Loading the menus…" OnRetry="LoadAsync">
+                  LoadingText="Loading the meals…" OnRetry="LoadAsync">
         <ChildContent Context="loaded">
             @if (_event is { } ev)
             {
@@ -149,16 +153,20 @@
                                         </div>
                                     </div>
 
-                                    <label class="form-label small mt-2 mb-1"
-                                           for="@($"sitting-dishes-{sitting.Key}")">
-                                        What is on it
-                                    </label>
-                                    @* Five rows, because four dishes and a scrollbar reads as a
-                                       menu with the pudding missing. *@
-                                    <textarea id="@($"sitting-dishes-{sitting.Key}")" rows="5"
-                                              class="form-control"
-                                              placeholder="One dish a line. Put the course first if you use them — Starter: Soup"
-                                              @bind="sitting.Dishes" @bind:event="oninput"></textarea>
+                                    @if (sitting.Id is { } mealId && ServedAt(mealId) is { Count: > 0 } served)
+                                    {
+                                        <div class="small mt-2" data-testid="meal-menus">
+                                            Menus:
+                                            @foreach (var (menu, place) in served.Select((m, n) => (m, n)))
+                                            {
+                                                @(place > 0 ? ", " : "")<a href="@($"/organizations/{OrgId}/events/{EventId}/menu-builder/{menu.Id}")">@menu.Title</a>@(menu.PublishedUtc is null ? " (draft)" : "")
+                                            }
+                                        </div>
+                                    }
+                                    else if (sitting.Id is not null)
+                                    {
+                                        <div class="small text-secondary mt-2">No menu is served at this meal yet.</div>
+                                    }
                                 </div>
                             }
                         </div>
@@ -174,7 +182,7 @@
                     }
                     <button type="button" class="btn btn-primary" id="menus-save"
                             disabled="@_busy" @onclick="SaveAsync">
-                        @(_busy ? "Saving…" : "Save the menus")
+                        @(_busy ? "Saving…" : "Save the meals")
                     </button>
                 </div>
             }
@@ -198,6 +206,13 @@
 
     private HostedEventRecord? _event;
     private ItemResult<HostedEventMenusRecord> _menus;
+
+    /// <summary>The designed menus, for saying which are served at each meal (10/13/2026).</summary>
+    private IReadOnlyList<EventMenuSummaryRecord> _designed = [];
+
+    private List<EventMenuSummaryRecord> ServedAt(Guid mealId)
+        => [.. _designed.Where(m => m.Meals.Any(x => x.HostedEventMenuId == mealId))];
+
     private readonly List<SittingForm> _sittings = [];
     private bool _loading = true;
     private bool _busy;
@@ -205,13 +220,7 @@
     private string? _note;
     private string? _error;
 
-    /// <summary>One sitting while it is being edited.</summary>
-    /// <remarks>
-    /// A class of its own rather than the record, because the dishes are edited as a block of text
-    /// and the record holds them as a list. Typing a menu is typing lines; making somebody press
-    /// Add for every course would be a form standing between them and a thing they can already
-    /// write out in ten seconds.
-    /// </remarks>
+    /// <summary>One meal while it is being edited.</summary>
     private sealed class SittingForm
     {
         public Guid Key { get; init; } = Guid.NewGuid();
@@ -222,7 +231,6 @@
         public string Title { get; set; } = "";
         public TimeOnly? ServedAt { get; set; }
         public string? Notes { get; set; }
-        public string Dishes { get; set; } = "";
     }
 
     protected override async Task OnAfterRenderAsync(bool firstRender)
@@ -240,6 +248,7 @@
         _loading = true;
         _event ??= await AdminClient.GetHostedEventAsync(OrgId, EventId);
         _menus = await AdminClient.GetEventMenusAsync(OrgId, EventId);
+        _designed = (await AdminClient.GetMenuWorkspaceAsync(OrgId, EventId)).Item?.Menus ?? [];
 
         if (_menus.Item is { } loaded) Fill(loaded);
 
@@ -260,9 +269,6 @@
                 Title = menu.Title,
                 ServedAt = menu.ServedAtLocal is { } at ? TimeOnly.FromTimeSpan(at) : null,
                 Notes = menu.Notes,
-                Dishes = string.Join("\n", menu.Items
-                    .OrderBy(i => i.SortOrder)
-                    .Select(i => i.Course is { Length: > 0 } course ? $"{course}: {i.Name}" : i.Name)),
             });
         }
     }
@@ -320,7 +326,8 @@
                 s.Title.Trim(),
                 s.ServedAt is { } at ? at.ToTimeSpan() : null,
                 Trimmed(s.Notes),
-                Dishes(s.Dishes),
+                // What's on a meal is its menus now (10/13/2026); the typed dishes are no longer kept here.
+                [],
                 s.Id))
             .ToList();
 
@@ -329,40 +336,13 @@
 
         _busy = false;
 
-        if (saved is null) { _error = error ?? "The menus couldn't be saved just now."; return; }
+        if (saved is null) { _error = error ?? "The meals couldn't be saved just now."; return; }
 
         Fill(saved);
         _dirty = false;
         _note = menus.Count == 0
-            ? "Saved. Nothing is being served."
-            : $"Saved. {menus.Count} {(menus.Count == 1 ? "sitting" : "sittings")} across the event.";
-    }
-
-    /// <summary>
-    /// Reads a block of typed lines as dishes, with an optional course before a colon.
-    /// </summary>
-    /// <remarks>
-    /// A colon is how people already write a menu — "Starter: Soup" — so it is what the box
-    /// accepts, and a line without one is simply a dish. Nothing is required and nothing is
-    /// rejected: a menu is prose a kitchen wrote, not a form.
-    /// </remarks>
-    private static List<HostedEventMenuItemInput> Dishes(string? typed)
-    {
-        if (string.IsNullOrWhiteSpace(typed)) return [];
-
-        return
-        [
-            .. typed
-                .Split('\n', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
-                .Select(line =>
-                {
-                    var colon = line.IndexOf(':');
-                    return colon > 0 && colon < line.Length - 1
-                        ? new HostedEventMenuItemInput(
-                            line[(colon + 1)..].Trim(), Course: line[..colon].Trim())
-                        : new HostedEventMenuItemInput(line);
-                })
-        ];
+            ? "Saved. No meals."
+            : $"Saved. {menus.Count} {(menus.Count == 1 ? "meal" : "meals")} across the event.";
     }
 
     private static string? Trimmed(string? value)

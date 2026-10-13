@@ -22,6 +22,19 @@ it carry no number.
 The history before 2026-08-22 is summarized rather than listed: the site was not yet open, and a
 day-by-day account of building it would say nothing to anyone using it now.
 
+## 2026-10-13 · 2.20.0
+
+- Events have designed menus. Make the items once and keep them for the event, your group or the
+  venue, then put menus together from them, with their prices, in one of twelve looks, six of them
+  made for ghost hunting. A preview shows the menu as you build it.
+- Published menus are on the event's page beside the dates they're served, with a PDF to download.
+  A menu can be served at several meals, or on offer throughout the event, like a snack table.
+- The event's page says which meals the event's price includes.
+- The Pricing page shows what each plan includes, each plan's differences from the free one, and
+  what a hosted event includes. The free plan no longer says "No limits" without saying it means
+  public work.
+- Page numbers on tables are easier to read in the dark theme.
+
 ## 2026-10-10 · 2.19.0
 
 - If your group's renewal payment doesn't go through, your plan keeps going for two weeks while the

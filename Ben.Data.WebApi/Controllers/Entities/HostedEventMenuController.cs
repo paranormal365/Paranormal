@@ -116,6 +116,11 @@ public sealed class HostedEventMenuController : OrgCmsControllerBase
         var kept = wanted.Where(m => m.Id is not null).Select(m => m.Id!.Value).ToHashSet();
         var going = existing.Where(m => !kept.Contains(m.Id)).ToList();
         db.HostedEventMenuItems.RemoveRange(existing.SelectMany(m => m.Items));
+        // A menu served at a meal that goes stays, no longer served there (the link doesn't cascade
+        // from the meal; see BenDataContext).
+        var goingIds = going.Select(m => m.Id).ToList();
+        db.EventMenuServings.RemoveRange(
+            await db.EventMenuServings.Where(sv => goingIds.Contains(sv.HostedEventMenuId)).ToListAsync(ct));
         db.HostedEventMenus.RemoveRange(going);
 
         // Position in the list IS the order, for sittings and for dishes alike. Reading a sent

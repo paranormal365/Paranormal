@@ -67,6 +67,21 @@ public sealed class MediaUrlBuilder : IMediaUrlBuilder
 
     public string VenuePhoto(Guid uploadFileId) => $"/media/venue-photo/{uploadFileId}";
 
+    public string MenuImage(Guid uploadFileId)
+    {
+        var cacheKey = $"menu-image:{uploadFileId}";
+        if (_urls.TryGetValue(cacheKey, out var cached)) return cached;
+
+        var token = _tokens.AccessToken;
+        var ticket = string.IsNullOrWhiteSpace(token) ? null : _tickets.Protect(uploadFileId, token);
+        var url = ticket is null
+            ? $"/media/menu-image/{uploadFileId}"
+            : $"/media/menu-image/{uploadFileId}?t={Uri.EscapeDataString(ticket)}";
+
+        _urls[cacheKey] = url;
+        return url;
+    }
+
     public string EventKeepZip(Guid orgId, Guid eventId, IReadOnlyCollection<Guid> uploadFileIds)
     {
         var token = _tokens.AccessToken;

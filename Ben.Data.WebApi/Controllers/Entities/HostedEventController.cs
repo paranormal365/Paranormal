@@ -1412,6 +1412,10 @@ public sealed class HostedEventController : OrgCmsControllerBase
             // A letter sent to the people there that night stays in the history, addressed to the whole event now.
             foreach (var letter in await db.HostedEventAnnouncements.Where(a => a.HostedEventNightId == gone.Id).ToListAsync(ct))
                 letter.HostedEventNightId = null;
+            // Menus served at that night's meals stay, just no longer served there: the link has no
+            // cascade of its own from the meal (two cascade paths), so it is cleared here.
+            db.EventMenuServings.RemoveRange(
+                await db.EventMenuServings.Where(sv => sv.Meal.HostedEventNightId == gone.Id).ToListAsync(ct));
             db.HostedEventNights.Remove(gone);
             hosted.Nights.Remove(gone);
         }

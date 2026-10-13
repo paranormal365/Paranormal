@@ -362,6 +362,8 @@ builder.Services.AddHostedService<Ben.Data.WebApi.Services.MarkupFieldSanitizeBa
 builder.Services.AddHostedService<Ben.Data.WebApi.Services.FieldSessionMarkerRecountService>();
 // Case notes became formatted text on 2026-09-14: converts the plain-text notes written before then, once.
 builder.Services.AddHostedService<Ben.Data.WebApi.Services.CaseNoteBodyHtmlBackfillService>();
+// Meals' typed dishes into designed menus (10/13/2026); once per meal, old rows kept.
+builder.Services.AddHostedService<Ben.Data.WebApi.Services.Events.EventMenuConversionBackfillService>();
 
 // Link previews (beta feedback, 2026-09-14): the card under a pasted link. The fetcher's handler dials only addresses
 // OutboundUrlGuard approves and follows no redirects on its own — see OpenGraphFetcher.
@@ -950,6 +952,7 @@ if (app.Configuration.GetValue("SeedData:Enabled", true))
     await Ben.Data.WebApi.SeedData.ExperienceTaxonomySeeder.SeedAsync(app.Services, app.Configuration);
     await Ben.Data.WebApi.SeedData.EquipmentTaxonomySeeder.SeedAsync(app.Services, app.Configuration);
     await Ben.Data.WebApi.SeedData.ContactTypeSeeder.SeedAsync(app.Services, app.Configuration);
+    await Ben.Data.WebApi.SeedData.MenuCategorySeeder.SeedAsync(app.Services, app.Configuration);
     await Ben.Data.WebApi.SeedData.SubscriptionTierSeeder.SeedAsync(app.Services, app.Configuration);
     await Ben.Data.WebApi.SeedData.MemberLevelSeeder.SeedAsync(app.Services, app.Configuration);
     await Ben.Data.WebApi.SeedData.InvestigationDutySeeder.SeedAsync(app.Services, app.Configuration);

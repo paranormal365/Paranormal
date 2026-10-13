@@ -3,6 +3,7 @@ using Ben.Data.Source.Context;
 using Ben.Data.Source.Entities;
 using Ben.Data.WebApi.Services.Events;
 using Ben.Data.WebApi.Services.Venues;
+using Ben.Service.Models.Entities;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
 
@@ -88,6 +89,7 @@ internal static class HostedEventDemoSeeder
         await PutThemOnThePublicSiteAsync(scope.ServiceProvider, db, owner.Id);
         await SeedWhatTheVenueKeepsAsync(db, owner.Id, now);
         await SeedWhatIsServedAsync(db, owner.Id, now);
+        await SeedTheDesignedMenusAsync(db, host.Id, owner.Id, now);
         await SeedAPartyTheKitchenMustWorkAroundAsync(db, userManager, config, owner.Id, now);
         await SeedTheProgrammeAsync(db, owner.Id, now);
         await SeedHowToGetInAsync(db);
@@ -225,7 +227,7 @@ internal static class HostedEventDemoSeeder
             ("Breakfast", new TimeSpan(8, 0, 0), "The morning after — yes, this is still Friday's night.",
              [
                  (null, "Eggs, bacon and toast", null),
-                 (null, "Fruit and yoghurt", "vegetarian"),
+                 (null, "Fruit and yogurt", "vegetarian"),
              ]),
         ];
 
@@ -279,6 +281,104 @@ internal static class HostedEventDemoSeeder
         await db.SaveChangesAsync();
         Console.WriteLine(
             $"[HostedEventDemoSeeder] Wrote {order} sittings across the séance weekend.");
+    }
+
+    /// <summary>
+    /// Designed menus on the séance weekend (Ben, 10/13/2026: "Create demo menus using each design to
+    /// show an end user what it looks like when done").
+    /// </summary>
+    /// <remarks>
+    /// <para>The meals' typed dishes above are converted here rather than waiting for the startup
+    /// conversion, and given ghost-hunting looks, so the demo's guests read four designed menus.
+    /// A snack table on offer the whole weekend shows candy and drinks sold or free with the event.
+    /// Then one draft per design, filled with the sample food, so a planner can open any look
+    /// finished. Items are the group's, so the samples share one library.</para>
+    /// </remarks>
+    private static async Task SeedTheDesignedMenusAsync(BenDataContext db, Guid hostOrgId, Guid ownerId, DateTime now)
+    {
+        if (await db.EventMenus.AnyAsync(m => m.HostedEventId == RoomsEventId && m.Title.StartsWith("Sample: ")))
+            return;
+        if (!await db.HostedEvents.AnyAsync(e => e.Id == RoomsEventId)) return;
+
+        await Services.Events.EventMenuConversion.ConvertAsync(db, CancellationToken.None);
+
+        var looks = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
+        {
+            ["Dinner"] = "seance-parlor", ["Late supper"] = "midnight-vigil", ["Breakfast"] = "garden-party",
+        };
+        var converted = await db.EventMenus.Where(m => m.HostedEventId == RoomsEventId && m.ConvertedFromHostedEventMenuId != null)
+            .Include(m => m.Servings).ThenInclude(sv => sv.Meal).ThenInclude(meal => meal.HostedEventNight)
+            .ToListAsync();
+        foreach (var menu in converted)
+        {
+            var meal = menu.Servings.FirstOrDefault()?.Meal;
+            var saturday = meal?.HostedEventNight.Date.DayOfWeek == DayOfWeek.Saturday;
+            menu.DesignKey = saturday ? "haunted-manor" : looks.GetValueOrDefault(meal?.Title ?? "", "seance-parlor");
+        }
+
+        var items = new Dictionary<string, MenuLibraryItem>(StringComparer.OrdinalIgnoreCase);
+        var categories = await db.MenuCategories.ToListAsync();
+
+        Guid CategoryFor(string title)
+        {
+            var key = MenuCategory.KeyFor(title);
+            var found = categories.FirstOrDefault(c => c.NameKey == key);
+            if (found is not null) return found.Id;
+            found = new MenuCategory { Id = Guid.NewGuid(), Name = title, NameKey = key, SortOrder = 1000, DateCreated = now };
+            categories.Add(found);
+            db.MenuCategories.Add(found);
+            return found.Id;
+        }
+
+        EventMenu Build(EventMenuRecord sample, string title, bool published, bool throughout)
+        {
+            var menu = new EventMenu
+            {
+                Id = Guid.NewGuid(), HostedEventId = RoomsEventId, Title = title, Heading = sample.Heading,
+                Intro = sample.Intro, Meal = sample.Meal, ThroughoutTheEvent = throughout, DesignKey = sample.DesignKey,
+                PriceNote = sample.PriceNote, PublishedUtc = published ? now : null,
+                DateCreated = now, CreatedByAppUserId = ownerId,
+            };
+            var order = 0;
+            foreach (var price in sample.Prices)
+                menu.Prices.Add(new EventMenuPrice { Id = Guid.NewGuid(), EventMenuId = menu.Id, Label = price.Label, Amount = price.Amount, SortOrder = order++ });
+
+            order = 0;
+            foreach (var section in sample.Sections)
+            {
+                var row = new EventMenuSection { Id = Guid.NewGuid(), EventMenuId = menu.Id, MenuCategoryId = CategoryFor(section.Title), SortOrder = order++ };
+                var at = 0;
+                foreach (var entry in section.Entries)
+                {
+                    if (!items.TryGetValue(entry.Item.Name, out var item))
+                    {
+                        item = new MenuLibraryItem
+                        {
+                            Id = Guid.NewGuid(), OrganizationId = hostOrgId, Scope = MenuItemScope.Group,
+                            MenuCategoryId = row.MenuCategoryId, Name = entry.Item.Name, Description = entry.Item.Description,
+                            Dietary = entry.Item.Dietary, Allergens = entry.Item.Allergens,
+                            DateCreated = now, CreatedByAppUserId = ownerId,
+                        };
+                        items[item.Name] = item;
+                        db.MenuLibraryItems.Add(item);
+                    }
+                    row.Entries.Add(new EventMenuEntry
+                    {
+                        Id = Guid.NewGuid(), EventMenuSectionId = row.Id, MenuLibraryItemId = item.Id,
+                        Pricing = entry.Pricing, Price = entry.Price, Note = entry.Note, SortOrder = at++,
+                    });
+                }
+                menu.Sections.Add(row);
+            }
+            return menu;
+        }
+
+        db.EventMenus.Add(Build(MenuSamples.Concessions("chalkboard-cafe"), "Snack table, all weekend", published: true, throughout: true));
+        foreach (var design in Ben.Data.Common.Menus.MenuDesigns.All)
+            db.EventMenus.Add(Build(MenuSamples.Dinner(design.Key), $"Sample: {design.Name}", published: false, throughout: false));
+
+        await db.SaveChangesAsync();
+        Console.WriteLine($"[HostedEventDemoSeeder] Wrote {Ben.Data.Common.Menus.MenuDesigns.All.Count + 1} designed menus on the séance weekend.");
     }
 
     /// <summary>

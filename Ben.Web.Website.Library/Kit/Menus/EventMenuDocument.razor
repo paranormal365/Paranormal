@@ -1,0 +1,172 @@
+@namespace Ben.Web.Website.Library.Kit.Menus
+@using Ben.Data.Common.Menus
+@using Ben.Service.Models.Entities
+@inject Ben.Web.Services.IMediaUrlBuilder Media
+
+@*
+    One menu, drawn in its design (Ben, 10/13/2026): the builder's live preview, the event's page and
+    the design gallery all draw through here, from the same MenuDesign the PDF reads, with the same
+    words (EventMenuPresentation). So what a planner previews is what guests see and what prints.
+
+    The design's colors are the menu's own paper, not the site's theme: a menu is a printed object,
+    and Séance Parlor stays oxblood in the light theme as Classic Bistro stays cream in the dark.
+*@
+
+@{
+    var design = MenuDesigns.FindOrDefault(DesignKey ?? Menu.DesignKey);
+    var key = EventMenuPresentation.Key(Menu);
+}
+
+<article class="menu-doc menu-doc--@design.Key @FontClass(design) @(design.UpperHeadings ? "menu-doc--caps" : "") @(design.TwoColumns && Menu.Sections.Count > 1 ? "menu-doc--columns" : "") @(Compact ? "menu-doc--compact" : "") menu-doc--frame-@design.Frame.ToString().ToLowerInvariant()"
+         style="@Palette(design)" data-testid="menu-document" data-design="@design.Key"
+         aria-label="@($"{Menu.ShownHeading} menu")">
+    <div class="menu-doc__page">
+        <header class="menu-doc__head">
+            @if (Menu.LogoUploadFileId is { } logo)
+            {
+                <img class="menu-doc__logo" src="@Media.MenuImage(logo)" alt="" />
+            }
+            @Ornament(design.Ornament)
+            <div class="menu-doc__event">@Menu.EventName</div>
+            <h3 class="menu-doc__title">@Menu.ShownHeading</h3>
+            @foreach (var line in EventMenuPresentation.WhenLines(Menu))
+            {
+                <div class="menu-doc__when">@line</div>
+            }
+            @if (Menu.Intro is { Length: > 0 } intro)
+            {
+                <p class="menu-doc__intro">@intro</p>
+            }
+            @if (EventMenuPresentation.PriceLine(Menu) is { } prices)
+            {
+                <div class="menu-doc__prices" data-testid="menu-prices">@prices</div>
+            }
+            @if (EventMenuPresentation.IncludedLine(Menu) is { } included)
+            {
+                <div class="menu-doc__prices">@included</div>
+            }
+            @if (Menu.PriceNote is { Length: > 0 } note)
+            {
+                <div class="menu-doc__price-note">@note</div>
+            }
+            <div class="menu-doc__rule" aria-hidden="true"></div>
+        </header>
+
+        @if (Menu.Sections.Count == 0)
+        {
+            <p class="menu-doc__empty">Add a section and put items in it, and they appear here.</p>
+        }
+
+        <div class="menu-doc__sections">
+            @foreach (var section in Menu.Sections)
+            {
+                <section class="menu-doc__section">
+                    <h4 class="menu-doc__section-title">@section.Title</h4>
+                    @foreach (var entry in section.Entries)
+                    {
+                        var price = EventMenuPresentation.EntryPrice(Menu, entry);
+                        <div class="menu-doc__item @(entry.Item.ImageUploadFileId is not null ? "menu-doc__item--pictured" : "")" data-testid="menu-item">
+                            @if (entry.Item.ImageUploadFileId is { } picture)
+                            {
+                                <img class="menu-doc__picture" src="@Media.MenuImage(picture)" alt="" loading="lazy" />
+                            }
+                            <div class="menu-doc__item-text">
+                                <div class="menu-doc__line">
+                                    <span class="menu-doc__name">@entry.Item.Name</span>
+                                    @if (EventMenuPresentation.Letters(entry.Item.Dietary) is { } letters)
+                                    {
+                                        <span class="menu-doc__marks">@letters</span>
+                                    }
+                                    @if (price is not null)
+                                    {
+                                        @if (design.DottedLeaders)
+                                        {
+                                            <span class="menu-doc__leader" aria-hidden="true"></span>
+                                        }
+                                        else
+                                        {
+                                            <span class="menu-doc__gap" aria-hidden="true"></span>
+                                        }
+                                        <span class="menu-doc__price">@price</span>
+                                    }
+                                </div>
+                                @if (entry.Item.Description is { Length: > 0 } description)
+                                {
+                                    <div class="menu-doc__desc">@description</div>
+                                }
+                                @if (EventMenuPresentation.AllergenLine(entry.Item) is { } allergens)
+                                {
+                                    <div class="menu-doc__allergens">@allergens</div>
+                                }
+                                @if (entry.Note is { Length: > 0 } entryNote)
+                                {
+                                    <div class="menu-doc__note">@entryNote</div>
+                                }
+                            </div>
+                        </div>
+                    }
+                </section>
+            }
+        </div>
+
+        @if (key is not null)
+        {
+            <div class="menu-doc__key">@key</div>
+        }
+
+        @* Ben, 10/13/2026: a very small credit to the site, the year and the company's legal name. *@
+        <footer class="menu-doc__credit">@MenuDesigns.Credit(DateTime.UtcNow.Year)</footer>
+    </div>
+</article>
+
+@code {
+    [Parameter, EditorRequired] public EventMenuRecord Menu { get; set; } = default!;
+
+    /// <summary>Draws in this design instead of the menu's own: the builder's "try another look".</summary>
+    [Parameter] public string? DesignKey { get; set; }
+
+    /// <summary>A small card for the design gallery, scaled down rather than reflowed.</summary>
+    [Parameter] public bool Compact { get; set; }
+
+    private static string FontClass(MenuDesign d) => d.Font switch
+    {
+        MenuFont.Sans => "menu-doc--sans",
+        MenuFont.Typewriter => "menu-doc--typewriter",
+        _ => "menu-doc--serif",
+    };
+
+    private static string Palette(MenuDesign d)
+        => $"--m-paper:{d.Paper};--m-ink:{d.Ink};--m-accent:{d.Accent};--m-muted:{d.Muted};";
+
+    /// <summary>The same small drawings the PDF makes, as SVG in the accent color.</summary>
+    private static RenderFragment Ornament(MenuOrnament ornament) => __builder =>
+    {
+        switch (ornament)
+        {
+            case MenuOrnament.Flourish:
+                <svg class="menu-doc__ornament" viewBox="0 0 120 16" aria-hidden="true"><path d="M0 8 C30 0 42 14 53 8 M120 8 C90 0 78 14 67 8" fill="none" stroke="currentColor" stroke-width="1.2" /><path d="M60 3 L65 8 L60 13 L55 8 Z" fill="currentColor" /></svg>
+                break;
+            case MenuOrnament.Crescent:
+                <svg class="menu-doc__ornament" viewBox="0 0 120 20" aria-hidden="true"><mask id="mm"><rect width="120" height="20" fill="#fff" /><circle cx="63.5" cy="8" r="7" fill="#000" /></mask><circle cx="60" cy="10" r="8" fill="currentColor" mask="url(#mm)" /><circle cx="38" cy="7" r="1.2" fill="currentColor" /><circle cx="84" cy="12" r="1.2" fill="currentColor" /></svg>
+                break;
+            case MenuOrnament.Stars:
+                <svg class="menu-doc__ornament" viewBox="0 0 120 16" aria-hidden="true"><g fill="currentColor"><path d="M60 2 l1.8 4.2 4.4.3-3.4 2.9 1.1 4.3L60 11.4l-3.9 2.3 1.1-4.3-3.4-2.9 4.4-.3z" /><path d="M40 5 l1 2.4 2.6.2-2 1.7.6 2.5L40 10.4l-2.2 1.4.6-2.5-2-1.7 2.6-.2z" /><path d="M80 5 l1 2.4 2.6.2-2 1.7.6 2.5L80 10.4l-2.2 1.4.6-2.5-2-1.7 2.6-.2z" /></g></svg>
+                break;
+            case MenuOrnament.Candle:
+                <svg class="menu-doc__ornament" viewBox="0 0 120 24" aria-hidden="true"><path d="M60 2 C63 7 63 9 60 11 C57 9 57 7 60 2 Z" fill="currentColor" /><rect x="57" y="12" width="6" height="11" fill="currentColor" /><path d="M20 20 H50 M70 20 H100" stroke="currentColor" stroke-width="1" /></svg>
+                break;
+            case MenuOrnament.Planchette:
+                <svg class="menu-doc__ornament" viewBox="0 0 120 24" aria-hidden="true"><path d="M60 2 C74 4 72 22 60 22 C48 22 46 4 60 2 Z" fill="none" stroke="currentColor" stroke-width="1.2" /><circle cx="60" cy="12" r="3.2" fill="none" stroke="currentColor" stroke-width="1.2" /><path d="M14 12 H42 M78 12 H106" stroke="currentColor" stroke-width="1" /></svg>
+                break;
+            case MenuOrnament.Waveform:
+                <svg class="menu-doc__ornament" viewBox="0 0 120 26" aria-hidden="true"><g stroke="currentColor" stroke-width="1.4">@foreach (var (h, i) in new[] { 1, 2, 4, 3, 7, 10, 5, 12, 6, 3, 9, 4, 2, 5, 1 }.Select((h, i) => (h, i))) { <line x1="@(25 + i * 5)" y1="@(13 - h)" x2="@(25 + i * 5)" y2="@(13 + h)" /> }</g></svg>
+                break;
+            case MenuOrnament.Leaf:
+                <svg class="menu-doc__ornament" viewBox="0 0 120 16" aria-hidden="true"><path d="M52 8 C48 0 40 2 38 8 C40 14 48 16 52 8 Z M68 8 C72 0 80 2 82 8 C80 14 72 16 68 8 Z" fill="currentColor" /><path d="M10 8 H36 M84 8 H110" stroke="currentColor" stroke-width="1" /></svg>
+                break;
+            case MenuOrnament.Stamp:
+                <div class="menu-doc__stamp" aria-hidden="true">Evidence · Menu</div>
+                break;
+        }
+    };
+}

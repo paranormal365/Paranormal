@@ -872,6 +872,20 @@ app.MapGet("/media/event-photo/{fileId:guid}", async (
         accessToken: null, httpFactory, ctx, ct);
 }).AllowAnonymous();
 
+// A menu item's photo or a menu's logo (10/13/2026). Anyone once the menu is published; before that the
+// ticket carries the planner, so the builder's preview shows it. The API decides either way.
+app.MapGet("/media/menu-image/{fileId:guid}", async (
+    Guid fileId, string? t,
+    Ben.Web.Website.Services.MediaTicketService tickets,
+    IHttpClientFactory httpFactory, IConfiguration config,
+    HttpContext ctx, CancellationToken ct) =>
+{
+    var accessToken = string.IsNullOrWhiteSpace(t) ? null : tickets.Unprotect(fileId, t);
+    return await Ben.Web.Website.Services.MediaProxy.StreamAsync(
+        $"{config["WebApi:BaseUrl"]}/api/public/menu-image/{fileId}",
+        accessToken, httpFactory, ctx, ct);
+}).AllowAnonymous();
+
 // A link preview's picture (2026-09-14): our own small copy of the picture another site published for its page. Anonymous
 // and un-ticketed on purpose — the address is stored inside research pages, and a card is drawn for readers who are not
 // signed in. The API serves only pictures it copied for a kept preview.

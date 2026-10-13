@@ -1,0 +1,246 @@
+@namespace Ben.Web.Website.Library.Kit.Menus
+@using Ben.Data.Common.Enums
+@using Ben.Service.Models.Entities
+@using Microsoft.AspNetCore.Components.Forms
+@inject IBenAdminClient AdminClient
+@inject Ben.Web.Services.IMediaUrlBuilder Media
+
+@*
+    Making or changing one menu item (Ben, 10/13/2026): name, description, picture, category,
+    dietary marks and allergens, and where it's kept. Where it's kept is explained beside each choice,
+    because the difference between "your group" and "this venue" is the whole point of having both.
+*@
+
+<BenModal Visible="@Visible" VisibleChanged="@VisibleChanged" Title="@(Item is null ? "A new item" : $"Change {Item.Name}")" Size="lg">
+    <ChildContent>
+        @if (_error is { Length: > 0 })
+        {
+            <div class="alert alert-danger py-2" role="alert" id="menu-item-error">@_error</div>
+        }
+
+        <div class="row g-3">
+            <div class="col-12 col-md-7">
+                <label class="form-label small mb-1" for="menu-item-name">Name</label>
+                <input id="menu-item-name" class="form-control" maxlength="200" @bind="_name" @bind:event="oninput" />
+            </div>
+            <div class="col-12 col-md-5">
+                <label class="form-label small mb-1" for="menu-item-category">Category</label>
+                <select id="menu-item-category" class="form-select" @bind="_categoryId">
+                    @foreach (var category in Categories)
+                    {
+                        <option value="@category.Id">@category.Name</option>
+                    }
+                </select>
+                @if (!_addingCategory)
+                {
+                    <button type="button" class="btn btn-link btn-sm px-0" id="menu-item-new-category" @onclick="() => _addingCategory = true">
+                        Add a category that isn't listed
+                    </button>
+                }
+                else
+                {
+                    <div class="input-group input-group-sm mt-1">
+                        <input class="form-control" maxlength="60" id="menu-item-category-name" placeholder="Such as Midnight Snacks"
+                               @bind="_newCategory" @bind:event="oninput" />
+                        <button type="button" class="btn btn-outline-primary" id="menu-item-category-add"
+                                disabled="@(_busy || string.IsNullOrWhiteSpace(_newCategory))" @onclick="AddCategoryAsync">Add</button>
+                    </div>
+                    <div class="form-text">Added for every event, if the site doesn't already have it.</div>
+                }
+            </div>
+
+            <div class="col-12">
+                <label class="form-label small mb-1" for="menu-item-description">Description <span class="text-secondary">(optional)</span></label>
+                <textarea id="menu-item-description" class="form-control" rows="2" maxlength="1000" @bind="_description" @bind:event="oninput"></textarea>
+            </div>
+
+            <div class="col-12 col-md-6">
+                <div class="form-label small mb-1">What it is</div>
+                <div class="d-flex flex-wrap gap-2">
+                    @foreach (var (mark, name) in MenuWords.Dietary)
+                    {
+                        var m = mark;
+                        <div class="form-check form-check-inline me-0">
+                            <input class="form-check-input" type="checkbox" id="@($"diet-{m}")" checked="@_dietary.HasFlag(m)"
+                                   @onchange="@(e => _dietary = (bool)e.Value! ? _dietary | m : _dietary & ~m)" />
+                            <label class="form-check-label small" for="@($"diet-{m}")">@name</label>
+                        </div>
+                    }
+                </div>
+            </div>
+            <div class="col-12 col-md-6">
+                <div class="form-label small mb-1">What it contains</div>
+                <div class="d-flex flex-wrap gap-2">
+                    @foreach (var (mark, name) in MenuWords.Allergens)
+                    {
+                        var m = mark;
+                        <div class="form-check form-check-inline me-0">
+                            <input class="form-check-input" type="checkbox" id="@($"allergen-{m}")" checked="@_allergens.HasFlag(m)"
+                                   @onchange="@(e => _allergens = (bool)e.Value! ? _allergens | m : _allergens & ~m)" />
+                            <label class="form-check-label small" for="@($"allergen-{m}")">@name</label>
+                        </div>
+                    }
+                </div>
+            </div>
+            <div class="col-12">
+                <label class="form-label small mb-1" for="menu-item-note">Anything else about what's in it <span class="text-secondary">(optional)</span></label>
+                <input id="menu-item-note" class="form-control" maxlength="300" placeholder="Such as made in a kitchen that uses nuts"
+                       @bind="_note" @bind:event="oninput" />
+            </div>
+
+            <div class="col-12">
+                <div class="form-label small mb-1">Where to keep it</div>
+                @foreach (var (scope, name, what) in MenuWords.Scopes)
+                {
+                    var s = scope;
+                    var unavailable = s == MenuItemScope.Venue && !VenueKnown;
+                    <div class="form-check mb-1">
+                        <input class="form-check-input" type="radio" name="menu-item-scope" id="@($"scope-{s}")"
+                               checked="@(_scope == s)" disabled="@(unavailable || (Item is not null && !OwnedHere))"
+                               @onchange="@(() => _scope = s)" />
+                        <label class="form-check-label" for="@($"scope-{s}")">
+                            <strong>@name.</strong> <span class="small text-secondary">@what</span>
+                        </label>
+                    </div>
+                }
+                @if (Item is not null && !OwnedHere)
+                {
+                    <div class="form-text">@Item.OrganizationName saved this at the venue, so it stays kept at the venue.</div>
+                }
+            </div>
+
+            <div class="col-12">
+                <div class="form-label small mb-1">Picture <span class="text-secondary">(optional)</span></div>
+                <div class="d-flex align-items-center gap-3 flex-wrap">
+                    @if (Item?.ImageUploadFileId is { } picture && !_removePicture)
+                    {
+                        <img src="@Media.MenuImage(picture)" alt="" style="width:4rem;height:4rem;object-fit:cover;border-radius:.4rem;" />
+                        <button type="button" class="btn btn-outline-secondary btn-sm" @onclick="() => _removePicture = true">Remove the picture</button>
+                    }
+                    <InputFile id="menu-item-picture" class="form-control" style="max-width:22rem;" accept="image/*" OnChange="@(e => _picked = e.File)" />
+                </div>
+                <div class="form-text">Resized, and any location in it removed.</div>
+            </div>
+        </div>
+    </ChildContent>
+    <FooterContent>
+        <button type="button" class="btn btn-outline-secondary" @onclick="CloseAsync">Cancel</button>
+        <button type="button" class="btn btn-primary" id="menu-item-save" disabled="@(_busy || string.IsNullOrWhiteSpace(_name))" @onclick="SaveAsync">
+            @(_busy ? "Saving…" : Item is null ? "Add the item" : "Save")
+        </button>
+    </FooterContent>
+</BenModal>
+
+@code {
+    [Parameter] public Guid OrgId { get; set; }
+    [Parameter] public Guid EventId { get; set; }
+    [Parameter] public bool Visible { get; set; }
+    [Parameter] public EventCallback<bool> VisibleChanged { get; set; }
+
+    /// <summary>The item being changed; null to make a new one.</summary>
+    [Parameter] public MenuLibraryItemRecord? Item { get; set; }
+
+    /// <summary>The category a new item starts in, such as the section it is being made for.</summary>
+    [Parameter] public Guid? StartingCategoryId { get; set; }
+
+    [Parameter, EditorRequired] public IReadOnlyList<MenuCategoryRecord> Categories { get; set; } = [];
+
+    /// <summary>Whether the event has a venue the site knows, so items can be kept there.</summary>
+    [Parameter] public bool VenueKnown { get; set; }
+
+    [Parameter] public EventCallback<MenuLibraryItemRecord> OnSaved { get; set; }
+    [Parameter] public EventCallback<MenuCategoryRecord> OnCategoryAdded { get; set; }
+
+    private string _name = "";
+    private string? _description;
+    private string? _note;
+    private Guid _categoryId;
+    private MenuItemScope _scope = MenuItemScope.Event;
+    private MenuDietary _dietary;
+    private MenuAllergen _allergens;
+    private IBrowserFile? _picked;
+    private bool _removePicture;
+    private bool _addingCategory;
+    private string? _newCategory;
+    private bool _busy;
+    private string? _error;
+    private bool _wasVisible;
+
+    /// <summary>The item belongs to the group holding this event, rather than to another group at the venue.</summary>
+    private bool OwnedHere => Item is null || Item.OrganizationId == OrgId;
+
+    protected override void OnParametersSet()
+    {
+        // Filled each time the form opens, from the item or blank.
+        if (Visible && !_wasVisible)
+        {
+            _name = Item?.Name ?? "";
+            _description = Item?.Description;
+            _note = Item?.DietaryNote;
+            _categoryId = Item?.MenuCategoryId ?? StartingCategoryId ?? Categories.FirstOrDefault()?.Id ?? Guid.Empty;
+            _scope = Item?.Scope ?? MenuItemScope.Event;
+            _dietary = Item?.Dietary ?? MenuDietary.None;
+            _allergens = Item?.Allergens ?? MenuAllergen.None;
+            _picked = null;
+            _removePicture = false;
+            _addingCategory = false;
+            _newCategory = null;
+            _error = null;
+        }
+        _wasVisible = Visible;
+    }
+
+    private async Task AddCategoryAsync()
+    {
+        _busy = true;
+        _error = null;
+        var (added, error) = await AdminClient.AddMenuCategoryAsync(OrgId, EventId, _newCategory!.Trim());
+        _busy = false;
+        if (added is null) { _error = error ?? "The category couldn't be added just now."; return; }
+
+        await OnCategoryAdded.InvokeAsync(added.Category);
+        _categoryId = added.Category.Id;
+        _addingCategory = false;
+        _newCategory = null;
+        if (added.AlreadyExisted) _error = null;
+    }
+
+    private async Task SaveAsync()
+    {
+        _busy = true;
+        _error = null;
+        try
+        {
+            var request = new SaveMenuLibraryItemRequest(_scope, _categoryId, _name.Trim(), _description, _dietary, _allergens, _note);
+            var (saved, error) = Item is null
+                ? await AdminClient.AddMenuItemAsync(OrgId, EventId, request)
+                : await AdminClient.SaveMenuItemAsync(OrgId, EventId, Item.Id, request);
+            if (saved is null) { _error = error ?? "The item couldn't be saved just now."; return; }
+
+            if (_removePicture && _picked is null)
+            {
+                var (cleared, clearError) = await AdminClient.RemoveMenuItemImageAsync(OrgId, EventId, saved.Id);
+                if (cleared is null) { _error = clearError ?? "Saved, but the picture couldn't be removed."; return; }
+                saved = cleared;
+            }
+
+            if (_picked is { } file)
+            {
+                using var content = new MultipartFormDataContent();
+                var stream = new StreamContent(file.OpenReadStream(50L * 1024 * 1024));
+                stream.Headers.ContentType = new System.Net.Http.Headers.MediaTypeHeaderValue(
+                    string.IsNullOrWhiteSpace(file.ContentType) ? "image/jpeg" : file.ContentType);
+                content.Add(stream, "file", file.Name);
+                var (pictured, pictureError) = await AdminClient.SetMenuItemImageAsync(OrgId, EventId, saved.Id, content);
+                if (pictured is null) { _error = pictureError ?? "Saved, but the picture couldn't be added."; await OnSaved.InvokeAsync(saved); return; }
+                saved = pictured;
+            }
+
+            await OnSaved.InvokeAsync(saved);
+            await CloseAsync();
+        }
+        finally { _busy = false; }
+    }
+
+    private Task CloseAsync() => VisibleChanged.InvokeAsync(false);
+}
