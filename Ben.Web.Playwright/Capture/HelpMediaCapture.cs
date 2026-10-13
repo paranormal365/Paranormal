@@ -3127,8 +3127,13 @@ public sealed class HelpMediaCapture : BenTestBase
         await Expect(free.First).ToBeVisibleAsync(new() { Timeout = 20_000 });
         for (var i = 0; i < 3; i++) await free.Nth(i).ClickAsync();
 
+        // A tall window for this one: with a row per person under the contact fields the card is
+        // taller than 900px, and an element photographed past the bottom of the window comes out
+        // black from the fold down, cutting off the summary the picture is about (10/13/2026).
+        await Page.SetViewportSizeAsync(DesktopWidth, 2000);
         await ShootAsync("going-to-an-event", "choosing-seats.png",
             gated: false, selector: "#hosted-places", proves: "a party of 3");
+        await Page.SetViewportSizeAsync(DesktopWidth, DesktopHeight);
 
         // Who's coming: a row for each of the three, with what each can't eat (10/13/2026). The
         // first row is the person booking, so it is filled from the account when it can be.

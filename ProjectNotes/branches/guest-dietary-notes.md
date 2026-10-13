@@ -50,7 +50,11 @@ the booking is Requested, Held or Confirmed.
 - `organization-administration.md`: the dietary sheet says guests give the notes themselves and
   that a change doesn't touch their places.
 - Changelog 2.20.0: one line.
-- `HelpMediaCapture.Capture_HostedEventGuest` shoots `whos-coming.png`.
+- `HelpMediaCapture.Capture_HostedEventGuest` shoots `whos-coming.png`, and photographs
+  `choosing-seats.png` in a 2000px-tall window: with the party rows the card is taller than 900px,
+  and an element shot past the window's bottom came out black from the fold down. Recaptured:
+  the going-to-an-event seat, phone, email-pick, What I'm going to and pass pictures.
+- `docs/IsHaunted-Product-Documentation.pdf` rebuilt.
 
 ## Tests
 
