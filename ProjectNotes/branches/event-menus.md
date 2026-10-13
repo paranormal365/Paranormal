@@ -183,3 +183,38 @@ own branding, and still says where the menu came from.
 ## At deploy
 
 One migration: the new tables, the seeded categories and the conversion of existing dishes.
+
+## Built (10/13/2026)
+
+All seven phases, in three commits:
+- **22daa347:** the model, the migration and the conversion.
+- **2f089498:** the API, the designs and the PDF.
+- **d3adb12e:** the screens, guests' menus, the demo menus and the docs.
+
+Changes from the plan, and things found on the way:
+
+- **The builder's preview isn't `position: sticky`.** `.content-wrapper` is `overflow-y: auto` and
+  never scrolls, so it becomes the scroll container and sticky never sticks inside it. That breaks
+  the event page's own sticky index (`sticky-lg-top`) too, which is left as it is. The editor uses
+  two panes that scroll on their own instead.
+- **New child rows have to be added to the context by name.** Saving a menu first threw
+  `DbUpdateConcurrencyException`. New prices, sections and entries with their ids set, put into a
+  tracked menu's collections, were taken for existing rows. `EventMenus.Apply` now adds each row,
+  and `EventMenuSaveTests` fails without that fix.
+- **Website guests have no way to give dietary notes**: only the organizer's screens and the app
+  take them. The guest help says to tell the venue. Not fixed here.
+- **Item photos and logos are served by `api/public/menu-image`.** Anyone can see them once the
+  menu is published on a public event. Before that, only members of a group that can use them.
+  Staff who aren't members don't see draft pictures in the preview.
+- **A venue item can be saved by any group holding an event there**, and changed by that group
+  and by the verified venue. There's no approval step like the venue photo library's; worth
+  revisiting if a venue's list fills with other groups' items.
+
+## Tests
+
+- **Unit:** `Services/EventMenus/` covers the conversion, the seeding, the rules (where items are
+  kept, saving, publishing, copy names, categories), what guests and the app read, the PDF in
+  every design and over two pages, and saving twice.
+- **Browser:** `EventMenuBuilderTests` covers the gallery, the preview following typing and the
+  look, publishing refused and then allowed, the event page, the public PDF, and the editor at
+  1280 and 375 pixels. `EventMenusTests` was updated for the Meals page.
