@@ -90,6 +90,10 @@ public interface IBenBillingClient
     /// <summary>The public price list, exactly as the pricing page shows it. Anonymous.</summary>
     Task<LoadResult<PublicSubscriptionTier>> GetPublicPricingAsync(CancellationToken token = default);
 
+    /// <summary>The free account's storage and the event offer, for the pricing page. Anonymous;
+    /// null when the API can't be reached.</summary>
+    Task<PublicPricingExtras?> GetPublicPricingExtrasAsync(CancellationToken token = default);
+
     /// <summary>
     /// Where one of the caller's groups stands. Null when the caller may not see that group's
     /// billing — the page skips the card rather than guessing.

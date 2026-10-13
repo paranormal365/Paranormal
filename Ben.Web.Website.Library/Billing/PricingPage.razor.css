@@ -235,3 +235,106 @@
         transform: none;
     }
 }
+
+/* ── What's included, and hosted events (Ben, 10/13/2026) ─────────────────────────────────────────────────
+   The link on each band, then the comparison and the events section below the bands. Written through
+   .home-band ::deep because the comparison is its own component; the events section uses the same cards. */
+
+.pricing-band__more {
+    display: inline-flex;
+    align-items: center;
+    gap: .35rem;
+    align-self: flex-start;
+    margin: 0 0 1rem;
+    font-size: .8rem;
+    font-weight: 600;
+    color: var(--ben-link);
+    text-decoration: none;
+}
+
+.pricing-band__more:hover,
+.pricing-band__more:focus-visible {
+    text-decoration: underline;
+}
+
+.pricing-band__more ::deep .sa-icon {
+    width: .9rem;
+    height: .9rem;
+}
+
+.home-band ::deep .plan-inclusions,
+.home-band ::deep .pricing-events {
+    margin-top: 3rem;
+    scroll-margin-top: 6rem;
+}
+
+.home-band ::deep .plan-inclusions__card {
+    height: 100%;
+    padding: 1.25rem;
+    background: var(--ben-surface, var(--bs-body-bg));
+    border: 1px solid var(--ben-line, var(--bs-border-color));
+    border-radius: .9rem;
+    scroll-margin-top: 6rem;
+    transition: border-color .3s ease, box-shadow .3s ease;
+}
+
+/* The plan a band's link jumped to, so the eye lands on it. */
+.home-band ::deep .plan-inclusions__card:target {
+    border-color: var(--ben-accent);
+    box-shadow: 0 0 0 3px var(--ben-accent-soft);
+}
+
+.home-band ::deep .plan-inclusions__lead {
+    margin: 0 0 .4rem;
+    font-size: .75rem;
+    font-weight: 700;
+    letter-spacing: .06em;
+    text-transform: uppercase;
+    color: var(--ben-ink-muted, var(--bs-secondary-color));
+}
+
+.home-band ::deep .plan-inclusions__list {
+    list-style: none;
+    margin: 0 0 1.1rem;
+    padding: 0;
+    font-size: .9rem;
+}
+
+.home-band ::deep .plan-inclusions__list:last-child {
+    margin-bottom: 0;
+}
+
+.home-band ::deep .plan-inclusions__list li {
+    display: flex;
+    align-items: flex-start;
+    gap: .5rem;
+    padding: .28rem 0;
+}
+
+.home-band ::deep .plan-inclusions__list .sa-icon {
+    flex: 0 0 auto;
+    width: 1rem;
+    height: 1rem;
+    margin-top: .18rem;
+    color: var(--ben-link);
+}
+
+.home-band ::deep .plan-inclusions__list li.is-off {
+    color: var(--ben-ink-muted, var(--bs-secondary-color));
+}
+
+.home-band ::deep .plan-inclusions__list li.is-off .sa-icon {
+    color: var(--ben-ink-muted, var(--bs-secondary-color));
+}
+
+.home-band ::deep .pricing-events__price {
+    display: flex;
+    align-items: baseline;
+    gap: .4rem;
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .home-band ::deep .plan-inclusions__card {
+        transition: none;
+    }
+}

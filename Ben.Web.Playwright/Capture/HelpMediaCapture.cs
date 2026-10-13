@@ -4221,6 +4221,37 @@ public sealed class HelpMediaCapture : BenTestBase
     }
 
     [Test]
+    [Description("organization-administration: what each plan includes, and hosted events, on the pricing page (10/13/2026).")]
+    public async Task Capture_PricingWhatsIncluded()
+    {
+        // As a visitor: the reader the page is for, and the events card then asks them to sign in
+        // rather than naming whichever groups the capture account looks after.
+        await LogoutAsync();
+        await GoAsync("/pricing");
+        await Expect(Page.Locator("[data-testid=plan-inclusions]").First).ToBeVisibleAsync(new() { Timeout = 20_000 });
+
+        // Taller than the section, so it is photographed without scrolling: scrolled, the page's
+        // fixed header lands across the middle of a picture this tall.
+        await Page.SetViewportSizeAsync(DesktopWidth, 3200);
+        await Page.EvaluateAsync("window.scrollTo(0, 0)");
+        try
+        {
+            await ShootAsync("organization-administration", "pricing-whats-included.png",
+                gated: true, selector: "#whats-included", proves: "with these differences");
+
+            if (await Page.Locator("#events").CountAsync() > 0)
+                await ShootAsync("organization-administration", "pricing-hosted-events.png",
+                    gated: true, selector: "#events", proves: "What an event includes");
+            else
+                TestContext.Out.WriteLine("Events are switched off here, so pricing-hosted-events.png was not taken.");
+        }
+        finally
+        {
+            await Page.SetViewportSizeAsync(DesktopWidth, DesktopHeight);
+        }
+    }
+
+    [Test]
     [Description("getting-started, your-profile, working-a-case and organization-administration: time zones (2026-09-28).")]
     public async Task Capture_TimeZones()
     {
