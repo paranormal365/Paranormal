@@ -47,6 +47,18 @@
         </p>
     }
 
+    @if (Booking.Status is HostedEventBookingStatus.Requested
+                        or HostedEventBookingStatus.Held
+                        or HostedEventBookingStatus.Confirmed)
+    {
+        @* Who is coming and what they can't eat, changeable without touching the places. *@
+        <div class="mt-2 mb-1">
+            <div class="fw-semibold small mb-1">Who's coming</div>
+            <BookingPartyPanel Booking="Booking" IdPrefix="booking"
+                               OnSaved="saved => OnChanged.InvokeAsync(saved)" />
+        </div>
+    }
+
     @if (Booking.CancellationRequestedUtc is not null)
     {
         <p class="text-secondary small mb-1" id="booking-asked-out">

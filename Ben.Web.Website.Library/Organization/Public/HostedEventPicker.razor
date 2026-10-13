@@ -104,6 +104,19 @@
             </div>
             <BookingContactFields Draft="_contact" IdPrefix="picker" AskEmail="Anonymous"
                                   OrganizationName="@Hosted.OrganizationName" Changed="StateHasChanged" />
+
+            @if (!Anonymous)
+            {
+                @* Signed in, the party can be named here. Somebody choosing by email names them
+                   from their booking once they've followed the link, because the email pick
+                   keeps only who is holding the places. *@
+                <div class="fw-semibold small mt-3 mb-1">Who's coming</div>
+                <p class="text-secondary small mb-2">
+                    Optional. Name each person and say what they can't eat, so the kitchen knows.
+                </p>
+                <BookingPartyFields Draft="_party" IdPrefix="picker" OrganizationName="@Hosted.OrganizationName"
+                                    Changed="StateHasChanged" />
+            }
         </div>
     }
 
@@ -131,7 +144,8 @@
                         disabled="@_busy" @onclick="Clear">Start again</button>
             }
             <button type="button" class="btn btn-primary" id="picker-hold"
-                    disabled="@(_busy || _places == 0 || _emailed is not null || !_contact.IsEnough(Anonymous))"
+                    disabled="@(_busy || _places == 0 || _emailed is not null || !_contact.IsEnough(Anonymous)
+                                || (!Anonymous && _party.HasANoteWithoutAName))"
                     @onclick="HoldAsync">
                 @(_busy ? (Anonymous ? "Sending…" : "Holding…")
                         : Anonymous ? "Email me a link to hold these" : "Hold these places")
@@ -154,6 +168,7 @@
     [Parameter] public bool Anonymous { get; set; }
 
     private readonly BookingContactDraft _contact = new();
+    private readonly BookingPartyDraft _party = new();
     private HostedEventEmailPickPlacedRecord? _emailed;
 
     private PlanModel _model = new(HostedEventLayoutKind.Seats);
@@ -189,6 +204,7 @@
 
         var mine = await AdminClient.GetMyBookingContactAsync();
         _contact.Fill(mine.Item);
+        _party.FillLead(_contact.FirstName, _contact.LastName);
         StateHasChanged();
     }
 
@@ -215,7 +231,7 @@
     private void OnSelectionChanged(IReadOnlySet<Guid> selection)
     {
         _chosen[_night] = [.. selection];
-        _places = _chosen.Sum(pair => pair.Value.Count);
+        Recount();
         _refusal = null;
         _ringed = [];
     }
@@ -223,9 +239,16 @@
     private void Clear()
     {
         _chosen.Clear();
-        _places = 0;
+        Recount();
         _refusal = null;
         _ringed = [];
+    }
+
+    /// <summary>What is chosen changed: count the places again, and give the party a row per person.</summary>
+    private void Recount()
+    {
+        _places = _chosen.Sum(pair => pair.Value.Count);
+        _party.Resize(PartySize());
     }
 
     /// <summary>
@@ -320,6 +343,7 @@
             (held, refused, error) = await AdminClient.HoldHostedEventPlacesAsync(
                 Hosted.Id,
                 new HoldHostedEventPlacesRequest(nights, PartySize(),
+                    Guests: _party.Sent(),
                     FirstName: BookingContactDraft.Sent(_contact.FirstName),
                     LastName: BookingContactDraft.Sent(_contact.LastName),
                     Phone: BookingContactDraft.Sent(_contact.Phone)));
@@ -347,7 +371,7 @@
             .Select(u => u.Key)];
 
         foreach (var night in _chosen.Keys.ToList()) _chosen[night].ExceptWith(_ringed);
-        _places = _chosen.Sum(pair => pair.Value.Count);
+        Recount();
     }
 
     // ── words ────────────────────────────────────────────────────────────────

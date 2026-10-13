@@ -2206,6 +2206,11 @@ text, so it can't run in your spreadsheet.
 **What the kitchen needs**, on the event page or the booking board, turns every guest's dietary note
 into a sheet the kitchen can actually work from.
 
+Guests give these notes themselves. When they ask for a place or hold places, they can name each
+person in their party and say what each one can't eat, and they can change it later from their
+booking. A change shows up on the sheet straight away, and it doesn't change their places or send a
+confirmed booking back to you.
+
 ![The kitchen's sheet: three numbers, a tally and the people](help-media:organization-administration/event-dietary.png)
 
 By default it counts **confirmed** parties, because those are the people you are buying food for.

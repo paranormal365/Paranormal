@@ -1,0 +1,72 @@
+@namespace Ben.Web.Website.Library.Organization.Public
+
+@* Each person in the party, by name, with anything they can't eat.
+
+   The kitchen's sheet, the dining tables and the door all read these notes, and until now nothing
+   on the website let a guest type one: the help told them to ask the venue to write it down.
+
+   ONE ROW PER PERSON, and every row optional. A guest who doesn't want to name their party
+   doesn't have to; a guest who does gets a box for each person's dietary needs beside the name.
+
+   WHO SEES THEM is said under the rows, because a dietary note is health information about a
+   named person and the guest is owed that sentence at the moment they give it. *@
+
+@* The wrapper is "-guests", not "-party": the ask form's party-size box is already "ask-party". *@
+<div class="booking-party" id="@($"{IdPrefix}-guests")">
+    @for (var i = 0; i < Draft.People.Count; i++)
+    {
+        var index = i;
+        var person = Draft.People[index];
+        <div class="row g-2 mb-2 booking-party__person">
+            <div class="col-12 col-md-5">
+                <label class="form-label small mb-1" for="@($"{IdPrefix}-guest-name-{index}")">
+                    @(index == 0 ? "Name" : $"Person {index + 1}")
+                </label>
+                <input id="@($"{IdPrefix}-guest-name-{index}")" class="form-control" maxlength="200"
+                       placeholder="@(index == 0 ? "Your name" : "Their name")"
+                       value="@person.Name" @oninput="e => Set(() => person.Name = Text(e))" />
+            </div>
+            <div class="col-12 col-md-7">
+                <label class="form-label small mb-1" for="@($"{IdPrefix}-guest-notes-{index}")">
+                    Dietary needs
+                </label>
+                <input id="@($"{IdPrefix}-guest-notes-{index}")" class="form-control" maxlength="500"
+                       placeholder="Optional — vegan, nut allergy, no shellfish"
+                       value="@person.Notes" @oninput="e => Set(() => person.Notes = Text(e))" />
+            </div>
+        </div>
+    }
+
+    @if (Draft.HasANoteWithoutAName)
+    {
+        <p class="text-danger small mb-1" id="@($"{IdPrefix}-party-needs-a-name")">
+            Add a name beside each dietary note, so the kitchen knows whose it is.
+        </p>
+    }
+
+    <p class="text-secondary small mb-0" id="@($"{IdPrefix}-party-disclosure")">
+        Names and dietary needs go to @(OrganizationName ?? "the organizer")'s staff for this event:
+        the people handling bookings, the kitchen and the door. They're never shown publicly.
+    </p>
+</div>
+
+@code {
+    [Parameter, EditorRequired] public BookingPartyDraft Draft { get; set; } = null!;
+
+    /// <summary>Prefixes every id, so two forms on one page never share a label.</summary>
+    [Parameter, EditorRequired] public string IdPrefix { get; set; } = "";
+
+    [Parameter] public string? OrganizationName { get; set; }
+
+    /// <summary>Told on every keystroke, so the form's own button can wake up.</summary>
+    [Parameter] public EventCallback Changed { get; set; }
+
+    private static string Text(ChangeEventArgs e) => e.Value?.ToString() ?? "";
+
+    private async Task Set(Action write)
+    {
+        write();
+        Draft.Touch();
+        await Changed.InvokeAsync();
+    }
+}

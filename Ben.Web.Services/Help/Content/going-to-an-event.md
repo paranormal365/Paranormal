@@ -58,8 +58,8 @@ places**.
   The page tells you how long that lasts before you commit — usually a couple of days.
 - **If someone takes a seat a second before you do**, you're told which seat it was, and
   everything else you chose stays yours. Pick another one and carry on.
-- **To change held places, let them go and pick again.** You can still change your note while
-  they're held. If a hold runs out, you can choose again straight away.
+- **To change held places, let them go and pick again.** You can still change your note, and
+  who's coming, while they're held. If a hold runs out, you can choose again straight away.
 
 On a phone, the summary and the button stay at the bottom of the screen the whole time, so you
 never have to scroll back through two hundred squares to check what you've picked.
@@ -78,6 +78,25 @@ answers.
 - **Two nights out of three is an ordinary booking.** Each night has its own checkbox, so if only
   Saturday suits you, just come for Saturday.
 - **Just for the day** is the same form without a room, for venues that offer day passes.
+
+## Who's coming
+
+When you ask for a place or hold places, the form has a row for each person in your party. Give
+each person's name and anything they can't eat, such as *vegan* or *nut allergy*. The first row is
+you. It's all optional, but it helps the kitchen cook for everyone.
+
+![Names and dietary needs for a party of three](/help/media/going-to-an-event/whos-coming.png)
+
+- **A dietary note needs a name beside it**, so the kitchen knows whose it is.
+- **Who sees them:** the event's staff — the people handling bookings, the kitchen and the door.
+  Names and dietary needs are never shown publicly.
+- **To change them later**, open your booking on the event's page, on **What I'm going to**, or
+  on your pass, and press **Add names and dietary needs** (or **Change names and dietary needs**).
+  Change what you need to and press **Save**.
+- **Changing names or dietary needs doesn't change your places.** If the venue has already
+  confirmed you, you're still confirmed.
+- If you chose your places without an account, you can add names once you've followed the link in
+  the email and signed in.
 
 ## What the answer means
 
@@ -106,7 +125,8 @@ work out. We keep these on purpose: if you were released from a weekend, you may
 date free.
 
 Under each event you'll see the sessions you signed up for, with their times. A session is marked
-if you're on its waiting list or if it has been canceled.
+if you're on its waiting list or if it has been canceled. You'll also see who's coming, and you can
+change their names and dietary needs there.
 
 ## The program
 
@@ -151,8 +171,8 @@ a drink from the bar. **Included** means the event's price covers it. A price at
 *Adults $25*, is the price of the meal. Under the dates, **Included with the event** says which meals
 your place covers. **Download this menu as a PDF** saves a copy to print or keep.
 
-The marks on a menu describe the food. If there's something you can't eat, tell the venue, so they
-can note it on your booking for the kitchen.
+The marks on a menu describe the food. If there's something someone in your party can't eat, add it
+to your booking under [Who's coming](#whos-coming), and the kitchen will see it.
 
 ## Downloads
 
