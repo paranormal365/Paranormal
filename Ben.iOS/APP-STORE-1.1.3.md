@@ -47,8 +47,9 @@ menus screen says there are no menus. The deploy also owes these migrations: **M
 
 ## 4. When it's live
 
-Follow `APP-STORE-1.1.3-HELP.md`: put back the held-back help (the update check and the designed menus,
-with the new menus picture in `help-1.1.3/`), rebuild the product PDF, and swap the green icon on the
-home page, the QR code and the app guide for the violet one.
+Follow `APP-STORE-1.1.3-HELP.md`. The held-back help (the update check and the designed menus, with the
+new menus picture) is already written on branch `release/ios-1.1.3-help`; what is left is the violet
+icon from Apple on the home page and the QR codes, the app guide and product PDF rebuilt, then merge
+and deploy.
 
 If Apple rejects it for code, the next build is **13**. An uploaded number is never reused.
