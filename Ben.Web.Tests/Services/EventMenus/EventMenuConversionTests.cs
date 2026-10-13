@@ -5,7 +5,7 @@ using Ben.Data.WebApi.Services.Events;
 using Microsoft.EntityFrameworkCore;
 using Xunit;
 
-namespace Ben.Web.Tests.Services.EventMenus;
+namespace Ben.Web.Tests.Services.DesignedMenus;
 
 /// <summary>
 /// The menus that existed before designed menus (10/13/2026): a meal's typed dishes become a

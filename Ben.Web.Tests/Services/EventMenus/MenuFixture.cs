@@ -3,7 +3,7 @@ using Ben.Data.Source.Context;
 using Ben.Data.Source.Entities;
 using Ben.Data.WebApi.SeedData;
 
-namespace Ben.Web.Tests.Services.EventMenus;
+namespace Ben.Web.Tests.Services.DesignedMenus;
 
 /// <summary>
 /// An event at a venue, with two nights and a dinner on each, for the designed-menu tests
