@@ -109,6 +109,10 @@ public sealed class EveryMailerGoesThroughTheOutboxTests
     /// </remarks>
     private static readonly Dictionary<string, string> SendsBesideItsContext = new()
     {
+        ["AdminMailDiagnosticsController.cs: SendTest"] =
+            "the Outgoing Mail test, which posts straight to the mail server on purpose (it reports "
+          + "the server's own answer) and then records the letter as already accepted or given up; "
+          + "there is no change for it to be lost beside.",
         ["ClientStatusMailer.cs: SendToClientsAsync"] =
             "case-status and visit notices, after the change is saved; the client's case page shows "
           + "the same status and visit either way.",

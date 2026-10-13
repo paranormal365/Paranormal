@@ -4174,6 +4174,17 @@ public sealed class HelpMediaCapture : BenTestBase
             }
         }
 
+        // The test send with a letter picked (10/13/2026). Taken before pressing Send: a capture
+        // database has no mail server, so the answer would be the switched-off warning.
+        await GoAsync("/admin/mail");
+        var kindPicker = Page.Locator("[data-testid=mail-test-kind]");
+        await Expect(kindPicker.Locator("option[value='payment-receipt']")).ToHaveCountAsync(1, new() { Timeout = 20_000 });
+        await FillAndConfirmAsync("[data-testid=mail-test-to]", "you@example.com");
+        await kindPicker.SelectOptionAsync("payment-receipt");
+        await Expect(Page.Locator("[data-testid=mail-test-kind-note]")).ToBeVisibleAsync();
+        await ShootAsync("site-administration", "mail-test-send.png",
+            gated: true, selector: "div.card:has([data-testid=mail-test-send])", proves: "made-up names");
+
         // Reading a letter that actually went — the other half of the same screen's job.
         await GoAsync("/admin/mail");
         // "Everything" — the filter was named "All" when this was written, and since it was

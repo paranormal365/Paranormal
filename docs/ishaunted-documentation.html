@@ -227,7 +227,7 @@ figcaption { color: var(--faint); font-size: 8.4pt; margin-top: .07in; }
     <h1>Everything <span class="accent-text">IsHaunted</span> does.</h1>
     <p class="lede">The complete product documentation — every screen, rule and safeguard, written for the people who use it.</p>
   </div>
-  <div class="facts"><div class="fact"><b>Documents</b><span>21</span></div><div class="fact"><b>Sections</b><span>6</span></div><div class="fact"><b>Updated</b><span>10/09/2026</span></div></div>
+  <div class="facts"><div class="fact"><b>Documents</b><span>21</span></div><div class="fact"><b>Sections</b><span>6</span></div><div class="fact"><b>Updated</b><span>10/13/2026</span></div></div>
   <div class="about"><b>About this document.</b> This is the in-product help, reproduced in full and unaltered — the same text the application serves to its users. It describes the software as built. It contains no business, market or financial information, and no usage figures.</div>
   <div class="foot"><span>ishaunted.com</span><span>Product documentation</span></div>
 </section>
@@ -7196,11 +7196,22 @@ three states to know about:</p>
 <p><strong>Send a test message</strong> does exactly that: it really sends a message instead of just checking the
 connection. The failures that matter happen after the connection opens (authentication rejected,
 sender not permitted, relay denied), and none of them show up until a message is actually sent.</p>
+<p><strong>Letter</strong> chooses what to send. Leave it on <em>A plain test message</em> to check that mail gets through,
+or pick one of the site's letters (a receipt, a booking confirmation, a password reset) to see how it
+looks when it arrives. A picked letter uses the version you published in <strong>Email templates</strong>, or the
+ready-made version there if you haven't published your own. Either way it's filled in with made-up
+names, places and links, so nothing real goes out and its buttons don't work.</p>
+<p><img alt="Sending a test of the receipt letter" src=".print-media/Ben.Web.Services/Help/Media/site-administration/mail-test-send.jpg" /></p>
+<p>Every test says at the top that it's a test, and its subject starts with <strong>[Test]</strong>. It's also added
+to <strong>Recent letters</strong> below, so you can open it with <strong>Read it</strong> and see exactly what was sent.</p>
 <p>If the test fails, you see the server's exact error, not a tidied-up "could not send".
 <em>"535 authentication failed"</em> and <em>"connection timed out"</em> need completely different fixes, and a
 polite summary wouldn't tell you which one you need.</p>
-<p>If the test succeeds but the message still doesn't arrive, the mail left this server and the
-problem is delivery: spam filtering, or the recipient's provider rejecting it after accepting it.</p>
+<p>If the test succeeds but the message still doesn't arrive, look in the junk or spam folder first.
+If it isn't there either, the mail left this server and the problem is delivery: the recipient's
+provider rejected or filtered it after accepting it. The most common cause is mail sent through a
+server the domain doesn't list as one of its senders. The site's own domain only allows its email
+hosting's mail server, so mail must go out through that server.</p>
 <h3>Every letter the site meant to send</h3>
 <p>Below the settings, <strong>Recent letters</strong> lists what the site has actually tried to send recently. It
 opens on the list you most likely came for: the ones it has <strong>given up on</strong>.</p>

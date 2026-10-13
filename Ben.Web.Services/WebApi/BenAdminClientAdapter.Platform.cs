@@ -488,9 +488,9 @@ public sealed partial class BenAdminClientAdapter
         => _api.GetAsync<MailSettingsRecord>("/api/admin/mail/settings", token);
 
     public Task<MailTestResultRecord?> SendTestEmailAsync(
-        string to, CancellationToken token = default)
+        string to, string? kind = null, CancellationToken token = default)
         => _api.PostAsync<object, MailTestResultRecord>(
-               "/api/admin/mail/test", new { To = to }, token);
+               "/api/admin/mail/test", new { To = to, Kind = kind }, token);
 
     // ── Sidecar telemetry ─────────────────────────────────────────────────────
 

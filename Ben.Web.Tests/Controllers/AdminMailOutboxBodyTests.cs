@@ -60,7 +60,7 @@ public sealed class AdminMailOutboxBodyTests
         var options = Options.Create(new SmtpOptions());
         var ctrl = new AdminMailDiagnosticsController(
             new SmtpEmailService(options, Options.Create(new SiteIdentity())),
-            options, sqlite.Factory, audit,
+            options, Options.Create(new SiteIdentity()), sqlite.Factory, audit,
             NullLogger<AdminMailDiagnosticsController>.Instance)
         {
             ControllerContext = new ControllerContext
