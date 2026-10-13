@@ -1,6 +1,8 @@
 using Ben.Data.Source.Services;
 using Ben.Data.Source.Context;
+using Ben.Data.WebApi.Services;
 using Ben.Data.WebApi.Services.Billing;
+using Ben.Data.WebApi.Services.Events;
 using Ben.Service.Models;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
@@ -74,4 +76,50 @@ public sealed class PublicPricingController : ControllerBase
                     .Except(t.ExcludedCapabilities.Select(c => c.Capability)).OrderBy(c => (int)c)],
             t.IsBandedByMembers)));
     }
+
+    /// <summary>
+    /// What the page says beside the bands: the free account's storage and the event offer.
+    /// </summary>
+    /// <remarks>
+    /// Every value is read the way the code that enforces it reads it, with the same fallbacks, so
+    /// the page can't promise a number the site doesn't keep. The event price is the one checkout
+    /// charges; on sale needs both the switch and a price above zero, like the billing page's card.
+    /// </remarks>
+    [HttpGet("extras")]
+    public async Task<ActionResult<PublicPricingExtras>> GetExtras(CancellationToken ct)
+    {
+        await using var db = await _dbFactory.CreateDbContextAsync(ct);
+
+        var freeBytes = await AccountStorageGuard.CapBytesAsync(db, ct);
+        var eventBytes = await EventStorage.CapBytesAsync(db, ct);
+
+        var onSale = await SiteSettingsService.GetBoolAsync(
+            db, SiteSettingKeys.EventCreditsEnabled, whenUnset: true, ct);
+        var price = PositiveDecimal(
+            await SiteSettingsService.GetAsync(db, SiteSettingKeys.EventCreditPriceUsd, ct),
+            EventCredits.DefaultPriceUsd);
+        var windowHours = (int)PositiveDecimal(
+            await SiteSettingsService.GetAsync(db, SiteSettingKeys.EventCancellationCreditWindowHours, ct),
+            (decimal)EventCredits.CancellationWindow.TotalHours);
+
+        return Ok(new PublicPricingExtras(
+            (int)(freeBytes / (1024 * 1024)),
+            new PublicEventOffer(
+                OnSale: onSale && price > 0m,
+                UnitPrice: price,
+                LifeDays: (int)EventCredits.Life.TotalDays,
+                MaximumPerPurchase: EventCredits.MaximumPerPurchase,
+                CancellationWindowHours: windowHours,
+                StorageMegabytes: (int)(eventBytes / (1024 * 1024)),
+                FilesKeptDays: await EventRetention.DaysAsync(db, ct))));
+    }
+
+    /// <summary>The same reading <see cref="SiteSettingsService.GetDecimalAsync"/> gives.</summary>
+    private static decimal PositiveDecimal(string? raw, decimal whenUnset)
+        => !string.IsNullOrWhiteSpace(raw)
+           && decimal.TryParse(raw, System.Globalization.NumberStyles.Any,
+                               System.Globalization.CultureInfo.InvariantCulture, out var parsed)
+           && parsed > 0m
+            ? parsed
+            : whenUnset;
 }

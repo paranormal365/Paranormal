@@ -1,0 +1,231 @@
+@namespace Ben.Web.Website.Library.Billing
+@using Ben.Data.Common.Enums
+@using Ben.Service.Models
+@using Ben.Web.Services
+@using Ben.Web.Website.Library.Kit
+
+@*
+    What each plan includes, below the bands (Ben, 10/13/2026): the first plan in full, then every
+    other plan as "everything in the first, with these differences", rather than each one saying
+    what the next one up adds.
+
+    Built from what is true right now: the tiers as the API sends them, the site's feature switches
+    (turning the video editor on puts it in the list for every plan; off takes it out), and the
+    settings for storage and events. Nothing here is typed in as a plan's selling point.
+*@
+
+@if (Tiers.Count > 0)
+{
+    var first = Tiers[0];
+    var firstFacts = Facts(first);
+
+    <section class="plan-inclusions" id="whats-included" aria-labelledby="whats-included-title">
+        <h2 class="h4 mb-1" id="whats-included-title">What each plan includes</h2>
+        <p class="text-secondary mb-4">
+            Every plan includes everything in @first.Name. The others are listed by how they differ from it.
+        </p>
+
+        <div class="row g-3">
+            <div class="col-12 col-lg-6">
+                <article class="plan-inclusions__card" id="@AnchorFor(first)" data-testid="plan-inclusions">
+                    <h3 class="h5 mb-2">@first.Name</h3>
+
+                    <p class="plan-inclusions__lead">Every plan includes</p>
+                    <ul class="plan-inclusions__list" data-testid="plan-platform">
+                        @foreach (var item in Platform())
+                        {
+                            <li><BenIcon Name="check-circle" /><span>@item</span></li>
+                        }
+                    </ul>
+
+                    <p class="plan-inclusions__lead">On @first.Name</p>
+                    <ul class="plan-inclusions__list">
+                        @foreach (var fact in firstFacts)
+                        {
+                            <li class="@(fact.Included ? "" : "is-off")">
+                                <BenIcon Name="@(fact.Included ? "check-circle" : "minus-circle")" /><span>@fact.Sentence</span>
+                            </li>
+                        }
+                    </ul>
+                </article>
+            </div>
+
+            @foreach (var tier in Tiers.Skip(1))
+            {
+                var differences = Differences(firstFacts, Facts(tier));
+                <div class="col-12 col-md-6 col-lg-3">
+                    <article class="plan-inclusions__card" id="@AnchorFor(tier)" data-testid="plan-inclusions">
+                        <h3 class="h5 mb-2">@tier.Name</h3>
+                        <p class="plan-inclusions__lead">Everything in @first.Name, with these differences</p>
+                        @if (differences.Count == 0)
+                        {
+                            <p class="small text-secondary mb-0">Nothing differs from @first.Name.</p>
+                        }
+                        else
+                        {
+                            <ul class="plan-inclusions__list">
+                                @foreach (var fact in differences)
+                                {
+                                    <li class="@(fact.Included ? "" : "is-off")">
+                                        <BenIcon Name="@(fact.Included ? "plus-circle" : "minus-circle")" /><span>@fact.Sentence</span>
+                                    </li>
+                                }
+                            </ul>
+                        }
+                    </article>
+                </div>
+            }
+        </div>
+    </section>
+}
+
+@code {
+    /// <summary>The bands, in the order the page shows them. The first is the one the rest are
+    /// compared with.</summary>
+    [Parameter, EditorRequired] public IReadOnlyList<PublicSubscriptionTier> Tiers { get; set; } = [];
+
+    /// <summary>Storage and events from the site's settings; null when they couldn't be read, in
+    /// which case nothing that depends on them is claimed.</summary>
+    [Parameter] public PublicPricingExtras? Extras { get; set; }
+
+    [Inject] private SiteFeaturesProvider Features { get; set; } = default!;
+
+    /// <summary>The id a band's "What's included" link jumps to.</summary>
+    public static string AnchorFor(PublicSubscriptionTier tier) => $"included-{tier.Id:N}";
+
+    /// <summary>One thing a plan does or doesn't include, keyed so two plans can be compared.</summary>
+    private sealed record Fact(string Key, string Sentence, bool Included = true);
+
+    /// <summary>
+    /// The parts of the site every plan has, from the feature switches. Store isn't here: it is
+    /// the site's shop, not something a plan gives a group.
+    /// </summary>
+    private IEnumerable<string> Platform()
+    {
+        yield return "Cases and investigations, with field sessions, recordings, notes and files";
+        yield return "The iPhone and iPad app, for recording in the field";
+        if (Features.IsOn(SiteFeatures.Equipment))    yield return "Equipment: your own kit, your group's catalog and loans";
+        if (Features.IsOn(SiteFeatures.VideoEditor))  yield return "The video editor";
+        if (Features.IsOn(SiteFeatures.MediaLibrary)) yield return "A media library for your photos, audio and video";
+        if (Features.IsOn(SiteFeatures.CmsPages))     yield return "Your group's own public pages";
+        if (Features.IsOn(SiteFeatures.Events))       yield return "A group calendar, with public events and RSVPs";
+        if (Features.IsOn(SiteFeatures.OrgMessaging)) yield return "Group messages";
+        if (Features.IsOn(SiteFeatures.Voting))       yield return "Voting on cases, evidence and files";
+        if (Features.IsOn(SiteFeatures.Discovery))    yield return "Listed in nearby search, so people can find you";
+        if (Features.IsOn(SiteFeatures.PublicFeed))   yield return "Posts on the public feed";
+        if (Features.IsOn(SiteFeatures.Publications)) yield return "Publications people can subscribe to";
+    }
+
+    /// <summary>A band whose every cadence costs nothing is the free band.</summary>
+    public static bool IsFree(PublicSubscriptionTier tier) =>
+        tier.Prices.Count > 0 && tier.Prices.All(p => p.Price == 0);
+
+    /// <summary>Everything about one plan that can differ from another.</summary>
+    private List<Fact> Facts(PublicSubscriptionTier tier)
+    {
+        var free = IsFree(tier);
+        var facts = new List<Fact>
+        {
+            new("people", !tier.IsBandedByMembers
+                ? "For tour and event businesses"
+                : free
+                    ? "One person"
+                    : tier.MaxMembers is { } max
+                        ? $"{tier.MinMembers}–{max} active members"
+                        : $"{tier.MinMembers} or more active members"),
+
+            // PaidPlan's rule: a free group's work at a public place is public, and a plan gives
+            // the group the choice. The same for every paid band, so it shows once, as a difference.
+            new("privacy", free
+                ? "Cases and sessions at public places are public, and published sessions stay published"
+                : "You choose what's public: keep cases and sessions private, and take published sessions down"),
+        };
+
+        // Personal storage: capped without a plan, not capped for members of a group on one.
+        if (Extras is { } extras)
+            facts.Add(new("storage", free
+                ? $"{Size(extras.FreeAccountStorageMegabytes)} of storage for your own recordings"
+                : "No cap on members' own storage"));
+
+        // A cap the plan doesn't set is no cap at all, which is said rather than left out, so a
+        // plan without one isn't read as missing it.
+        foreach (var limit in tier.Limits.Where(l => LimitWords(l.Limit) is not null))
+            facts.Add(new($"limit:{limit.Limit}", PricingWords.LimitSentence(limit), limit.MaxValue != 0));
+
+        if (tier.Limits.Count == 0 && free)
+            facts.Add(new("limit:none", "No limits on public cases and posts"));
+
+        foreach (var capability in Shown)
+        {
+            var included = tier.IncludedCapabilities?.Contains(capability) ?? true;
+            facts.Add(new($"cap:{capability}", CapabilitySentence(capability, included), included));
+        }
+
+        // Said by what's left out: the list of what's in is every area but one or two.
+        if (tier.IncludedAreas is { } areas
+            && Enum.GetValues<OrganizationPermissionArea>().Except(areas).ToList() is { Count: > 0 } missing)
+            facts.Add(new("areas", "Custom roles can't give rights over "
+                + string.Join(", ", missing.Select(PricingWords.AreaLabel).Select(a => a.ToLowerInvariant())), false));
+
+        return facts;
+    }
+
+    /// <summary>
+    /// What a plan has that the first plan doesn't, or has differently, in the first plan's order.
+    /// A cap only one of them sets is shown as the other's "unlimited", since no cap is unlimited.
+    /// </summary>
+    private static List<Fact> Differences(List<Fact> baseline, List<Fact> plan)
+    {
+        var differences = plan.Where(f => baseline.FirstOrDefault(b => b.Key == f.Key) is not { } b
+                                       || b.Sentence != f.Sentence)
+                              .Where(f => f.Key != "limit:none")
+                              .ToList();
+
+        foreach (var gone in baseline.Where(b => b.Key.StartsWith("limit:", StringComparison.Ordinal)
+                                              && b.Key != "limit:none"
+                                              && plan.All(f => f.Key != b.Key)))
+        {
+            var limit = Enum.Parse<SubscriptionLimit>(gone.Key["limit:".Length..]);
+            differences.Add(new(gone.Key, PricingWords.LimitSentence(new PublicTierLimit(limit, null))));
+        }
+
+        return differences;
+    }
+
+    /// <summary>
+    /// The capabilities a reader can judge a plan by. Buying events and selling tickets aren't
+    /// shown: nothing checks the first (events are bought by any group that needs one) and the
+    /// second is reserved, so either would be a promise the site doesn't keep.
+    /// </summary>
+    private static readonly TierCapability[] Shown =
+    [
+        TierCapability.PrivateResidenceCases,
+        TierCapability.CaseTransfers,
+        TierCapability.MediaMetadataStripping,
+        TierCapability.HostEvents,
+    ];
+
+    private string CapabilitySentence(TierCapability capability, bool included) => capability switch
+    {
+        TierCapability.PrivateResidenceCases => included
+            ? "Cases at private homes, and from client requests"
+            : "No cases at private homes or from client requests",
+        TierCapability.CaseTransfers => included
+            ? "Hand a case to another group, or take one in"
+            : "No case transfers between groups",
+        TierCapability.MediaMetadataStripping => included
+            ? "Location data removed from audio and video before it's shared"
+            : "Location data is removed from photos only",
+        TierCapability.HostEvents => included
+            ? "Hosted events included"
+            : Extras?.Events.OnSale == true
+                ? "Hosted events, bought one at a time"
+                : "No hosted events",
+        _ => capability.ToString(),
+    };
+
+    private static string? LimitWords(SubscriptionLimit limit) => PricingWords.IsShown(limit) ? limit.ToString() : null;
+
+    private static string Size(int megabytes)
+        => megabytes >= 1024 ? $"{megabytes / 1024m:0.#} GB" : $"{megabytes} MB";
+}

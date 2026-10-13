@@ -91,6 +91,9 @@ public sealed partial class BenAdminClientAdapter
     public Task<LoadResult<PublicSubscriptionTier>> GetPublicPricingAsync(CancellationToken token = default)
         => _api.GetAnonymousListAsync<PublicSubscriptionTier>("/api/public/pricing", token);
 
+    public Task<PublicPricingExtras?> GetPublicPricingExtrasAsync(CancellationToken token = default)
+        => _api.GetAnonymousAsync<PublicPricingExtras>("/api/public/pricing/extras", token);
+
     public Task<OrgSubscriptionView?> GetMySubscriptionAsync(Guid organizationId, CancellationToken token = default)
         => _api.GetAsync<OrgSubscriptionView>($"/api/organizations/{organizationId}/subscription", token);
 

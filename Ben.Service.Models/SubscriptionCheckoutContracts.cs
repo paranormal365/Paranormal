@@ -77,6 +77,30 @@ public record PublicSubscriptionTier(
     // Appended, because this record is built positionally.
     bool IsBandedByMembers = true);
 
+/// <summary>
+/// What the pricing page says beside the bands: the free account's storage, and what an event costs.
+/// </summary>
+/// <remarks>
+/// Ben, 10/13/2026: each plan shows what it includes, and the page offers events for sale with what
+/// one includes. Both numbers are site settings, so they are read here rather than typed on the page.
+/// </remarks>
+/// <param name="FreeAccountStorageMegabytes">How much one person may keep without a paid plan.
+/// Members of a group on a paid plan aren't capped.</param>
+public record PublicPricingExtras(int FreeAccountStorageMegabytes, PublicEventOffer Events);
+
+/// <summary>One hosted event bought on its own (an event credit), as a visitor reads it.</summary>
+/// <param name="OnSale">Whether events can be bought at the moment.</param>
+/// <param name="UnitPrice">The price of one event, before tax.</param>
+/// <param name="LifeDays">How long a bought event stays usable.</param>
+/// <param name="MaximumPerPurchase">The most that can be bought at once.</param>
+/// <param name="CancellationWindowHours">Calling an event off at least this long before it starts
+/// gives the event back.</param>
+/// <param name="StorageMegabytes">Room for each event's files, gallery and photos.</param>
+/// <param name="FilesKeptDays">How long an event's files are kept after its last date.</param>
+public record PublicEventOffer(
+    bool OnSale, decimal UnitPrice, int LifeDays, int MaximumPerPurchase,
+    int CancellationWindowHours, int StorageMegabytes, int FilesKeptDays);
+
 /// <summary>One cap as it actually binds a group right now.</summary>
 /// <param name="FromContract">
 /// True when the group's contract is holding this value against a worse live tier — the "your

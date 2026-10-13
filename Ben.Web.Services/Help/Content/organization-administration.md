@@ -2364,6 +2364,23 @@ Plans are priced by **active members, per group**. The price list is on the **Pr
 anyone can see. Yearly billing usually costs less than paying monthly, and the card shows how much
 you save.
 
+**What's included**, on each band, takes you to that plan in the list further down the page. The
+first plan is listed in full, including the parts of the site every plan has. Each of the others is
+listed by how it differs from the first: how many members it's for, the open cases it allows, private
+work, cases at private homes, storage and so on. The list follows what's switched on for the whole
+site, so a part of the site that's turned off isn't offered on any plan.
+
+![What each plan includes: the first plan in full, and the others by how they differ](help-media:organization-administration/pricing-whats-included.png)
+
+Below that, **Hosted events** says what an event includes: the rooms or seats plan, bookings and the
+booking board, the program, menus, dining tables and the dietary sheet, passes and the door, staff,
+the event's page, files, the guests' room, and the thank-you afterwards. It also says what an event
+costs on a plan that doesn't include hosting. If you look after a group's billing, you can buy one
+or more events for it right there; they go to your group's event credits, the same as buying them on
+the billing page (see [Buying event credits](#buying-event-credits)).
+
+![Hosted events on the Pricing page: what an event includes, and buying events](help-media:organization-administration/pricing-hosted-events.png)
+
 Each band on the Pricing page has its own button. If you don't run a group yet, **Start a group on
 this plan** opens the new-group steps with that plan shown at the top; once the group exists, you
 go straight to its billing page to confirm the plan and pay. If you already run a group, **Choose
