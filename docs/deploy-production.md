@@ -64,6 +64,19 @@ Nothing applies migrations at startup, so anything marked `(Pending)` has to be 
 `dotnet ef database update` before deploying. `scripts\create-database.sql` is older than the
 migrations and should not be used for this.
 
+### MemberPublicListing and RenewalGracePeriod — five new columns, nothing dropped
+
+Both from 10/09/2026, and both only add nullable or defaulted columns, so they are quick and safe to
+run with the site up.
+
+- `MemberPublicListing` adds `OrganizationUserMemberships.ShowOnPublicPages` (a bit, default 0): the
+  member list section on a group's public pages shows only members who have said yes. Without it,
+  any group page with that section fails.
+- `RenewalGracePeriod` adds `GraceForPeriodEnd`, `GraceUntilUtc`, `GraceGrantedUtc` and
+  `GraceGrantedToAppUserId` to `OrganizationSubscriptions`, all nullable: the two weeks a group's
+  plan keeps going after a failed renewal. Without them, the nightly lapse job and the billing page
+  fail.
+
 ### EmailTemplates — one new table, and what happens while it is empty
 
 `EmailTemplates` (2026-09-20) creates one table, keyed uniquely by the letter's `Kind`. Nothing
