@@ -1,0 +1,52 @@
+/* The design picker: every look drawn as a finished sample menu (Ben, 10/13/2026), cropped to its top. */
+.menu-gallery {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(12.5rem, 1fr));
+    gap: .75rem;
+}
+
+.menu-gallery__card {
+    display: flex;
+    flex-direction: column;
+    gap: .25rem;
+    padding: .5rem;
+    text-align: left;
+    color: inherit;
+    background: var(--ben-surface, var(--bs-body-bg));
+    border: 1px solid var(--ben-line, var(--bs-border-color));
+    border-radius: .6rem;
+    cursor: pointer;
+    transition: border-color .15s ease, box-shadow .15s ease;
+}
+
+.menu-gallery__card:hover,
+.menu-gallery__card:focus-visible {
+    border-color: var(--ben-accent, var(--bs-primary));
+}
+
+.menu-gallery__card.is-chosen {
+    border-color: var(--ben-accent, var(--bs-primary));
+    box-shadow: 0 0 0 3px var(--ben-accent-soft, rgba(13, 110, 253, .2));
+}
+
+.menu-gallery__frame {
+    display: block;
+    height: 13rem;
+    overflow: hidden;
+    border-radius: .4rem;
+    pointer-events: none;
+}
+
+.menu-gallery__name {
+    font-weight: 700;
+    font-size: .9rem;
+}
+
+.menu-gallery__what {
+    font-size: .75rem;
+    color: var(--ben-ink-muted, var(--bs-secondary-color));
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .menu-gallery__card { transition: none; }
+}

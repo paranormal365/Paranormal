@@ -164,6 +164,11 @@ public static class EventMenus
     }
 
     /// <summary>Writes a checked request onto a loaded menu, replacing its prices, sections and meals.</summary>
+    /// <remarks>
+    /// The new rows are added to the context by name, not just to the loaded menu's collections:
+    /// a row with its id already set, put into a tracked parent's list, is taken for one that exists,
+    /// and the save becomes an update that matches nothing.
+    /// </remarks>
     public static void Apply(BenDataContext db, EventMenu menu, SaveEventMenuRequest r, Guid userId, DateTime now)
     {
         menu.Title = r.Title.Trim();
@@ -180,10 +185,14 @@ public static class EventMenus
         menu.Prices.Clear();
         var order = 0;
         foreach (var p in r.Prices)
-            menu.Prices.Add(new EventMenuPrice
+        {
+            var price = new EventMenuPrice
             {
                 Id = Guid.NewGuid(), EventMenuId = menu.Id, Label = Trimmed(p.Label), Amount = p.Amount, SortOrder = order++,
-            });
+            };
+            db.EventMenuPrices.Add(price);
+            menu.Prices.Add(price);
+        }
 
         db.EventMenuEntries.RemoveRange(menu.Sections.SelectMany(s => s.Entries));
         db.EventMenuSections.RemoveRange(menu.Sections);
@@ -196,16 +205,21 @@ public static class EventMenus
                 Id = Guid.NewGuid(), EventMenuId = menu.Id, MenuCategoryId = s.MenuCategoryId,
                 Heading = Trimmed(s.Heading), SortOrder = order++,
             };
+            db.EventMenuSections.Add(section);
             var at = 0;
             foreach (var e in s.Entries)
-                section.Entries.Add(new EventMenuEntry
+            {
+                var entry = new EventMenuEntry
                 {
                     Id = Guid.NewGuid(), EventMenuSectionId = section.Id, MenuLibraryItemId = e.MenuLibraryItemId,
                     Pricing = e.Pricing,
                     // A price only means something when the item is paid for on its own.
                     Price = e.Pricing == MenuPricing.PricedSeparately ? e.Price : null,
                     Note = Trimmed(e.Note), SortOrder = at++,
-                });
+                };
+                db.EventMenuEntries.Add(entry);
+                section.Entries.Add(entry);
+            }
             menu.Sections.Add(section);
         }
 
@@ -213,7 +227,11 @@ public static class EventMenus
         menu.Servings.Clear();
         if (!r.ThroughoutTheEvent)
             foreach (var mealId in r.MealIds.Distinct())
-                menu.Servings.Add(new EventMenuServing { EventMenuId = menu.Id, HostedEventMenuId = mealId });
+            {
+                var serving = new EventMenuServing { EventMenuId = menu.Id, HostedEventMenuId = mealId };
+                db.EventMenuServings.Add(serving);
+                menu.Servings.Add(serving);
+            }
     }
 
     /// <summary>

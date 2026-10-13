@@ -296,3 +296,57 @@ public sealed class EventMenuPdfSamples
         }
     }
 }
+
+/// <summary>Saving a menu through the same code the builder uses, against a real database.</summary>
+public sealed class EventMenuSaveTests
+{
+    [Fact]
+    public async Task A_menu_saves_and_saves_again_replacing_what_it_had()
+    {
+        await using var sqlite = await SqliteTestDb.CreateAsync();
+        var f = await MenuFixture.SeedAsync(sqlite);
+        Guid menuId, itemId, categoryId;
+
+        await using (var db = await sqlite.NewContextAsync())
+        {
+            categoryId = MenuFixture.CategoryId(db, "Desserts");
+            var item = new MenuLibraryItem
+            {
+                Id = Guid.NewGuid(), OrganizationId = f.OrgId, Scope = MenuItemScope.Group, MenuCategoryId = categoryId,
+                Name = "Pudding", DateCreated = DateTime.UtcNow, CreatedByAppUserId = f.HostId,
+            };
+            var menu = new EventMenu
+            {
+                Id = Guid.NewGuid(), HostedEventId = f.EventId, Title = "Supper", DateCreated = DateTime.UtcNow, CreatedByAppUserId = f.HostId,
+            };
+            db.AddRange(item, menu);
+            await db.SaveChangesAsync();
+            (menuId, itemId) = (menu.Id, item.Id);
+        }
+
+        SaveEventMenuRequest Request(decimal price, params Guid[] meals) => new(
+            "Supper", "The Midnight Feast", null, MenuMeal.Supper, false, "midnight-vigil", null,
+            [new("Adults", 20m)],
+            [new SaveEventMenuSection(categoryId, null, [new SaveEventMenuEntry(itemId, MenuPricing.PricedSeparately, price, null)])],
+            meals);
+
+        foreach (var (price, meals) in new[] { (5m, new[] { f.FridayDinnerId }), (6m, new[] { f.SaturdayDinnerId }) })
+        {
+            await using var db = await sqlite.NewContextAsync();
+            var menu = await db.EventMenus.Include(m => m.Prices).Include(m => m.Servings)
+                .Include(m => m.Sections).ThenInclude(s => s.Entries).SingleAsync(m => m.Id == menuId);
+            EventMenus.Apply(db, menu, Request(price, meals), f.HostId, DateTime.UtcNow);
+            await db.SaveChangesAsync();
+        }
+
+        await using (var db = await sqlite.NewContextAsync())
+        {
+            var menu = await db.EventMenus.Include(m => m.Prices).Include(m => m.Servings)
+                .Include(m => m.Sections).ThenInclude(s => s.Entries).SingleAsync(m => m.Id == menuId);
+            Assert.Equal("midnight-vigil", menu.DesignKey);
+            Assert.Single(menu.Prices);
+            Assert.Equal(6m, Assert.Single(Assert.Single(menu.Sections).Entries).Price);
+            Assert.Equal(f.SaturdayDinnerId, Assert.Single(menu.Servings).HostedEventMenuId);
+        }
+    }
+}

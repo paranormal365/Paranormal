@@ -1,0 +1,55 @@
+@namespace Ben.Web.Website.Library.Organization.Public
+@using Ben.Service.Models.Entities
+@using Ben.Web.Website.Library.Kit
+@using Ben.Web.Website.Library.Kit.Menus
+@using Microsoft.JSInterop
+@inject IBenAdminClient AdminClient
+@inject IJSRuntime JS
+
+@*
+    An event's published menus on its page (Ben, 10/13/2026), for everyone looking at the event:
+    each in its own design, in the order a guest reads them (by the meal they're served at, then
+    what's on offer throughout), each with its PDF. Drafts never reach here; the API sends only what
+    is published, and only while the event is on the public site.
+*@
+
+@if (Menus.Count > 0)
+{
+    <section class="mb-4" id="menus" data-testid="event-menus">
+        <BenSectionHeading Text="@(Menus.Count == 1 ? "Menu" : "Menus")" />
+        @if (_error is { Length: > 0 })
+        {
+            <div class="alert alert-danger py-2" role="alert">@_error</div>
+        }
+        @foreach (var menu in Menus)
+        {
+            var m = menu;
+            <div class="mb-4" id="@($"menu-{m.Id}")">
+                <EventMenuDocument Menu="@m" />
+                <div class="text-center mt-2">
+                    <button type="button" class="btn btn-sm btn-outline-secondary" disabled="@_busy"
+                            data-testid="event-menu-pdf" @onclick="() => PdfAsync(m)">
+                        Download this menu as a PDF
+                    </button>
+                </div>
+            </div>
+        }
+    </section>
+}
+
+@code {
+    [Parameter, EditorRequired] public IReadOnlyList<EventMenuRecord> Menus { get; set; } = [];
+
+    private bool _busy;
+    private string? _error;
+
+    private async Task PdfAsync(EventMenuRecord menu)
+    {
+        _busy = true;
+        _error = null;
+        var pdf = await AdminClient.GetPublishedEventMenuPdfAsync(menu.HostedEventId, menu.Id);
+        _busy = false;
+        if (pdf is not { } file) { _error = "The PDF couldn't be made just now. Try again in a moment."; return; }
+        await JS.InvokeVoidAsync("downloadFileFromBase64", Convert.ToBase64String(file.Data), "application/pdf", file.FileName);
+    }
+}

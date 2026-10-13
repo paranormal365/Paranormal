@@ -1550,42 +1550,110 @@ sent, so you aren't left waiting.
 If an event isn't published yet, has been canceled, or doesn't sell day passes, the invitation is
 refused and the message says which — much better than thirty people finding out two weeks later.
 
-### Menus
+### Meals
 
-**Menus** on the event page is a single page for the whole weekend: every night, and under each
-night, every meal you serve.
+**Meals**, from the event page, is the event's schedule of food: every night, and under each night,
+every meal you serve, with its time and a note. What's on a meal is its **menu**, which you make under
+**Menus** (below) and attach to the meals it's served at. The dining tables are laid out meal by meal.
 
-![Menus for a weekend, with three sittings under the Friday](help-media:organization-administration/event-menus.png)
+![Meals for a weekend, with three under the Friday](help-media:organization-administration/event-menus.png)
 
-Each night's heading has four buttons — **+ Breakfast**, **+ Lunch**, **+ Dinner**, **+ Snacks** —
-and each one adds a meal under that night. They are just a starting point: once added, the name is
-an ordinary text box, so a midnight vigil supper can be called whatever you like. Add a time if it
-has one and a note if it needs one, then type the dishes in the box below, **one to a line**. If you
-use courses, put the course before a colon — `Starter: Tomato soup`. A line without a colon is just
-a dish.
+Each night's heading has four buttons, **+ Breakfast**, **+ Lunch**, **+ Dinner** and **+ Snacks**,
+and each one adds a meal under that night. They're only a starting point: once added, the name is an
+ordinary text box, so a midnight vigil supper can be called whatever you like. Add a time if it has
+one and a note if it needs one. Under each meal, the page lists the menus served at it.
 
-The arrows beside a meal move it **within its night**, and the order in the list is the order it is
-served. The trash can removes it. Nothing is saved until you press **Save the menus**, which saves
-the whole weekend at once.
+The arrows beside a meal move it **within its night**, and the order in the list is the order it's
+served. The trash can removes it. Nothing is saved until you press **Save the meals**, which saves the
+whole weekend at once.
 
 **A night runs from the evening people arrive to the next morning.** So Friday night's meals include
 Saturday's breakfast, and the last night of a weekend still includes breakfast on the day everyone
 leaves. Meals appear in the order you arrange them, not by time, because an 8 a.m. breakfast comes
 *after* the 7 p.m. dinner the night before.
 
-The tags on a dish describe **the food** — "vegan", "contains nuts" — and everyone who can see the
-menu sees them. A guest's own allergy is something else entirely, and it is recorded on their
-booking.
+The page works on a phone too, if you need to add a meal on the go.
 
-Menus are shown only to guests whose place you have **confirmed**, not to the public. A menu is part
-of what somebody has booked, and you may not want a competing venue sizing up your catering before
-you have sold the weekend. A guest who is still waiting is told the menu will be shared once their
-place is confirmed.
+![The meals page on a phone](help-media:organization-administration/event-menus-phone.png)
 
-Typing a whole weekend's menus is easier on a keyboard, but the page also works on a phone if you
-need to add a meal on the go.
+### Menus
 
-![The menus page on a phone](help-media:organization-administration/event-menus-phone.png)
+**Menus**, from the event page, is where you make the food guests read about: the items, then menus
+put together from them, each in a look of its own. A menu stays a **draft** until you publish it.
+Then everyone looking at the event can read it on the event's page, beside the dates it's served on,
+and download it as a PDF.
+
+![Menus: the event's menus, and a design to start a new one in](help-media:organization-administration/event-menu-builder.png)
+
+#### Items, and where they're kept
+
+The **Items** tab lists everything this event's menus can use. Each item has a name, an optional
+description and picture, a **category** (Appetizers, Sandwiches, Snacks, Drinks…), what it is (vegan,
+vegetarian, gluten free…) and what it contains (milk, eggs, tree nuts and the other major allergens).
+The categories are one list for the whole site. If yours isn't there, add it from the item's form and
+every event after can use it too. A name the list already has, however it's capitalized, isn't added
+twice.
+
+When you make an item, you choose where to keep it:
+
+- **Just this event.** Only this event's menus can use it.
+- **Your group.** Every event your group holds can use it, wherever it is. Good for what you always
+  bring, like the pizza order your group gets every time.
+- **This venue.** Every event held at this venue can use it, whichever group holds it. Good for what
+  the venue's own kitchen serves; the Thomas House's own menus, for example, belong here. The venue
+  can change these items too.
+
+Changing an item changes it on every menu that has it. **Remove** stops offering it for new menus;
+menus that already have it keep it.
+
+#### Putting a menu together
+
+**Start a menu** with a name for yourself, such as *Friday dinner, adults*, and a look. Guests never
+see that name; they see the **heading** you give the menu, or the meal's name if you don't.
+
+![Building a menu, with its preview beside it](help-media:organization-administration/event-menu-editor.png)
+
+On the menu:
+
+- **Which meal it is**: breakfast, brunch, lunch, supper, dinner, snacks, drinks or dessert. It can
+  stay unchosen while you work.
+- **When it's served**: tick the meals it's served at. A menu can be served at several meals, and a
+  meal can show several menus, such as a children's menu or a vegan menu beside the main one. Or
+  choose **Throughout the event** for what's on offer the whole time: candy at $2, bottled water and
+  soft drinks, sold or free with the event.
+- **Sections**: add a section for each category, then add items to it from that category. The arrows
+  move sections and items; the order on the screen is the order on the menu. A section can have a
+  heading of its own, such as *From the grill*.
+- **How each item is paid for**:
+  - **In the meal's price.** Covered by the menu's price. A menu with any of these needs that price.
+  - **Covered by the event.** Part of what guests paid for the event. The event's page says what the
+    event's price includes, under the dates.
+  - **Priced on its own.** An extra or an add-on, such as alcohol, or blue cheese on a steak. Give its
+    price.
+- **Prices**: the meal's price, as one amount for everybody or one for each kind of guest: adults,
+  children, seniors, first responders. A note under them can say *Gratuity not included*.
+- **A logo or picture** at the top of the menu.
+
+#### The look, and the preview
+
+The preview beside the form shows the menu as it looks with what's typed now, saved or not, so you
+can check it at any time. **Look** changes the design, and the arrows step through them, so you can
+try each one against your own menu before you decide. There are twelve: six made for ghost hunting
+(Séance Parlor, Midnight Vigil, Spirit Board, Haunted Manor, Case File and EVP Static) and six for
+anything (Classic Bistro, Modern Minimal, Chalkboard Café, Rustic Farmhouse, Garden Party and Elegant
+Evening). The design picker shows each one as a finished sample menu.
+
+Every menu ends with a very small line saying it was made with IsHaunted.com.
+
+#### Publishing, copies and the PDF
+
+- **Save and publish** shows the menu to everyone looking at the event. It needs at least one item,
+  the meals it's served at (or *Throughout the event*), and a price if any item is in the meal's
+  price. **Unpublish** makes it a draft again.
+- **Make a copy** makes *Friday dinner Copy 1* (then *Copy 2*, and so on) with everything but its
+  meals and its publishing. Change the copy and the original stays as it was.
+- **Download the PDF** gives you the menu, in its look, ready to print or send. Guests can download
+  each published menu as a PDF from the event's page too.
 
 ### Dining tables
 
@@ -1595,7 +1663,7 @@ need to add a meal on the go.
 
 1. **Set up the tables** once for the event — a name and how many it seats, or *Add 6 tables of 8* to start.
    The same tables are used at every sitting.
-2. **Choose a sitting** from the buttons at the top. Each sitting is a meal from the Menus page.
+2. **Choose a sitting** from the buttons at the top. Each sitting is a meal from the Meals page.
 3. **Tap a party, then tap a table.** The party is seated there. To split a big party, change how many to
    seat before you tap the table, then seat the rest at another.
 
@@ -1608,7 +1676,7 @@ canceled, it is removed from its table automatically.
 the same table again. **Print table list** prints each table with who sits there and their dietary
 notes, for the kitchen and the dining room. Guests see their table on their pass.
 
-Changing a meal's name or dishes keeps its seating. Removing a meal or a table removes its seating.
+Changing a meal's name or its menus keeps its seating. Removing a meal or a table removes its seating.
 
 ### The confirmation email and the pass
 
@@ -1674,7 +1742,7 @@ switches, and each one is independent:
 - **Run the door** — scan passes and check people in. Most helpers only need this one.
 - **See who's coming** — the board, with guests' names and anything they can't eat.
 - **Say yes or no to bookings** — making decisions, which includes seeing the board.
-- **Menus and the kitchen's sheet.**
+- **Menus and the kitchen's sheet** — making and publishing the menus, and reading what the kitchen needs.
 - **The event's files.**
 
 The role — *Door*, *Kitchen*, *Guide* — is just a label for your own schedule. It doesn't grant
@@ -2104,7 +2172,7 @@ stays at 7 PM even if daylight saving time has changed in between.
 Each part you made is listed with its size, already checked:
 
 - **the plan** — rooms or seats, sections, prices, and what the venue held back on which night,
-- **menus**, on the same night of the run,
+- **meals**, on the same night of the run, and the **menus**, as drafts served at the same meals,
 - **the program**, at the same times, not yet published,
 - **bands**, and **helpers** with what they can do (unanswered invitations aren't copied),
 - **the advert**, as a draft that is reviewed again before it shows,

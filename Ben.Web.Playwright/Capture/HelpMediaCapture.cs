@@ -2991,6 +2991,54 @@ public sealed class HelpMediaCapture : BenTestBase
         await ShootAsync("organization-administration", "event-menus-phone.png",
             gated: true, proves: "Friday", width: 375);
 
+        // Designed menus (10/13/2026): the builder's list with the design gallery, then one of the
+        // seeded sample menus open beside its preview, then the menus guests read on the event page.
+        await GoAsync($"/organizations/{orgId}/events/{SeededRoomsEventId}/menu-builder");
+        await Expect(Page.Locator(".menu-gallery__card").First).ToBeVisibleAsync(new() { Timeout = 20_000 });
+        await ShootAsync("organization-administration", "event-menu-builder.png",
+            gated: true, proves: "Start a menu");
+
+        var sample = Page.Locator("[data-testid=menu-card] a", new() { HasTextString = "Sample: Séance Parlor" });
+        if (await sample.CountAsync() > 0)
+        {
+            await sample.First.ClickAsync();
+            await Expect(Page.Locator("[data-testid=menu-preview] [data-testid=menu-document]")).ToBeVisibleAsync(new() { Timeout = 20_000 });
+            // The form and its preview, side by side, from the top of the two panes.
+            await Page.Locator("#menu-form").ScrollIntoViewIfNeededAsync();
+            await Page.EvaluateAsync("document.querySelector('#menu-form').scrollIntoView({ block: 'start' })");
+            await ShootAsync("organization-administration", "event-menu-editor.png",
+                gated: true, proves: "The heading guests see");
+        }
+        else
+        {
+            TestContext.Out.WriteLine("No seeded sample menus here, so event-menu-editor.png was not taken.");
+        }
+
+        string? slug = null;
+        if (await SuperAdminTokenAsync() is { } menuToken)
+        {
+            var read = await Page.APIRequest.GetAsync($"{ApiUrl}/api/organizations/{orgId}/events/{SeededRoomsEventId}",
+                new() { Headers = new Dictionary<string, string> { ["Authorization"] = $"Bearer {menuToken}" } });
+            if (read.Ok) slug = (await read.JsonAsync())?.GetProperty("urlName").GetString();
+        }
+        if (slug is { Length: > 0 })
+        {
+            await LogoutAsync();
+            await GoAsync($"/o/paranormal365/events/{slug}");
+            var menus = Page.Locator("[data-testid=event-menus]");
+            if (await menus.CountAsync() > 0)
+            {
+                // A designed one rather than the plain look a converted menu starts in, when there is one.
+                var designed = Page.Locator("[data-testid=event-menus] [data-testid=menu-document]:not([data-design=classic-bistro])");
+                try { await designed.First.WaitForAsync(new() { Timeout = 10_000 }); } catch (TimeoutException) { }
+                var pick = await designed.CountAsync() > 0
+                    ? "[data-testid=event-menus] [data-testid=menu-document]:not([data-design=classic-bistro])"
+                    : "[data-testid=event-menus] [data-testid=menu-document]";
+                await ShootAsync("going-to-an-event", "event-menus-for-guests.png", selector: pick, proves: "Menu made with IsHaunted.com");
+            }
+            await LoginAsync(SuperAdminEmail, SuperAdminPassword);
+        }
+
         // The kitchen sheet needs somebody who has said what they cannot eat. A guest asks for a
         // place for three, with their party's notes, and the sheet is read with the requests not
         // yet confirmed counted in — the switch the sheet offers for exactly this, planning the

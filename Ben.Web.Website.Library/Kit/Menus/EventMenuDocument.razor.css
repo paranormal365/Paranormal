@@ -1,0 +1,276 @@
+/* A menu is a printed object with its own paper (Ben, 10/13/2026). Every color comes from the
+   design (--m-paper, --m-ink, --m-accent, --m-muted, set on the element), never from the site's
+   theme, so a menu looks the same in the light and dark site and matches its PDF. */
+
+.menu-doc {
+    --m-gap: 1.5rem;
+    container-type: inline-size;
+    color: var(--m-ink);
+    background: var(--m-paper);
+    border-radius: .5rem;
+    box-shadow: 0 .5rem 1.5rem rgba(0, 0, 0, .18);
+    padding: 1.1rem;
+    max-width: 52rem;
+    margin-inline: auto;
+}
+
+.menu-doc--serif { font-family: Georgia, "Times New Roman", Times, serif; }
+.menu-doc--sans { font-family: "Helvetica Neue", Helvetica, Arial, sans-serif; }
+.menu-doc--typewriter { font-family: "Courier New", Courier, monospace; }
+
+.menu-doc__page {
+    position: relative;
+    padding: 2rem 1.75rem 1.25rem;
+    min-height: 18rem;
+}
+
+/* The frames, drawn in the accent. */
+.menu-doc--frame-single .menu-doc__page { border: 1.5px solid var(--m-accent); }
+.menu-doc--frame-double .menu-doc__page {
+    border: 2px solid var(--m-accent);
+    outline: 1px solid var(--m-accent);
+    outline-offset: -8px;
+}
+.menu-doc--frame-corners .menu-doc__page {
+    background:
+        linear-gradient(var(--m-accent), var(--m-accent)) top left / 2.5rem 1.5px no-repeat,
+        linear-gradient(var(--m-accent), var(--m-accent)) top left / 1.5px 2.5rem no-repeat,
+        linear-gradient(var(--m-accent), var(--m-accent)) top right / 2.5rem 1.5px no-repeat,
+        linear-gradient(var(--m-accent), var(--m-accent)) top right / 1.5px 2.5rem no-repeat,
+        linear-gradient(var(--m-accent), var(--m-accent)) bottom left / 2.5rem 1.5px no-repeat,
+        linear-gradient(var(--m-accent), var(--m-accent)) bottom left / 1.5px 2.5rem no-repeat,
+        linear-gradient(var(--m-accent), var(--m-accent)) bottom right / 2.5rem 1.5px no-repeat,
+        linear-gradient(var(--m-accent), var(--m-accent)) bottom right / 1.5px 2.5rem no-repeat;
+}
+
+.menu-doc__head {
+    text-align: center;
+    margin-bottom: 1.5rem;
+}
+
+.menu-doc__logo {
+    display: block;
+    max-height: 5rem;
+    max-width: 14rem;
+    margin: 0 auto .75rem;
+    object-fit: contain;
+}
+
+.menu-doc__ornament {
+    display: block;
+    width: 7.5rem;
+    height: auto;
+    margin: 0 auto .6rem;
+    color: var(--m-accent);
+}
+
+.menu-doc__stamp {
+    display: inline-block;
+    margin-bottom: .6rem;
+    padding: .15rem .6rem;
+    border: 2px solid var(--m-accent);
+    color: var(--m-accent);
+    font-weight: 700;
+    font-size: .72rem;
+    letter-spacing: .14em;
+    text-transform: uppercase;
+    transform: rotate(-2deg);
+}
+
+.menu-doc__event {
+    font-size: .72rem;
+    letter-spacing: .14em;
+    text-transform: uppercase;
+    color: var(--m-muted);
+}
+
+.menu-doc__title {
+    margin: .2rem 0 .3rem;
+    font-family: inherit;
+    font-size: clamp(1.6rem, 6cqi, 2.4rem);
+    font-weight: 700;
+    line-height: 1.1;
+    color: var(--m-accent);
+}
+
+.menu-doc__when {
+    font-style: italic;
+    font-size: .85rem;
+    color: var(--m-muted);
+}
+
+.menu-doc__intro {
+    margin: .5rem auto 0;
+    max-width: 34rem;
+    font-style: italic;
+    font-size: .92rem;
+}
+
+.menu-doc__prices {
+    margin-top: .6rem;
+    font-weight: 700;
+    color: var(--m-accent);
+}
+
+.menu-doc__price-note {
+    font-size: .74rem;
+    color: var(--m-muted);
+}
+
+.menu-doc__rule {
+    width: 40%;
+    margin: 1rem auto 0;
+    border-top: 1px solid var(--m-accent);
+}
+
+.menu-doc__sections {
+    display: grid;
+    gap: 1.25rem var(--m-gap);
+}
+
+/* Two columns once there is room, as the PDF does. */
+@container (min-width: 40rem) {
+    .menu-doc--columns .menu-doc__sections {
+        grid-template-columns: 1fr 1fr;
+        align-items: start;
+    }
+}
+
+.menu-doc__section-title {
+    margin: 0 0 .7rem;
+    font-family: inherit;
+    font-size: 1.05rem;
+    font-weight: 700;
+    text-align: center;
+    color: var(--m-accent);
+}
+
+.menu-doc__section-title::after {
+    content: "";
+    display: block;
+    width: 2.75rem;
+    margin: .3rem auto 0;
+    border-top: 1px solid var(--m-accent);
+}
+
+.menu-doc--caps .menu-doc__section-title {
+    text-transform: uppercase;
+    letter-spacing: .14em;
+    font-size: .95rem;
+}
+
+.menu-doc__item {
+    display: flex;
+    gap: .75rem;
+    margin-bottom: .75rem;
+}
+
+.menu-doc__picture {
+    flex: 0 0 3.25rem;
+    width: 3.25rem;
+    height: 3.25rem;
+    object-fit: cover;
+    border-radius: .3rem;
+}
+
+.menu-doc__item-text {
+    flex: 1 1 auto;
+    min-width: 0;
+}
+
+.menu-doc__line {
+    display: flex;
+    align-items: baseline;
+    gap: .4rem;
+}
+
+.menu-doc__name {
+    font-weight: 700;
+    overflow-wrap: anywhere;
+}
+
+.menu-doc__marks {
+    flex: 0 0 auto;
+    font-size: .7rem;
+    font-weight: 700;
+    letter-spacing: .04em;
+    color: var(--m-muted);
+}
+
+.menu-doc__leader {
+    flex: 1 1 auto;
+    min-width: 1rem;
+    border-bottom: 1px dotted var(--m-muted);
+    transform: translateY(-.25em);
+}
+
+.menu-doc__gap { flex: 1 1 auto; }
+
+.menu-doc__price {
+    flex: 0 0 auto;
+    font-weight: 700;
+    color: var(--m-accent);
+}
+
+.menu-doc__desc {
+    font-style: italic;
+    font-size: .86rem;
+    color: var(--m-muted);
+}
+
+.menu-doc__allergens {
+    font-size: .74rem;
+    color: var(--m-muted);
+}
+
+.menu-doc__note {
+    font-style: italic;
+    font-size: .78rem;
+    color: var(--m-accent);
+}
+
+.menu-doc__empty {
+    text-align: center;
+    font-style: italic;
+    color: var(--m-muted);
+}
+
+.menu-doc__key {
+    margin-top: 1rem;
+    text-align: center;
+    font-size: .72rem;
+    color: var(--m-muted);
+}
+
+/* Ben: "an extremely small credit". */
+.menu-doc__credit {
+    margin-top: 1.25rem;
+    text-align: center;
+    font-family: "Helvetica Neue", Helvetica, Arial, sans-serif;
+    font-size: .58rem;
+    letter-spacing: .02em;
+    color: var(--m-muted);
+    opacity: .85;
+}
+
+/* The design gallery's small card: the whole menu drawn, scaled down, never reflowed. */
+.menu-doc--compact {
+    padding: .5rem;
+    font-size: .55rem;
+    box-shadow: 0 .25rem .75rem rgba(0, 0, 0, .18);
+}
+
+.menu-doc--compact .menu-doc__page { padding: 1rem .9rem .6rem; min-height: 0; }
+.menu-doc--compact .menu-doc__title { font-size: 1.15rem; }
+.menu-doc--compact .menu-doc__ornament { width: 4rem; }
+.menu-doc--compact .menu-doc__item { margin-bottom: .35rem; }
+.menu-doc--compact .menu-doc__picture { flex-basis: 1.5rem; width: 1.5rem; height: 1.5rem; }
+
+@media (max-width: 575.98px) {
+    .menu-doc { padding: .5rem; }
+    .menu-doc__page { padding: 1.4rem 1rem 1rem; }
+}
+
+@media print {
+    .menu-doc { box-shadow: none; }
+}

@@ -1,0 +1,26 @@
+/* The builder (10/13/2026): the form on the left, the preview on the right, each scrolling on its
+   own on a wide screen, so the preview stays beside whatever part of the form is being changed.
+
+   Not position: sticky. The app's .content-wrapper is overflow-y: auto without ever scrolling, which
+   makes it the sticky element's scroll container, so sticky never sticks anywhere inside it. Two
+   panes each the height of the window do the same job without depending on that. */
+@media (min-width: 1200px) {
+    .menu-editor__pane {
+        max-height: calc(100vh - 2rem);
+        overflow-y: auto;
+        overscroll-behavior: contain;
+        padding-right: .25rem;
+    }
+}
+
+.menu-editor__section {
+    padding: .75rem;
+    margin-bottom: .75rem;
+    border: 1px solid var(--ben-line, var(--bs-border-color));
+    border-radius: .5rem;
+}
+
+.menu-editor__entry {
+    padding: .5rem 0;
+    border-top: 1px dashed var(--ben-line, var(--bs-border-color));
+}

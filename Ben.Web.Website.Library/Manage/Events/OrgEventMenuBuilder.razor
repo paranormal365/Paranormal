@@ -1,0 +1,346 @@
+@page "/organizations/{OrgId:guid}/events/{EventId:guid}/menu-builder"
+@namespace Ben.Web.Website.Library.Manage.Events
+
+@inject IBenAdminClient AdminClient
+@inject IBenUserState UserState
+@inject NavigationManager Nav
+@inject IJSRuntime JS
+
+@using Ben.Data.Common.Enums
+@using Ben.Data.Common.Menus
+@using Ben.Service.Models.Entities
+@using Ben.Web.Services.WebApi
+@using Ben.Web.Website.Library.Kit
+@using Ben.Web.Website.Library.Kit.Menus
+@using Microsoft.JSInterop
+
+@* An event's menus and the items they're made from (Ben, 10/13/2026).
+
+   Two tabs, because they are two jobs: the items are made once and reused, the menus are put
+   together from them. A menu is a draft until it's published, and only then do guests see it. *@
+
+<PageTitle>@(_workspace?.EventName is { Length: > 0 } n ? $"Menus — {n}" : "Menus")</PageTitle>
+
+<div class="container-fluid py-3">
+    <div class="text-secondary small">
+        <a href="@($"/organizations/{OrgId}/events")">Events</a>
+        @if (_workspace is { } crumb)
+        {
+            <text> · </text><a href="@($"/organizations/{OrgId}/events/{EventId}")">@crumb.EventName</a>
+        }
+        <text> · </text><a href="@($"/organizations/{OrgId}/events/{EventId}/menus")">Meals</a>
+    </div>
+
+    <h1 class="h3 mb-1">
+        Menus
+        <HelpLink Slug="organization-administration" Anchor="hosted-events" />
+    </h1>
+    <p class="text-secondary small mb-3">
+        Make the items once, then put menus together from them. A menu stays a draft until you publish
+        it; then everyone looking at the event can read it, and download it as a PDF.
+    </p>
+
+    @if (_note is { Length: > 0 }) { <div class="alert alert-success py-2" id="menu-builder-note" role="status">@_note</div> }
+    @if (_error is { Length: > 0 }) { <div class="alert alert-danger py-2" id="menu-builder-error" role="alert">@_error</div> }
+
+    <ul class="nav nav-tabs mb-3" role="tablist">
+        <li class="nav-item" role="presentation">
+            <button type="button" class="nav-link @(_tab == "menus" ? "active" : "")" id="tab-menus" role="tab"
+                    aria-selected="@(_tab == "menus")" @onclick="@(() => _tab = "menus")">Menus</button>
+        </li>
+        <li class="nav-item" role="presentation">
+            <button type="button" class="nav-link @(_tab == "items" ? "active" : "")" id="tab-items" role="tab"
+                    aria-selected="@(_tab == "items")" @onclick="@(() => _tab = "items")">
+                Items
+                @if (_workspace is { } w) { <span class="badge text-bg-secondary ms-1">@w.Library.Count</span> }
+            </button>
+        </li>
+    </ul>
+
+    <BenItemState TItem="EventMenuWorkspaceRecord" Result="_result" Loading="_loading" LoadingText="Loading the menus…" OnRetry="LoadAsync">
+        <ChildContent Context="loaded">
+            @if (_tab == "menus")
+            {
+                @* ── the menus ─────────────────────────────────────────── *@
+                @if (loaded.Menus.Count == 0)
+                {
+                    <p class="text-secondary" id="menus-none">No menus yet. Start one below.</p>
+                }
+                <div class="row g-3 mb-4" id="menu-list">
+                    @foreach (var menu in loaded.Menus)
+                    {
+                        var m = menu;
+                        <div class="col-12 col-lg-6">
+                            <div class="card h-100" data-testid="menu-card">
+                                <div class="card-body">
+                                    <div class="d-flex justify-content-between align-items-start gap-2">
+                                        <div>
+                                            <h2 class="h6 mb-0"><a href="@EditorHref(m.Id)">@m.Title</a></h2>
+                                            <div class="small text-secondary">Guests see: @m.ShownHeading</div>
+                                        </div>
+                                        @if (m.PublishedUtc is not null)
+                                        {
+                                            <span class="badge text-bg-success">Published</span>
+                                        }
+                                        else
+                                        {
+                                            <span class="badge text-bg-secondary">Draft</span>
+                                        }
+                                    </div>
+                                    <div class="small mt-2">
+                                        @(m.ThroughoutTheEvent ? "Throughout the event" : m.Meals.Count == 0 ? "Not served at any meal yet" : string.Join("; ", m.Meals.Select(Served)))
+                                    </div>
+                                    <div class="small text-secondary">
+                                        @MenuDesigns.FindOrDefault(m.DesignKey).Name · @m.ItemCount @(m.ItemCount == 1 ? "item" : "items")
+                                    </div>
+                                </div>
+                                <div class="card-footer d-flex flex-wrap gap-1">
+                                    <a class="btn btn-sm btn-primary" href="@EditorHref(m.Id)">Open</a>
+                                    <button type="button" class="btn btn-sm btn-outline-secondary" disabled="@_busy" @onclick="() => CopyAsync(m)">Copy</button>
+                                    @if (m.PublishedUtc is null)
+                                    {
+                                        <button type="button" class="btn btn-sm btn-outline-success" disabled="@_busy" @onclick="() => PublishAsync(m)">Publish</button>
+                                    }
+                                    else
+                                    {
+                                        <button type="button" class="btn btn-sm btn-outline-secondary" disabled="@_busy" @onclick="() => UnpublishAsync(m)">Unpublish</button>
+                                    }
+                                    <button type="button" class="btn btn-sm btn-outline-secondary" disabled="@_busy" @onclick="() => PdfAsync(m)">PDF</button>
+                                    <button type="button" class="btn btn-sm btn-outline-danger ms-auto" disabled="@_busy" @onclick="() => _deleting = m">Delete</button>
+                                </div>
+                            </div>
+                        </div>
+                    }
+                </div>
+
+                <div class="card" id="menu-new">
+                    <div class="card-header fw-semibold">Start a menu</div>
+                    <div class="card-body">
+                        <div class="row g-2 align-items-end mb-3">
+                            <div class="col-12 col-md-6">
+                                <label class="form-label small mb-1" for="menu-new-title">Its name, for you</label>
+                                <input id="menu-new-title" class="form-control" maxlength="120" placeholder="Such as Friday dinner, adults"
+                                       @bind="_newTitle" @bind:event="oninput" />
+                                <div class="form-text">Only you see this. Guests see the heading you give it.</div>
+                            </div>
+                            <div class="col-12 col-md-auto">
+                                <button type="button" class="btn btn-primary" id="menu-new-start"
+                                        disabled="@(_busy || string.IsNullOrWhiteSpace(_newTitle))" @onclick="CreateAsync">
+                                    Start it in @MenuDesigns.FindOrDefault(_newDesign).Name
+                                </button>
+                            </div>
+                        </div>
+
+                        <div class="form-label small mb-1">Choose a look. You can change it at any time.</div>
+                        @foreach (var family in new[] { MenuDesigns.GhostHunting, MenuDesigns.General })
+                        {
+                            <div class="small fw-semibold text-secondary mt-2 mb-1">@family</div>
+                            <div class="menu-gallery" data-testid="menu-gallery">
+                                @foreach (var design in MenuDesigns.All.Where(d => d.Family == family))
+                                {
+                                    var d = design;
+                                    <button type="button" class="menu-gallery__card @(d.Key == _newDesign ? "is-chosen" : "")"
+                                            aria-pressed="@(d.Key == _newDesign)" data-design="@d.Key" @onclick="() => _newDesign = d.Key">
+                                        <span class="menu-gallery__frame"><EventMenuDocument Menu="@MenuSamples.Dinner(d.Key)" Compact="true" /></span>
+                                        <span class="menu-gallery__name">@d.Name</span>
+                                        <span class="menu-gallery__what">@d.Description</span>
+                                    </button>
+                                }
+                            </div>
+                        }
+                    </div>
+                </div>
+            }
+            else
+            {
+                @* ── the items ─────────────────────────────────────────── *@
+                <div class="d-flex flex-wrap gap-2 align-items-center mb-3">
+                    <button type="button" class="btn btn-primary" id="menu-item-add" @onclick="() => OpenItem(null)">Add an item</button>
+                    <span class="small text-secondary">
+                        This event can use its own items, your group's, and the ones kept at @(loaded.VenueName ?? "the venue").
+                    </span>
+                </div>
+
+                @if (loaded.Library.Count == 0)
+                {
+                    <p class="text-secondary" id="menu-items-none">No items yet.</p>
+                }
+                @foreach (var group in loaded.Library.GroupBy(i => i.CategoryName))
+                {
+                    <h2 class="h6 mt-3">@group.Key</h2>
+                    <div class="table-responsive">
+                        <table class="table table-sm align-middle mb-2">
+                            <tbody>
+                                @foreach (var item in group)
+                                {
+                                    var it = item;
+                                    <tr data-testid="menu-item-row">
+                                        <td style="width:3rem;">
+                                            @if (it.ImageUploadFileId is { } pic)
+                                            {
+                                                <img src="@Media.MenuImage(pic)" alt="" style="width:2.5rem;height:2.5rem;object-fit:cover;border-radius:.3rem;" />
+                                            }
+                                        </td>
+                                        <td>
+                                            <div class="fw-semibold">@it.Name</div>
+                                            @if (it.Description is { Length: > 0 } d) { <div class="small text-secondary">@d</div> }
+                                        </td>
+                                        <td class="small text-secondary text-nowrap">
+                                            @MenuWords.ScopeName(it.Scope)
+                                            @if (it.OrganizationId != OrgId) { <div>Saved by @it.OrganizationName</div> }
+                                        </td>
+                                        <td class="text-end text-nowrap">
+                                            @if (it.CanEdit)
+                                            {
+                                                <button type="button" class="btn btn-sm btn-outline-secondary" @onclick="() => OpenItem(it)">Change</button>
+                                                <button type="button" class="btn btn-sm btn-outline-danger" disabled="@_busy" @onclick="() => RetireAsync(it)">Remove</button>
+                                            }
+                                        </td>
+                                    </tr>
+                                }
+                            </tbody>
+                        </table>
+                    </div>
+                }
+            }
+        </ChildContent>
+    </BenItemState>
+</div>
+
+@if (_workspace is { } ws)
+{
+    <MenuItemForm @bind-Visible="_itemOpen" OrgId="@OrgId" EventId="@EventId" Item="@_editingItem"
+                  Categories="@_categories" VenueKnown="@ws.VenueIsKnownToTheSite"
+                  OnSaved="ItemSavedAsync" OnCategoryAdded="CategoryAdded" />
+}
+
+<BenModal Visible="@(_deleting is not null)" VisibleChanged="@(v => { if (!v) _deleting = null; })" Title="Delete this menu?" Size="sm">
+    <ChildContent>
+        <p class="mb-0">"@_deleting?.Title" goes for good, and stops showing to guests if it was published. Its items stay in the list.</p>
+    </ChildContent>
+    <FooterContent>
+        <button type="button" class="btn btn-outline-secondary" @onclick="() => _deleting = null">Keep it</button>
+        <button type="button" class="btn btn-danger" id="menu-delete-confirm" disabled="@_busy" @onclick="DeleteAsync">Delete</button>
+    </FooterContent>
+</BenModal>
+
+@code {
+    [Parameter] public Guid OrgId { get; set; }
+    [Parameter] public Guid EventId { get; set; }
+
+    [Inject] private Ben.Web.Services.IMediaUrlBuilder Media { get; set; } = default!;
+
+    private ItemResult<EventMenuWorkspaceRecord> _result;
+    private EventMenuWorkspaceRecord? _workspace;
+    private List<MenuCategoryRecord> _categories = [];
+    private bool _loading = true;
+    private bool _busy;
+    private string? _note;
+    private string? _error;
+    private string _tab = "menus";
+    private string? _newTitle;
+    private string _newDesign = MenuDesigns.Default.Key;
+    private bool _itemOpen;
+    private MenuLibraryItemRecord? _editingItem;
+    private EventMenuSummaryRecord? _deleting;
+
+    private string EditorHref(Guid menuId) => $"/organizations/{OrgId}/events/{EventId}/menu-builder/{menuId}";
+
+    private static string Served(EventMenuMealRecord meal)
+        => $"{meal.NightDate:ddd MM/dd} {meal.MealTitle}";
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (!firstRender) return;
+        if (!await UserState.WaitUntilAuthReadyAsync(RendererInfo.IsInteractive)) return;
+
+        if (new Uri(Nav.Uri).Query.Contains("tab=items")) _tab = "items";
+        await LoadAsync();
+        StateHasChanged();
+    }
+
+    private async Task LoadAsync()
+    {
+        _loading = true;
+        _result = await AdminClient.GetMenuWorkspaceAsync(OrgId, EventId);
+        _workspace = _result.Item;
+        _categories = [.. _workspace?.Categories ?? []];
+        _loading = false;
+    }
+
+    private async Task Run(Func<Task<(EventMenuRecord? Result, string? Error)>> call, string done)
+    {
+        _busy = true; _error = null; _note = null;
+        var (result, error) = await call();
+        _busy = false;
+        if (result is null) { _error = error ?? "That couldn't be done just now."; return; }
+        _note = done;
+        await LoadAsync();
+    }
+
+    private async Task CreateAsync()
+    {
+        _busy = true; _error = null;
+        var (made, error) = await AdminClient.CreateEventMenuAsync(OrgId, EventId, new CreateEventMenuRequest(_newTitle!.Trim(), _newDesign));
+        _busy = false;
+        if (made is null) { _error = error ?? "The menu couldn't be started just now."; return; }
+        Nav.NavigateTo(EditorHref(made.Id));
+    }
+
+    private Task CopyAsync(EventMenuSummaryRecord m)
+        => Run(() => AdminClient.CopyEventMenuAsync(OrgId, EventId, m.Id), "Copied. The copy is a draft, not served at any meal yet.");
+
+    private Task PublishAsync(EventMenuSummaryRecord m)
+        => Run(() => AdminClient.PublishEventMenuAsync(OrgId, EventId, m.Id), $"\"{m.Title}\" is published.");
+
+    private Task UnpublishAsync(EventMenuSummaryRecord m)
+        => Run(() => AdminClient.UnpublishEventMenuAsync(OrgId, EventId, m.Id), $"\"{m.Title}\" is a draft again. Guests no longer see it.");
+
+    private async Task DeleteAsync()
+    {
+        if (_deleting is not { } m) return;
+        _busy = true; _error = null; _note = null;
+        var (deleted, error) = await AdminClient.DeleteEventMenuAsync(OrgId, EventId, m.Id);
+        _busy = false;
+        _deleting = null;
+        if (!deleted) { _error = error ?? "The menu couldn't be deleted just now."; return; }
+        _note = $"\"{m.Title}\" is deleted.";
+        await LoadAsync();
+    }
+
+    private async Task PdfAsync(EventMenuSummaryRecord m)
+    {
+        _busy = true; _error = null;
+        var pdf = await AdminClient.GetEventMenuPdfAsync(OrgId, EventId, m.Id);
+        _busy = false;
+        if (pdf is not { } file) { _error = "The PDF couldn't be made just now."; return; }
+        await JS.InvokeVoidAsync("downloadFileFromBase64", Convert.ToBase64String(file.Data), "application/pdf", file.FileName);
+    }
+
+    private void OpenItem(MenuLibraryItemRecord? item)
+    {
+        _editingItem = item;
+        _itemOpen = true;
+    }
+
+    private async Task ItemSavedAsync(MenuLibraryItemRecord item)
+    {
+        _note = $"\"{item.Name}\" is saved.";
+        await LoadAsync();
+    }
+
+    private void CategoryAdded(MenuCategoryRecord category)
+    {
+        if (_categories.All(c => c.Id != category.Id)) _categories.Add(category);
+    }
+
+    private async Task RetireAsync(MenuLibraryItemRecord item)
+    {
+        _busy = true; _error = null; _note = null;
+        var (done, error) = await AdminClient.RetireMenuItemAsync(OrgId, EventId, item.Id);
+        _busy = false;
+        if (done is null) { _error = error ?? "The item couldn't be removed just now."; return; }
+        _note = $"\"{item.Name}\" won't be offered for new menus. Menus that have it keep it.";
+        await LoadAsync();
+    }
+}

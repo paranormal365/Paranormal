@@ -64,6 +64,12 @@ public interface IMediaUrlBuilder
     string VenuePhoto(Guid uploadFileId);
 
     /// <summary>
+    /// A menu item's photo or a menu's logo (10/13/2026). Carries the viewer's ticket when signed in,
+    /// so a planner's preview shows a picture before the menu is published.
+    /// </summary>
+    string MenuImage(Guid uploadFileId);
+
+    /// <summary>
     /// The chosen files, pictures and photos of an event as one zip (item 235 phase 12). Not cached: every
     /// choice is a different address.
     /// </summary>

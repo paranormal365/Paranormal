@@ -121,6 +121,16 @@ else
                             {
                                 <span class="text-secondary small">@notes</span>
                             }
+                            @if (MenusOn(night.Date).ToList() is { Count: > 0 } served)
+                            {
+                                @* What's served that night, from its published menus (10/13/2026). *@
+                                <span class="small" data-testid="night-menus">
+                                    @foreach (var (pair, at) in served.Select((p, n) => (p, n)))
+                                    {
+                                        @(at > 0 ? " · " : "")<a href="@($"o/{UrlName}/events/{EventSlug}#menu-{pair.Menu.Id}")">@pair.Meal.MealTitle@(pair.Menu.ShownHeading != pair.Meal.MealTitle ? $": {pair.Menu.ShownHeading}" : "")</a>
+                                    }
+                                </span>
+                            }
                         </div>
                     }
                 </div>
@@ -136,6 +146,10 @@ else
                         <strong>Getting in and getting around</strong>
                         <p class="mb-0" style="white-space:pre-line;">@access</p>
                     </div>
+                }
+                @if (IncludedWithTheEvent() is { } included)
+                {
+                    <p class="mt-3 mb-0" id="event-included"><strong>Included with the event:</strong> @included.</p>
                 }
                 @if (hosted.ContactLine is { Length: > 0 } contact)
                 {
@@ -371,6 +385,7 @@ else
         @if (_hosted is { } withProgramme)
         {
             <HostedEventProgramme HostedEventId="withProgramme.Id" IsAuthenticated="_isAuthenticated" />
+            <HostedEventMenus Menus="@_menus" />
             <HostedEventDownloads HostedEventId="withProgramme.Id" IsAuthenticated="_isAuthenticated" />
             <HostedEventReviews HostedEventId="withProgramme.Id" />
             @if (_isAuthenticated)
@@ -658,6 +673,35 @@ else
     private string? _error;
     private PublicHostedEventRecord? _hosted;
 
+    /// <summary>The event's published menus, in the order a guest reads them (10/13/2026).</summary>
+    private IReadOnlyList<EventMenuRecord> _menus = [];
+
+    /// <summary>Menus served on this date: (meal, menu) in serving order.</summary>
+    private IEnumerable<(EventMenuMealRecord Meal, EventMenuRecord Menu)> MenusOn(DateTime date)
+        => _menus.SelectMany(m => m.Meals.Where(x => x.NightDate.Date == date.Date).Select(x => (x, m)))
+                 .OrderBy(p => p.x.ServedAtLocal ?? TimeSpan.MaxValue);
+
+    /// <summary>
+    /// What the event's price covers, for beside the booking (Ben, 10/13/2026: "If the price is
+    /// included in the event price, it will be notated in the event ticket information").
+    /// </summary>
+    private string? IncludedWithTheEvent()
+    {
+        var covered = _menus.Where(m => m.Sections.SelectMany(s => s.Entries).Any(e => e.Pricing == Ben.Data.Common.Enums.MenuPricing.IncludedInEvent)).ToList();
+        if (covered.Count == 0) return null;
+        var names = covered.Select(m =>
+        {
+            var all = EventMenuPresentation.AllIncludedInEvent(m);
+            var what = m.ThroughoutTheEvent ? m.ShownHeading : m.Meals.Count == 1 ? $"{m.Meals[0].NightDate:dddd} {m.Meals[0].MealTitle.ToLowerInvariant()}" : m.ShownHeading;
+            return all ? what : $"some of {what}";
+        }).Distinct().ToList();
+        return names.Count switch
+        {
+            1 => names[0],
+            _ => string.Join(", ", names.Take(names.Count - 1)) + " and " + names[^1],
+        };
+    }
+
     /// <summary>Whether this event invites evidence — always, unless a hosted event says not.</summary>
     private bool _collectsEvidence => _hosted?.CollectsEvidence ?? true;
 
@@ -927,6 +971,10 @@ else
         {
             var hosted = await AdminClient.GetPublicHostedEventAsync(hostedId);
             _hosted = hosted.Item;
+
+            // Its published menus (10/13/2026). A failed read leaves the section out; the event
+            // page is still worth reading without its dinner.
+            _menus = (await AdminClient.GetPublishedEventMenusAsync(hostedId)).Items;
 
             // A refusal somebody WROTE is shown; the one this client generates from a status code
             // is not. Both arrive as a Reason and only the first is meant for a visitor: "The

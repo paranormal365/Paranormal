@@ -107,34 +107,22 @@ public class EventMenusTests : BenTestBase
     // ── the menus ────────────────────────────────────────────────────────────
 
     [Test]
-    public async Task A_sitting_a_host_typed_is_still_there_after_a_reload()
+    public async Task A_meal_a_host_added_is_still_there_after_a_reload()
     {
         // The one thing a replace-the-set save can get wrong invisibly: it looks saved, and the
-        // dishes are gone the next time somebody opens it.
+        // meal is gone the next time somebody opens it. (What's ON a meal is its designed menus
+        // since 10/13/2026; EventMenuBuilderTests covers those.)
         await OpenTheMenusAsync();
 
         var breakfast = Page.Locator("button[id^='add-breakfast-']").First;
-        await ClickUntilAsync(breakfast, Page.Locator("textarea[id^='sitting-dishes-']"));
-
-        await Page.Locator("textarea[id^='sitting-dishes-']").First
-            .FillAsync("Starter: Grapefruit\nEggs and bacon\nToast");
+        await ClickUntilAsync(breakfast, Page.Locator("input[id^='sitting-title-']"));
+        await Page.Locator("input[id^='sitting-title-']").First.FillAsync("Ghost-hunter's breakfast");
 
         await ClickUntilAsync(Page.Locator("#menus-save"), Page.Locator("#menus-note"));
-        await Expect(Page.Locator("#menus-note")).ToContainTextAsync("sitting");
+        await Expect(Page.Locator("#menus-note")).ToContainTextAsync("meal");
 
         await OpenTheMenusAsync();
-
-        await Expect(Page.Locator("input[id^='sitting-title-']").First).ToHaveValueAsync("Breakfast");
-
-        // ToHaveValue and not ToContainText: what a host typed into a textarea is its VALUE, and
-        // its text content is whatever the markup shipped with — empty here. The first version of
-        // this test asserted the text and failed against a page that was perfectly correct.
-        //
-        // The course written before the colon is asserted too: it survived the round trip as a
-        // course rather than becoming part of the dish's name.
-        await Expect(Page.Locator("textarea[id^='sitting-dishes-']").First)
-            .ToHaveValueAsync(new System.Text.RegularExpressions.Regex(
-                "Starter: Grapefruit\\nEggs and bacon\\nToast"));
+        await Expect(Page.Locator("input[id^='sitting-title-']").First).ToHaveValueAsync("Ghost-hunter's breakfast");
     }
 
     [Test]
