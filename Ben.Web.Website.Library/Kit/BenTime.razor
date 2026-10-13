@@ -12,7 +12,7 @@
 <span class="ben-time" title="@Other" data-testid="@TestId">@if (LettersClass is null)
     {@($"{Shown.Text}{(Shown.Letters.Length > 0 ? " " : "")}{Shown.Letters}")}
     else
-    {@Shown.Text<span class="@LettersClass">@Shown.Letters</span>}</span>
+    {@Shown.Text@(Shown.Letters.Length > 0 ? " " : "")<span class="@LettersClass">@Shown.Letters</span>}</span>
 
 @code {
     public enum Shape { DateTime, Date, Time, Span, TimeSpan, LongDate }

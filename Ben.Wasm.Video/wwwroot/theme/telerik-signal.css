@@ -251,6 +251,15 @@ body.k-body {
     box-shadow: inset 0 0 0 999px var(--ben-accent-soft);
 }
 
+/* The other page numbers. Kendo draws a flat primary button's text from
+   --kendo-color-primary-ON-SURFACE (not --kendo-color-primary), and at :root that is the accent:
+   4.48:1 on the dark pager, under the 4.5:1 small text needs. The link color reads 7.15:1 there and
+   is the accent itself in light, so light is unchanged. Measured in the browser 10/13/2026; first
+   found on the old theme 09/24 at 1.70:1. */
+.k-pager {
+    --kendo-color-primary-on-surface: var(--ben-link);
+}
+
 /* Kendo's primary buttons carry the same gradient as Bootstrap's .btn-primary, so a "Save" in a
    Telerik dialog and a "Save" on a page are visibly the same button.
 

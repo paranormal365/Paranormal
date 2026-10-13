@@ -115,7 +115,9 @@
 .ev-row__zone,
 .ev-row__time ::deep .ev-row__zone {
     display: inline;
-    margin-left: .35rem;
+    /* BenTime puts a real space before the letters, so a screen reader or a copy reads
+       "8:00 PM CDT" rather than "8:00 PMCDT"; this margin makes up the rest of the gap. */
+    margin-left: .15rem;
     font-size: .7rem;
     font-weight: 650;
     letter-spacing: .06em;
