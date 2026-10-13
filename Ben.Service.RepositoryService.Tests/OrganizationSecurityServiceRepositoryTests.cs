@@ -623,7 +623,7 @@ public class OrganizationSecurityServiceRepositoryTests
         }
 
         var svc = CreateService(factory);
-        await Assert.ThrowsAsync<InvalidOperationException>(() =>
+        await Assert.ThrowsAsync<OrganizationRuleException>(() =>
             svc.RegisterOrganizationAsync(userId, "   ", "valid-url"));
     }
 
@@ -634,7 +634,7 @@ public class OrganizationSecurityServiceRepositoryTests
         var missingId = Guid.NewGuid();
 
         var svc = CreateService(factory);
-        await Assert.ThrowsAsync<InvalidOperationException>(() =>
+        await Assert.ThrowsAsync<OrganizationRuleException>(() =>
             svc.RegisterOrganizationAsync(missingId, "Good Name", "good-url"));
     }
 
@@ -645,7 +645,7 @@ public class OrganizationSecurityServiceRepositoryTests
         var (_, ownerId, _) = await SeedOrgAsync(factory); // "test-org" is taken
 
         var svc = CreateService(factory);
-        await Assert.ThrowsAsync<InvalidOperationException>(() =>
+        await Assert.ThrowsAsync<OrganizationRuleException>(() =>
             svc.RegisterOrganizationAsync(ownerId, "Duplicate", "test-org"));
     }
 
@@ -684,7 +684,7 @@ public class OrganizationSecurityServiceRepositoryTests
         var (orgId, _, memberId) = await SeedOrgAsync(factory);
 
         var svc = CreateService(factory);
-        await Assert.ThrowsAsync<UnauthorizedAccessException>(() =>
+        await Assert.ThrowsAsync<OrganizationRuleDeniedException>(() =>
             svc.GetOrganizationUsersAsync(orgId, memberId));
     }
 
@@ -734,7 +734,7 @@ public class OrganizationSecurityServiceRepositoryTests
         var (orgId, _, memberId) = await SeedOrgAsync(factory);
 
         var svc = CreateService(factory);
-        await Assert.ThrowsAsync<UnauthorizedAccessException>(() =>
+        await Assert.ThrowsAsync<OrganizationRuleDeniedException>(() =>
             svc.UpsertMembershipAsync(orgId, memberId, MemberRole.Administrator, true, memberId));
     }
 
@@ -780,7 +780,7 @@ public class OrganizationSecurityServiceRepositoryTests
         var outsiderId = Guid.NewGuid();
 
         var svc = CreateService(factory);
-        await Assert.ThrowsAsync<InvalidOperationException>(() =>
+        await Assert.ThrowsAsync<OrganizationRuleException>(() =>
             svc.SetAccessGrantAsync(orgId, outsiderId, DataTable.Organization, DataAction.Read, ownerId));
     }
 
