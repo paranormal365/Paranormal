@@ -350,3 +350,47 @@ public sealed class EventMenuSaveTests
         }
     }
 }
+
+/// <summary>The menu fonts (10/13/2026): every design names faces that exist, and every file is there.</summary>
+public sealed class MenuFontsTests
+{
+    [Fact]
+    public void Every_design_is_set_in_fonts_the_site_has()
+    {
+        foreach (var design in MenuDesigns.All)
+        {
+            Assert.NotNull(MenuFonts.Closest(design.HeadingFace!, design.HeadingWeight, false));
+            Assert.NotNull(MenuFonts.Closest(design.BodyFace!, 400, false));
+        }
+    }
+
+    [Fact]
+    public void Every_font_file_is_embedded_and_is_truetype()
+    {
+        foreach (var file in MenuFonts.Files)
+        {
+            var bytes = MenuFonts.Read(file.File);
+            Assert.True(bytes is { Length: > 10_000 }, file.File);
+            // A TrueType file opens with 0x00010000.
+            Assert.Equal(new byte[] { 0, 1, 0, 0 }, bytes![..4]);
+        }
+        Assert.Null(MenuFonts.Read("../../secrets.ttf"));
+    }
+
+    [Fact]
+    public void A_face_without_the_cut_asked_for_gives_the_one_it_has()
+    {
+        Assert.Equal("PirataOne-Regular.ttf", MenuFonts.Closest("Pirata One", 700, false)!.File);
+        Assert.Equal("Cinzel-Regular.ttf", MenuFonts.Closest("Cinzel", 400, true)!.File);
+        Assert.Equal("Lora-Italic.ttf", MenuFonts.Closest("Lora", 400, true)!.File);
+        Assert.Null(MenuFonts.Closest("Comic Sans", 400, false));
+    }
+
+    [Fact]
+    public void The_page_gets_a_rule_for_every_file()
+    {
+        var css = MenuFonts.FontFaceCss("/menu-fonts/");
+        Assert.Equal(MenuFonts.Files.Count, System.Text.RegularExpressions.Regex.Matches(css, "@font-face").Count);
+        Assert.Contains("url('/menu-fonts/Cinzel-Bold.ttf')", css);
+    }
+}

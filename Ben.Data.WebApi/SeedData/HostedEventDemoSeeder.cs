@@ -296,11 +296,16 @@ internal static class HostedEventDemoSeeder
     /// </remarks>
     private static async Task SeedTheDesignedMenusAsync(BenDataContext db, Guid hostOrgId, Guid ownerId, DateTime now)
     {
-        if (await db.EventMenus.AnyAsync(m => m.HostedEventId == RoomsEventId && m.Title.StartsWith("Sample: ")))
-            return;
         if (!await db.HostedEvents.AnyAsync(e => e.Id == RoomsEventId)) return;
 
-        await Services.Events.EventMenuConversion.ConvertAsync(db, CancellationToken.None);
+        // The first run converts, styles and adds the snack table; every run adds a sample for any
+        // design that has none yet, so designs added later reach a demo that already exists.
+        var samples = (await db.EventMenus.Where(m => m.HostedEventId == RoomsEventId && m.Title.StartsWith("Sample: "))
+            .Select(m => m.Title).ToListAsync()).ToHashSet();
+        var firstRun = samples.Count == 0;
+        if (!firstRun && Ben.Data.Common.Menus.MenuDesigns.All.All(d => samples.Contains($"Sample: {d.Name}"))) return;
+
+        if (firstRun) await Services.Events.EventMenuConversion.ConvertAsync(db, CancellationToken.None);
 
         var looks = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
         {
@@ -309,14 +314,19 @@ internal static class HostedEventDemoSeeder
         var converted = await db.EventMenus.Where(m => m.HostedEventId == RoomsEventId && m.ConvertedFromHostedEventMenuId != null)
             .Include(m => m.Servings).ThenInclude(sv => sv.Meal).ThenInclude(meal => meal.HostedEventNight)
             .ToListAsync();
-        foreach (var menu in converted)
+        foreach (var menu in firstRun ? converted : [])
         {
             var meal = menu.Servings.FirstOrDefault()?.Meal;
             var saturday = meal?.HostedEventNight.Date.DayOfWeek == DayOfWeek.Saturday;
             menu.DesignKey = saturday ? "haunted-manor" : looks.GetValueOrDefault(meal?.Title ?? "", "seance-parlor");
         }
 
-        var items = new Dictionary<string, MenuLibraryItem>(StringComparer.OrdinalIgnoreCase);
+        // The group's items the earlier samples made, so a later sample shares them rather than
+        // making a second "Apple crumble".
+        var items = (await db.MenuLibraryItems.Where(i => i.OrganizationId == hostOrgId && i.Scope == MenuItemScope.Group && i.RetiredUtc == null)
+                .ToListAsync())
+            .GroupBy(i => i.Name, StringComparer.OrdinalIgnoreCase)
+            .ToDictionary(g => g.Key, g => g.First(), StringComparer.OrdinalIgnoreCase);
         var categories = await db.MenuCategories.ToListAsync();
 
         Guid CategoryFor(string title)
@@ -373,12 +383,17 @@ internal static class HostedEventDemoSeeder
             return menu;
         }
 
-        db.EventMenus.Add(Build(MenuSamples.Concessions("chalkboard-cafe"), "Snack table, all weekend", published: true, throughout: true));
-        foreach (var design in Ben.Data.Common.Menus.MenuDesigns.All)
+        if (firstRun)
+            db.EventMenus.Add(Build(MenuSamples.Concessions("chalkboard-cafe"), "Snack table, all weekend", published: true, throughout: true));
+        var added = 0;
+        foreach (var design in Ben.Data.Common.Menus.MenuDesigns.All.Where(d => !samples.Contains($"Sample: {d.Name}")))
+        {
             db.EventMenus.Add(Build(MenuSamples.Dinner(design.Key), $"Sample: {design.Name}", published: false, throughout: false));
+            added++;
+        }
 
         await db.SaveChangesAsync();
-        Console.WriteLine($"[HostedEventDemoSeeder] Wrote {Ben.Data.Common.Menus.MenuDesigns.All.Count + 1} designed menus on the séance weekend.");
+        Console.WriteLine($"[HostedEventDemoSeeder] Wrote {added} sample menu(s) on the séance weekend.");
     }
 
     /// <summary>

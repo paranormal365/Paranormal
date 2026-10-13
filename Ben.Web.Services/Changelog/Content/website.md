@@ -25,8 +25,8 @@ day-by-day account of building it would say nothing to anyone using it now.
 ## 2026-10-13 · 2.20.0
 
 - Events have designed menus. Make the items once and keep them for the event, your group or the
-  venue, then put menus together from them, with their prices, in one of twelve looks, six of them
-  made for ghost hunting. A preview shows the menu as you build it.
+  venue, then put menus together from them, with their prices, in one of twenty-five looks, thirteen of
+  them made for ghost hunting, each set in its own typefaces. A preview shows the menu as you build it.
 - Published menus are on the event's page beside the dates they're served, with a PDF to download.
   A menu can be served at several meals, or on offer throughout the event, like a snack table.
 - The event's page says which meals the event's price includes.

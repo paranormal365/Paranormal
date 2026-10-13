@@ -27,6 +27,9 @@
          render-blocking fetches to a third party on every navigation, at the end of a serial
          chain (stylesheet → @import → font file). See wwwroot/fonts/fonts.css. -->
     <link rel="stylesheet" href="/fonts/fonts.css" />
+    @* The menu designs' fonts (10/13/2026), generated from Ben.Data.Common's MenuFonts. Only the
+       declarations load here; a browser fetches a font file the first time a menu uses it. *@
+    <link rel="stylesheet" href="/menu-fonts.css" />
 
     <!-- Bootstrap 5.3.8 is compiled INTO smartapp.min.css — do not also load it from a CDN,
          two copies fight over the same cascade. -->

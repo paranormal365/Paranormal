@@ -108,7 +108,7 @@ public class EventMenuBuilderTests : BenTestBase
         await OpenAsync($"/organizations/{_orgId}/events/{RoomsEventId}/menu-builder", Page.Locator("#menu-new"));
 
         await Expect(Page.Locator("[data-testid=menu-card]").Filter(new() { HasText = $"Test menu {_tag}" })).ToHaveCountAsync(1);
-        await Expect(Page.Locator(".menu-gallery__card")).ToHaveCountAsync(12);
+        await Expect(Page.Locator(".menu-gallery__card")).ToHaveCountAsync(25); // MenuDesigns.All; this project cannot see Ben.Data.Common
         await Expect(Page.Locator(".menu-gallery__card [data-testid=menu-document]").First).ToBeVisibleAsync();
     }
 

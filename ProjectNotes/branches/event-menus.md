@@ -218,3 +218,27 @@ Changes from the plan, and things found on the way:
 - **Browser:** `EventMenuBuilderTests` covers the gallery, the preview following typing and the
   look, publishing refused and then allowed, the event page, the public PDF, and the editor at
   1280 and 375 pixels. `EventMenusTests` was updated for the Meals page.
+
+## Fonts and 25 designs (10/13/2026, `feature/menu-fonts`)
+
+Ben: "add some free custom design fonts available to the menus and update the previews to use the
+best looking designs", then "make more designs … 25 or so".
+
+- **Fonts.** 23 free families from Google Fonts: SIL Open Font License, except Special Elite under
+  Apache 2.0, with the licenses in `Ben.Data.Common/Menus/Fonts/licenses`. They're static TTFs
+  fetched through the Google Fonts CSS service, since the repository only has variable fonts for
+  several families. There are 44 files in all, embedded once in Ben.Data.Common.
+  - The API registers them with Telerik (`MenuPdfFonts`: regular and bold only, since Telerik has
+    no semibold).
+  - The website serves `/menu-fonts.css` and `/menu-fonts/{file}` from the same bytes, so a menu's
+    page and its PDF use the same type.
+- **Designs.** Every design names its heading face, body face, heading weight and scale; there are
+  25 in all, 13 for ghost hunting and 12 general.
+  - Two new ornaments: Ghost and Bat.
+  - The picker lists the strongest first, and new menus start in Séance Parlor
+    (`MenuDesigns.Featured`).
+  - The gallery draws each sample whole at `zoom: .4`.
+  - The demo seeder adds a sample for any design that hasn't got one, so existing demos gain the
+    new ones.
+- **Tests.** `EventMenusTests` now uses the one-night evening for its meals page. Clearing the
+  weekend's meals on every run was knocking the demo's designed menus off their meals.

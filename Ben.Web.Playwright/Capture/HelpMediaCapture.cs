@@ -2998,6 +2998,19 @@ public sealed class HelpMediaCapture : BenTestBase
         await ShootAsync("organization-administration", "event-menu-builder.png",
             gated: true, proves: "Start a menu");
 
+        // The ghost-hunting half of the design gallery, each look drawn as a finished sample menu. Tall
+        // enough to hold it, so it is photographed whole rather than under the page's fixed header.
+        await Page.SetViewportSizeAsync(DesktopWidth, 2400);
+        try
+        {
+            await ShootAsync("organization-administration", "event-menu-designs.png",
+                gated: true, selector: "[data-testid=menu-gallery]", proves: "Séance Parlor");
+        }
+        finally
+        {
+            await Page.SetViewportSizeAsync(DesktopWidth, DesktopHeight);
+        }
+
         var sample = Page.Locator("[data-testid=menu-card] a", new() { HasTextString = "Sample: Séance Parlor" });
         if (await sample.CountAsync() > 0)
         {

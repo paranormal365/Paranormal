@@ -25,9 +25,6 @@ namespace Ben.Web.Playwright.Tests;
 [Category("HostedEvents")]
 public class EventMenusTests : BenTestBase
 {
-    /// <summary>The seeded weekend in the rooms — two nights, so a sitting has a night to be under.</summary>
-    private const string RoomsEventId = "40000002-0000-0000-0000-000000000002";
-
     /// <summary>The seeded 260-seat evening, where a party can be put together with one call.</summary>
     private const string SeatsEventId = "40000002-0000-0000-0000-000000000003";
 
@@ -201,7 +198,9 @@ public class EventMenusTests : BenTestBase
     private async Task OpenTheMenusAsync(int width = 1280, int height = 800)
     {
         await Page.SetViewportSizeAsync(width, height);
-        await Page.GotoAsync($"{BaseUrl}/organizations/{_orgId}/events/{RoomsEventId}/menus");
+        // The meals page on the one-night evening, not the weekend: clearing the weekend's meals took
+        // the demo's designed menus off their meals on every run (10/13/2026).
+        await Page.GotoAsync($"{BaseUrl}/organizations/{_orgId}/events/{SeatsEventId}/menus");
         await Page.WaitForLoadStateAsync(LoadState.NetworkIdle);
         await WaitUntilLoadedAsync();
 
@@ -258,7 +257,7 @@ public class EventMenusTests : BenTestBase
     /// <summary>Leaves the weekend with nothing being served, which is how the seed leaves it.</summary>
     private async Task ClearTheMenusAsync(IAPIRequestContext admin)
         => await admin.PutAsync(
-            $"/api/organizations/{_orgId}/events/{RoomsEventId}/menus",
+            $"/api/organizations/{_orgId}/events/{SeatsEventId}/menus",
             new() { DataObject = new { menus = Array.Empty<object>() } });
 
     private static async Task LetGoAsync(IAPIRequestContext who)

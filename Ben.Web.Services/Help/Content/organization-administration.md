@@ -1638,10 +1638,20 @@ On the menu:
 
 The preview beside the form shows the menu as it looks with what's typed now, saved or not, so you
 can check it at any time. **Look** changes the design, and the arrows step through them, so you can
-try each one against your own menu before you decide. There are twelve: six made for ghost hunting
-(Séance Parlor, Midnight Vigil, Spirit Board, Haunted Manor, Case File and EVP Static) and six for
-anything (Classic Bistro, Modern Minimal, Chalkboard Café, Rustic Farmhouse, Garden Party and Elegant
-Evening). The design picker shows each one as a finished sample menu.
+try each one against your own menu before you decide. There are twenty-five:
+
+- **Thirteen for ghost hunting:** Séance Parlor, Haunted Manor, Spirit Board, Midnight Vigil, Case
+  File, EVP Static, Witching Hour, Graveyard Shift, Victorian Mourning, Hallowed Ground, Lantern
+  Light, Ectoplasm and Asylum Records.
+- **Twelve for anything:** Classic Bistro, Elegant Evening, Garden Party, Chalkboard Café, Rustic
+  Farmhouse, Modern Minimal, Art Deco, Retro Diner, Harvest Table, Bold Poster, Coastal Breeze and
+  Handwritten Notes.
+
+Each is set in its own typefaces, such as Séance Parlor's engraved capitals, Haunted Manor's
+blackletter and Case File's typewriter, and the PDF uses the same ones.
+
+![The ghost-hunting designs, each drawn as a finished menu](help-media:organization-administration/event-menu-designs.png) The design picker
+shows each one as a finished sample menu, and a new menu starts in Séance Parlor.
 
 Every menu ends with a very small line saying it was made with IsHaunted.com.
 

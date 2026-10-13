@@ -602,7 +602,7 @@ def brochure(mails):
   </div>
   <div class="row" style="grid-template-columns:3.9in 1fr;align-items:center">
     {_frame('shot', W + '13-organizer-kitchen.png')}
-    <div class="stack">{_cap(4, 'Menus, and what the kitchen needs', 'Designed menus on the event page with a PDF, in twelve looks, priced or included. Dietary notes tallied a page per night for the kitchen.')}
+    <div class="stack">{_cap(4, 'Menus, and what the kitchen needs', 'Designed menus on the event page with a PDF, in 25 looks, priced or included. Dietary notes tallied a page per night for the kitchen.')}
       <div class="note"><strong>Offline on the iPhone.</strong> Arrivals recorded with no signal keep the time they happened and send when the phone reconnects.</div></div>
   </div>
 </div>{folio(5)}</section>""")
