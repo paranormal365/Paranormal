@@ -13842,3 +13842,18 @@ ordinary case. What is still possible on a very slow connection: the timeline pl
 is not there yet. If people report that, show the recording's buffered fraction (element.buffered /
 duration) on the stage — "Loading the recording… 40%" — while it is behind, and hide it once it is in
 step. Watch the API's slow-request log (any data call over 5 s) and field reports before building it.
+
+## 259. The menu shifts down a row when "Your groups" arrives (OPEN)
+
+Found 10/14/2026 by the full browser run (The_admin_menu_reads_as_groups failed; passed alone). The menu
+draws first and asks for the person's groups afterwards; when they arrive, "Your groups" is inserted
+directly beneath Home and every entry under it — Administration, Notifications, My Work — moves down one
+row. A click aimed at one of them in that moment lands on the entry above it: the test clicked
+Administration and went to /organizations. It happens on every full page load for anybody in a group,
+and it is older than this release (the groups were always fetched after the first draw).
+
+Fix: draw the menu with the groups it had last time. Keep the person's membership list per user for a
+few minutes on the website (memory cache keyed by user id, cleared on sign-out and on joining or leaving
+a group), render "Your groups" from it at once, and refresh in the background as now. The very first
+load after signing in still shifts; every later page does not. The browser suite waits it out meanwhile
+(BenTestBase.WaitForYourGroupsInTheMenuAsync).

@@ -1578,6 +1578,7 @@ public abstract class BenTestBase : PageTest
         {
             await Page.GotoAsync($"{BaseUrl}/admin/dashboard");
             await WaitForTheCircuitAsync();
+            await WaitForYourGroupsInTheMenuAsync();
             await Page.GetByRole(AriaRole.Link, new() { Name = "Administration", Exact = false }).First.ClickAsync();
             try
             {
@@ -1588,6 +1589,29 @@ public abstract class BenTestBase : PageTest
             {
                 await Page.WaitForTimeoutAsync(5_000);
             }
+        }
+    }
+
+    /// <summary>
+    /// Waits for "Your groups" to join the menu, for somebody who belongs to a group.
+    /// </summary>
+    /// <remarks>
+    /// The menu draws first and asks for the person's groups afterwards, and "Your groups" is then
+    /// inserted directly beneath Home — pushing Administration and everything under it down a row.
+    /// A click aimed at Administration in that moment lands on "Your groups" and goes to
+    /// /organizations (The_admin_menu_reads_as_groups, full run of 10/14/2026, passing alone). An
+    /// account with no groups never gets the entry, so this gives up quietly rather than failing.
+    /// </remarks>
+    protected async Task WaitForYourGroupsInTheMenuAsync()
+    {
+        try
+        {
+            await Page.GetByRole(AriaRole.Navigation).GetByRole(AriaRole.Link, new() { Name = "Your groups", Exact = true })
+                .First.WaitForAsync(new() { State = WaitForSelectorState.Visible, Timeout = 10_000 });
+        }
+        catch (TimeoutException)
+        {
+            // No groups, so nothing moves.
         }
     }
 

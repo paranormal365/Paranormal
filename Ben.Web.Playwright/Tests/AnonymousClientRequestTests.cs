@@ -63,6 +63,9 @@ public class AnonymousClientRequestTests : BenTestBase
         await LogoutAsync();
         await Page.GotoAsync($"{BaseUrl}/my-requests/new");
         await Expect(Page.Locator("#req-street1")).ToBeVisibleAsync(new() { Timeout = 20_000 });
+        // Typed before the circuit is up, the street is erased by the first interactive render and
+        // Verify answers "Fill in the street first" (full run of 10/14/2026).
+        await WaitForTheCircuitAsync();
 
         await FillAndConfirmAsync("#req-street1", "2500 West End Ave");
         await FillAndConfirmAsync("#req-city", "Nashville");
@@ -78,10 +81,10 @@ public class AnonymousClientRequestTests : BenTestBase
     /// The whole way through: address, story, group, and the account made at Submit.
     /// </summary>
     /// <remarks>
-    /// <para>Geocoding is a real round trip to the map service, so this test skips rather than
-    /// fails if the address cannot be verified — an offline machine is not a product defect. The
-    /// account it creates is a throwaway one; it never confirms, so it can never sign in, which is
-    /// exactly the state under test.</para>
+    /// <para>Geocoding is a real round trip to the map service. "Couldn't reach the map service" is
+    /// tried again, as a person would; a real address reported as not found, or no answer three
+    /// times running, fails. The account it creates is a throwaway one; it never confirms, so it
+    /// can never sign in, which is exactly the state under test.</para>
     /// </remarks>
     [Test]
     public async Task A_stranger_can_ask_for_help_without_an_account()
@@ -89,6 +92,9 @@ public class AnonymousClientRequestTests : BenTestBase
         await LogoutAsync();
         await Page.GotoAsync($"{BaseUrl}/my-requests/new");
         await Expect(Page.Locator("#req-street1")).ToBeVisibleAsync(new() { Timeout = 20_000 });
+        // Typed before the circuit is up, the street is erased by the first interactive render and
+        // Verify answers "Fill in the street first" (full run of 10/14/2026).
+        await WaitForTheCircuitAsync();
 
         await FillAndConfirmAsync("#req-street1", "2500 West End Ave");
         await FillAndConfirmAsync("#req-city", "Nashville");

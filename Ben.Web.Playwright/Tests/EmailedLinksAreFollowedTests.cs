@@ -70,6 +70,9 @@ public class EmailedLinksAreFollowedTests : BenTestBase
         await LoginAsync(SuperAdminEmail, SuperAdminPassword);
         await Page.GotoAsync($"{BaseUrl}/admin/users/create");
         await Expect(Page.Locator("#adminusercreate-email-0463")).ToBeVisibleAsync(new() { Timeout = 15_000 });
+        // Typed before the circuit is up, a value sits in the box and is then erased by the first
+        // interactive render — FillAndConfirm reads it back too early to notice.
+        await WaitForTheCircuitAsync();
         await FillAndConfirmAsync("#adminusercreate-display-name-4286", $"Handed Over {Unique}");
         await FillAndConfirmAsync("#adminusercreate-email-0463", email);
         await FillAndConfirmAsync("#adminusercreate-password-2989", typedByAdmin);
@@ -172,6 +175,7 @@ public class EmailedLinksAreFollowedTests : BenTestBase
     {
         await Page.GotoAsync($"{BaseUrl}{link}");
         await Expect(Page.Locator("#reset-new")).ToBeVisibleAsync(new() { Timeout = 15_000 });
+        await WaitForTheCircuitAsync();
 
         // A complete link keeps the code out of sight; a code box here means the link lost it.
         await Expect(Page.Locator("#reset-code")).ToHaveCountAsync(0);

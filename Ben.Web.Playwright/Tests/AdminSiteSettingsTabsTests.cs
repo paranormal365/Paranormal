@@ -85,6 +85,7 @@ public class AdminSiteSettingsTabsTests : BenTestBase
     {
         await Page.GotoAsync($"{BaseUrl}/admin/dashboard");
         await WaitForTheCircuitAsync();
+        await WaitForYourGroupsInTheMenuAsync();
 
         await ClickUntilAsync(
             Page.GetByRole(AriaRole.Link, new() { Name = "Administration", Exact = false }).First,
