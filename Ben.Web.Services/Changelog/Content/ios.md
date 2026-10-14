@@ -27,7 +27,7 @@ and ideas behind running the site, goes under a `### Administration` sub-heading
 after the lines everybody reads. Only SuperAdmins see those lines. A version with nothing else in
 it is hidden from everybody else, but still takes its number. No other sub-heading is read.
 
-## Unreleased
+## 1.1.4 · 2026-10-14
 
 - Field Kit is now called the Paranormal Platform; its tab reads Paranormal.
 - In a session's review, tapping a photo goes to the moment it was taken, and the mark being passed
