@@ -127,7 +127,13 @@ public sealed class StoreCheckoutService(
             return StoreCheckoutResult.Refused(StoreCheckoutOutcome.Conflict, StoreCheckoutSentences.ItemsChanged(why));
         }
 
+        // Open means still holding stock: a hold that has run out no longer counts, whether or not
+        // the release job has got to it yet. The refusal tells the person to "try again in a few
+        // minutes", and that is only true if an expired hold stops counting at its expiry — not when
+        // a scheduled job next runs (found 10/14/2026, when abandoned test checkouts whose holds
+        // had expired hours earlier refused every new checkout from the same address).
         var openCount = await db.StoreOrders.CountAsync(o => o.Status == StoreOrderStatus.PendingPayment && o.ReservationReleasedUtc == null
+            && (o.ReservationExpiresUtc == null || o.ReservationExpiresUtc > now)
             && (open == null || o.Id != open.Id) && ((ip != null && o.PlacedFromIp == ip) || o.BuyerEmailNormalized == emailKey), ct);
         if (openCount >= StoreCheckoutRules.MaxOpenCheckoutsPerCaller)
             return StoreCheckoutResult.Refused(StoreCheckoutOutcome.Conflict, StoreCheckoutSentences.TooManyOpen);

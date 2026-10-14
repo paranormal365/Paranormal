@@ -234,6 +234,26 @@ public sealed class StoreCheckoutServiceTests : IAsyncLifetime
         Assert.Equal(StoreCheckoutOutcome.Ok, sameEmail.Outcome);   // one open from that email is under the limit
     }
 
+    [Fact]
+    public async Task Checkouts_whose_hold_has_run_out_no_longer_count_as_open()
+    {
+        // "Try again in a few minutes" must be true at the hold's expiry, not whenever the release
+        // job next runs (10/14/2026: abandoned test checkouts, long expired, refused every new one).
+        var v = await VariantAsync();
+        for (var i = 0; i < StoreCheckoutRules.MaxOpenCheckoutsPerCaller; i++)
+            Assert.Equal(StoreCheckoutOutcome.Ok, (await Checkout().PrepareAsync(await CartWithAsync(v, 1), "198.51.100.9", Request($"x{i}@example.com"))).Outcome);
+
+        await using (var db = await _sqlite.NewContextAsync())
+        {
+            foreach (var order in db.StoreOrders.Where(o => o.PlacedFromIp == "198.51.100.9"))
+                order.ReservationExpiresUtc = DateTime.UtcNow.AddMinutes(-1);   // run out, not yet released
+            await db.SaveChangesAsync();
+        }
+
+        var next = await Checkout().PrepareAsync(await CartWithAsync(v, 1), "198.51.100.9", Request("y@example.com"));
+        Assert.Equal(StoreCheckoutOutcome.Ok, next.Outcome);
+    }
+
     // ── codes ────────────────────────────────────────────────────────────────
 
     [Fact]
