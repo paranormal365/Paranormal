@@ -162,18 +162,28 @@ public class AdminTests : BenTestBase
             await save.ClickAsync();
 
             // Either it saved, or the page names the reason — never a refusal with nothing in it.
-            var failure = Page.Locator(".alert-danger");
-            await Expect(box.Or(failure).First).ToBeVisibleAsync(new() { Timeout = 20_000 });
-            if (await failure.CountAsync() > 0)
-                Assert.Fail("Saving site roles was refused: " + (await failure.First.InnerTextAsync()).Trim());
-
+            //
+            // The page's own "Site roles saved" is the proof, not the box. The box is ticked in the
+            // browser the moment it is clicked, so waiting on it passed while every save answered
+            // 500 from 09/04 to 10/14/2026 (RequestRecordValidationTests has the cause).
+            await ExpectRolesSavedAsync();
             await Expect(box).ToBeCheckedAsync(new() { Checked = !held, Timeout = 20_000 });
         }
         finally
         {
             await box.SetCheckedAsync(held);
             await save.ClickAsync();
+            await ExpectRolesSavedAsync();
             await Expect(box).ToBeCheckedAsync(new() { Checked = held, Timeout = 20_000 });
+        }
+
+        async Task ExpectRolesSavedAsync()
+        {
+            var saved   = Page.GetByText("Site roles saved", new() { Exact = false });
+            var failure = Page.Locator(".alert-danger");
+            await Expect(saved.Or(failure).First).ToBeVisibleAsync(new() { Timeout = 20_000 });
+            if (await failure.CountAsync() > 0)
+                Assert.Fail("Saving site roles was refused: " + (await failure.First.InnerTextAsync()).Trim());
         }
     }
 

@@ -9,7 +9,7 @@ namespace Ben.Service.Models.Admin;
 /// </summary>
 /// <param name="Roles">Role names as listed under Site Roles. Matched without regard to case.</param>
 public sealed record AdminSetUserRolesRequest(
-    [property: Required] IReadOnlyList<string> Roles);
+    [Required] IReadOnlyList<string> Roles);
 
 /// <summary>The site roles a person holds after a change.</summary>
 public sealed record AppUserRolesAdminRecord(Guid UserId, IReadOnlyList<string> Roles);
