@@ -29,6 +29,7 @@ it is hidden from everybody else, but still takes its number. No other sub-headi
 
 ## Unreleased
 
+- Field Kit is now called the Paranormal Platform; its tab reads Paranormal.
 - In a session's review, tapping a photo goes to the moment it was taken, and the mark being passed
   lights up in the list.
 - The map arrow turns smoothly and stays right when the map is turned. The map keeps the marker in

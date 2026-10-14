@@ -33,6 +33,8 @@ day-by-day account of building it would say nothing to anyone using it now.
 
 ## Unreleased
 
+- Field Kit is now called the Paranormal Platform, and the site's tagline reads “The Paranormal
+  Platform”.
 - Field sessions play back more smoothly. Dragging through a session while it plays carries on from
   where you let go, instead of jumping back.
 - On the map, the marker follows the path that was walked and the arrow turns to show which way the

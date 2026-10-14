@@ -211,9 +211,9 @@ available so you can look back through it.
 
 ## When the organizer starts the group's session
 
-At some events, the organizer or whoever is running the door starts a Field Kit session for
+At some events, the organizer or whoever is running the door starts a Paranormal Platform session for
 everyone at once. If you have the IsHaunted app, you'll get a notification, and you can join from
-it, from the card in your feed, or from **Happening now** in Field Kit. Nothing records until you
+it, from the card in your feed, or from **Happening now** in the Paranormal Platform. Nothing records until you
 press Start, and you can send what you recorded that night or days later. See
 [The iPhone and iPad Apps](/help/the-mobile-apps).
 

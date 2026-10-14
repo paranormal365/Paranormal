@@ -21,7 +21,7 @@ final class FieldKitDemoDriveUITests: XCTestCase {
         app.launchArguments += ["-fieldKitFakeSensors"]
         app.launch()
 
-        XCTAssertTrue(AppNavigator.openSection("Field Kit", in: app))
+        XCTAssertTrue(AppNavigator.openSection("Paranormal", in: app))
 
         let start = AppNavigator.section("Start a session", in: app, timeout: 15)
         XCTAssertNotNil(start, "the Field Kit home should offer a session")

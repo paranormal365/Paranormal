@@ -125,9 +125,9 @@ other.</p>
 inbox. A message that cannot be read in context is worth much less.</p>
 """),
 
-    ("Field Kit — the reason the app exists", "40-fieldkit-home", """
-<p>Everything above has a website equivalent. <b>This does not.</b> The Field Kit turns the phone
-into an instrument, and it is the part a new developer should read first and most carefully.</p>
+    ("The Paranormal Platform — the reason the app exists", "40-fieldkit-home", """
+<p>Everything above has a website equivalent. <b>This does not.</b> The Paranormal Platform turns the
+phone into an instrument, and it is the part a new developer should read first and most carefully.</p>
 
 <p>The home screen lists past sessions and starts a new one. A session is a recording in the
 fullest sense: not a single measurement, but <b>every reading from every enabled sensor, for as
@@ -295,7 +295,7 @@ specific control in the dark is exactly what somebody cannot do.</p>
 """),
 
     ("How a recording is replayed — and why", None, """
-<p class="rule"><b>The Field Kit records every reading, continuously, for the whole session — and
+<p class="rule"><b>The Paranormal Platform records every reading, continuously, for the whole session — and
 selecting a past session plays the entire recording back as it happened. This is deliberate and it
 is the central idea of the feature.</b></p>
 
@@ -332,10 +332,10 @@ permission the app needs was refused, the switch says so and offers Settings.</p
 
     ("A group session, started by the lead", "54-launch-notified", """
 <p>Item 252. A tour's guide, an event's organizer or door staff, or an investigation's lead starts
-everybody's Field Kit at once. The server (<code>FieldLaunchService</code>) finds who is
+the Paranormal Platform for everybody at once. The server (<code>FieldLaunchService</code>) finds who is
 registered, writes a card in the feed — public when the thing is, otherwise a
 <code>FieldLaunchNotice</code> only its people can read — and pushes to every registered phone
-through APNs. Nobody is forced in: the push, the card and Field Kit's <b>Happening now</b> all open
+through APNs. Nobody is forced in: the push, the card and the Paranormal Platform's <b>Happening now</b> all open
 the same link, <code>ishaunted://field-kit/launch/{id}</code>, and <code>JoinLaunchView</code>
 turns it into a session already set to the thing and its place (<code>startSession(joining:)</code>),
 pending until Start.</p>
@@ -359,7 +359,7 @@ The send screen replaces the investigation picker with <b>Send to …</b>; the u
 launch and the server resolves where it goes — so it works days later, and for a walk-up let in
 after they recorded. Each part of a long session goes under its own id
 (<code>SessionWindow.uploadId</code>), so the next ten minutes no longer replaces the first. Rows in
-Field Kit say Sent or Not sent.</p>
+the Paranormal Platform say Sent or Not sent.</p>
 """),
 
     ("Joining by the lead's code", "57-join-ask", """

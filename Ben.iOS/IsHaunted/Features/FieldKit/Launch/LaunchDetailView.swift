@@ -51,7 +51,7 @@ struct LaunchDetailView: View {
                     }
                     .accessibilityIdentifier("join-launch-button")
                 } footer: {
-                    Text("Opens Field Kit set up for this, with nothing to choose. Nothing records until you press Start, and every session you take stays on this phone until you send it.")
+                    Text("Opens the Paranormal Platform set up for this, with nothing to choose. Nothing records until you press Start, and every session you take stays on this phone until you send it.")
                 }
                 if let token = launch.joinToken {
                     if !requests.isEmpty { requestsSection }

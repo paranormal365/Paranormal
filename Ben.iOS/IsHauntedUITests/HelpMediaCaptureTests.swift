@@ -155,7 +155,7 @@ final class HelpMediaCaptureTests: XCTestCase {
         // Scripted sensors: a simulator has no magnetometer, and the Field Kit refuses to open without one.
         relaunch(as: email, password: password)
 
-        XCTAssertTrue(AppNavigator.openSection("Field Kit", in: app), "Could not reach the Field Kit.")
+        XCTAssertTrue(AppNavigator.openSection("Paranormal", in: app), "Could not reach the Field Kit.")
         settle(3)
         app.swipeUp()
         settle(1)
@@ -192,7 +192,7 @@ final class HelpMediaCaptureTests: XCTestCase {
         let device = UIDevice.current.userInterfaceIdiom == .pad ? "ipad" : "iphone"
         relaunch(as: email, password: password)
 
-        XCTAssertTrue(AppNavigator.openSection("Field Kit", in: app), "Could not reach the Field Kit.")
+        XCTAssertTrue(AppNavigator.openSection("Paranormal", in: app), "Could not reach the Field Kit.")
         settle(2)
         AppNavigator.startNewSession(in: app)
         XCTAssertTrue(app.buttons["confirm-start-session"].waitForExistence(timeout: 15))

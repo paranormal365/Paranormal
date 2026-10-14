@@ -127,7 +127,7 @@ public sealed class PushDeviceTests
         await ctx.SaveChangesAsync();
     }
 
-    private static readonly PushMessage Message = new("The walk is starting", "Tap to open Field Kit.", new Dictionary<string, string>());
+    private static readonly PushMessage Message = new("The walk is starting", "Tap to open the Paranormal Platform.", new Dictionary<string, string>());
 
     [Fact]
     public async Task EveryPhoneOfThePeopleNamedIsPushedAndNobodyElse()

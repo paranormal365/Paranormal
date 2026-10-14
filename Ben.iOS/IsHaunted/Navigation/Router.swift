@@ -78,7 +78,7 @@ enum AppSection: String, CaseIterable, Identifiable, Hashable {
         case .tours: "Tours"
         case .cases: "My Cases"
         case .investigations: "Investigations"
-        case .fieldKit: "Field Kit"
+        case .fieldKit: "Paranormal"
         case .events: "Events"
         case .profile: "Profile"
         }

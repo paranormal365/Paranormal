@@ -186,7 +186,7 @@ def build_html():
   <div class="hero" style="background-image:url({STOCK}p2-holding-phone.jpg)"></div>
   {top('<span class="pill">The app guide</span>')}
   <div class="title">
-    <div class="kicker">Field Kit, feed, cases and nights out</div>
+    <div class="kicker">The Paranormal Platform, feed, cases and nights out</div>
     <h1>Your phone is<br>the <em>instrument</em>.</h1>
     <p>A meter, a recorder and a camera that keep the same clock — and put the night on your group's case
        once you have signal again. Free, on iPhone and iPad.</p>
@@ -206,10 +206,10 @@ def build_html():
     # 2 — Field Kit, the instrument
     pages.append(f"""
 <section class="page">
-  {top('02 · Field Kit')}
+  {top('02 · Paranormal Platform')}
   <div class="head"><div class="kicker">The phone as an instrument</div>
     <h2>A meter that knows <em>the room</em>.</h2>
-    <p>Field Kit records an investigation on the device. It needs no signal and no account: start in a cellar
+    <p>The Paranormal Platform records an investigation on the device. It needs no signal and no account: start in a cellar
        with no bars, and nothing leaves the phone until you send it.</p></div>
   {cards([
       ("gauge", "Measured against the room", "Set a base once the room has settled. The needle then shows how far the magnetic field has moved from it, in milligauss."),
@@ -276,7 +276,7 @@ def build_html():
       ("ticket", "A pass with no signal", "Your pass, the program and the menus are saved on the phone, so they open in a cellar with no bars."),
       ("camera", "Photos for the night", "Share photos to the event's room; with no signal they wait on the phone and go when you're back in range."),
       ("scan", "Running the door", "Helpers check people in by name or by scanning their pass — with or without a signal."),
-      ("users", "Start the night together", "A lead can start everybody's Field Kit from a push. Nobody is taken over; you join when you're ready."),
+      ("users", "Start the night together", "A lead can start the Paranormal Platform for everybody from a push. Nobody is taken over; you join when you're ready."),
   ], 3.05)}
   {phones([(p + "63-event-hub.png", 5.0, 1.15, -4, ""), (p + "67-door-scanned.png", 6.05, 5.55, 4, "")])}
   <div class="fine">{html.escape(FINE)}</div>

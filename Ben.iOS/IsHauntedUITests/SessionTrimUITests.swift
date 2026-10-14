@@ -37,7 +37,7 @@ final class SessionTrimUITests: XCTestCase {
         // whether it has finished. Racing it is how this test would flake.
         sleep(5)
 
-        XCTAssertTrue(AppNavigator.openSection("Field Kit", in: app))
+        XCTAssertTrue(AppNavigator.openSection("Paranormal", in: app))
         AppNavigator.startNewSession(in: app)
         XCTAssertTrue(app.buttons["confirm-start-session"].waitForExistence(timeout: 15))
         app.buttons["confirm-start-session"].tap()

@@ -16,15 +16,15 @@ final class FieldKitUITests: XCTestCase {
 
     /// Field Kit deliberately needs no account — everything it does happens on the device.
     func testFieldKitIsReachableWithoutSigningIn() {
-        XCTAssertTrue(AppNavigator.openSection("Field Kit", in: app),
+        XCTAssertTrue(AppNavigator.openSection("Paranormal", in: app),
                       "Field Kit should be reachable on this shell")
-        XCTAssertTrue(app.navigationBars["Field Kit"].waitForExistence(timeout: 20))
+        XCTAssertTrue(app.navigationBars["Paranormal Platform"].waitForExistence(timeout: 20))
         XCTAssertTrue(app.buttons["start-field-session"].waitForExistence(timeout: 10),
                       "a signed-out person must still be able to start recording")
     }
 
     func testAStartedSessionSurvivesLeavingTheAppAndComingBack() throws {
-        XCTAssertTrue(AppNavigator.openSection("Field Kit", in: app))
+        XCTAssertTrue(AppNavigator.openSection("Paranormal", in: app))
         AppNavigator.startNewSession(in: app)
 
         let label = app.textFields["session-label"]
@@ -48,7 +48,7 @@ final class FieldKitUITests: XCTestCase {
         app.terminate()
         app.launch()
 
-        XCTAssertTrue(AppNavigator.openSection("Field Kit", in: app))
+        XCTAssertTrue(AppNavigator.openSection("Paranormal", in: app))
         // Signed in, the screen can open with group sessions above this phone's own (item 252), so
         // the row may be further down.
         let row = app.staticTexts[marker]
@@ -66,7 +66,7 @@ final class FieldKitUITests: XCTestCase {
     }
 
     func testStoppingASessionOpensItsReview() {
-        XCTAssertTrue(AppNavigator.openSection("Field Kit", in: app))
+        XCTAssertTrue(AppNavigator.openSection("Paranormal", in: app))
         AppNavigator.startNewSession(in: app)
         XCTAssertTrue(app.buttons["confirm-start-session"].waitForExistence(timeout: 15))
         app.buttons["confirm-start-session"].tap()
@@ -94,7 +94,7 @@ final class FieldKitUITests: XCTestCase {
         fresh.launchArguments += ["-fieldKitFakeSensors"]
         fresh.launch()
 
-        XCTAssertTrue(AppNavigator.openSection("Field Kit", in: fresh))
+        XCTAssertTrue(AppNavigator.openSection("Paranormal", in: fresh))
         AppNavigator.startNewSession(in: fresh)
         XCTAssertTrue(fresh.buttons["confirm-start-session"].waitForExistence(timeout: 15))
         fresh.buttons["confirm-start-session"].tap()
@@ -134,7 +134,7 @@ final class FieldKitUITests: XCTestCase {
         fresh.launchArguments += ["-fieldKitFakeSensors"]
         fresh.launch()
 
-        XCTAssertTrue(AppNavigator.openSection("Field Kit", in: fresh))
+        XCTAssertTrue(AppNavigator.openSection("Paranormal", in: fresh))
         AppNavigator.startNewSession(in: fresh)
         XCTAssertTrue(fresh.buttons["confirm-start-session"].waitForExistence(timeout: 15))
         fresh.buttons["confirm-start-session"].tap()
@@ -175,7 +175,7 @@ final class FieldKitUITests: XCTestCase {
         fresh.launchArguments += ["-fieldKitFakeSensors"]
         fresh.launch()
 
-        XCTAssertTrue(AppNavigator.openSection("Field Kit", in: fresh))
+        XCTAssertTrue(AppNavigator.openSection("Paranormal", in: fresh))
         AppNavigator.startNewSession(in: fresh)
         XCTAssertTrue(fresh.buttons["confirm-start-session"].waitForExistence(timeout: 15))
         fresh.buttons["confirm-start-session"].tap()
@@ -199,7 +199,7 @@ final class FieldKitUITests: XCTestCase {
         fresh.launchArguments += ["-fieldKitFakeSensors"]
         fresh.launch()
 
-        XCTAssertTrue(AppNavigator.openSection("Field Kit", in: fresh))
+        XCTAssertTrue(AppNavigator.openSection("Paranormal", in: fresh))
         AppNavigator.startNewSession(in: fresh)
         XCTAssertTrue(fresh.buttons["confirm-start-session"].waitForExistence(timeout: 15))
         fresh.buttons["confirm-start-session"].tap()
@@ -234,7 +234,7 @@ final class FieldKitUITests: XCTestCase {
         fresh.launchArguments += ["-fieldKitFakeSensors"]
         fresh.launch()
 
-        XCTAssertTrue(AppNavigator.openSection("Field Kit", in: fresh))
+        XCTAssertTrue(AppNavigator.openSection("Paranormal", in: fresh))
         AppNavigator.startNewSession(in: fresh)
         XCTAssertTrue(fresh.buttons["confirm-start-session"].waitForExistence(timeout: 15))
         fresh.buttons["confirm-start-session"].tap()
@@ -266,7 +266,7 @@ final class FieldKitUITests: XCTestCase {
         fresh.launchArguments += ["-fieldKitFakeSensors"]
         fresh.launch()
 
-        XCTAssertTrue(AppNavigator.openSection("Field Kit", in: fresh))
+        XCTAssertTrue(AppNavigator.openSection("Paranormal", in: fresh))
         AppNavigator.startNewSession(in: fresh)
         XCTAssertTrue(fresh.buttons["confirm-start-session"].waitForExistence(timeout: 15))
         fresh.buttons["confirm-start-session"].tap()
@@ -299,7 +299,7 @@ final class FieldKitUITests: XCTestCase {
         fresh.launchArguments += ["-fieldKitFakeSensors"]
         fresh.launch()
 
-        XCTAssertTrue(AppNavigator.openSection("Field Kit", in: fresh))
+        XCTAssertTrue(AppNavigator.openSection("Paranormal", in: fresh))
         AppNavigator.startNewSession(in: fresh)
         XCTAssertTrue(fresh.buttons["confirm-start-session"].waitForExistence(timeout: 15))
         fresh.buttons["confirm-start-session"].tap()
@@ -339,7 +339,7 @@ final class FieldKitUITests: XCTestCase {
         fresh.launchArguments += ["-fieldKitFakeSensors"]
         fresh.launch()
 
-        XCTAssertTrue(AppNavigator.openSection("Field Kit", in: fresh))
+        XCTAssertTrue(AppNavigator.openSection("Paranormal", in: fresh))
         AppNavigator.startNewSession(in: fresh)
         XCTAssertTrue(fresh.buttons["confirm-start-session"].waitForExistence(timeout: 15))
         fresh.buttons["confirm-start-session"].tap()
@@ -373,7 +373,7 @@ final class FieldKitUITests: XCTestCase {
         fresh.launchArguments += ["-fieldKitFakeSensors"]
         fresh.launch()
 
-        XCTAssertTrue(AppNavigator.openSection("Field Kit", in: fresh))
+        XCTAssertTrue(AppNavigator.openSection("Paranormal", in: fresh))
         AppNavigator.startNewSession(in: fresh)
         XCTAssertTrue(fresh.buttons["confirm-start-session"].waitForExistence(timeout: 15))
         fresh.buttons["confirm-start-session"].tap()
@@ -413,7 +413,7 @@ final class FieldKitUITests: XCTestCase {
         fresh.launchArguments += ["-fieldKitFakeSensors"]
         fresh.launch()
 
-        XCTAssertTrue(AppNavigator.openSection("Field Kit", in: fresh))
+        XCTAssertTrue(AppNavigator.openSection("Paranormal", in: fresh))
         AppNavigator.startNewSession(in: fresh)
         XCTAssertTrue(fresh.buttons["confirm-start-session"].waitForExistence(timeout: 15))
         fresh.buttons["confirm-start-session"].tap()
@@ -462,7 +462,7 @@ final class FieldKitUITests: XCTestCase {
         fresh.launchArguments += ["-fieldKitFakeSensors"]
         fresh.launch()
 
-        XCTAssertTrue(AppNavigator.openSection("Field Kit", in: fresh))
+        XCTAssertTrue(AppNavigator.openSection("Paranormal", in: fresh))
         AppNavigator.startNewSession(in: fresh)
         XCTAssertTrue(fresh.buttons["confirm-start-session"].waitForExistence(timeout: 15))
         fresh.buttons["confirm-start-session"].tap()
@@ -514,7 +514,7 @@ final class FieldKitUITests: XCTestCase {
         fresh.launchArguments += ["-fieldKitFakeSensors"]
         fresh.launch()
 
-        XCTAssertTrue(AppNavigator.openSection("Field Kit", in: fresh))
+        XCTAssertTrue(AppNavigator.openSection("Paranormal", in: fresh))
         AppNavigator.startNewSession(in: fresh)
         XCTAssertTrue(fresh.buttons["confirm-start-session"].waitForExistence(timeout: 15))
         fresh.buttons["confirm-start-session"].tap()
@@ -558,7 +558,7 @@ final class FieldKitUITests: XCTestCase {
         fresh.launchArguments += ["-fieldKitFakeSensors"]
         fresh.launch()
 
-        XCTAssertTrue(AppNavigator.openSection("Field Kit", in: fresh))
+        XCTAssertTrue(AppNavigator.openSection("Paranormal", in: fresh))
         AppNavigator.startNewSession(in: fresh)
         XCTAssertTrue(fresh.buttons["confirm-start-session"].waitForExistence(timeout: 15))
         fresh.buttons["confirm-start-session"].tap()
@@ -614,7 +614,7 @@ final class FieldKitUITests: XCTestCase {
         fresh.launchArguments += ["-fieldKitFakeSensors"]
         fresh.launch()
 
-        XCTAssertTrue(AppNavigator.openSection("Field Kit", in: fresh))
+        XCTAssertTrue(AppNavigator.openSection("Paranormal", in: fresh))
         AppNavigator.startNewSession(in: fresh)
         XCTAssertTrue(fresh.buttons["confirm-start-session"].waitForExistence(timeout: 15))
         fresh.buttons["confirm-start-session"].tap()
@@ -663,7 +663,7 @@ final class FieldKitUITests: XCTestCase {
         fresh.launchArguments += ["-fieldKitFakeSensors"]
         fresh.launch()
 
-        XCTAssertTrue(AppNavigator.openSection("Field Kit", in: fresh))
+        XCTAssertTrue(AppNavigator.openSection("Paranormal", in: fresh))
         AppNavigator.startNewSession(in: fresh)
         XCTAssertTrue(fresh.buttons["confirm-start-session"].waitForExistence(timeout: 15))
         fresh.buttons["confirm-start-session"].tap()

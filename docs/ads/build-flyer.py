@@ -142,7 +142,7 @@ TILES = [
 # Ben asked for this specifically, and it is the part a list of features cannot say: the same
 # recording travels from a dark hallway to a client's report without anybody exporting a file.
 CHAIN = [
-    ("Record it in the field", "Field Kit turns the phone into a meter and a recorder. No signal needed.",
+    ("Record it in the field", "The Paranormal Platform turns the phone into a meter and a recorder. No signal needed.",
      PUB + "the-mobile-apps/iphone-meter.png", "phone"),
     ("It lands on the case",   "The session uploads itself when there is signal again, onto the right case.",
      PUB + "working-a-case/field-session-player.png", "shot"),
@@ -407,7 +407,7 @@ def build():
       <div class="shotcell" style="background-image:url({small(WALK + "owner/56-org-subscriptions.png")})"></div>
       <div class="words">
         <div class="big">Free to <em>explore</em>. Pay only for what you run.</div>
-        <div class="small">Enthusiasts: free, with Field Kit and 2&nbsp;GB of your own files · Groups from
+        <div class="small">Enthusiasts: free, with the Paranormal Platform and 2&nbsp;GB of your own files · Groups from
           $19.99 a month · Ghost walks $29 a month per tour · Hosted events $99 each, however many
           nights · Investigations of public places stay free on every plan.</div>
       </div>

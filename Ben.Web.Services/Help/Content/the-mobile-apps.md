@@ -27,7 +27,7 @@ scan with your iPhone's camera.
 your iPhone's camera does the same.*
 
 **[The app guide (PDF)](/guides/IsHaunted-App-Guide.pdf)** shows what the app does in six pages,
-using screens from the app itself: Field Kit, marking and watching, playing a night back, and events
+using screens from the app itself: the Paranormal Platform, marking and watching, playing a night back, and events
 and the door.
 
 ## What you need an account for — and what you don't
@@ -65,7 +65,7 @@ once, with a button to save or send them — the site can't show them to you aga
 | **Investigations** | The ones you're on, split into upcoming and past, with your assigned role, any evidence deadline, and the group's case behind each one. **Where you've been** shows the places you've investigated on a map. On an iPhone the tab bar only has room for five tabs, so group members find Investigations under **Profile → Investigations**; on an iPad it's in the sidebar. |
 | **Haunted Tours** | Ghost walks near you, or near a place you look up, with how far away they are and when they next run. No account needed. Tap one to open the walk — where you meet, how long it runs, who leads it and the upcoming nights — then tap a night to open it. That's where you ask for a place. **Location is asked for, never taken**: the tab opens on a list, and if you'd rather not share where you are, type a city instead. |
 | **Events** | Public events, readable without an account, where you can reserve a place. A night that belongs to a **walking tour** shows the tour's name under its title, since a business running three walks would otherwise show three rows all called "Saturday walk". Times are shown **where you are**, with the time zone named beside them, and **Local time** switches to the time where the event takes place — for example, 3:08 PM CDT for a Nashville walk (see *Times and time zones*, below). If an event's organizer never set a time zone, it's shown in Central time and labeled that way. **Add to calendar** puts it straight into your own calendar. Tap a night to open it, with your seat, directions to the meeting point and who's guiding. A night that belongs to a **hosted event** — a weekend at a venue, a dinner and a show — shows your booking status and your pass instead; see below. |
-| **Field Kit** | Your phone as an instrument during an investigation — see below. |
+| **Paranormal Platform** | Your phone as an instrument during an investigation, on the **Paranormal** tab — see below. |
 | **My evidence** | What you've offered at other people's public events. You can always open it, whatever they decided, and you can add it to the archive of the place where it was taken. |
 | **Your account** | Sign in and out, create an account, confirm your email, change your password, and turn two-step sign-in on or off. |
 
@@ -92,23 +92,23 @@ says so instead of showing a switch that wouldn't change anything.
 
 ![A case's visits, with the time they happen](/help/media/the-mobile-apps/iphone-case-visits.png)
 
-**Field Kit sessions** are shown in the phone's time. A session file records universal time and the
+**Paranormal Platform sessions** are shown in the phone's time. A session file records universal time and the
 time zone the phone was in when it recorded, so it plays back at the right moments on any phone and
 on the website, wherever the person opening it is.
 
-## Field Kit — the phone as an instrument
+## The Paranormal Platform — the phone as an instrument
 
-Field Kit records an investigation on the device. It needs **no signal and no account**: a member
+The Paranormal Platform records an investigation on the device. It needs **no signal and no account**: a member
 standing in a cellar with no bars can start recording, and everything stays on the phone until they
 choose to send it. Signing in still matters, because a session records who was signed in when it
 was made. Staying signed in doesn't need a connection, so a member who signed in last week is still
 identified in that cellar.
 
-![Field Kit, listing sessions recorded on this device](/help/media/the-mobile-apps/iphone-home.png)
+![The Paranormal Platform, listing sessions recorded on this device](/help/media/the-mobile-apps/iphone-home.png)
 
 ### Your first session, start to finish
 
-1. Open **Field Kit** and tap **Start a session**. If a session is still open, the app asks first.
+1. Open the **Paranormal** tab and tap **Start a session**. If a session is still open, the app asks first.
    One that's recording is **saved** — stopped and kept with your other sessions. One that was set
    up but never started is replaced, since nothing was recorded in it.
 2. **Where are you?** If the app can use your location, it fills this in for you: the name of a
@@ -142,7 +142,7 @@ identified in that cellar.
 8. Work. Tap **Mark** whenever something happens, or **Note** to add a line about it.
 9. Tap **Stop** when you're done. The session is saved and opens for review right away.
    **Start another session** at the top of the review begins the next one with the same settings — same
-   place, same investigation, same channels. Going back from the review takes you to Field Kit, not
+   place, same investigation, same channels. Going back from the review takes you to the Paranormal Platform, not
    to the instruments of a session that's over.
 
 If the night turns out to be nothing before you ever press Start, tap **Discard** next to the Start
@@ -489,9 +489,9 @@ There are three ways to open one, and they all lead to the same place:
 
 - **Tap the file** wherever it arrived — AirDrop, a message, an email attachment, Files — and
   IsHaunted is offered as the app to open it.
-- **Open a .ben file** on the Field Kit screen opens the Files browser, for a file you've already
+- **Open a .ben file** on the Paranormal Platform screen opens the Files browser, for a file you've already
   saved.
-- **On the server, not on this phone**, further down the Field Kit screen, lists sessions you've
+- **On the server, not on this phone**, further down the Paranormal Platform screen, lists sessions you've
   uploaded that aren't on this phone — sent from another device, or cleared from this one.
   **Download** brings the whole night back, and the app knows it's already on the server. Only
   sessions sent as a single file are offered; anything sent before session files existed is counted
@@ -506,7 +506,7 @@ a night someone else handed you is never mistakenly credited to you.
 
 ### Finding sessions other people published
 
-**Find public sessions** on the Field Kit screen lists sessions other people have published to the
+**Find public sessions** on the Paranormal Platform screen lists sessions other people have published to the
 public archive — **near you**, or at a place you **search for** by name or town ("waverly",
 "louisville"). Each row shows where and when it was recorded, who recorded it and what it contains.
 **Download** saves it to your phone, where it plays like any other session and is marked *public
@@ -534,13 +534,13 @@ You'll hear about it in three ways, and each one does the same thing:
 - **A notification** — "Printers Alley After Dark is starting". Tap it.
 - **A card in your feed** with **Join the session**, in case you missed the notification or have
   notifications turned off.
-- **Happening now**, at the top of Field Kit, for as long as the session is open.
+- **Happening now**, at the top of the Paranormal Platform, for as long as the session is open.
 
 ![The guide has started the walk, and the phone says so](/help/media/the-mobile-apps/iphone-launch-notified.png)
 
 ![The card in the feed, for anybody who missed the notification](/help/media/the-mobile-apps/iphone-launch-feed-card.png)
 
-**Join** opens Field Kit straight into a session that's already set up for the tour, event or
+**Join** opens the Paranormal Platform straight into a session that's already set up for the tour, event or
 investigation and its location — there's nothing to choose. Nothing records until you press
 **Start**. You can stop and start another session as often as you like; every session stays on your
 phone.
@@ -549,7 +549,7 @@ The card leaves the feed, and the link stops working, six hours after the night 
 
 ### Sending what you recorded — now, or days later
 
-Your sessions build up on the phone, and each row in Field Kit says **Sent** or **Not sent**. Send
+Your sessions build up on the phone, and each row in the Paranormal Platform says **Sent** or **Not sent**. Send
 them whenever you're ready — that night, or days later once you've been through them. When you do,
 the send screen already shows where they're going:
 
@@ -578,7 +578,7 @@ A visit to someone's home, or a private client case, never has a code.
 
 ### Starting it, if you lead
 
-Field Kit shows **Launch a session for your group** whenever something you lead is on — a tour date
+The Paranormal Platform shows **Launch a session for your group** whenever something you lead is on — a tour date
 you guide, an event you organize or run the door at, an investigation you lead or manage. It appears
 three hours before the start and stays until the end. Tap **Launch** and confirm. The card goes into
 the feed — for anyone if it's public, or only for the people registered if it isn't — and everyone
@@ -864,7 +864,7 @@ shows depends on who you are:
 
 | If you are | You see |
 |---|---|
-| **Investigating on your own** | The feed, Field Kit, and your profile. No case list and no investigations — you don't have either, and an empty screen is worse than no screen. |
+| **Investigating on your own** | The feed, the Paranormal Platform, and your profile. No case list and no investigations — you don't have either, and an empty screen is worse than no screen. |
 | **Somebody's client** | Your case too, even though you don't belong to a group. You asked for the investigation, so it's yours to follow. |
 | **In a group** | Cases, investigations and events, as your group's roles allow. |
 | **On a ghost walk** | Events, and My evidence for what you photographed there. |
@@ -900,4 +900,4 @@ screen or dock, and it will open in its own window without an address bar. Your 
 itself — **Install** in Chrome's address bar, or **Add to Home screen** in its menu.
 
 It's the same site, so you can do everything there that you can do on the web. The one thing it
-doesn't have is Field Kit, which needs an iPhone's sensors.
+doesn't have is the Paranormal Platform, which needs an iPhone's sensors.

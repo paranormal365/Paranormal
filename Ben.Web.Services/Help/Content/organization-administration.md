@@ -926,8 +926,9 @@ Groups that aren't on a tour plan have no clock at all: their files stay, as the
 
 ### Starting the night, and what your guests send back
 
-On the night, a date's guide — or anyone who can edit your calendar — can start Field Kit for
-everyone from the IsHaunted app, using **Launch a session for your group** in Field Kit. Everyone
+On the night, a date's guide — or anyone who can edit your calendar — can start the Paranormal
+Platform for everyone from the IsHaunted app, using **Launch a session for your group** in the
+Paranormal Platform. Everyone
 with a reserved place is notified, and the card appears in the feed. Guests who never signed up can
 scan the guide's code. At a public date they join right away; at a private one they ask, and the
 guide lets them in. See [The iPhone and iPad Apps](/help/the-mobile-apps).
@@ -1334,7 +1335,7 @@ is the one action that costs money.
 
 ### The group's session on the night
 
-As with a tour, the organizer — or staff running the door — can start Field Kit for everyone from
+As with a tour, the organizer — or staff running the door — can start the Paranormal Platform for everyone from
 the IsHaunted app, and confirmed guests are notified. What they send appears on the event's page
 under **Field sessions sent up**, visible to your group and the event's staff. Letting in someone who
 scanned the code and asked to join never creates a booking: it only lets them record along with

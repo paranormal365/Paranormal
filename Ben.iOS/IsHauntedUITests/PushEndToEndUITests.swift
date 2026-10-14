@@ -28,7 +28,7 @@ final class PushEndToEndUITests: XCTestCase {
 
         app.launch()
         sleep(5)
-        XCTAssertTrue(AppNavigator.openSection("Field Kit", in: app))
+        XCTAssertTrue(AppNavigator.openSection("Paranormal", in: app))
         // "Happening now" asks for notifications — the moment one plainly helps.
         let allow = springboard.buttons["Allow"]
         if allow.waitForExistence(timeout: 15) { allow.tap() }

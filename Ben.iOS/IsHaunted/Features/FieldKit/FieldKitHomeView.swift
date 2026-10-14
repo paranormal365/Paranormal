@@ -223,7 +223,7 @@ struct FieldKitHomeView: View {
                 }
             }
         }
-        .navigationTitle("Field Kit")
+        .navigationTitle("Paranormal Platform")
         .sheet(isPresented: $starting, onDismiss: { startingLike = nil }) {
             StartSessionSheet(like: startingLike, onBrowsePublic: {
                 starting = false

@@ -155,7 +155,7 @@ final class RolePlayUITests: XCTestCase {
         let app = try app()
         app.launch()
         sleep(5)
-        XCTAssertTrue(AppNavigator.openSection("Field Kit", in: app))
+        XCTAssertTrue(AppNavigator.openSection("Paranormal", in: app))
         let row = app.buttons["field-session-row"].firstMatch
         XCTAssertTrue(row.waitForExistence(timeout: 20))
         row.tap()
@@ -180,7 +180,7 @@ final class RolePlayUITests: XCTestCase {
         let app = try app()
         app.launch()
         sleep(6)
-        XCTAssertTrue(AppNavigator.openSection("Field Kit", in: app))
+        XCTAssertTrue(AppNavigator.openSection("Paranormal", in: app))
         let open = app.buttons["open-launch-for-group"].firstMatch
         for _ in 0..<3 where !open.waitForExistence(timeout: 8) { app.swipeDown() }
         XCTAssertTrue(open.exists, "Field Kit should offer the lead a launch")

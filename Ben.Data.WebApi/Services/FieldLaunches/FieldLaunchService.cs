@@ -232,7 +232,7 @@ public sealed class FieldLaunchService
         var launcherName = await NameAsync(db, userId, ct);
         var fanOut = await _push.SendAsync(recipients, new PushMessage(
             Title: $"{candidate.Title} is starting",
-            Body: $"{launcherName} started the group's session. Tap to join it in Field Kit.",
+            Body: $"{launcherName} started the group's session. Tap to join it in the Paranormal Platform.",
             Data: new Dictionary<string, string> { ["link"] = AppLink(launch.Id), ["launchId"] = launch.Id.ToString() },
             CollapseId: $"launch-{launch.Id:N}",
             ExpiresAt: new DateTimeOffset(DateTime.SpecifyKind(expires, DateTimeKind.Utc))), ct);
@@ -250,7 +250,7 @@ public sealed class FieldLaunchService
     public static string CardText(string title) =>
         // Read on the phone (under a Join button) and on the website (beside "Open in the app"),
         // so it names where to join rather than a button only one of them has.
-        Clip($"{title} is starting now. Join the group's session from Field Kit in the IsHaunted app — nothing records until you press Start, and every session you take stays on your phone until you send it.", 1000);
+        Clip($"{title} is starting now. Join the group's session from the Paranormal Platform in the IsHaunted app — nothing records until you press Start, and every session you take stays on your phone until you send it.", 1000);
 
     // ── Reading launches ─────────────────────────────────────────────────────
 

@@ -167,8 +167,8 @@ final class EverySurfaceUITests: XCTestCase {
     }
 
     func testFieldKitOpens() {
-        XCTAssertTrue(AppNavigator.openSection("Field Kit", in: app))
-        assertSettled("Field Kit", anyOf: ["Start a session", "Nothing recorded yet",
+        XCTAssertTrue(AppNavigator.openSection("Paranormal", in: app))
+        assertSettled("Paranormal Platform", anyOf: ["Start a session", "Nothing recorded yet",
                                            "can't be stored"])
     }
 

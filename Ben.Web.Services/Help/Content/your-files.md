@@ -10,7 +10,7 @@ order: 52
 
 **Media → Upload Files** shows every file you own: files you uploaded on the site, photos and
 videos you posted to the feed, evidence you attached to a case, equipment photos, and the
-recordings and documents your Field Kit sessions uploaded. A file is yours from the moment it
+recordings and documents your Paranormal Platform sessions uploaded. A file is yours from the moment it
 arrives until you delete it.
 
 From each row you can download, share, replace or delete the file.
@@ -62,7 +62,7 @@ copies in its files, and places that refer to the file itself. Then you are aske
 Say no to both and nothing changes. A file is only handed over when you choose that answer
 yourself; it never happens automatically.
 
-### Field Kit recordings
+### Paranormal Platform recordings
 
 A recording made during a field session belongs to that session: the session's document names the
 file, and its readings are linked to moments in it. You can still hand the recording to a group,

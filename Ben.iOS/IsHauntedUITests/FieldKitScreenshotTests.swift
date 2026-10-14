@@ -95,7 +95,7 @@ final class FieldKitScreenshotTests: XCTestCase {
             settle(4)
         }
 
-        XCTAssertTrue(AppNavigator.openSection("Field Kit", in: app))
+        XCTAssertTrue(AppNavigator.openSection("Paranormal", in: app))
         settle(1)
 
         // ── A session, named for the place ────────────────────────────────
@@ -214,7 +214,7 @@ final class FieldKitScreenshotTests: XCTestCase {
         // ── Back home: the list with a night in it ────────────────────────
         if app.navigationBars.buttons.firstMatch.exists { app.navigationBars.buttons.firstMatch.tap() }
         settle(1)
-        if AppNavigator.openSection("Field Kit", in: app) {
+        if AppNavigator.openSection("Paranormal", in: app) {
             settle(1)
             snap("04-field-kit")               // replaces the 1.0.0 empty-list shot
         }

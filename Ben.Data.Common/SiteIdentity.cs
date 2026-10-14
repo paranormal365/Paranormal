@@ -34,7 +34,7 @@ public sealed class SiteIdentity
     public string BaseUrl { get; set; } = "";
 
     /// <summary>One line saying what the site is, for a link preview with nothing better to show.</summary>
-    public string Tagline { get; set; } = "Find paranormal investigators near you.";
+    public string Tagline { get; set; } = "The Paranormal Platform";
 
     /// <summary>
     /// The API's own public origin, no trailing slash — <c>https://ishaunted.com/webapi</c>.
