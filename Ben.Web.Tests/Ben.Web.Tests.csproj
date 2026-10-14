@@ -44,4 +44,13 @@
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </None>
   </ItemGroup>
+
+  <!-- The replay conformance fixtures live with the phone's tests (SwiftPM can only bundle files
+       inside its own package) and are linked here, not copied, so the website is held to the same
+       files the phone is. See ProjectNotes/specs/replay-semantics.md. -->
+  <ItemGroup>
+    <None Include="..\Ben.iOS\BenKit\Tests\BenKitTests\Fixtures\replay-conformance\*.json"
+          Link="Fixtures\replay-conformance\%(Filename)%(Extension)"
+          CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
 </Project>

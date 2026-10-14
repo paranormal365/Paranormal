@@ -22,7 +22,7 @@ Written 10/14/2026, from the audit of both players. Where the two disagreed, the
 |---|---|---|
 | I1 | **Held, not interpolated.** The instruments show the last reading at or before the moment (binary search). Before the first reading, every instrument reads "—". | Both. |
 | I2 | **Magnetic field** shows as mG from base: (µT − base µT) × 10. With no base in force it shows the absolute value, labelled "abs" on the web and "no base" on the phone. | |
-| I3 | **The base in force** is the `emf.baseline` on the held reading, or the last one written before it. A re-baseline partway through applies from that reading on. | Web: the first base seen. Phone: the last base seen. Both were wrong for a session that re-zeroed partway. |
+| I3 | **The base in force** is the `emf.baseline` on the held reading, or the last one written before it. A re-baseline partway through applies from that reading on. Before the first reading that carries a base, the session's last base stands in (what the phone has always used for the whole night). | Web: the first base seen. Phone: the last base seen. Both were wrong for a session that re-zeroed partway. |
 | I4 | **Sound** shows as absolute dBFS, held. | |
 | I5 | **Room** is the held reading's `room`. It is not carried past a reading that has none: readings carry the room for as long as one is set, so its absence means they stopped saying. | Both. |
 
