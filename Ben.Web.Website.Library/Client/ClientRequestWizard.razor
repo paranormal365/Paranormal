@@ -469,6 +469,10 @@
 
     private bool _verifying;
 
+    /// <summary>The lookup did not happen; the address may be fine. Pressing Verify again retries.</summary>
+    internal const string UnreachableMapService =
+        "We couldn't reach the map service just now. Press Verify Address again in a moment — your address is kept.";
+
     // Step 2 — about you
     private ClientGender _gender    = ClientGender.NotProvided;
     private int? _birthYear;
@@ -623,7 +627,15 @@
         {
             var q = $"{_streetAddress1}, {_city}, {_state} {_zipCode}";
             var result = await AdminClient.SearchGeocodingAsync(q);
-            if (result?.Latitude is not { } lat || result.Longitude is not { } lon)
+            if (result is null || result.Unavailable)
+            {
+                // The map service, or our way to it, did not answer — a refused or busy lookup, not the
+                // person's address. This used to read "Address not found" for a real Nashville street,
+                // and the request could go no further (10/14/2026).
+                _lat = _lon = null;
+                _geocodeError = UnreachableMapService;
+            }
+            else if (result.Latitude is not { } lat || result.Longitude is not { } lon)
             {
                 _lat = _lon = null;
                 _geocodeError = "Address not found. Please check the details and try again.";
@@ -635,7 +647,7 @@
                 await FindSameAddressAsync();
             }
         }
-        catch { _geocodeError = "We couldn't reach the map service. Try again in a moment."; }
+        catch { _geocodeError = UnreachableMapService; }
         finally { _verifying = false; }
     }
 

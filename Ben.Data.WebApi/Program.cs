@@ -834,7 +834,10 @@ else
     {
         Ben.Service.RepositoryService.Services.AddressGeocodingService.Configure(
             new Ben.Service.RepositoryService.Services.AppleMapsGeocoder(
-                teamId, keyId, PrivateKeyFile.ReadOrEmpty(keyPath, "Maps:PrivateKeyPath"), maps["BaseUrl"]));
+                teamId, keyId, PrivateKeyFile.ReadOrEmpty(keyPath, "Maps:PrivateKeyPath"), maps["BaseUrl"],
+                // Error, the level the database keeps: a lookup that fails stops a stranger's request
+                // at its first step, and used to leave no trace at all (10/14/2026).
+                reportFailure: message => Log.Error("{GeocodingFailure}", message)));
         Log.Information("Geocoding: Apple Maps Server API, key {KeyId}", keyId);
     }
     else

@@ -118,7 +118,7 @@ public sealed record OrgAddressUpsertRequest(
     decimal? Latitude  = null,
     decimal? Longitude = null);
 
-public sealed record GeocodingPreviewResponse(decimal? Latitude, decimal? Longitude, string? ResultType);
+public sealed record GeocodingPreviewResponse(decimal? Latitude, decimal? Longitude, string? ResultType, bool Unavailable = false);
 
 public sealed record ReverseGeocodingResponse(
     string? StreetAddress1,

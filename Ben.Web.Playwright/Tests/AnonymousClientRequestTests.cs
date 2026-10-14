@@ -95,12 +95,25 @@ public class AnonymousClientRequestTests : BenTestBase
         await FillAndConfirmAsync("#req-state", "TN");
         await FillAndConfirmAsync("#req-zip", "37203");
 
-        await ClickUntilAsync(
-            Page.GetByRole(AriaRole.Button, new() { Name = "Verify Address" }),
-            Page.GetByText("Address verified").Or(Page.GetByText("couldn't")));
-
-        if (!await Page.GetByText("Address verified").IsVisibleAsync())
-            Assert.Ignore("The geocoding service did not answer; the funnel below needs a real lookup.");
+        // The front door: a stranger's real address must verify. "The map service did not answer" is
+        // tried again, as a person would; "not found" for a real street, or no answer after three
+        // tries, is a failure — never a skip (10/14/2026: this skipped itself while the lookup was
+        // failing silently, and a real Nashville address read "Address not found").
+        var verified = Page.GetByText("Address verified");
+        var unreachable = Page.GetByText("couldn't reach the map service");
+        var notFound = Page.GetByText("Address not found");
+        for (var attempt = 1; ; attempt++)
+        {
+            await ClickUntilAsync(
+                Page.GetByRole(AriaRole.Button, new() { Name = "Verify Address" }),
+                verified.Or(unreachable).Or(notFound));
+            if (await verified.IsVisibleAsync()) break;
+            if (await notFound.IsVisibleAsync())
+                Assert.Fail("A real Nashville address was reported as not found.");
+            if (attempt == 3)
+                Assert.Fail("The map service did not answer three times running; the API's error log says why.");
+            await Page.WaitForTimeoutAsync(2000);
+        }
 
         await ClickUntilAsync(
             Page.GetByRole(AriaRole.Button, new() { Name = "Next: About You" }),

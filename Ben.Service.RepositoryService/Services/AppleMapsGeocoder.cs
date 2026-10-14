@@ -36,14 +36,21 @@ public sealed class AppleMapsGeocoder
     private readonly string _keyId;
     private readonly Func<DateTimeOffset> _now;
     private readonly SemaphoreSlim _tokenLock = new(1, 1);
+    private readonly Action<string>? _reportFailure;
     private string? _accessToken;
+    private readonly TimeSpan _retryDelay;
     private DateTimeOffset _accessTokenExpires;
 
     /// <param name="privateKeyPem">The Maps key's <c>.p8</c> text. Never stored anywhere but the key file.</param>
     /// <param name="handler">A transport for tests; null means the network.</param>
+    /// <param name="reportFailure">Told, in a sentence, whenever Apple could not be asked or did not
+    /// answer — the API logs it as an error, so a failing lookup is never silent again.</param>
     public AppleMapsGeocoder(string teamId, string keyId, string privateKeyPem,
-        string? baseUrl = null, HttpMessageHandler? handler = null, Func<DateTimeOffset>? now = null)
+        string? baseUrl = null, HttpMessageHandler? handler = null, Func<DateTimeOffset>? now = null,
+        Action<string>? reportFailure = null, TimeSpan? retryDelay = null)
     {
+        _reportFailure = reportFailure;
+        _retryDelay = retryDelay ?? TimeSpan.FromMilliseconds(400);
         _teamId = teamId;
         _keyId  = keyId;
         _key    = Es256Jwt.ImportP256(privateKeyPem, "Maps:PrivateKey");
@@ -74,32 +81,55 @@ public sealed class AppleMapsGeocoder
         string.IsNullOrWhiteSpace(query) ? Task.FromResult(GeocodingLookupResult.Empty)
                                          : GeocodeAsync(query.Trim(), "US", ct);
 
+    /// <summary>
+    /// One lookup: found, not found (Apple answered with no match), or <see cref="GeocodingLookupResult.Unanswered"/>.
+    /// </summary>
+    /// <remarks>
+    /// A failure that may pass — no connection, a timeout, a 429 or a 5xx — is tried once more after a
+    /// moment; one that will not (a refused key) is not. Either way the failure is reported, and it is
+    /// never passed off as "not found" (10/14/2026: a stranger's request stalled at step one on a real
+    /// Nashville address, and nothing anywhere said why).
+    /// </remarks>
     private async Task<GeocodingLookupResult> GeocodeAsync(string query, string? countryCode, CancellationToken ct)
     {
-        try
+        var path = $"v1/geocode?q={Uri.EscapeDataString(query)}&lang=en-US";
+        if (countryCode is not null) path += $"&limitToCountries={countryCode}";
+
+        string failure = "no attempt was made";
+        for (var attempt = 0; attempt < 2; attempt++)
         {
-            var path = $"v1/geocode?q={Uri.EscapeDataString(query)}&lang=en-US";
-            if (countryCode is not null) path += $"&limitToCountries={countryCode}";
+            if (attempt > 0) await Task.Delay(_retryDelay, ct);
+            try
+            {
+                var (status, json) = await SendAsync(path, ct);
+                if (status is >= 200 and < 300)
+                {
+                    using var doc = JsonDocument.Parse(json);
+                    if (!doc.RootElement.TryGetProperty("results", out var results) || results.GetArrayLength() == 0)
+                        return new GeocodingLookupResult(null, null, json, null);   // answered: nothing there
 
-            var (ok, json) = await GetAsync(path, ct);
-            if (!ok) return GeocodingLookupResult.Empty;
+                    var first = results[0];
+                    var coordinate = first.GetProperty("coordinate");
+                    return new GeocodingLookupResult(
+                        coordinate.GetProperty("latitude").GetDecimal(),
+                        coordinate.GetProperty("longitude").GetDecimal(),
+                        json,
+                        Classify(first));
+                }
 
-            using var doc = JsonDocument.Parse(json);
-            if (!doc.RootElement.TryGetProperty("results", out var results) || results.GetArrayLength() == 0)
-                return new GeocodingLookupResult(null, null, json, null);
-
-            var first = results[0];
-            var coordinate = first.GetProperty("coordinate");
-            return new GeocodingLookupResult(
-                coordinate.GetProperty("latitude").GetDecimal(),
-                coordinate.GetProperty("longitude").GetDecimal(),
-                json,
-                Classify(first));
+                failure = status == 0 ? "no access token (the Maps key was refused)" : $"Apple answered {status}";
+                if (status != 0 && status != 429 && status < 500) break;   // a 4xx other than 429 will not pass
+            }
+            catch (Exception ex) when (ex is not OperationCanceledException || !ct.IsCancellationRequested)
+            {
+                // Includes HttpClient's own timeout, which arrives as a TaskCanceledException while the
+                // caller's token is still live. It used to escape this method altogether.
+                failure = ex is OperationCanceledException ? "Apple did not answer in time" : $"{ex.GetType().Name}: {ex.Message}";
+            }
         }
-        catch (Exception ex) when (ex is not OperationCanceledException)
-        {
-            return GeocodingLookupResult.Empty;
-        }
+
+        _reportFailure?.Invoke($"Geocoding unavailable: {failure}.");
+        return GeocodingLookupResult.Unanswered;
     }
 
     // ── Reverse ───────────────────────────────────────────────────────────────
@@ -164,21 +194,30 @@ public sealed class AppleMapsGeocoder
 
     // ── Transport ─────────────────────────────────────────────────────────────
 
-    private async Task<(bool Ok, string Body)> GetAsync(string path, CancellationToken ct)
+    /// <returns>The HTTP status, or 0 when no access token could be had.</returns>
+    private async Task<(int Status, string Body)> SendAsync(string path, CancellationToken ct)
     {
+        var status = 0;
         for (var attempt = 0; attempt < 2; attempt++)
         {
             var access = await AccessTokenAsync(force: attempt > 0, ct);
-            if (access is null) return (false, string.Empty);
+            if (access is null) return (0, string.Empty);
 
             using var request = new HttpRequestMessage(HttpMethod.Get, path);
             request.Headers.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", access);
             using var response = await _http.SendAsync(request, ct);
             var body = await response.Content.ReadAsStringAsync(ct);
+            status = (int)response.StatusCode;
             if (response.StatusCode == System.Net.HttpStatusCode.Unauthorized) continue;   // revoked early: once more with a fresh one
-            return (response.IsSuccessStatusCode, body);
+            return (status, body);
         }
-        return (false, string.Empty);
+        return (status, string.Empty);
+    }
+
+    private async Task<(bool Ok, string Body)> GetAsync(string path, CancellationToken ct)
+    {
+        var (status, body) = await SendAsync(path, ct);
+        return (status is >= 200 and < 300, body);
     }
 
     private async Task<string?> AccessTokenAsync(bool force, CancellationToken ct)

@@ -35,8 +35,9 @@ day-by-day account of building it would say nothing to anyone using it now.
 
 - Field Kit is now called the Paranormal Platform, and the site's tagline reads “The Paranormal
   Platform”.
-- Field sessions play back more smoothly. Dragging through a session while it plays carries on from
-  where you let go, instead of jumping back.
+- Field sessions play back more smoothly and in step with the clock: Play starts at once, and the
+  playhead never stalls or jumps back while a recording loads. Dragging through a session while it
+  plays carries on from where you let go.
 - On the map, the marker follows the path that was walked and the arrow turns to show which way the
   phone was facing. The map keeps it in view, and **Recenter** brings it back after you move the map.
 - Playback goes up to 32×, has buttons for the previous and next mark, and answers the arrow keys and
@@ -60,6 +61,8 @@ day-by-day account of building it would say nothing to anyone using it now.
 - The home page and the menu load faster after signing in, especially for people in many groups.
 - On a phone, the notices at the top of a page about work waiting take a line or two each, so the
   page you opened starts on the screen rather than below it.
+- When asking for help, an address the map service could not look up just then says so, and Verify
+  Address tries again; only an address the map really cannot find is reported as not found.
 
 ### Administration
 

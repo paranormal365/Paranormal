@@ -47,7 +47,7 @@ public sealed class GeocodingController : ControllerBase
         var result = await AddressGeocodingService.TryResolveCoordinatesAsync(
             streetAddress1, streetAddress2, city, state, zipCode, country, ct);
 
-        return Ok(new GeocodingPreviewResponse(result.Latitude, result.Longitude, result.ResultType));
+        return Ok(new GeocodingPreviewResponse(result.Latitude, result.Longitude, result.ResultType, result.Unavailable));
     }
 
     /// <summary>
@@ -85,14 +85,17 @@ public sealed class GeocodingController : ControllerBase
             return Ok(new GeocodingPreviewResponse(null, null, null));
 
         var result = await AddressGeocodingService.TryResolveFromQueryAsync(q, ct);
-        return Ok(new GeocodingPreviewResponse(result.Latitude, result.Longitude, result.ResultType));
+        return Ok(new GeocodingPreviewResponse(result.Latitude, result.Longitude, result.ResultType, result.Unavailable));
     }
 }
 
+/// <param name="Unavailable">The map service did not answer, as opposed to answering that it found
+/// nothing (10/14/2026). Additive: a client that does not know it reads the old shape.</param>
 public sealed record GeocodingPreviewResponse(
     decimal? Latitude,
     decimal? Longitude,
-    string? ResultType);
+    string? ResultType,
+    bool Unavailable = false);
 
 public sealed record ReverseGeocodingResponse(
     string? StreetAddress1,

@@ -56,13 +56,22 @@ public static class AddressGeocodingService
     // ── Result records ────────────────────────────────────────────────────────
 
     /// <param name="ResultType">How precise the hit is: <c>rooftop</c>, <c>street</c> or <c>place</c>.</param>
+    /// <param name="Unavailable">
+    /// The map service did not answer — no token, an error status, a timeout, no connection — as
+    /// opposed to answering that it found nothing. The two used to be the same empty result, and a
+    /// stranger asking for help was told their real address did not exist (10/14/2026).
+    /// </param>
     public sealed record GeocodingLookupResult(
         decimal? Latitude,
         decimal? Longitude,
         string?  RawResponseJson,
-        string?  ResultType)
+        string?  ResultType,
+        bool     Unavailable = false)
     {
         public static GeocodingLookupResult Empty => new(null, null, null, null);
+
+        /// <summary>The service could not be asked, or did not answer.</summary>
+        public static GeocodingLookupResult Unanswered => new(null, null, null, null, Unavailable: true);
     }
 
     public sealed record ReverseGeocodingResult(

@@ -24,6 +24,8 @@ public class AppleMapsGeocoderTests
         public readonly List<string> Paths = new();
         public readonly List<string?> Bearers = new();
         public Func<int, HttpStatusCode>? LookupStatusByCall;
+        /// <summary>The lookup times out the way HttpClient does: a TaskCanceledException.</summary>
+        public bool LookupTimesOut;
 
         protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken ct)
         {
@@ -37,17 +39,19 @@ public class AppleMapsGeocoderTests
                     { Content = new StringContent(Fixture("token-200.json"), Encoding.UTF8, "application/json") });
             }
             LookupCalls++;
+            if (LookupTimesOut) throw new TaskCanceledException("The request was canceled due to the configured HttpClient.Timeout.");
             var status = LookupStatusByCall?.Invoke(LookupCalls) ?? LookupStatus;
             return Task.FromResult(new HttpResponseMessage(status)
                 { Content = new StringContent(Fixture(LookupFixture), Encoding.UTF8, "application/json") });
         }
     }
 
-    private static (AppleMapsGeocoder Geocoder, AppleStub Stub) Build(Func<DateTimeOffset>? now = null)
+    private static (AppleMapsGeocoder Geocoder, AppleStub Stub) Build(Func<DateTimeOffset>? now = null, List<string>? reported = null)
     {
         var stub = new AppleStub();
         var pem = System.Security.Cryptography.ECDsa.Create(System.Security.Cryptography.ECCurve.NamedCurves.nistP256).ExportPkcs8PrivateKeyPem();
-        return (new AppleMapsGeocoder("5778H75249", "623JTDWHAQ", pem, handler: stub, now: now), stub);
+        return (new AppleMapsGeocoder("5778H75249", "623JTDWHAQ", pem, handler: stub, now: now,
+                                      reportFailure: m => reported?.Add(m), retryDelay: TimeSpan.Zero), stub);
     }
 
     [Fact]
@@ -92,6 +96,65 @@ public class AppleMapsGeocoderTests
 
         Assert.Null(result.Latitude);
         Assert.Equal("{\"results\":[]}", result.RawResponseJson);
+        Assert.False(result.Unavailable);   // Apple answered: there is nothing there
+    }
+
+    // ── Not answering is not "not found" (10/14/2026) ──────────────────────────
+    // A stranger's real address read "Address not found" because every failure — a busy Apple, a
+    // timeout, a refused key — came back as the same empty result as a genuine miss.
+
+    [Fact]
+    public async Task A_busy_answer_is_tried_once_more_and_found()
+    {
+        var reported = new List<string>();
+        var (geocoder, stub) = Build(reported: reported);
+        stub.LookupStatusByCall = n => n == 1 ? HttpStatusCode.ServiceUnavailable : HttpStatusCode.OK;
+
+        var result = await geocoder.ResolveFromQueryAsync("2500 West End Ave, Nashville, TN 37203", default);
+
+        Assert.Equal(36.5907774m, result.Latitude);
+        Assert.Equal(2, stub.LookupCalls);
+        Assert.Empty(reported);
+    }
+
+    [Fact]
+    public async Task No_answer_twice_is_unavailable_and_reported_never_not_found()
+    {
+        var reported = new List<string>();
+        var (geocoder, stub) = Build(reported: reported);
+        stub.LookupStatus = HttpStatusCode.TooManyRequests;
+
+        var result = await geocoder.ResolveFromQueryAsync("2500 West End Ave, Nashville, TN 37203", default);
+
+        Assert.True(result.Unavailable);
+        Assert.Null(result.Latitude);
+        Assert.Equal(2, stub.LookupCalls);
+        Assert.Contains(reported, m => m.Contains("429"));
+    }
+
+    [Fact]
+    public async Task A_timeout_is_unavailable_rather_than_an_exception()
+    {
+        var reported = new List<string>();
+        var (geocoder, stub) = Build(reported: reported);
+        stub.LookupTimesOut = true;
+
+        var result = await geocoder.ResolveFromQueryAsync("2500 West End Ave, Nashville, TN 37203", default);
+
+        Assert.True(result.Unavailable);
+        Assert.Contains(reported, m => m.Contains("in time"));
+    }
+
+    [Fact]
+    public async Task A_refused_request_is_not_retried()
+    {
+        var (geocoder, stub) = Build();
+        stub.LookupStatus = HttpStatusCode.BadRequest;
+
+        var result = await geocoder.ResolveFromQueryAsync("2500 West End Ave, Nashville, TN 37203", default);
+
+        Assert.True(result.Unavailable);
+        Assert.Equal(1, stub.LookupCalls);
     }
 
     [Fact]
@@ -147,7 +210,8 @@ public class AppleMapsGeocoderTests
         var (geocoder, stub) = Build();
         stub.TokenStatus = HttpStatusCode.Unauthorized;
 
-        Assert.Equal(AddressGeocodingService.GeocodingLookupResult.Empty, await geocoder.ResolveFromQueryAsync("Nashville, TN", default));
+        // Unavailable, not "nothing there": the key, not the address, is the problem.
+        Assert.Equal(AddressGeocodingService.GeocodingLookupResult.Unanswered, await geocoder.ResolveFromQueryAsync("Nashville, TN", default));
         Assert.Equal(0, stub.LookupCalls);
     }
 
