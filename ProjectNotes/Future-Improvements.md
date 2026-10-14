@@ -13828,3 +13828,17 @@ two list types (AdminAppUser roles). All now compare like with like. Lists (role
 section order) are recorded as text, because the audit keeps simple values only and a list recorded nothing.
 `AuditShapesWriteTests` runs the real audit service and fails without the fix.
 
+
+## 258. Session player: a loading bar for a recording that is not ready yet (OPEN — only if it becomes an issue)
+
+Ben, 10/14/2026: "If it becomes an issue as more people use the session player, we will need to
+implement some type of loading progress bar so they understand why it is not playing and have an idea
+of how much is left until they are able to play the session back."
+
+Where it stands (release/2026-10-14): the player no longer stops for a recording. The timeline runs on
+the wall clock and the recording joins it when buffered; the recording under the playhead is buffered
+while paused (preload auto) and the next one within 20 s while playing, so Play starts at once in the
+ordinary case. What is still possible on a very slow connection: the timeline plays while the sound
+is not there yet. If people report that, show the recording's buffered fraction (element.buffered /
+duration) on the stage — "Loading the recording… 40%" — while it is behind, and hide it once it is in
+step. Watch the API's slow-request log (any data call over 5 s) and field reports before building it.

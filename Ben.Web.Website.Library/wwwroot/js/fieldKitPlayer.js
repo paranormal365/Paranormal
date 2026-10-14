@@ -33,7 +33,11 @@ const DRAG_SEEK_MS = 100;
 /** Arrow keys move this far. */
 const SKIP_MS = 5000;
 /** The longest a buffering recording holds the clock. */
-const WAIT_MS = 3000;
+const WAIT_MS = 3000;   // kept for the state() readout; the clock no longer holds for buffering (10/14/2026)
+/** How far ahead a recording still to come is buffered, so the hand-over to it does not stall. */
+const PRIME_AHEAD_MS = 20000;
+/** The most a recording is moved ahead of the playhead to allow for how long its seek takes. */
+const MAX_LEAD_S = 1.5;
 
 const ICONS = '/icons/sprite.svg#';
 const players = new WeakMap();
@@ -129,6 +133,7 @@ class Player {
         this.dragging = false;
         this.frames = 0;
         this.lastSeekAt = new Map();
+        this.seekLead = new Map();   // per recording: seconds its last seek took to sound again
         this.pendingPlay = new WeakSet();
         this.attached = new WeakSet();
         this.media = new Map();
@@ -299,23 +304,24 @@ class Player {
         if (this.playing) {
             const frame = frameAt(this.tl, this.playhead);
             const clock = this.clockElement(frame);
-            let next;
+            // The page's own clock always runs (10/14/2026). It used to stop for up to three seconds
+            // whenever the recording was buffering — at every Play on a recording not yet loaded —
+            // and then follow the recording from wherever it had got to: 8 s of playing showed 4.9.
+            let next = this.anchorMs + (now - this.anchorAt) * this.rate;
+            this.clockFile = null;
             if (clock) {
-                // The SOUND is the clock while it plays: what is heard and what is shown are one
-                // moment. Re-anchored every frame, so the hand-over to the page's own clock when
-                // the recording ends is seamless.
-                next = clock.clip.startMs + clock.element.currentTime * 1000;
-                this.reanchor(next);
-                this.clockFile = clock.clip.fileId;
-            } else if (this.waiting && now - this.waitingSince < WAIT_MS) {
-                // A recording that is buffering holds the clock rather than being left behind —
-                // for a while. One that never recovers stops holding it.
-                next = this.playhead;
-                this.reanchor(next);
-                this.clockFile = null;
-            } else {
-                next = this.anchorMs + (now - this.anchorAt) * this.rate;
-                this.clockFile = null;
+                // The SOUND keeps time while it is in step with the page: what is heard and what is
+                // shown are one moment, re-anchored every frame so a hand-over is seamless. A
+                // recording that has fallen behind is brought to the playhead (syncMedia) — never
+                // the playhead taken back to it.
+                const heard = clock.clip.startMs + clock.element.currentTime * 1000;
+                if (Math.abs(heard - next) <= DRIFT_S * 1000) {
+                    // Never backwards: a recording a fraction behind is waited for (at most DRIFT_S),
+                    // so the playhead only ever moves forward while playing.
+                    next = Math.max(heard, this.playhead);
+                    this.reanchor(next);
+                    this.clockFile = clock.clip.fileId;
+                }
             }
             if (next >= this.tl.durationMs) {
                 this.playhead = this.tl.durationMs;
@@ -595,7 +601,16 @@ class Player {
             this.waiting = true;
             this.waitingSince = performance.now();
         });
-        element.addEventListener('playing', () => { this.waiting = false; });
+        element.addEventListener('playing', () => {
+            this.waiting = false;
+            // How long a move took to sound again: the next correction aims that far ahead, so a
+            // recording on a slow connection catches the playhead instead of chasing it.
+            if (element.__fkSeekAt) {
+                const took = (performance.now() - element.__fkSeekAt) / 1000;
+                this.seekLead.set(fileId, Math.min(MAX_LEAD_S, Math.max(0, took)));
+                element.__fkSeekAt = 0;
+            }
+        });
         element.addEventListener('canplay', () => { this.waiting = false; });
         element.addEventListener('error', () => this.failed(fileId, element));
         // A file the browser could not decode can fail before this attached — preload starts the
@@ -675,6 +690,7 @@ class Player {
 
     seekElement(element, seconds, fileId, now) {
         this.lastSeekAt.set(fileId, now);
+        element.__fkSeekAt = now;
         if (element.readyState < 1) {
             // Before metadata, an assignment to currentTime may be dropped: remember the latest
             // target and apply it once, rather than queueing one listener per seek.
@@ -710,10 +726,24 @@ class Player {
             // One sound at a time (rule M7): a video is muted while a recording covers it.
             element.muted = isVideo ? audioId !== null : false;
 
+            this.prime(element);
             if (audible) {
                 element.playbackRate = this.rate;
                 const isClock = this.clockFile === fileId;
-                if (!isClock && (snap || Math.abs(element.currentTime - target) > DRIFT_S)) this.seekElement(element, target, fileId, now);
+                const drift = Math.abs(element.currentTime - target);
+                const since = now - (this.lastSeekAt.get(fileId) ?? 0);
+                if (!isClock) {
+                    if (snap) {
+                        // Already there (it was buffered there while paused): moving it again would
+                        // throw the buffer away for nothing.
+                        if (drift > 0.05) this.seekElement(element, target, fileId, now);
+                    } else if (drift > DRIFT_S && !element.seeking && since > FAST_SEEK_MS) {
+                        // Out of step while playing: moved to where the playhead will be once it
+                        // sounds again, not where it is now — and not again until that move settles.
+                        const lead = (this.seekLead.get(fileId) ?? 0.25) * this.rate;
+                        this.seekElement(element, Math.min(target + lead, (element.duration || Infinity)), fileId, now);
+                    }
+                }
                 if (element.paused && !element.ended && !this.pendingPlay.has(element)) {
                     this.pendingPlay.add(element);
                     const done = () => this.pendingPlay.delete(element);
@@ -731,6 +761,31 @@ class Player {
                 if (due) this.seekElement(element, target, fileId, now);
             }
         }
+        this.primeNext(now);
+    }
+
+    /**
+     * Buffers ahead: the recording under the playhead (so Play starts at once) and the next one to
+     * come, at its start (so the hand-over does not stall). On a page that loads recordings only as
+     * metadata, the first Play used to wait on the network with the clock stopped (10/14/2026).
+     */
+    prime(element) {
+        if (element.preload !== 'auto') element.preload = 'auto';
+    }
+
+    primeNext(now) {
+        const horizon = this.playing ? PRIME_AHEAD_MS * this.rate : Infinity;
+        let next = null;
+        for (const clip of this.tl.clips) {
+            if (clip.startMs == null || clip.startMs <= this.playhead || this.isBroken(clip.fileId)) continue;
+            if (clip.startMs - this.playhead > horizon) continue;
+            if (!next || clip.startMs < next.startMs) next = clip;
+        }
+        const element = next && this.media.get(next.fileId);
+        if (!element || !element.paused) return;
+        this.prime(element);
+        if (element.currentTime > 0.05 && now - (this.lastSeekAt.get(next.fileId) ?? 0) > FAST_SEEK_MS)
+            this.seekElement(element, 0, next.fileId, now);
     }
 
     /** Pauses an element without that pause being read as the person pausing the session. */

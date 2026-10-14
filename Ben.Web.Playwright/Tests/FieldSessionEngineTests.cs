@@ -121,6 +121,66 @@ public class FieldSessionEngineTests : BenTestBase
 
     private async Task<double> PlayheadAsync() => (await EngineAsync()).GetProperty("playhead").GetDouble();
 
+    // ── Real time, never backwards (Ben, 10/14/2026: "No excuses for there to be lag or errors in
+    //    playback after deploying this branch to production.") ─────────────────────────────────
+    // 8 s of playing once showed 4.9 s: the clock stopped while the recording buffered. These hold
+    // the player to the time on the wall, on this machine and on a connection as slow as a phone's.
+
+    [Test]
+    public async Task Playback_keeps_real_time_and_never_goes_backwards()
+        => await PlaysInRealTimeAsync("Engine real time", mediaDelayMs: 0);
+
+    [Test]
+    public async Task On_a_slow_connection_playback_still_keeps_real_time()
+        => await PlaysInRealTimeAsync("Engine slow connection", mediaDelayMs: 800);
+
+    private async Task PlaysInRealTimeAsync(string label, int mediaDelayMs)
+    {
+        var sessionId = await UploadWalkAsync(label);
+        if (mediaDelayMs > 0)
+        {
+            // Every request for a recording waits, the way production's do across the internet.
+            await Page.RouteAsync("**/media/field-sessions/**", async route =>
+            {
+                await Task.Delay(mediaDelayMs);
+                await route.ContinueAsync();
+            });
+        }
+        await OpenAsync(sessionId, label);
+
+        await Page.GetByRole(AriaRole.Button, new() { Name = "Play", Exact = true }).ClickAsync();
+        // Sampled in the page every 100 ms for 8 s: the wall clock beside the playhead.
+        var samples = await Page.EvaluateAsync<JsonElement>(@"async () => {
+            const m = await import('/_content/Ben.Web.Website.Library/js/fieldKitPlayer.js');
+            const root = document.querySelector('[data-testid=field-player]');
+            const out = [];
+            const t0 = performance.now();
+            while (performance.now() - t0 < 8000) {
+                out.push([performance.now() - t0, m.state(root).playhead, m.state(root).playing]);
+                await new Promise(r => setTimeout(r, 100));
+            }
+            return out;
+        }");
+
+        var rows = samples.EnumerateArray().Select(r => (Wall: r[0].GetDouble(), Playhead: r[1].GetDouble(), Playing: r[2].GetBoolean())).ToList();
+        TestContext.Out.WriteLine($"first {rows[0].Playhead:0} ms, last {rows[^1].Playhead:0} ms over {rows[^1].Wall:0} ms");
+
+        Assert.That(rows.All(r => r.Playing), Is.True, "playback stopped by itself");
+        for (var i = 1; i < rows.Count; i++)
+            Assert.That(rows[i].Playhead, Is.GreaterThanOrEqualTo(rows[i - 1].Playhead - 1),
+                $"the playhead went backwards at {rows[i].Wall:0} ms: {rows[i - 1].Playhead:0} → {rows[i].Playhead:0}");
+
+        var advanced = rows[^1].Playhead - rows[0].Playhead;
+        var wall = rows[^1].Wall - rows[0].Wall;
+        Assert.That(advanced, Is.InRange(wall - 1000, wall + 500),
+            $"{advanced:0} ms of session in {wall:0} ms of real time — playback must keep time");
+
+        // And it moved from the start: no frozen first second while the recording loaded.
+        var firstSecond = rows.Where(r => r.Wall <= 1000).ToList();
+        Assert.That(firstSecond[^1].Playhead - firstSecond[0].Playhead, Is.GreaterThan(500),
+            "the first second of playing should move the playhead");
+    }
+
     [Test]
     public async Task A_drag_while_playing_lands_where_it_was_dragged_and_carries_on_from_there()
     {
