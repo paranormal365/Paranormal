@@ -1,0 +1,293 @@
+{
+ "name": "walk",
+ "about": "Instruments hold; a re-baseline at 6 s applies from there on; position glides between fixes, holds across a gap over 30 s and clamps after the last; facing is Looking, then Walking, then Moving from the track, then none.",
+ "document": {
+  "format_version": "1.0.0",
+  "device": {
+   "manufacturer": "Apple",
+   "model": "iPhone17,1"
+  },
+  "session": {
+   "started_at": "2026-09-27T01:00:00.000Z",
+   "timezone": "America/Chicago",
+   "location_label": "Conformance walk",
+   "trigger": {
+    "mode": "hybrid",
+    "interval_seconds": 2,
+    "debounce_seconds": 3
+   },
+   "ended_at": "2026-09-27T01:00:44.000Z"
+  },
+  "readings": [
+   {
+    "at": "2026-09-27T01:00:00.000Z",
+    "precision": "millisecond",
+    "sequence": 1,
+    "triggered_by": "interval",
+    "measurements": {
+     "emf": {
+      "value": 50,
+      "unit": "uT",
+      "baseline": 48
+     },
+     "sound_level": {
+      "value": -50,
+      "unit": "dBFS"
+     },
+     "room": {
+      "value": "Hall"
+     }
+    },
+    "position": {
+     "latitude": 36.0,
+     "longitude": -86.0,
+     "accuracy_meters": 10
+    },
+    "motion": {
+     "heading_degrees": 90
+    }
+   },
+   {
+    "at": "2026-09-27T01:00:02.000Z",
+    "precision": "millisecond",
+    "sequence": 2,
+    "triggered_by": "interval",
+    "measurements": {
+     "emf": {
+      "value": 52,
+      "unit": "uT",
+      "baseline": 48
+     },
+     "sound_level": {
+      "value": -48,
+      "unit": "dBFS"
+     },
+     "room": {
+      "value": "Hall"
+     }
+    },
+    "position": {
+     "latitude": 36.0001,
+     "longitude": -86.0,
+     "accuracy_meters": 20
+    },
+    "motion": {
+     "heading_degrees": 100
+    }
+   },
+   {
+    "at": "2026-09-27T01:00:04.000Z",
+    "precision": "millisecond",
+    "sequence": 3,
+    "triggered_by": "interval",
+    "measurements": {
+     "emf": {
+      "value": 49,
+      "unit": "uT",
+      "baseline": 48
+     },
+     "room": {
+      "value": "Hall"
+     }
+    },
+    "position": {
+     "latitude": 36.0001,
+     "longitude": -86.0,
+     "accuracy_meters": 20
+    },
+    "motion": {
+     "course_degrees": 180
+    }
+   },
+   {
+    "at": "2026-09-27T01:00:06.000Z",
+    "precision": "millisecond",
+    "sequence": 4,
+    "triggered_by": "interval",
+    "measurements": {
+     "emf": {
+      "value": 47,
+      "unit": "uT",
+      "baseline": 46
+     }
+    }
+   },
+   {
+    "at": "2026-09-27T01:00:08.000Z",
+    "precision": "millisecond",
+    "sequence": 5,
+    "triggered_by": "interval",
+    "measurements": {
+     "emf": {
+      "value": 47,
+      "unit": "uT",
+      "baseline": 46
+     }
+    },
+    "position": {
+     "latitude": 36.0002,
+     "longitude": -86.0,
+     "accuracy_meters": 15
+    }
+   },
+   {
+    "at": "2026-09-27T01:00:10.000Z",
+    "precision": "millisecond",
+    "sequence": 6,
+    "triggered_by": "interval",
+    "measurements": {
+     "emf": {
+      "value": 47,
+      "unit": "uT",
+      "baseline": 46
+     }
+    },
+    "position": {
+     "latitude": 36.0003,
+     "longitude": -86.0,
+     "accuracy_meters": 15
+    }
+   },
+   {
+    "at": "2026-09-27T01:00:44.000Z",
+    "precision": "millisecond",
+    "sequence": 7,
+    "triggered_by": "interval",
+    "measurements": {
+     "emf": {
+      "value": 46,
+      "unit": "uT",
+      "baseline": 46
+     }
+    },
+    "position": {
+     "latitude": 36.001,
+     "longitude": -86.0,
+     "accuracy_meters": 5
+    },
+    "motion": {
+     "heading_degrees": 270
+    }
+   }
+  ]
+ },
+ "durations": {},
+ "bounds": {
+  "start_ms": 0,
+  "end_ms": 44000
+ },
+ "moments": [
+  {
+   "at_ms": 0,
+   "expect": {
+    "emf_ut": 50,
+    "emf_base_ut": 48,
+    "field_mg": 20,
+    "sound_dbfs": -50,
+    "room": "Hall",
+    "lat": 36.0,
+    "lon": -86.0,
+    "accuracy_m": 20,
+    "facing": {
+     "kind": "looking",
+     "deg": 90
+    }
+   }
+  },
+  {
+   "at_ms": 1000,
+   "expect": {
+    "emf_ut": 50,
+    "field_mg": 20,
+    "lat": 36.00005,
+    "lon": -86.0,
+    "accuracy_m": 20,
+    "facing": {
+     "kind": "looking",
+     "deg": 90
+    }
+   }
+  },
+  {
+   "at_ms": 3000,
+   "expect": {
+    "emf_ut": 52,
+    "field_mg": 40,
+    "sound_dbfs": -48,
+    "lat": 36.0001,
+    "accuracy_m": 20,
+    "facing": {
+     "kind": "looking",
+     "deg": 100
+    }
+   }
+  },
+  {
+   "at_ms": 5000,
+   "expect": {
+    "emf_ut": 49,
+    "emf_base_ut": 48,
+    "field_mg": 10,
+    "sound_dbfs": null,
+    "room": "Hall",
+    "lat": 36.000125,
+    "accuracy_m": 20,
+    "facing": {
+     "kind": "walking",
+     "deg": 180
+    }
+   }
+  },
+  {
+   "at_ms": 7000,
+   "expect": {
+    "emf_ut": 47,
+    "emf_base_ut": 46,
+    "field_mg": 10,
+    "room": null,
+    "lat": 36.000175,
+    "accuracy_m": 20,
+    "facing": {
+     "kind": "moving",
+     "deg": 0
+    }
+   }
+  },
+  {
+   "at_ms": 9000,
+   "expect": {
+    "emf_base_ut": 46,
+    "lat": 36.00025,
+    "accuracy_m": 15,
+    "facing": {
+     "kind": "moving",
+     "deg": 0
+    }
+   }
+  },
+  {
+   "at_ms": 12000,
+   "expect": {
+    "emf_ut": 47,
+    "lat": 36.0003,
+    "lon": -86.0,
+    "accuracy_m": 15,
+    "facing": null
+   }
+  },
+  {
+   "at_ms": 44000,
+   "expect": {
+    "emf_ut": 46,
+    "field_mg": 0,
+    "lat": 36.001,
+    "accuracy_m": 5,
+    "facing": {
+     "kind": "looking",
+     "deg": 270
+    }
+   }
+  }
+ ],
+ "jumps": []
+}

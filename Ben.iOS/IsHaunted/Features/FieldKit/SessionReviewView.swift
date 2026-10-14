@@ -486,7 +486,9 @@ struct SessionReviewView: View {
                     value: replay.frame.facing
                         .map { "\(PositionReadout.compass($0.degrees)) \(Int($0.degrees))°" } ?? "—",
                     icon: replay.frame.facing.map {
-                        $0.what == "walking" ? "figure.walk" : "safari"
+                        // The compass for where they looked; a walker for either way of saying
+                        // where they went — the fix's course, or the track's own bearing.
+                        $0.what == "looking" ? "safari" : "figure.walk"
                     } ?? "safari")
         }
     }

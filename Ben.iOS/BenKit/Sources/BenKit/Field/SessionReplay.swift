@@ -97,7 +97,15 @@ public struct ReplayFrame: Sendable, Equatable {
     public var headingDegrees: Double?
     /// Which way they were walking at this moment, from the fix rather than the compass.
     public var courseDegrees: Double?
+    /// The direction between the fixes either side of this moment, when they are far enough apart
+    /// to mean a walk rather than GPS drift — for the stretches with neither compass nor course
+    /// (rule P6, `ProjectNotes/specs/replay-semantics.md`).
+    public var trackBearingDegrees: Double?
     public var relativeAltitudeMeters: Double?
+    /// The magnetic base in force at this moment: the base on the reading at the playhead, or the
+    /// last one written before it (rule I3). A base set again partway through a night applies from
+    /// there on; one figure for the whole session was wrong either side of the change.
+    public var magneticBaseMicrotesla: Double?
 
     /// Which way to point the arrow on the map, and what that direction actually means.
     ///
@@ -109,10 +117,12 @@ public struct ReplayFrame: Sendable, Equatable {
     public enum Facing: Sendable, Equatable {
         case looking(Double)
         case walking(Double)
+        /// Worked out from the track itself: the bearing from one fix to the next.
+        case moving(Double)
 
         public var degrees: Double {
             switch self {
-            case .looking(let value), .walking(let value): value
+            case .looking(let value), .walking(let value), .moving(let value): value
             }
         }
 
@@ -121,15 +131,19 @@ public struct ReplayFrame: Sendable, Equatable {
             switch self {
             case .looking: "looking"
             case .walking: "walking"
+            case .moving: "moving"
             }
         }
     }
 
     /// The compass first: where somebody was pointed is what they were investigating. The
-    /// direction of travel stands in when there is no compass reading, which is most of a night.
+    /// direction of travel stands in when there is no compass reading, which is most of a night,
+    /// and the track's own bearing when there is no course either — every session recorded before
+    /// the app wrote one.
     public var facing: Facing? {
         if let headingDegrees { return .looking(headingDegrees) }
         if let courseDegrees { return .walking(courseDegrees) }
+        if let trackBearingDegrees { return .moving(trackBearingDegrees) }
         return nil
     }
     /// The video covering this moment, and how far into it.
@@ -162,6 +176,8 @@ public struct ReplayFrame: Sendable, Equatable {
             && lhs.position == rhs.position
             && lhs.headingDegrees == rhs.headingDegrees
             && lhs.courseDegrees == rhs.courseDegrees
+            && lhs.trackBearingDegrees == rhs.trackBearingDegrees
+            && lhs.magneticBaseMicrotesla == rhs.magneticBaseMicrotesla
             && lhs.activeVideo?.segment.id == rhs.activeVideo?.segment.id
             && lhs.activeAudio?.segment.id == rhs.activeAudio?.segment.id
             && lhs.nearestMarker?.id == rhs.nearestMarker?.id
@@ -169,8 +185,11 @@ public struct ReplayFrame: Sendable, Equatable {
             && lhs.room == rhs.room
     }
 
+    /// mG from the base in force at this moment, falling back to the session's base for a
+    /// reading that carried none.
     public func magneticDeviationMilligauss(from baselines: Baselines) -> Double? {
-        guard let now = magneticMicrotesla, let base = baselines.magneticMicrotesla else { return nil }
+        guard let now = magneticMicrotesla,
+              let base = magneticBaseMicrotesla ?? baselines.magneticMicrotesla else { return nil }
         return (now - base) * 10
     }
 }
@@ -195,6 +214,11 @@ public final class SessionReplay {
     /// night is thousands of fixes, and the map used to walk every reading for them ten times a
     /// second.
     public private(set) var walkedPath: [FieldReading.Position] = []
+    /// The fixes with their times, worked out once at load. `timeline.track` builds the list
+    /// afresh, and the frame needs it ten times a second.
+    private var track: [(at: Date, position: FieldReading.Position)] = []
+    /// The magnetic base in force at each reading, by index (rule I3).
+    private var magneticBaseInForce: [Double?] = []
     public private(set) var playhead: Date = .distantPast
     public private(set) var frame = ReplayFrame(at: .distantPast)
     public private(set) var isPlaying = false
@@ -303,7 +327,13 @@ public final class SessionReplay {
                 baselines: baselines)
             fieldTrace = FieldTrace(readings: timeline.readings,
                                     baselineMicrotesla: baselines.magneticMicrotesla)
-            walkedPath = timeline.track.map(\.position)
+            track = timeline.track
+            walkedPath = track.map(\.position)
+            var inForce: Double?
+            magneticBaseInForce = timeline.readings.map { reading in
+                if let base = reading.measurements?["emf"]?.baseline { inForce = base }
+                return inForce
+            }
             playhead = timeline.startedAt
             frame = makeFrame(at: playhead)
             isLoaded = true
@@ -404,7 +434,9 @@ public final class SessionReplay {
 
         // Instruments HOLD their last value; they do not interpolate. Smoothing a field trace
         // between samples would draw a reading nobody took.
-        if let reading = lastReading(at: moment) {
+        if let index = lastReadingIndex(at: moment) {
+            let reading = timeline.readings[index]
+            result.magneticBaseMicrotesla = index < magneticBaseInForce.count ? magneticBaseInForce[index] : nil
             result.magneticMicrotesla = reading.measurements?["emf"]?.numberValue
             result.soundDbfs = reading.measurements?["sound_level"]?.numberValue
             result.relativeAltitudeMeters = reading.measurements?["relative_altitude"]?.numberValue
@@ -417,6 +449,7 @@ public final class SessionReplay {
         }
 
         result.position = interpolatedPosition(at: moment)
+        result.trackBearingDegrees = trackBearing(at: moment)
         // The LATEST-starting clip of each kind wins where two of a kind overlap: it is the one
         // somebody started most recently, and so the one they are most likely looking for.
         func covering(_ kind: CaptureKind) -> (segment: MediaSegment, offset: TimeInterval)? {
@@ -433,15 +466,14 @@ public final class SessionReplay {
         return result
     }
 
-    private func lastReading(at moment: Date) -> FieldReading? {
+    private func lastReadingIndex(at moment: Date) -> Int? {
         // Binary search: a five-hour session is tens of thousands of readings and this runs ten
         // times a second.
-        var low = 0, high = timeline.readings.count - 1, best: FieldReading?
+        var low = 0, high = timeline.readings.count - 1, best: Int?
         while low <= high {
             let mid = (low + high) / 2
-            let candidate = timeline.readings[mid]
-            if candidate.at <= moment {
-                best = candidate
+            if timeline.readings[mid].at <= moment {
+                best = mid
                 low = mid + 1
             } else {
                 high = mid - 1
@@ -450,10 +482,56 @@ public final class SessionReplay {
         return best
     }
 
+    /// The fixes either side of a moment: the last at or before it and the first after it.
+    private func fixesAround(_ moment: Date) -> (before: Int?, after: Int?) {
+        var low = 0, high = track.count - 1, before: Int?
+        while low <= high {
+            let mid = (low + high) / 2
+            if track[mid].at <= moment { before = mid; low = mid + 1 } else { high = mid - 1 }
+        }
+        let after = (before ?? -1) + 1
+        return (before, after < track.count ? after : nil)
+    }
+
+    /// How far apart two fixes must be before the line between them is a walk rather than drift.
+    static let trackBearingMinimumMeters: Double = 5
+
+    /// The bearing from the fix before the moment to the fix after it (rule P6): only across a
+    /// stretch short enough to be a walk (30 s, as the glide) and long enough to be one (5 m).
+    private func trackBearing(at moment: Date) -> Double? {
+        let (beforeIndex, afterIndex) = fixesAround(moment)
+        guard let beforeIndex, let afterIndex else { return nil }
+        let before = track[beforeIndex], after = track[afterIndex]
+        let span = after.at.timeIntervalSince(before.at)
+        guard span > 0, span <= 30,
+              let lat1 = before.position.latitude, let lon1 = before.position.longitude,
+              let lat2 = after.position.latitude, let lon2 = after.position.longitude
+        else { return nil }
+        guard Self.metres(lat1, lon1, lat2, lon2) >= Self.trackBearingMinimumMeters else { return nil }
+        return Self.bearing(lat1, lon1, lat2, lon2)
+    }
+
+    /// Equirectangular distance — plenty for "did they leave the spot".
+    static func metres(_ lat1: Double, _ lon1: Double, _ lat2: Double, _ lon2: Double) -> Double {
+        let earth = 6_371_000.0
+        let dLat = (lat2 - lat1) * .pi / 180
+        let dLon = (lon2 - lon1) * .pi / 180 * cos((lat1 + lat2) / 2 * .pi / 180)
+        return earth * (dLat * dLat + dLon * dLon).squareRoot()
+    }
+
+    /// Initial bearing from one point to another, clockwise from north, 0..<360.
+    static func bearing(_ lat1: Double, _ lon1: Double, _ lat2: Double, _ lon2: Double) -> Double {
+        let φ1 = lat1 * .pi / 180, φ2 = lat2 * .pi / 180
+        let Δλ = (lon2 - lon1) * .pi / 180
+        let y = sin(Δλ) * cos(φ2)
+        let x = cos(φ1) * sin(φ2) - sin(φ1) * cos(φ2) * cos(Δλ)
+        let degrees = atan2(y, x) * 180 / .pi
+        return (degrees + 360).truncatingRemainder(dividingBy: 360)
+    }
+
     /// Position IS interpolated: somebody walking between two fixes really was somewhere in
     /// between, and a map that teleports them corner to corner is less true, not more.
     private func interpolatedPosition(at moment: Date) -> FieldReading.Position? {
-        let track = timeline.track
         guard !track.isEmpty else { return nil }
         guard let firstAfter = track.firstIndex(where: { $0.at > moment }) else {
             return track.last?.position

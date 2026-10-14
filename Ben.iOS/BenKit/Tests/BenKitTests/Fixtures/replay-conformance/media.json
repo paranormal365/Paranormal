@@ -1,0 +1,484 @@
+{
+ "name": "media",
+ "about": "The session's sound from 1 s (offset reference at 5 s, closed with its length at 21 s); a video noted at 14 s whose file runs 6 s, so it began at 8 s; a photo at 10 s; motion at 12 s; a second sound clip 16-26 s that overlaps the first and wins while both cover; no magnetic base.",
+ "document": {
+  "format_version": "1.0.0",
+  "device": {
+   "manufacturer": "Apple",
+   "model": "iPhone17,1"
+  },
+  "session": {
+   "started_at": "2026-09-27T01:00:00.000Z",
+   "timezone": "America/Chicago",
+   "location_label": "Conformance media",
+   "trigger": {
+    "mode": "hybrid",
+    "interval_seconds": 2,
+    "debounce_seconds": 3
+   },
+   "ended_at": "2026-09-27T01:00:31.000Z"
+  },
+  "readings": [
+   {
+    "at": "2026-09-27T01:00:00.000Z",
+    "precision": "millisecond",
+    "sequence": 1,
+    "triggered_by": "interval",
+    "measurements": {
+     "emf": {
+      "value": 50,
+      "unit": "uT"
+     }
+    }
+   },
+   {
+    "at": "2026-09-27T01:00:02.000Z",
+    "precision": "millisecond",
+    "sequence": 2,
+    "triggered_by": "interval",
+    "measurements": {
+     "emf": {
+      "value": 50,
+      "unit": "uT"
+     }
+    }
+   },
+   {
+    "at": "2026-09-27T01:00:04.000Z",
+    "precision": "millisecond",
+    "sequence": 3,
+    "triggered_by": "interval",
+    "measurements": {
+     "emf": {
+      "value": 50,
+      "unit": "uT"
+     }
+    }
+   },
+   {
+    "at": "2026-09-27T01:00:05.000Z",
+    "precision": "millisecond",
+    "sequence": 4,
+    "triggered_by": "manual",
+    "measurements": {
+     "emf": {
+      "value": 50,
+      "unit": "uT"
+     },
+     "marker": {
+      "value": "manual_marker"
+     }
+    },
+    "audio_ref": {
+     "filename": "media/audio-001.m4a",
+     "media_type": "audio/mp4",
+     "start_offset_seconds": 4
+    },
+    "note": "footsteps upstairs"
+   },
+   {
+    "at": "2026-09-27T01:00:06.000Z",
+    "precision": "millisecond",
+    "sequence": 5,
+    "triggered_by": "interval",
+    "measurements": {
+     "emf": {
+      "value": 50,
+      "unit": "uT"
+     }
+    }
+   },
+   {
+    "at": "2026-09-27T01:00:08.000Z",
+    "precision": "millisecond",
+    "sequence": 6,
+    "triggered_by": "interval",
+    "measurements": {
+     "emf": {
+      "value": 50,
+      "unit": "uT"
+     }
+    }
+   },
+   {
+    "at": "2026-09-27T01:00:10.000Z",
+    "precision": "millisecond",
+    "sequence": 7,
+    "triggered_by": "interval",
+    "measurements": {
+     "emf": {
+      "value": 50,
+      "unit": "uT"
+     }
+    }
+   },
+   {
+    "at": "2026-09-27T01:00:10.000Z",
+    "precision": "millisecond",
+    "sequence": 8,
+    "triggered_by": "manual",
+    "measurements": {
+     "emf": {
+      "value": 50,
+      "unit": "uT"
+     },
+     "marker": {
+      "value": "photo"
+     }
+    },
+    "note": "photo: media/photo-001.jpg"
+   },
+   {
+    "at": "2026-09-27T01:00:12.000Z",
+    "precision": "millisecond",
+    "sequence": 9,
+    "triggered_by": "interval",
+    "measurements": {
+     "emf": {
+      "value": 50,
+      "unit": "uT"
+     }
+    }
+   },
+   {
+    "at": "2026-09-27T01:00:12.000Z",
+    "precision": "millisecond",
+    "sequence": 10,
+    "triggered_by": "event",
+    "measurements": {
+     "emf": {
+      "value": 50,
+      "unit": "uT"
+     },
+     "marker": {
+      "value": "scene_motion"
+     }
+    }
+   },
+   {
+    "at": "2026-09-27T01:00:14.000Z",
+    "precision": "millisecond",
+    "sequence": 11,
+    "triggered_by": "interval",
+    "measurements": {
+     "emf": {
+      "value": 50,
+      "unit": "uT"
+     }
+    }
+   },
+   {
+    "at": "2026-09-27T01:00:14.000Z",
+    "precision": "millisecond",
+    "sequence": 12,
+    "triggered_by": "manual",
+    "measurements": {
+     "emf": {
+      "value": 50,
+      "unit": "uT"
+     },
+     "marker": {
+      "value": "video"
+     }
+    },
+    "note": "video: media/video-001.mov"
+   },
+   {
+    "at": "2026-09-27T01:00:16.000Z",
+    "precision": "millisecond",
+    "sequence": 13,
+    "triggered_by": "interval",
+    "measurements": {
+     "emf": {
+      "value": 50,
+      "unit": "uT"
+     }
+    }
+   },
+   {
+    "at": "2026-09-27T01:00:18.000Z",
+    "precision": "millisecond",
+    "sequence": 14,
+    "triggered_by": "interval",
+    "measurements": {
+     "emf": {
+      "value": 50,
+      "unit": "uT"
+     }
+    }
+   },
+   {
+    "at": "2026-09-27T01:00:20.000Z",
+    "precision": "millisecond",
+    "sequence": 15,
+    "triggered_by": "interval",
+    "measurements": {
+     "emf": {
+      "value": 50,
+      "unit": "uT"
+     }
+    }
+   },
+   {
+    "at": "2026-09-27T01:00:21.000Z",
+    "precision": "millisecond",
+    "sequence": 16,
+    "triggered_by": "manual",
+    "measurements": {
+     "emf": {
+      "value": 50,
+      "unit": "uT"
+     },
+     "marker": {
+      "value": "audio"
+     }
+    },
+    "audio_ref": {
+     "filename": "media/audio-001.m4a",
+     "media_type": "audio/mp4",
+     "duration_seconds": 20
+    },
+    "note": "audio: media/audio-001.m4a"
+   },
+   {
+    "at": "2026-09-27T01:00:22.000Z",
+    "precision": "millisecond",
+    "sequence": 17,
+    "triggered_by": "interval",
+    "measurements": {
+     "emf": {
+      "value": 50,
+      "unit": "uT"
+     }
+    }
+   },
+   {
+    "at": "2026-09-27T01:00:24.000Z",
+    "precision": "millisecond",
+    "sequence": 18,
+    "triggered_by": "interval",
+    "measurements": {
+     "emf": {
+      "value": 50,
+      "unit": "uT"
+     }
+    }
+   },
+   {
+    "at": "2026-09-27T01:00:26.000Z",
+    "precision": "millisecond",
+    "sequence": 19,
+    "triggered_by": "interval",
+    "measurements": {
+     "emf": {
+      "value": 50,
+      "unit": "uT"
+     }
+    }
+   },
+   {
+    "at": "2026-09-27T01:00:26.000Z",
+    "precision": "millisecond",
+    "sequence": 20,
+    "triggered_by": "manual",
+    "measurements": {
+     "emf": {
+      "value": 50,
+      "unit": "uT"
+     },
+     "marker": {
+      "value": "audio"
+     }
+    },
+    "audio_ref": {
+     "filename": "media/audio-002.m4a",
+     "media_type": "audio/mp4",
+     "duration_seconds": 10
+    },
+    "note": "audio: media/audio-002.m4a"
+   },
+   {
+    "at": "2026-09-27T01:00:28.000Z",
+    "precision": "millisecond",
+    "sequence": 21,
+    "triggered_by": "interval",
+    "measurements": {
+     "emf": {
+      "value": 50,
+      "unit": "uT"
+     }
+    }
+   },
+   {
+    "at": "2026-09-27T01:00:28.000Z",
+    "precision": "millisecond",
+    "sequence": 22,
+    "triggered_by": "event",
+    "measurements": {
+     "emf": {
+      "value": 50,
+      "unit": "uT"
+     },
+     "marker": {
+      "value": "app_backgrounded"
+     }
+    }
+   },
+   {
+    "at": "2026-09-27T01:00:30.000Z",
+    "precision": "millisecond",
+    "sequence": 23,
+    "triggered_by": "interval",
+    "measurements": {
+     "emf": {
+      "value": 50,
+      "unit": "uT"
+     }
+    }
+   },
+   {
+    "at": "2026-09-27T01:00:30.500Z",
+    "precision": "millisecond",
+    "sequence": 24,
+    "triggered_by": "event",
+    "measurements": {
+     "emf": {
+      "value": 50,
+      "unit": "uT"
+     },
+     "marker": {
+      "value": "app_returned"
+     }
+    }
+   }
+  ]
+ },
+ "durations": {
+  "media/video-001.mov": 6
+ },
+ "bounds": {
+  "start_ms": 0,
+  "end_ms": 31000
+ },
+ "moments": [
+  {
+   "at_ms": 0,
+   "expect": {
+    "emf_ut": 50,
+    "emf_base_ut": null,
+    "field_mg": null,
+    "audio": {
+     "path": "media/audio-001.m4a",
+     "offset_ms": 0
+    },
+    "video": null,
+    "motion": false,
+    "glowing_photo": null,
+    "nearest_marker_ms": null,
+    "lat": null,
+    "facing": null
+   }
+  },
+  {
+   "at_ms": 5000,
+   "expect": {
+    "audio": {
+     "path": "media/audio-001.m4a",
+     "offset_ms": 4000
+    },
+    "video": null,
+    "nearest_marker_ms": 5000
+   }
+  },
+  {
+   "at_ms": 9000,
+   "expect": {
+    "audio": {
+     "path": "media/audio-001.m4a",
+     "offset_ms": 8000
+    },
+    "video": {
+     "path": "media/video-001.mov",
+     "offset_ms": 1000
+    }
+   }
+  },
+  {
+   "at_ms": 10000,
+   "expect": {
+    "glowing_photo": "media/photo-001.jpg",
+    "video": {
+     "path": "media/video-001.mov",
+     "offset_ms": 2000
+    }
+   }
+  },
+  {
+   "at_ms": 12500,
+   "expect": {
+    "motion": true,
+    "glowing_photo": "media/photo-001.jpg",
+    "nearest_marker_ms": 12000,
+    "video": {
+     "path": "media/video-001.mov",
+     "offset_ms": 4500
+    }
+   }
+  },
+  {
+   "at_ms": 15000,
+   "expect": {
+    "motion": false,
+    "glowing_photo": null,
+    "video": null,
+    "audio": {
+     "path": "media/audio-002.m4a",
+     "offset_ms": 0
+    }
+   },
+   "note": "The second clip starts at 16 s but covers from 15 s (the 1 s lead), and the latest-starting clip wins."
+  },
+  {
+   "at_ms": 17000,
+   "expect": {
+    "audio": {
+     "path": "media/audio-002.m4a",
+     "offset_ms": 1000
+    }
+   }
+  },
+  {
+   "at_ms": 22000,
+   "expect": {
+    "audio": {
+     "path": "media/audio-002.m4a",
+     "offset_ms": 6000
+    }
+   }
+  },
+  {
+   "at_ms": 27000,
+   "expect": {
+    "audio": null,
+    "video": null
+   }
+  }
+ ],
+ "jumps": [
+  {
+   "from_ms": 0,
+   "forward": true,
+   "lands_ms": 2000
+  },
+  {
+   "from_ms": 2000,
+   "forward": true,
+   "lands_ms": 9000
+  },
+  {
+   "from_ms": 9000,
+   "forward": false,
+   "lands_ms": 2000
+  }
+ ]
+}

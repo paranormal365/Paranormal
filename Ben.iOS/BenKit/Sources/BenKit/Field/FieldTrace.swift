@@ -43,12 +43,14 @@ public struct FieldTrace: Sendable, Equatable {
     /// compare against — the chart says so itself.
     public init(readings: [FieldReading], baselineMicrotesla: Double?,
                 mostPoints: Int = FieldTrace.mostPoints) {
-        guard let base = baselineMicrotesla else {
-            points = []
-            return
-        }
+        // Against the base IN FORCE at each reading (rule I3): the one it carries, or the last
+        // one written before it, or the session's own. A base set again partway through a night
+        // applies from there on; measuring the whole night against one figure drew everything
+        // before the change against a base nobody was using then.
+        var inForce = baselineMicrotesla
         let all: [(at: Date, milligauss: Double)] = readings.compactMap { reading in
-            guard let field = reading.measurements?["emf"]?.numberValue else { return nil }
+            if let carried = reading.measurements?["emf"]?.baseline { inForce = carried }
+            guard let base = inForce, let field = reading.measurements?["emf"]?.numberValue else { return nil }
             return (reading.at, (field - base) * 10)
         }
 

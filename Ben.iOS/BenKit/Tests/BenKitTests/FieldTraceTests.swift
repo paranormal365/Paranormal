@@ -8,14 +8,14 @@ struct FieldTraceTests {
 
     private let start = Date(timeIntervalSince1970: 1_750_000_000)
 
-    private func readings(count: Int, spikeAt spike: Int? = nil) -> [FieldReading] {
+    private func readings(count: Int, spikeAt spike: Int? = nil, baseline: Double? = 50) -> [FieldReading] {
         (0..<count).map { index in
             // A slow wave around the base level, and one spike where asked.
             var field = 50 + sin(Double(index) / 40) * 0.3
             if index == spike { field = 50 + 12 }
             return FieldReading(at: start.addingTimeInterval(Double(index) * 0.5),
                                 triggeredBy: .interval,
-                                measurements: ["emf": .number(field, unit: "uT", baseline: 50)])
+                                measurements: ["emf": .number(field, unit: "uT", baseline: baseline)])
         }
     }
 
@@ -41,7 +41,24 @@ struct FieldTraceTests {
 
     @Test("with no base level there is no line")
     func noBaseLevelNoLine() {
-        #expect(FieldTrace(readings: readings(count: 50), baselineMicrotesla: nil).points.isEmpty)
+        #expect(FieldTrace(readings: readings(count: 50, baseline: nil), baselineMicrotesla: nil).points.isEmpty)
+    }
+
+    @Test("a base set again partway applies from there on (rule I3)")
+    func aReBaselineAppliesFromThereOn() {
+        // Ten readings at 50 µT against a base of 48, then ten at 50 against a new base of 46.
+        let first = readings(count: 10, baseline: 48).map { reading -> FieldReading in
+            var copy = reading; copy.measurements = ["emf": .number(50, unit: "uT", baseline: 48)]; return copy
+        }
+        let second = readings(count: 10, baseline: 46).map { reading -> FieldReading in
+            var copy = reading
+            copy.at = reading.at.addingTimeInterval(60)
+            copy.measurements = ["emf": .number(50, unit: "uT", baseline: 46)]
+            return copy
+        }
+        let trace = FieldTrace(readings: first + second, baselineMicrotesla: 46)
+        #expect(trace.points.prefix(10).allSatisfy { abs($0.milligauss - 20) < 1e-9 })
+        #expect(trace.points.suffix(10).allSatisfy { abs($0.milligauss - 40) < 1e-9 })
     }
 
     @Test("a flat bucket gives one point, not the same reading twice")

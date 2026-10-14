@@ -1,0 +1,124 @@
+{
+ "name": "interrupted",
+ "about": "No ended_at: the session ends at its last reading. No magnetic channel, no position, no room: every one of those reads none.",
+ "document": {
+  "format_version": "1.0.0",
+  "device": {
+   "manufacturer": "Apple",
+   "model": "iPhone17,1"
+  },
+  "session": {
+   "started_at": "2026-09-27T01:00:00.000Z",
+   "timezone": "America/Chicago",
+   "location_label": "Conformance interrupted",
+   "trigger": {
+    "mode": "hybrid",
+    "interval_seconds": 2,
+    "debounce_seconds": 3
+   }
+  },
+  "readings": [
+   {
+    "at": "2026-09-27T01:00:00.000Z",
+    "precision": "millisecond",
+    "sequence": 1,
+    "triggered_by": "interval",
+    "measurements": {
+     "sound_level": {
+      "value": -60,
+      "unit": "dBFS"
+     }
+    }
+   },
+   {
+    "at": "2026-09-27T01:00:02.000Z",
+    "precision": "millisecond",
+    "sequence": 2,
+    "triggered_by": "interval",
+    "measurements": {
+     "sound_level": {
+      "value": -58,
+      "unit": "dBFS"
+     }
+    }
+   },
+   {
+    "at": "2026-09-27T01:00:04.000Z",
+    "precision": "millisecond",
+    "sequence": 3,
+    "triggered_by": "interval",
+    "measurements": {
+     "sound_level": {
+      "value": -56,
+      "unit": "dBFS"
+     }
+    }
+   },
+   {
+    "at": "2026-09-27T01:00:06.000Z",
+    "precision": "millisecond",
+    "sequence": 4,
+    "triggered_by": "interval",
+    "measurements": {
+     "sound_level": {
+      "value": -54,
+      "unit": "dBFS"
+     }
+    }
+   },
+   {
+    "at": "2026-09-27T01:00:08.000Z",
+    "precision": "millisecond",
+    "sequence": 5,
+    "triggered_by": "interval",
+    "measurements": {
+     "sound_level": {
+      "value": -52,
+      "unit": "dBFS"
+     }
+    }
+   },
+   {
+    "at": "2026-09-27T01:00:10.000Z",
+    "precision": "millisecond",
+    "sequence": 6,
+    "triggered_by": "interval",
+    "measurements": {
+     "sound_level": {
+      "value": -50,
+      "unit": "dBFS"
+     }
+    }
+   }
+  ]
+ },
+ "durations": {},
+ "bounds": {
+  "start_ms": 0,
+  "end_ms": 10000
+ },
+ "moments": [
+  {
+   "at_ms": 0,
+   "expect": {
+    "emf_ut": null,
+    "field_mg": null,
+    "sound_dbfs": -60,
+    "lat": null,
+    "lon": null,
+    "accuracy_m": null,
+    "facing": null,
+    "room": null,
+    "audio": null,
+    "video": null
+   }
+  },
+  {
+   "at_ms": 7000,
+   "expect": {
+    "sound_dbfs": -54
+   }
+  }
+ ],
+ "jumps": []
+}
