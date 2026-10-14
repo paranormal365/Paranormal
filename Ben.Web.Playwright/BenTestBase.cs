@@ -86,6 +86,40 @@ public abstract class BenTestBase : PageTest
     }
 
     /// <summary>
+    /// What the page looked like when a test failed: a screenshot, the address and the HTML, in
+    /// <c>BEN_E2E_FAILURE_DIR</c> (run-e2e.sh sets it to the run's log folder).
+    /// </summary>
+    /// <remarks>
+    /// A failure that passes alone used to leave only Playwright's message and an accessibility
+    /// snapshot, which is not enough to say what happened under load. On 10/14/2026 two such
+    /// failures — a published page a visitor was told did not exist, and a group's Cases tab that
+    /// never opened — could not be explained from the logs. Runs before PageTest closes the page
+    /// (NUnit runs a derived class's TearDown first), and never fails the test itself.
+    /// </remarks>
+    [TearDown]
+    public async Task KeepWhatTheFailedPageShowedAsync()
+    {
+        if (TestContext.CurrentContext.Result.Outcome.Status != NUnit.Framework.Interfaces.TestStatus.Failed) return;
+        var dir = Environment.GetEnvironmentVariable("BEN_E2E_FAILURE_DIR");
+        if (string.IsNullOrEmpty(dir)) return;
+
+        try
+        {
+            Directory.CreateDirectory(dir);
+            var name = Regex.Replace(TestContext.CurrentContext.Test.Name, @"[^A-Za-z0-9_.-]+", "_");
+            if (name.Length > 120) name = name[..120];
+            var stem = Path.Combine(dir, $"{DateTime.Now:HHmmss}-{name}");
+            await File.WriteAllTextAsync(stem + ".url.txt", Page.Url);
+            await File.WriteAllTextAsync(stem + ".html", await Page.ContentAsync());
+            await Page.ScreenshotAsync(new() { Path = stem + ".png", FullPage = true, Timeout = 10_000 });
+        }
+        catch (Exception)
+        {
+            // A page already gone has nothing to keep; the failure itself is what matters.
+        }
+    }
+
+    /// <summary>
     /// Root URL of the front end under test. Override with the BEN_BASE_URL env var.
     /// <para>
     /// Defaults to :5078 — <c>Ben.Web.Website</c>, which is now the only front end. The original

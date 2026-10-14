@@ -516,7 +516,8 @@ echo ""
 set +e
 dotnet test Ben.Web.Playwright -p:IsTestProject=true -c Release --nologo --no-build \
   --logger "console;verbosity=normal" \
-  -e BEN_BASE_URL="$WEB_URL" -e BEN_E2E_DB="$DB_NAME" "${PASSTHROUGH[@]:-}" 2>&1 \
+  -e BEN_BASE_URL="$WEB_URL" -e BEN_E2E_DB="$DB_NAME" -e BEN_E2E_FAILURE_DIR="$LOG_DIR/failures" \
+  "${PASSTHROUGH[@]:-}" 2>&1 \
   | tee "$LOG_DIR/e2e.log" \
   | grep -E --line-buffered '^( *(Failed|Error) |Test Run |Total tests:|A total of)' || true
 STATUS=${PIPESTATUS[0]}
