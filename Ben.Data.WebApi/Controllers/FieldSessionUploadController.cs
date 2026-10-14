@@ -701,7 +701,7 @@ public sealed partial class FieldSessionUploadController : BenControllerBase
         // window, fields no phone can measure, positions off the Earth — refused with the first
         // offending reading named, before anything is stored.
         if (FieldSessionDocumentGuard.Refusal(documentText) is { } implausible)
-            return BadRequest("That doesn't look like a session a Field Kit recorded: " + implausible);
+            return BadRequest("That doesn't look like a session the Paranormal Platform recorded: " + implausible);
 
         var storedName = $"{Guid.NewGuid()}.json";
         // A personal session lives under the person, not under a group they may not belong to.

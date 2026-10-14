@@ -127,7 +127,7 @@ public sealed partial class FieldSessionUploadController
             if (FieldSessionDocumentGuard.Refusal(documentText) is { } implausible)
             {
                 throw new BenBundleFormatException(
-                    "That doesn't look like a session a Field Kit recorded: " + implausible);
+                    "That doesn't look like a session the Paranormal Platform recorded: " + implausible);
             }
 
             // The seal, when the phone wrote one, is read for shape only: small, and JSON. What it

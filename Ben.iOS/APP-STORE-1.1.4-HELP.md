@@ -37,3 +37,23 @@ None of this is in the App Store yet, so `Ben.Web.Services/Help/Content/the-mobi
 The apps changelog (`Ben.Web.Services/Changelog/Content/ios.md`) holds these under `## Unreleased`.
 When 1.1.4 goes to App Review, that heading becomes `## 1.1.4 · yyyy-MM-dd` in the same commit that sets
 `MARKETING_VERSION` to 1.1.4; a test fails if the two disagree.
+
+## The Paranormal Platform name (10/14/2026)
+
+1.1.4 also renames Field Kit to the Paranormal Platform in the app, with the tab reading
+**Paranormal**. The website and its other help pages use the new name already; `the-mobile-apps.md`
+walks through the app's own screens, so it keeps saying Field Kit until 1.1.4 is in the App Store.
+When it is:
+
+1. Apply the prepared rename of that page, from the repository root:
+
+   ```bash
+   git apply Ben.iOS/APP-STORE-1.1.4-the-mobile-apps-rename.patch
+   ```
+
+   If the page has changed since and the patch no longer applies, the patch is still the list of
+   every line to change.
+2. Recapture the iPhone and iPad screenshots in that page (`HelpMediaCaptureTests`, and the captures
+   named in `ProjectNotes/FeatureHistory` for the launch and meter shots): every one that shows the
+   tab bar or the Field Kit screen shows the old name.
+3. Rebuild the product PDF and the app guides.

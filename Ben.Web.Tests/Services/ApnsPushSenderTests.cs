@@ -53,7 +53,7 @@ public class ApnsPushSenderTests
     }
 
     private static readonly PushMessage Message = new(
-        "The walk is starting", "Tap to open Field Kit.",
+        "The walk is starting", "Tap to open the Paranormal Platform.",
         new Dictionary<string, string> { ["link"] = "ishaunted://field-kit/launch/1" },
         CollapseId: "launch-1", ExpiresAt: new DateTimeOffset(2026, 9, 29, 4, 0, 0, TimeSpan.Zero));
 
@@ -91,7 +91,7 @@ public class ApnsPushSenderTests
         // The alert under aps; the app's link beside it, where the app reads it.
         using var payload = JsonDocument.Parse(body);
         Assert.Equal("The walk is starting", payload.RootElement.GetProperty("aps").GetProperty("alert").GetProperty("title").GetString());
-        Assert.Equal("Tap to open Field Kit.", payload.RootElement.GetProperty("aps").GetProperty("alert").GetProperty("body").GetString());
+        Assert.Equal("Tap to open the Paranormal Platform.", payload.RootElement.GetProperty("aps").GetProperty("alert").GetProperty("body").GetString());
         Assert.Equal("ishaunted://field-kit/launch/1", payload.RootElement.GetProperty("link").GetString());
     }
 

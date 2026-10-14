@@ -188,7 +188,7 @@ page also shows a few of the feed's current top posts.
 ## When a group's session starts
 
 A guide, organizer or investigation lead can start a session for everyone from the app. When they
-do, a card in the feed says so and offers **Open in the app**. You join in Field Kit on your phone,
+do, a card in the feed says so and offers **Open in the app**. You join in the Paranormal Platform on your phone,
 since that's where the recording happens. On a phone with the app, the button opens the session
 there, and the app also lists it under **Happening now**.
 

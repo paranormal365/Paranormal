@@ -59,7 +59,7 @@ final class JoinLaunchUITests: XCTestCase {
     func testFieldKitListsItUnderHappeningNow() {
         app.launch()
         sleep(5)
-        XCTAssertTrue(AppNavigator.openSection("Field Kit", in: app))
+        XCTAssertTrue(AppNavigator.openSection("Paranormal", in: app))
         let join = app.buttons["happening-join"].firstMatch
         for _ in 0..<3 where !join.waitForExistence(timeout: 8) { app.swipeDown() }
         XCTAssertTrue(join.exists, "Field Kit should list the launch under Happening now")

@@ -170,7 +170,7 @@ final class DeveloperDocCaptureTests: XCTestCase {
         }
 
         // ── Field Kit: the long one ──────────────────────────────────────────
-        if AppNavigator.openSection("Field Kit", in: app) {
+        if AppNavigator.openSection("Paranormal", in: app) {
             settle(3)
             snap("40-fieldkit-home")
 

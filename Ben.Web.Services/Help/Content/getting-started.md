@@ -28,10 +28,10 @@ replaced with a name they chose.
 *Near the bottom of the home page: the App Store badge, a QR code to scan from a computer, and
 screens from the app.*
 
-IsHaunted is also a free app for iPhone and iPad, available on the App Store. Select **Field Kit for
-iPhone & iPad** at the top of the home page to jump to the app's section near the bottom. There, the
+IsHaunted is also a free app for iPhone and iPad, available on the App Store. Select **The Paranormal
+Platform for iPhone & iPad** at the top of the home page to jump to the app's section near the bottom. There, the
 badge opens the App Store. If you're on a computer, scan the QR code with your phone's camera to get
-there instead. Field Kit turns your phone into a meter, a recorder and a camera that all share the
+there instead. The Paranormal Platform turns your phone into a meter, a recorder and a camera that all share the
 same clock, then sends the whole night to your group's case.
 [The iPhone and iPad Apps](/help/the-mobile-apps) explains everything it does.
 

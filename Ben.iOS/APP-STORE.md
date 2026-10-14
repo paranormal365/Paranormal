@@ -9,7 +9,7 @@ Bundle id `com.ishaunted.ios`, version 0.1.0 (build 1), iPhone and iPad, iOS 18.
 
 **Name:** IsHaunted
 
-**Subtitle (30 char max):** `Paranormal field investigation` *(30)*
+**Subtitle (30 char max):** `The Paranormal Platform` *(23)*
 
 **Promotional text (170 max):**
 > Run an investigation from your pocket. Record a field session with the sensors you already
@@ -113,9 +113,10 @@ There are no third-party SDKs in the app at all — verified by search, not by m
 ## 3. Review notes (paste into App Review Information)
 
 > IsHaunted is a tool for paranormal investigation groups. Most of the app works without an
-> account — the feed, public events and the whole Field Kit are usable signed out.
+> account — the feed, public events and the whole Paranormal Platform are usable signed out.
 >
-> **Field Kit** is the core feature and needs no account: Field Kit tab → Start a session.
+> **The Paranormal Platform** is the core feature and needs no account: Paranormal tab → Start a
+> session.
 > It asks for microphone, motion and location permission; all three are optional and the
 > session runs without them, with fewer channels.
 >

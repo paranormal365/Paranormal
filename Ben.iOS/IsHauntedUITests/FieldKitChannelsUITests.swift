@@ -22,7 +22,7 @@ final class FieldKitChannelsUITests: XCTestCase {
         app.launchArguments += ["-fieldKitFakeSensors"]
         app.launch()
 
-        XCTAssertTrue(AppNavigator.openSection("Field Kit", in: app))
+        XCTAssertTrue(AppNavigator.openSection("Paranormal", in: app))
         XCTAssertTrue(app.buttons["start-field-session"].waitForExistence(timeout: 15))
         AppNavigator.startNewSession(in: app)
         XCTAssertTrue(app.buttons["confirm-start-session"].waitForExistence(timeout: 15))

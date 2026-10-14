@@ -285,6 +285,12 @@ Sign in with Apple for Email Communication**. Until `ishaunted.com` is registere
 site sends to an `@privaterelay.appleid.com` address is dropped, silently. Account confirmation is
 not affected, because an Apple-created account is already confirmed, but notifications are.
 
+**Done (confirmed 10/14/2026, from Ben's screenshot of the developer portal):** under Certificates,
+Identifiers & Profiles → Services → Sign in with Apple for Email Communication, the domain
+`ishaunted.com` and the addresses `admin@`, `ben@` and `no-reply@ishaunted.com` are registered,
+all passing SPF. Relay addresses receive the site's mail. It covers the whole developer team, so the
+iOS app's Apple sign-ins are covered too.
+
 ## Build note carried over from item 225
 
 `dotnet build Ben.slnx` now needs the .NET MAUI workload. Use `Ben.Server.slnf` for everyday builds

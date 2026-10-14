@@ -43,7 +43,7 @@ public static class FieldSessionFileGuard
 
         var extension = Path.GetExtension(relativePath);
         if (string.IsNullOrEmpty(extension) || !ContentTypesByExtension.TryGetValue(extension, out var types))
-            return $"a session cannot carry a \"{extension}\" file — only the recordings and photos the Field Kit makes.";
+            return $"a session cannot carry a \"{extension}\" file — only the recordings and photos the Paranormal Platform makes.";
 
         var declared = (contentType ?? "").Split(';')[0].Trim();
         if (declared.Length > 0 && !types.Contains(declared, StringComparer.OrdinalIgnoreCase))

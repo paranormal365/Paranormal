@@ -22,7 +22,7 @@ final class SessionStartUITests: XCTestCase {
         app.launchArguments += ["-fieldKitFakeSensors"]
         app.launch()
 
-        XCTAssertTrue(AppNavigator.openSection("Field Kit", in: app))
+        XCTAssertTrue(AppNavigator.openSection("Paranormal", in: app))
         AppNavigator.startNewSession(in: app)
         XCTAssertTrue(app.buttons["confirm-start-session"].waitForExistence(timeout: 15))
         app.buttons["confirm-start-session"].tap()
@@ -82,7 +82,7 @@ final class SessionStartUITests: XCTestCase {
         let app = XCUIApplication()
         app.launchArguments += ["-fieldKitFakeSensors"]
         app.launch()
-        XCTAssertTrue(AppNavigator.openSection("Field Kit", in: app))
+        XCTAssertTrue(AppNavigator.openSection("Paranormal", in: app))
         XCTAssertTrue(app.buttons["start-field-session"].waitForExistence(timeout: 15))
 
         AppNavigator.startNewSession(in: app)
@@ -114,7 +114,7 @@ final class SessionStartUITests: XCTestCase {
         app = XCUIApplication()
         app.launchArguments += ["-fieldKitFakeSensors"]
         app.launch()
-        XCTAssertTrue(AppNavigator.openSection("Field Kit", in: app))
+        XCTAssertTrue(AppNavigator.openSection("Paranormal", in: app))
 
         XCTAssertTrue(app.staticTexts["Set up, not started"].waitForExistence(timeout: 10),
                       "a pending session should survive a relaunch as pending")

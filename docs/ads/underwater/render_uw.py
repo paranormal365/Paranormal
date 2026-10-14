@@ -46,7 +46,7 @@ def analyzer(t):
         draw_logo_piece(c, nme, 70, 66, 84)
     font(c, 'Public Sans', 30, True); setc(c, BONE); c.move_to(126, 62); c.show_text('EVP Analyzer')
     font(c, 'Public Sans', 19); setc(c, FOG); c.move_to(126, 92); c.show_text('Shipwreck · 60 ft · 0:41 recorded')
-    font(c, 'Public Sans', 16, True); setc(c, LINK); c.move_to(850, 62); c.show_text('Field Kit')
+    font(c, 'Public Sans', 16, True); setc(c, LINK); c.move_to(850, 62); c.show_text('Paranormal')
     # waveform panel
     px, py, pw, ph = 36, 132, 928, 330
     rrect(c, px, py, pw, ph, 22); setc(c, hx('#1B2433')); c.fill_preserve(); c.set_line_width(1.5); setc(c, (1, 1, 1, .09)); c.stroke()

@@ -21,7 +21,7 @@ final class LaunchForGroupUITests: XCTestCase {
         app.launch()
         sleep(5)
 
-        XCTAssertTrue(AppNavigator.openSection("Field Kit", in: app))
+        XCTAssertTrue(AppNavigator.openSection("Paranormal", in: app))
         let open = app.buttons["open-launch-for-group"].firstMatch
         for _ in 0..<3 where !open.waitForExistence(timeout: 8) { app.swipeDown() }
         if !open.exists { attach(app, "lead-no-launch-offered") }

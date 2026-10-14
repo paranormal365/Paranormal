@@ -38,7 +38,7 @@ def analyzer(t):
     g.add_color_stop_rgba(0, *MIST); g.add_color_stop_rgba(1, *INK); c.paint()
     glow(c, 120, 560, 320, ECTO, .18); glow(c, 330, 760, 260, HAUNT, .10)
     # title
-    font(c, 'Public Sans', 13, True); setc(c, hx('#A78BFA')); c.move_to(20, 368); c.show_text('Field Kit')
+    font(c, 'Public Sans', 13, True); setc(c, hx('#A78BFA')); c.move_to(20, 368); c.show_text('Paranormal Platform')
     font(c, 'Public Sans', 27, True); setc(c, BONE); c.move_to(20, 400); c.show_text('EVP Analyzer')
     font(c, 'Public Sans', 14); setc(c, FOG); c.move_to(20, 424); c.show_text('Great Hall · 0:52 recorded')
     # waveform panel
