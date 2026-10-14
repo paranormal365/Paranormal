@@ -20,6 +20,11 @@
       <IncludeAssets>runtime; build; native; contentfiles; analyzers</IncludeAssets>
     </PackageReference>
     <PackageReference Include="Microsoft.EntityFrameworkCore.SqlServer" Version="10.0.11" />
+    <!-- Pinned past the version EF Core's SQL client brings (10.0.0), which carries a published
+         high-severity advisory (GHSA-846f-f764-76mx, fixed in 10.0.13). With TreatWarningsAsErrors a
+         fresh restore refuses to build, so every consumer of this project gets the fixed one
+         (10/14/2026). Remove once Microsoft.Data.SqlClient depends on 10.0.13 or later itself. -->
+    <PackageReference Include="System.Security.Cryptography.Pkcs" Version="10.0.13" />
     <PackageReference Include="Microsoft.Extensions.Configuration" Version="10.0.11" />
     <PackageReference Include="Microsoft.Extensions.Configuration.Json" Version="10.0.11" />
     <PackageReference Include="Microsoft.Extensions.Logging" Version="10.0.11" />

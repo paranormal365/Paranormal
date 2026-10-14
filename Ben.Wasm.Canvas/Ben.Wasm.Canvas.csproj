@@ -27,6 +27,10 @@
     <PackageReference Include="Microsoft.AspNetCore.Components.WebAssembly" Version="10.0.11" />
     <PackageReference Include="Microsoft.AspNetCore.Components.WebAssembly.DevServer" Version="10.0.11" PrivateAssets="all" />
     <PackageReference Include="Telerik.UI.for.Blazor" Version="14.1.0" />
+    <!-- Pinned past the version Telerik's document libraries bring (9.0.9), which carries a published
+         high-severity advisory (GHSA-846f-f764-76mx, fixed in 10.0.13): a fresh restore refused to
+         build with warnings as errors (10/14/2026). Telerik 15.1 brings 10.0.13 itself; remove then. -->
+    <PackageReference Include="System.Security.Cryptography.Pkcs" Version="10.0.13" />
   </ItemGroup>
 
   <ItemGroup>
