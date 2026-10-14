@@ -242,3 +242,16 @@ adaptive sections ADD nothing to hide from that account, since it is a group mem
       the account must exist on ishaunted.com (a member of a group with a case or two to see).
       Create it on the live site, then paste the credentials into the review notes above.
 - [x] `MARKETING_VERSION` bumped to 1.0.0 (build 1) 08/28/2026.
+
+## 5. Every version: before archiving
+
+1. **Warnings: none.** Build (`scripts/build.sh`, or ⌘B in Xcode), then run `scripts/warnings.sh`
+   and fix everything it lists before archiving. Deprecations arrive a few at a time with each
+   Xcode and are cheap to fix while they are few (Ben, 10/14/2026). The script reads the newest
+   build log and builds nothing; it leaves out Xcode's "Metadata extraction skipped, no
+   AppIntents.framework dependency found", which every app without Shortcuts support gets, and
+   which is not worth a framework to silence.
+2. **Changelog.** In `Ben.Web.Services/Changelog/Content/ios.md`, `## Unreleased` becomes
+   `## x.y.z · yyyy-MM-dd` in the same commit that sets `MARKETING_VERSION` to x.y.z; a test fails
+   when the two disagree.
+3. **Held-back help.** Restore any `APP-STORE-x.y.z-HELP.md` for this version once it is live.

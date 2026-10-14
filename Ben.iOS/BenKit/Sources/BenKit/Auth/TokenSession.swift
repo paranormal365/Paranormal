@@ -154,6 +154,14 @@ public actor TokenSession {
         endSession()
     }
 
+    /// **Debugging "it signed me out".** Every sign-out comes through here, from one of: the
+    /// server refusing the refresh token (`refresh(using:)`), a 401 on the token still held
+    /// (`handleUnauthorized`), `SessionStore` deciding `api/me` refused, a deliberate Sign out, or
+    /// switching environment in Developer settings. A breakpoint here, then the stack, says which.
+    /// No signal, a 5xx, a 429 and a 408 never sign anybody out — the tokens are kept for the next
+    /// try. The tokens themselves are one Keychain item (service `com.ishaunted.ios`, account
+    /// `tokens`) that survives deleting the app, so a "fresh install" on a Simulator is not signed
+    /// out unless the Simulator is erased.
     public func endSession() {
         let wasSignedIn = tokens != nil
         tokens = nil

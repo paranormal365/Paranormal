@@ -7,6 +7,7 @@ iPad — chosen by size class, so Split View / Stage Manager degrade gracefully.
 Full plan: `~/.claude/plans/playful-leaping-tome.md` (Phase 1 in 8 slices).
 **Status: Slices 1–8 complete (kernel, auth, feed, participation, notifications, cases, investigations + events, account).**
 **How to run and test it (written for a C# developer): see `TESTING.md`.**
+**When something is wrong: see `DEBUGGING.md`. Before archiving a version: `scripts/warnings.sh` (APP-STORE.md §5).**
 
 ## It cannot interfere with the website
 

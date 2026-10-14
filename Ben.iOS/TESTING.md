@@ -138,6 +138,9 @@ update. Green = the app is still in sync.
 
 ## Troubleshooting
 
+For anything beyond the table below — which server the app is talking to, why it signed somebody
+out, where a Field Kit session is on disk — see [DEBUGGING.md](DEBUGGING.md).
+
 | Symptom | Cause | Fix |
 |---|---|---|
 | Sign-in says "Too many tries" | `/login` is rate-limited: 20/min | Wait for the countdown; it's the API, not the app |

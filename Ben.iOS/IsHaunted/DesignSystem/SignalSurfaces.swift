@@ -76,6 +76,18 @@ struct SignalForm<Content: View>: View {
 }
 
 /// The few UIKit controls SwiftUI gives no style for, in Signal's colours — set once at launch.
+///
+/// **Main actor.** UIKit's appearance proxies are main-thread only, and Swift 6 says so: without
+/// `@MainActor` the 1.1.3 archive logged seven "main actor-isolated … from a nonisolated context"
+/// warnings here. It always ran on the main thread — `IsHauntedApp.init` calls it, and an `App`'s
+/// init is main-actor — so the annotation states what was already true.
+///
+/// **Debugging a color that will not take.** An appearance proxy only reaches controls created
+/// *after* it is set, so this must run before the first scene draws. If a UIKit control shows the
+/// system blue or grey, check it is a control this styles (a `UISegmentedControl`, or a view's
+/// tint); SwiftUI's own controls take `.tint` instead. Xcode's Debug View Hierarchy (Debug ▸ View
+/// Debugging ▸ Capture View Hierarchy) shows which UIKit class is actually drawing.
+@MainActor
 enum SignalAppearance {
     static func apply() {
         // The accent for everything UIKit draws under SwiftUI — including a presented sheet's own

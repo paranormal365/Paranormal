@@ -42,6 +42,13 @@ public enum ResponseMapping {
     }
 
     /// Maps a failure status. Precondition: `statusCode` is NOT 2xx.
+    ///
+    /// **Debugging: this is where an answer becomes what the screen says.** 401 is "Your session
+    /// ended", 429 is "Slow down a moment", and anything else shows the server's own sentence when
+    /// it sent a short plain one — or "The server answered N (…)" when it sent JSON or HTML, which
+    /// usually means an unhandled exception on the API: look in its log for the same minute. A
+    /// screen saying "The server couldn't be reached" never got here: the request threw in
+    /// `Transport` (no network, wrong environment, the API not running).
     public static func failure<T: Sendable>(statusCode: Int, data: Data, headers: [AnyHashable: Any]) -> LoadResult<T> {
         switch statusCode {
         case 401:

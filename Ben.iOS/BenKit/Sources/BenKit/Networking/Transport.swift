@@ -5,6 +5,13 @@ import FoundationNetworking
 
 /// The seam between `APIClient`/`TokenSession` and the network. `MockTransport`
 /// (BenKitTestSupport) implements this so every unit test runs without a socket.
+///
+/// **Debugging: every request passes here.** A breakpoint in `URLSessionTransport.send`,
+/// `download` or `upload` sees each call the app makes — including the token refresh, which
+/// `TokenSession` sends directly rather than through `APIClient`. In the debugger,
+/// `po request.url` and `po String(data: request.httpBody ?? Data(), encoding: .utf8)` show what
+/// went; after the `await`, `po response.statusCode` and `po String(data: data, encoding: .utf8)`
+/// show what came back. The app writes no log of its own, so this is where a request is watched.
 public protocol Transport: Sendable {
     func send(_ request: URLRequest) async throws -> (Data, HTTPURLResponse)
     /// Downloads to a temporary file the caller must move or consume promptly.

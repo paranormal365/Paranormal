@@ -820,13 +820,18 @@ public enum FieldSessionError: Error, LocalizedError, Equatable {
 /// bundle, because "iPhone" would not let anyone assess a reading for known quirks, and every
 /// meter has some.
 public enum DeviceModel {
+    ///
+    /// On the Simulator this is the Mac's own architecture (`arm64`), not a phone model — the
+    /// simulated model is in `SIMULATOR_MODEL_IDENTIFIER`, deliberately not used here, so a
+    /// bundle recorded on a Simulator says so rather than claiming to be a phone.
     public static func identifier() -> String {
         var info = utsname()
         uname(&info)
-        let machine = withUnsafeBytes(of: &info.machine) { raw in
-            raw.prefix { $0 != 0 }.map { CChar(bitPattern: $0) }
+        // `machine` is a fixed-size C char array, NUL-padded. Decoded as UTF-8 up to the first NUL;
+        // `String(cString:)` on an array is deprecated (it warned in the 1.1.3 archive).
+        let text = withUnsafeBytes(of: &info.machine) { raw in
+            String(decoding: raw.prefix { $0 != 0 }, as: UTF8.self)
         }
-        let text = String(cString: machine + [0])
         return text.isEmpty ? "unknown" : text
     }
 
