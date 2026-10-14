@@ -224,6 +224,9 @@ public final class SessionReplay {
     public private(set) var isPlaying = false
     public private(set) var isLoaded = false
     public private(set) var problem: String?
+    /// Goes up by one on every seek — a jump, a drag, a mark. The map turns its arrow smoothly
+    /// while playing and snaps it on a seek; this is how a view tells the two apart.
+    public private(set) var seekCount = 0
 
     /// Playback speed. A five-hour vigil is not watched at 1×.
     ///
@@ -349,6 +352,13 @@ public final class SessionReplay {
     public func play() {
         guard isLoaded, !isPlaying, timeline.duration > 0 else { return }
         if playhead >= timeline.endedAt { seek(to: timeline.startedAt) }
+        // Play where nothing was recorded, with a recording still to come: start at that recording
+        // (rule T6, ProjectNotes/specs/replay-semantics.md — the website's rule since 09/16/2026).
+        // Pressing Play at 0:00 on a night whose sound begins at 0:04 means "play the sound".
+        if frame.activeAudio == nil, frame.activeVideo == nil,
+           let next = timeline.media.filter({ $0.startedAt > playhead }).min(by: { $0.startedAt < $1.startedAt }) {
+            seek(to: next.startedAt)
+        }
         isPlaying = true
 
         reanchor(at: playhead)
@@ -387,6 +397,7 @@ public final class SessionReplay {
     public func togglePlaying() { isPlaying ? pause() : play() }
 
     public func seek(to moment: Date) {
+        seekCount += 1
         moveTo(moment)
         // A person dragging the scrubber mid-playback restarts the measurement; without this the
         // next tick would drag the playhead straight back to where the anchor says it should be.

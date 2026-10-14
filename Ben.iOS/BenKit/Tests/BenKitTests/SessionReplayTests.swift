@@ -149,6 +149,39 @@ struct SessionReplayTests {
         #expect(replay.frame.activeMedia != nil)
     }
 
+    @Test func playInAGapBeforeARecordingStartsAtThatRecording() async throws {
+        // Rule T6 (ProjectNotes/specs/replay-semantics.md), the website's since 09/16/2026: Play at
+        // 0:00 on a night whose sound begins at 0:10 means "play the sound", not ten silent seconds.
+        let clip = MediaSegment(kind: .audio, relativePath: "media/audio-001.m4a",
+                                startedAt: start.addingTimeInterval(10), duration: 5)
+        let replay = try await loaded([reading(0, emf: 48)], media: [clip])
+
+        replay.play()
+        #expect(replay.playhead == start.addingTimeInterval(10))
+        #expect(replay.frame.activeAudio != nil)
+        replay.pause()
+
+        // Over a recording already, Play stays where it is.
+        replay.seek(to: start.addingTimeInterval(12))
+        replay.play()
+        #expect(replay.playhead >= start.addingTimeInterval(12))
+        replay.pause()
+
+        // Past every recording, there is nothing ahead to move to.
+        replay.seek(to: start.addingTimeInterval(30))
+        replay.play()
+        #expect(replay.playhead >= start.addingTimeInterval(30))
+        replay.pause()
+    }
+
+    @Test func everySeekIsCountedSoTheMapKnowsToSnapRatherThanTurn() async throws {
+        let replay = try await loaded([reading(0, emf: 48)])
+        let before = replay.seekCount
+        replay.seek(to: start.addingTimeInterval(5))
+        replay.seek(fraction: 0.5)
+        #expect(replay.seekCount == before + 2)
+    }
+
     @Test func aVideoInsideTheSessionsSoundIsNotHiddenByIt() async throws {
         // Ben, 2026-09-27: "Even when recording video, it doesn't play back." The sound recording
         // starts at Start, so it began before any video and the old first-match rule picked it

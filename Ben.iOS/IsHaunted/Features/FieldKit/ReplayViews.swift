@@ -100,8 +100,18 @@ struct MovementMap: View {
     let stills: [CaptureMark]
     /// The walked path as coordinates — converted once by the screen, after the replay loads.
     let track: [CLLocationCoordinate2D]
+    /// Goes up on every seek: the arrow snaps to a seek and turns smoothly while playing.
+    var seekCount: Int = 0
+    var isPlaying: Bool = false
 
     @State private var camera: MapCameraPosition = .automatic
+    /// The arrow's drawn bearing, unwound (it can pass 360) so a turn from 350° to 10° goes 20°.
+    @State private var turned: Double?
+    /// The map's own rotation and zoom, kept so following the marker changes neither.
+    @State private var mapHeading: Double = 0
+    @State private var mapDistance: Double = 600
+    @State private var lastFollow: Date = .distantPast
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     var body: some View {
         // A session with no fix used to be drawn as a map of the whole continent with a caption
@@ -153,6 +163,89 @@ struct MovementMap: View {
     }
 
     private var map: some View {
+        GeometryReader { geometry in
+            MapReader { proxy in
+                mapContent
+                    .onMapCameraChange(frequency: .continuous) { context in
+                        mapHeading = context.camera.heading
+                        mapDistance = context.camera.distance
+                    }
+                    .onChange(of: frame.at) { _, _ in follow(proxy, size: geometry.size, snap: false) }
+                    .onChange(of: seekCount) { _, _ in
+                        turn(to: frame.facing?.degrees, snap: true)
+                        follow(proxy, size: geometry.size, snap: true)
+                    }
+                    .onChange(of: frame.facing?.degrees) { _, degrees in turn(to: degrees, snap: false) }
+                    .onAppear { turn(to: frame.facing?.degrees, snap: true) }
+            }
+        }
+        .frame(height: 220)
+        .clipShape(RoundedRectangle(cornerRadius: 12))
+        .overlay(alignment: .topTrailing) { recenterButton }
+        .overlay(alignment: .bottomLeading) {
+            if track.isEmpty {
+                Text("No position was recorded for this session.")
+                    .font(.caption2)
+                    .padding(8)
+                    .background(Theme.mist.opacity(0.9), in: Capsule())
+                    .foregroundStyle(Theme.fog)
+                    .padding(8)
+            }
+        }
+        .accessibilityLabel("Where this session went")
+    }
+
+    /// Shown once the person has moved the map themselves: following stops until they ask for it.
+    @ViewBuilder
+    private var recenterButton: some View {
+        if camera.positionedByUser, let here = frame.position?.coordinate {
+            Button("Recenter") {
+                let target = MapCameraPosition.camera(
+                    MapCamera(centerCoordinate: here, distance: mapDistance, heading: mapHeading, pitch: 0))
+                if reduceMotion { camera = target } else { withAnimation(.easeInOut(duration: 0.4)) { camera = target } }
+            }
+            .font(.caption.weight(.semibold))
+            .padding(.horizontal, 10).padding(.vertical, 6)
+            .background(.thinMaterial, in: Capsule())
+            .padding(8)
+            .accessibilityIdentifier("replay-map-recenter")
+        }
+    }
+
+    /// Turns the arrow toward a new heading the SHORT way round, or straight there on a seek
+    /// (Ben, 10/14/2026: "track the direction and location and move smoothly each reading").
+    private func turn(to target: Double?, snap: Bool) {
+        guard let target else { turned = nil; return }
+        guard let current = turned, !snap, !reduceMotion else {
+            var still = Transaction()
+            still.disablesAnimations = true
+            withTransaction(still) { turned = target }
+            return
+        }
+        var delta = (target - current).truncatingRemainder(dividingBy: 360)
+        if delta > 180 { delta -= 360 }
+        if delta < -180 { delta += 360 }
+        withAnimation(.easeOut(duration: 0.3)) { turned = current + delta }
+    }
+
+    /// Keeps the marker in view: once it nears an edge, the view moves to put it back in the
+    /// middle — unless the person has moved the map, which is theirs until they press Recenter.
+    private func follow(_ proxy: MapProxy, size: CGSize, snap: Bool) {
+        guard !camera.positionedByUser, let here = frame.position?.coordinate,
+              size.width > 0, let point = proxy.convert(here, to: .local) else { return }
+        let margin = 0.22
+        let inside = point.x > size.width * margin && point.x < size.width * (1 - margin)
+            && point.y > size.height * margin && point.y < size.height * (1 - margin)
+        if inside { return }
+        let now = Date()
+        if !snap, now.timeIntervalSince(lastFollow) < 0.6 { return }
+        lastFollow = now
+        let target = MapCameraPosition.camera(
+            MapCamera(centerCoordinate: here, distance: mapDistance, heading: mapHeading, pitch: 0))
+        if snap || reduceMotion { camera = target } else { withAnimation(.easeInOut(duration: 0.45)) { camera = target } }
+    }
+
+    private var mapContent: some View {
         Map(position: $camera) {
             if track.count > 1 {
                 MapPolyline(coordinates: track)
@@ -195,11 +288,13 @@ struct MovementMap: View {
                     // point of drawing it — could not be read.
                     ZStack {
                         if let facing = frame.facing {
+                            // Relative to the MAP, not the screen: a map turned by the person
+                            // would otherwise have the arrow pointing the wrong way.
                             Image(systemName: "location.north.fill")
                                 .font(.system(size: 22, weight: .bold))
                                 .foregroundStyle(Theme.ecto)
                                 .shadow(color: .black.opacity(0.6), radius: 2)
-                                .rotationEffect(.degrees(facing.degrees))
+                                .rotationEffect(.degrees((turned ?? facing.degrees) - mapHeading))
                                 .accessibilityLabel(
                                     "\(facing.what) \(PositionReadout.compass(facing.degrees))")
                         } else {
@@ -211,19 +306,6 @@ struct MovementMap: View {
                 }
             }
         }
-        .frame(height: 220)
-        .clipShape(RoundedRectangle(cornerRadius: 12))
-        .overlay(alignment: .bottomLeading) {
-            if track.isEmpty {
-                Text("No position was recorded for this session.")
-                    .font(.caption2)
-                    .padding(8)
-                    .background(Theme.mist.opacity(0.9), in: Capsule())
-                    .foregroundStyle(Theme.fog)
-                    .padding(8)
-            }
-        }
-        .accessibilityLabel("Where this session went")
     }
 
     private var markersWithPlaces: [FieldMarkerRecord] {

@@ -270,7 +270,8 @@ struct SessionReviewView: View {
             .background(Theme.mist, in: RoundedRectangle(cornerRadius: 12))
 
             MovementMap(timeline: replay.timeline, frame: replay.frame,
-                        stills: source?.stills ?? [], track: track)
+                        stills: source?.stills ?? [], track: track,
+                        seekCount: replay.seekCount, isPlaying: replay.isPlaying)
 
             markerList
             sessionFacts
@@ -447,6 +448,10 @@ struct SessionReviewView: View {
     private func expand(_ photo: CaptureMark) {
         resumeAfterPhoto = replay.isPlaying
         replay.pause()
+        // To the moment it was taken (rule T7): the readings, the map and the sound behind the
+        // photograph are the ones from when it was taken. The comment on the strip always said so;
+        // the code did not seek until 10/14/2026.
+        replay.seek(to: photo.at)
         withAnimation(.spring(duration: 0.4)) { expandedPhoto = photo }
     }
 
@@ -515,6 +520,9 @@ struct SessionReviewView: View {
                     .font(.caption).foregroundStyle(Theme.fog)
             } else {
                 ForEach(replay.timeline.markers) { marker in
+                    // The mark the playhead is passing is lit, as on the website (rule M10). The
+                    // frame always worked it out; nothing showed it until 10/14/2026.
+                    let current = replay.frame.nearestMarker?.id == marker.id
                     Button {
                         replay.pause()
                         replay.seek(to: marker)
@@ -539,8 +547,15 @@ struct SessionReviewView: View {
                             Text(SessionClock.elapsed(from: replay.timeline.startedAt, to: marker.at))
                                 .font(.caption2.monospacedDigit()).foregroundStyle(Theme.fog)
                         }
+                        .padding(.vertical, 3)
+                        .padding(.horizontal, 6)
+                        .background(current ? Theme.ecto.opacity(0.18) : .clear,
+                                    in: RoundedRectangle(cornerRadius: 6))
+                        .animation(.easeInOut(duration: 0.2), value: current)
                     }
                     .buttonStyle(.plain)
+                    .accessibilityAddTraits(current ? .isSelected : [])
+                    .accessibilityValue(current ? "now" : "")
                     .accessibilityIdentifier("replay-marker-row")
                 }
             }
