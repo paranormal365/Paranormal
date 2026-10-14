@@ -1,6 +1,10 @@
 <Project Sdk="Microsoft.NET.Sdk.Web">
 
     <PropertyGroup>
+        <!-- The service's version: the newest released heading of
+             Ben.Web.Services/Changelog/Content/api.md. It changes only at release, in the same
+             commit that turns "## Unreleased" into "## x.y.z" (ChangelogServiceTests). -->
+        <Version>2.9.0</Version>
         <TargetFramework>net10.0</TargetFramework>
         <Nullable>enable</Nullable>
         <ImplicitUsings>enable</ImplicitUsings>

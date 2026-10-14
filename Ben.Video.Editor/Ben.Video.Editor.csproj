@@ -4,6 +4,10 @@
 	<TargetFramework>net10.0</TargetFramework>
 	<Nullable>enable</Nullable>
 	<ImplicitUsings>enable</ImplicitUsings>
+	<!-- The video editor's version: the newest released heading of
+	     Ben.Web.Services/Changelog/Content/video-editor.md. It changes only at release, in the same
+	     commit that turns "## Unreleased" into "## x.y.z" (ChangelogServiceTests). -->
+	<Version>1.0.0</Version>
 	</PropertyGroup>
 
   <ItemGroup>

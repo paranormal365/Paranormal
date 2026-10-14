@@ -1,4 +1,4 @@
-# iPhone and iPad changes
+# iOS changes
 
 This file is PUBLIC. It is rendered anonymously at `/changes`, so every line has to be safe for a
 stranger to read.
@@ -9,20 +9,25 @@ stranger to read.
 anybody's name, any group or case, and anything that only means something to whoever wrote the
 code.
 
-**Dates are the day the change was made, not the day Apple approved it.** A build reaches people
-when App Review says so, which is usually later and never predictable. Where a version number is
-known it is worth naming, because that is what somebody can check on their own phone.
+**Shape:** one `## x.y.z` heading per version, newest first, each followed by `- ` lines. The
+date the version was released can follow a middle dot — `## 2.4.1 · 2026-09-18` — and is shown when
+it is there, but the version is what is tracked. Nothing else is read but the `### Administration`
+sub-heading below.
 
-**Shape:** `## yyyy-MM-dd · version` headings, newest first, each followed by `- ` lines. Nothing else is
-read.
+**Versions** (Ben, 10/14/2026): a major change moves the first number (1.4.2 → 2.0.0); something
+new that is not an overhaul moves the middle one (1.4.2 → 1.5.0); fixes and everyday updates move
+the last (1.4.2 → 1.4.3). Every version is one step on from the one before it, and the number is
+kept in `MARKETING_VERSION` in the Xcode project, which is what Settings → General → About shows on somebody's phone. A test fails when the two disagree.
 
-**Versions** (from 2026-09-28): each heading carries the App Store version that brought the change
-to phones, after a middle dot — `## 2026-09-16 · 1.0.3` — so it matches Settings → General → About
-on somebody's own phone. Several days can share a number, because one build carries a fortnight of
-work. A change not yet on the App Store is listed under the number the next build will have. Fixes
-move the last number, new things the middle one, a whole new part of the app the first.
+**Unreleased:** what is merged but not yet released goes under one `## Unreleased` heading at the
+top. Only SuperAdmins see it on `/changes`. At release, when the build goes to App Review, that heading becomes the build's number, in the same commit that sets the version.
 
-## 2026-10-14 · 1.1.4
+**Administration** (Ben, 10/14/2026): a change to the administration screens, or to the concepts
+and ideas behind running the site, goes under a `### Administration` sub-heading inside its version,
+after the lines everybody reads. Only SuperAdmins see those lines. A version with nothing else in
+it is hidden from everybody else, but still takes its number. No other sub-heading is read.
+
+## Unreleased
 
 - In a session's review, tapping a photo goes to the moment it was taken, and the mark being passed
   lights up in the list.
@@ -32,7 +37,7 @@ move the last number, new things the middle one, a whole new part of the app the
 - A base level set again partway through a session counts from there on.
 - When there is no compass or course, the arrow follows the direction walked.
 
-## 2026-10-13 · 1.1.3
+## 1.1.3 · 2026-10-13
 
 - Event menus look the way the hosts designed them, just as on the website: their colors, typefaces,
   border and drawing, with prices, what the event covers, and the marks for each dish.
@@ -40,13 +45,11 @@ move the last number, new things the middle one, a whole new part of the app the
 - Anyone can see an event's published menus, without signing in. The event's page shows what its
   price includes and a link to **See the menus**.
 
-## 2026-10-03 · 1.1.3
-
 - A new violet app icon, to match the website.
 - Profile shows which version of the app you have, under **App**, and checks whether a newer one is
   in the App Store. When there is, **Update in the App Store** takes you straight there.
 
-## 2026-10-02 · 1.1.2
+## 1.1.2 · 2026-10-02
 
 - The app has the website's new look, in light and in dark: the same colors, buttons and cards.
 - Anywhere you need to sign in, there is a **Sign in** button right there. The sign-in sheet links to
@@ -68,14 +71,14 @@ move the last number, new things the middle one, a whole new part of the app the
   sessions start with — the motion reading and the magnetometer were each asking the phone's motion
   sensors for something different, and the magnetometer stopped updating; they now share one reading.
 
-## 2026-09-29 · 1.1.1
+## 1.1.1 · 2026-09-29
 
 - The app now talks to the service at its new address. Everything that needs you signed in —
   your cases, investigations, launching or joining a group's session, sending sessions — works
   again after the move; 1.1.0 and earlier can still read the feed and use Field Kit, but ask you
   to sign in again for the rest.
 
-## 2026-09-28 · 1.1.0
+## 1.1.0 · 2026-09-28
 
 - A lead can now start everybody's Field Kit. A tour's guide, an event's organizer or door staff,
   or an investigation's lead taps **Launch a session for your group** in Field Kit. Everybody
@@ -93,8 +96,6 @@ move the last number, new things the middle one, a whole new part of the app the
 - On an iPad, a notification or a link into a page deeper than a section's front screen now opens
   that page rather than stopping at the front.
 
-## 2026-09-28 · 1.1.0
-
 - Times in the app are shown on the clock of wherever the phone is, and follow it when it crosses
   into another time zone. Every time is still stored in universal time; the zone chosen on the
   website sets only the website's clock.
@@ -111,8 +112,6 @@ move the last number, new things the middle one, a whole new part of the app the
   rather than in UTC.
 - Signing up on the phone records the phone's time zone as the website's clock for you, until you
   choose another there.
-
-## 2026-09-27 · 1.1.0
 
 - Sound recordings are louder. The microphone was recorded exactly as the sound meter reads it,
   which left a voice across the room barely audible; recordings now carry a steady boost for the
@@ -140,7 +139,7 @@ move the last number, new things the middle one, a whole new part of the app the
 - One upload now carries 10 minutes of video and 600 MB in total, and **Send without the video**
   sends everything else in one go.
 
-## 2026-09-17 · 1.0.3
+## 1.0.3 · 2026-09-17
 
 - The button in a running session is a **Photo** button. It takes a photograph of what the camera
   sees — there and then when the camera is already on, or from a viewfinder that opens and closes
@@ -154,8 +153,6 @@ move the last number, new things the middle one, a whole new part of the app the
   *App put away* to *Back in the app* — with a line saying which of those happened.
 - A photograph that the camera never delivers is given up on after a few seconds with a sentence,
   instead of leaving the button stuck on "Taking…".
-
-## 2026-09-16 · 1.0.3
 
 - A session somebody sends you as a `.ben` file — by AirDrop, in a message, from Files — opens in the
   app and plays exactly as it did for them: the same trace, map, marks and recordings, with a line on
@@ -186,8 +183,6 @@ move the last number, new things the middle one, a whole new part of the app the
   when the pass is closed.
 - A session too big to go in one file (more than 4 GB of recordings) says so before exporting or
   sending, instead of writing a file that cannot be opened.
-
-## 2026-09-13 · 1.0.3
 
 - On What I'm going to, Pass now opens your pass. It had opened the event's screen, so the pass could only be
   reached from there.
@@ -220,8 +215,6 @@ move the last number, new things the middle one, a whole new part of the app the
   photo notice the first time, send a photo to the organizers, take your own posts down and report
   somebody else's.
 
-## 2026-09-12 · 1.0.3
-
 - Sign in with Apple now works. It was returning to the sign-in screen without explanation when
   an Apple Account had no account here yet; it now asks for a display name and an @name, or offers
   to join an account you already have. Fixed in 1.0.2 build 5.
@@ -231,7 +224,7 @@ move the last number, new things the middle one, a whole new part of the app the
 - Before sending a session, the app says how much it weighs and how much video is in it. Where a
   window is too heavy, it offers to send the video at a smaller size rather than simply refusing.
 
-## 2026-09-04 · 1.0.2
+## 1.0.2 · 2026-09-04
 
 - A recording can be trimmed on the phone before it is sent, so only the part that mattered
   leaves the device.
@@ -239,21 +232,17 @@ move the last number, new things the middle one, a whole new part of the app the
   the moment it is created.
 - Links to the site open in the app.
 
-## 2026-08-31 · 1.0.1
+## 1.0.1 · 2026-08-31
 
 - The app shows only what applies to you.
 - A published session says whether what it recorded was unusual for that place.
 
-## 2026-08-30 · 1.0.0
+## 1.0.0 · 2026-08-30
 
 - Version 1.0 submitted to the App Store.
 
-## 2026-08-29
-
 - Somebody can be blocked, from the app and from the site.
 - An account can be deleted from inside the app.
-
-## 2026-08-25
 
 - The Field Kit: magnetic field, sound level, photographs, audio and location, recorded offline
   and reviewed later against one timeline.

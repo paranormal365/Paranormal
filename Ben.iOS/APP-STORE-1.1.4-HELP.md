@@ -34,4 +34,6 @@ None of this is in the App Store yet, so `Ben.Web.Services/Help/Content/the-mobi
    > marker in view as it moves. If you move or zoom the map yourself, it stays where you put it until
    > you tap **Recenter**.
 
-The apps changelog (`Ben.Web.Services/Changelog/Content/apps.md`) already lists these under 1.1.4.
+The apps changelog (`Ben.Web.Services/Changelog/Content/ios.md`) holds these under `## Unreleased`.
+When 1.1.4 goes to App Review, that heading becomes `## 1.1.4 · yyyy-MM-dd` in the same commit that sets
+`MARKETING_VERSION` to 1.1.4; a test fails if the two disagree.

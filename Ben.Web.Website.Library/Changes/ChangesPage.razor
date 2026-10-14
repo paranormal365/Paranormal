@@ -2,13 +2,14 @@
 @using Ben.Web.Services.Changelog
 @inject ChangelogService Changelog
 @inject Microsoft.Extensions.Options.IOptions<Ben.Data.Common.SiteIdentity> SiteOptions
+@inject Ben.Web.Services.IBenUserState UserState
 
 @* What changed, newest first, for anybody — signed in or not.
 
    Anonymous on purpose. Somebody deciding whether to sign up is exactly the reader who wants to
    know the place is alive and being worked on, and a changelog behind a sign-in tells them
-   nothing. Nothing on this page is private: the three files it renders carry the rule about what
-   may go into them at the top, where the next person to add a line will read it.
+   nothing. Nothing on this page is private: each product's file carries the rule about what may
+   go into it at the top, where the next person to add a line will read it.
 
    Rendered from embedded markdown that is written by hand. A changelog generated from commit
    subjects would be half refactors and deployment notes, and would name files and branches — see
@@ -28,78 +29,161 @@
         </p>
     </div>
 
-    @* The filter is a set of links rather than a control, so a chosen stream is a URL somebody
-       can send to somebody else. *@
-    <div class="btn-group mb-4" role="group" aria-label="Which product">
-        <a class="btn btn-sm @(Stream is null ? "btn-primary" : "btn-outline-primary")"
+    @* The filter is a set of links rather than a control, so a chosen list is a URL somebody can
+       send to somebody else. Four projects; the website is four products of its own, so picking it
+       offers them underneath (Ben, 10/14/2026). The rows wrap rather than run off a phone. *@
+    <div class="d-flex flex-wrap gap-2 mb-2" role="group" aria-label="Which project">
+        <a class="btn btn-sm @(Project is null ? "btn-primary" : "btn-outline-primary")"
            href="/changes">Everything</a>
-        @foreach (var stream in Enum.GetValues<ChangelogStream>())
+        @foreach (var project in Enum.GetValues<ChangelogProject>())
         {
-            <a class="btn btn-sm @(Stream == stream ? "btn-primary" : "btn-outline-primary")"
-               href="@($"/changes?product={stream.Slug()}")">@stream.Title()</a>
+            <a class="btn btn-sm @(Project == project ? "btn-primary" : "btn-outline-primary")"
+               href="@($"/changes?project={project.Slug()}")">@project.Title()</a>
         }
     </div>
 
-    @if (Stream is not null)
+    @if (Project is { } chosen && chosen.Streams().Count > 1)
     {
-        <p class="text-secondary small">@Stream.Value.Description()</p>
+        <div class="d-flex flex-wrap gap-2 mb-2" role="group" aria-label="Which part of the @chosen.Title()"
+             data-testid="changes-parts">
+            <a class="btn btn-sm @(Part is null ? "btn-secondary" : "btn-outline-secondary")"
+               href="@($"/changes?project={chosen.Slug()}")">All of the @chosen.Title().ToLowerInvariant()</a>
+            @foreach (var part in chosen.Streams())
+            {
+                <a class="btn btn-sm @(Part == part ? "btn-secondary" : "btn-outline-secondary")"
+                   href="@($"/changes?project={chosen.Slug()}&part={part.Slug()}")">@part.Title()</a>
+            }
+        </div>
     }
 
-    @if (_days.Count == 0)
+    <p class="text-secondary small mb-4">
+        @(Part?.Description() ?? Project?.Description() ?? "Every project, each with its own version.")
+    </p>
+
+    @* Merged and waiting for the next release, for SuperAdmins only — the public list
+       says what people can already use, never what is coming (10/14/2026, as on benclark.net). *@
+    @foreach (var release in _unreleased)
+    {
+        <div class="card mb-3 border-warning" data-testid="change-unreleased">
+            <div class="card-header d-flex align-items-center justify-content-between">
+                <span class="fw-semibold">
+                    Not released yet
+                    <span class="text-secondary fw-normal ms-2">only SuperAdmins see this</span>
+                </span>
+                <span class="badge bg-secondary">@Badge(release.Stream)</span>
+            </div>
+            <ul class="list-group list-group-flush">
+                @foreach (var entry in release.Entries)
+                {
+                    <li class="list-group-item">@((MarkupString)Ben.Web.Services.Changelog.ChangelogText.ToHtml(entry))</li>
+                }
+            </ul>
+            <AdministrationEntries Release="release" Show="_isSuperAdmin" />
+        </div>
+    }
+
+    @if (_releases.Count == 0)
     {
         <div class="alert alert-secondary">Nothing recorded here yet.</div>
     }
     else
     {
-        @foreach (var day in _days)
+        @foreach (var release in _releases)
         {
             <div class="card mb-3">
                 <div class="card-header d-flex align-items-center justify-content-between">
-                    @* US format sitewide. *@
-                    <span class="fw-semibold">
-                        @day.Date.ToString("MM/dd/yyyy")
-                        @* The release, from go-live on (Ben, 2026-09-28). *@
-                        @if (day.Version is { } version)
+                    @* The version is what is tracked; the date, when the file gives one, is a
+                       bonus (Ben, 10/14/2026). US format sitewide. *@
+                    <span class="fw-semibold" data-testid="change-version">
+                        Version @release.Version
+                        @if (release.Date is { } date)
                         {
-                            <span class="text-secondary fw-normal ms-2" data-testid="change-version">Version @version</span>
+                            <span class="text-secondary fw-normal ms-2">@date.ToString("MM/dd/yyyy")</span>
                         }
                     </span>
                     @* The product is named on every row, not only in the filter: on the combined
                        list a change to the apps and a change to the website look identical
                        otherwise, and one of them may be a fortnight from anybody's phone. *@
-                    <span class="badge bg-secondary">@day.Stream.Title()</span>
+                    <span class="badge bg-secondary">@Badge(release.Stream)</span>
                 </div>
                 <ul class="list-group list-group-flush">
-                    @foreach (var entry in day.Entries)
+                    @foreach (var entry in release.Entries)
                     {
                         @* Encoded, then only **bold**, *italic* and `code` become tags. *@
                         <li class="list-group-item">@((MarkupString)Ben.Web.Services.Changelog.ChangelogText.ToHtml(entry))</li>
                     }
                 </ul>
+                <AdministrationEntries Release="release" Show="_isSuperAdmin" />
             </div>
         }
     }
 </div>
 
 @code {
-    /// <summary>Which product to show, from the query string. Absent means all three.</summary>
+    /// <summary>Which project to show, from the query string. Absent means all of them.</summary>
+    [SupplyParameterFromQuery(Name = "project")]
+    public string? ProjectSlug { get; set; }
+
+    /// <summary>Which part of the project, when it has more than one.</summary>
+    [SupplyParameterFromQuery(Name = "part")]
+    public string? PartSlug { get; set; }
+
+    /// <summary>
+    /// The address before projects (until 10/14/2026): <c>?product=website|api|apps</c>. Links
+    /// people kept still land on the same list.
+    /// </summary>
     [SupplyParameterFromQuery(Name = "product")]
-    public string? Product { get; set; }
+    public string? LegacyProduct { get; set; }
 
-    private ChangelogStream? Stream =>
-        Enum.GetValues<ChangelogStream>()
-            .Cast<ChangelogStream?>()
-            .FirstOrDefault(s => string.Equals(s!.Value.Slug(), Product,
-                                               StringComparison.OrdinalIgnoreCase));
+    private ChangelogProject? Project =>
+        Enum.GetValues<ChangelogProject>().Cast<ChangelogProject?>()
+            .FirstOrDefault(p => string.Equals(p!.Value.Slug(), ProjectSlug, StringComparison.OrdinalIgnoreCase))
+        ?? Part?.Project()
+        ?? LegacyProduct?.ToLowerInvariant() switch
+        {
+            "website" => ChangelogProject.Website,
+            "api" => ChangelogProject.Api,
+            "apps" => ChangelogProject.Ios,
+            _ => null,
+        };
 
-    private IReadOnlyList<ChangelogDay> _days = [];
+    private ChangelogStream? Part =>
+        Enum.GetValues<ChangelogStream>().Cast<ChangelogStream?>()
+            .FirstOrDefault(s => string.Equals(s!.Value.Slug(), PartSlug, StringComparison.OrdinalIgnoreCase));
+
+    /// <summary>"Website · Canvas Board"; "API" where the project is one product.</summary>
+    private static string Badge(ChangelogStream stream) =>
+        stream.Project().Streams().Count > 1 ? $"{stream.Project().Title()} · {stream.Title()}" : stream.Title();
+
+    private bool Shows(ChangelogRelease release) =>
+        Part is { } part ? release.Stream == part
+        : Project is not { } project || release.Stream.Project() == project;
+
+    private IReadOnlyList<ChangelogRelease> _releases = [];
+    private IReadOnlyList<ChangelogRelease> _unreleased = [];
     private DateOnly? _lastChanged;
+    private bool _isSuperAdmin;
 
     // Read on every parameter set rather than in OnInitialized: the product filter is a query
     // string, and a page that only read it once would keep showing the first list clicked.
-    protected override void OnParametersSet()
+    protected override async Task OnParametersSetAsync()
     {
-        _days = Changelog.Days(Stream);
-        _lastChanged = Changelog.LastChanged(Stream);
+        // What everybody may read, first, so the prerender and a signed-out visitor get the page
+        // at once. A version whose only changes are administration ones is not shown at all.
+        var all = Changelog.Releases().Where(Shows).ToList();
+        _releases = all.Where(r => r.IsPublic).ToList();
+        _lastChanged = _releases.Select(r => r.Date).FirstOrDefault(d => d is not null);
+        _unreleased = [];
+
+        // Administration changes — its screens, concepts and ideas — and unreleased work are for
+        // SuperAdmins only (Ben, 10/14/2026). Only once sign-in is known can the page say whether
+        // the viewer is one; during the prerender nobody is.
+        _isSuperAdmin = await UserState.WaitUntilAuthReadyAsync(RendererInfo.IsInteractive) && UserState.IsSuperAdmin;
+        if (_isSuperAdmin)
+        {
+            _releases = all;
+            _lastChanged = all.Select(r => r.Date).FirstOrDefault(d => d is not null);
+            _unreleased = Changelog.Unreleased().Where(Shows).ToList();
+        }
     }
 }

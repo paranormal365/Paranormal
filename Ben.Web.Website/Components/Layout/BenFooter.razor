@@ -8,6 +8,9 @@
     @* Anonymous like the rest of these: somebody deciding whether to sign up is exactly the
        reader who wants to see the place is being worked on. *@
     <a href="/changes" class="app-footer-link ms-3">What's new</a>
+    @* The release, as benclark.net shows its own (10/14/2026): set in Ben.Web.Website.csproj at
+       release, the same number as the newest heading on What's new. *@
+    <a href="/changes?project=website&part=webapp" class="app-footer-link ms-3" data-testid="footer-version">Version @Release</a>
     <a href="/contact" class="app-footer-link ms-3">Contact</a>
     @* Also the privacy-policy URL given to App Store Connect, so it has to stay anonymous and
        stay at this path — a moved or gated /privacy is a rejected app submission, not just a
@@ -19,3 +22,9 @@
     <a href="@SiteOptions.Value.AppStoreUrl" class="app-footer-link ms-3" target="_blank" rel="noopener"
        data-testid="footer-app-store">iPhone &amp; iPad app</a>
 </footer>
+
+@code {
+    /// <summary>The website's release, three numbers, read from its own assembly.</summary>
+    private static readonly string Release =
+        typeof(BenFooter).Assembly.GetName().Version is { } v ? $"{v.Major}.{v.Minor}.{v.Build}" : "";
+}

@@ -1,0 +1,25 @@
+@using Ben.Web.Services.Changelog
+
+@* A version's administration changes — its screens, and the concepts and ideas behind running the
+   site — drawn under the changes everybody sees. SuperAdmins only (Ben, 10/14/2026); the page
+   decides who that is and passes Show. *@
+
+@if (Show && !Release.AdminEntries.IsEmpty)
+{
+    <div class="card-body border-top py-2 small fw-semibold text-secondary" data-testid="change-administration">
+        Administration
+        <span class="fw-normal ms-2">only SuperAdmins see this</span>
+    </div>
+    <ul class="list-group list-group-flush">
+        @foreach (var entry in Release.AdminEntries)
+        {
+            <li class="list-group-item">@((MarkupString)ChangelogText.ToHtml(entry))</li>
+        }
+    </ul>
+}
+
+@code {
+    [Parameter, EditorRequired] public ChangelogRelease Release { get; set; } = default!;
+
+    [Parameter] public bool Show { get; set; }
+}

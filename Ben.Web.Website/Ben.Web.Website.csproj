@@ -3,6 +3,10 @@
     <TargetFramework>net10.0</TargetFramework>
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
+    <!-- The website's version: the newest released heading of
+         Ben.Web.Services/Changelog/Content/webapp.md. It changes only at release, in the same
+         commit that turns "## Unreleased" into "## x.y.z" (ChangelogServiceTests). -->
+    <Version>2.20.0</Version>
   </PropertyGroup>
   <ItemGroup>
     <PackageReference Include="Microsoft.AspNetCore.Authentication.OpenIdConnect" Version="10.0.11" />

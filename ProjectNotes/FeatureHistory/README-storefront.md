@@ -571,7 +571,7 @@ refund.updated, payment_intent.canceled, fetched with `stripe events retrieve <e
 ## Rollout state
 Flag OFF in production until Ben turns it on; §8 of the plan is the checklist.
 
-**On launch day**, add to `Ben.Web.Services/Changelog/Content/website.md` (public — it goes live with
+**On launch day**, add to `Ben.Web.Services/Changelog/Content/webapp.md` (public — it goes live with
 the flag, not before):
 
 ```

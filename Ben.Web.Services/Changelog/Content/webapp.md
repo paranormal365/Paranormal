@@ -1,4 +1,4 @@
-# Website changes
+# Web App changes
 
 This file is PUBLIC. It is rendered anonymously at `/changes`, so every line has to be safe for a
 stranger to read.
@@ -10,19 +10,28 @@ tables, infrastructure and deployment, anybody's name, any group or case, and an
 only mean something to whoever wrote the code. If a line would help somebody attack the site or
 identify a person, it does not belong here.
 
-**Shape:** `## yyyy-MM-dd · version` headings, newest first, each followed by `- ` lines. Nothing else is
-read. Add today's heading at the top when you ship something people can see.
+**Shape:** one `## x.y.z` heading per version, newest first, each followed by `- ` lines. The
+date the version was released can follow a middle dot — `## 2.4.1 · 2026-09-18` — and is shown when
+it is there, but the version is what is tracked. Nothing else is read but the `### Administration`
+sub-heading below.
 
-**Versions** (from 2026-09-28): each heading after the site went live carries the release number
-after a middle dot — `## 2026-09-28 · 2.11.0`. A day of fixes moves the last number (2.10.0 →
-2.10.1); a day that adds something people can use moves the middle one (→ 2.11.0); a whole new part
-of the product moves the first (→ 3.0.0). The site went live as 1.0.0 on 2026-08-23; the days before
-it carry no number.
+**Versions** (Ben, 10/14/2026): a major change moves the first number (1.4.2 → 2.0.0); something
+new that is not an overhaul moves the middle one (1.4.2 → 1.5.0); fixes and everyday updates move
+the last (1.4.2 → 1.4.3). Every version is one step on from the one before it, and the number is
+kept in `<Version>` in `Ben.Web.Website/Ben.Web.Website.csproj`; the foot of every page shows it. A test fails when the two disagree.
 
-The history before 2026-08-22 is summarized rather than listed: the site was not yet open, and a
+**Unreleased:** what is merged but not yet released goes under one `## Unreleased` heading at the
+top. Only SuperAdmins see it on `/changes`. At release that heading becomes the next number, in the same commit that sets the version.
+
+**Administration** (Ben, 10/14/2026): a change to the administration screens, or to the concepts
+and ideas behind running the site, goes under a `### Administration` sub-heading inside its version,
+after the lines everybody reads. Only SuperAdmins see those lines. A version with nothing else in
+it is hidden from everybody else, but still takes its number. No other sub-heading is read.
+
+1.0.0 holds everything up to going live, summarized rather than listed: the site was not yet open, and a
 day-by-day account of building it would say nothing to anyone using it now.
 
-## 2026-10-14 · 2.21.0
+## Unreleased
 
 - Field sessions play back more smoothly. Dragging through a session while it plays carries on from
   where you let go, instead of jumping back.
@@ -35,8 +44,18 @@ day-by-day account of building it would say nothing to anyone using it now.
 - A photo shared by link no longer carries the location stored inside the picture.
 - A recording made on its own, separately from the session's sound, now sits where it began rather
   than where it ended, and a recording that runs past the last reading can be played to its end.
+- The foot of every page shows the site's version, and links to what changed in it.
+- What's new is arranged by project: the website, the API, the iOS app and the Sidecar, or all of
+  them together under **Everything**. The website can be narrowed to the web app, the Canvas board,
+  the video editor, the audio editor or the CMS. Each has its own version, shown first, with the day
+  it was released after it.
 
-## 2026-10-13 · 2.20.0
+### Administration
+
+- What's new shows SuperAdmins the work that is not released yet, and the changes to administration
+  in each version, which nobody else sees.
+
+## 2.20.0 · 2026-10-13
 
 - Events have designed menus. Make the items once and keep them for the event, your group or the
   venue, then put menus together from them, with their prices, in one of twenty-five looks, thirteen of
@@ -52,7 +71,7 @@ day-by-day account of building it would say nothing to anyone using it now.
   public work.
 - Page numbers on tables are easier to read in the dark theme.
 
-## 2026-10-10 · 2.19.0
+## 2.19.0 · 2026-10-10
 
 - If your group's renewal payment doesn't go through, your plan keeps going for two weeks while the
   card is tried again each day, once a year. Your billing page shows the date.
@@ -69,13 +88,13 @@ day-by-day account of building it would say nothing to anyone using it now.
   scroll, and search boxes you can read on the dark pages.
 - A public case list now shows dates in your own time, matching the case's page.
 
-## 2026-10-09 · 2.18.0
+## 2.18.0 · 2026-10-09
 
 - Three more kinds of section for your group's public pages: your contact details, a gallery of your
   public files, and your members. Each one keeps up with your group's records by itself.
 - Members choose whether each of their groups may list them on its public pages, from their profile.
 
-## 2026-10-09 · 2.17.0
+## 2.17.0 · 2026-10-09
 
 - You choose where a page goes in your group's menu by dragging it on a tree, up to three levels deep,
   instead of typing a sort number.
@@ -99,13 +118,13 @@ day-by-day account of building it would say nothing to anyone using it now.
   building, that comes first under the cover photo, with the map right below. Venue pages follow the same
   layout.
 
-## 2026-10-09 · 2.16.0
+## 2.16.0 · 2026-10-09
 
 - A new short film on the home page: a ghost walk in the future, where the tour group turns out to be robots
   who check in with the app.
 - The home page's films start with a random one, then play the rest in a shuffled order without repeating.
 
-## 2026-10-05 · 2.15.0
+## 2.15.0 · 2026-10-05
 
 - The home page has a section for the iPhone and iPad app: what it does, its own screens, Apple's
   App Store badge, and a QR code to scan from a computer. A link near the top takes you straight to it.
@@ -124,7 +143,7 @@ day-by-day account of building it would say nothing to anyone using it now.
   dates beside a short weekday read "Thu 11/19/26" wherever space is tight — the requests page, the venue
   page, your event pass, and an event's nights.
 
-## 2026-10-02 · 2.14.0
+## 2.14.0 · 2026-10-02
 
 - An event's page names the right clock: a November event read in October said "Times are CDT"
   above a start time in CST.
@@ -154,7 +173,7 @@ day-by-day account of building it would say nothing to anyone using it now.
 - The site is written in American English throughout — catalog, color, program, canceled.
 - A request the site could not read now says so, instead of reporting an error on our side.
 
-## 2026-10-02 · 2.13.0
+## 2.13.0 · 2026-10-02
 
 - The whole site has a new look, in light and in dark: one set of colors, type and pictures from the
   front page to the editors.
@@ -174,8 +193,7 @@ day-by-day account of building it would say nothing to anyone using it now.
 - The pictures in the help guides show the new look, and the flyers on the front page have been
   refreshed to match.
 
-## 2026-09-28 · 2.12.0
-
+## 2.12.0 · 2026-09-28
 
 - A tour date's page and an event's page now show **Field sessions sent up**: what guests recorded
   in Field Kit and sent to that night, with who, when and where, and **Play back**. Your group and
@@ -186,7 +204,7 @@ day-by-day account of building it would say nothing to anyone using it now.
   longer offered for deletion from My Field Sessions.
 - Someone without the app who scans a lead's code is shown how to get it and join.
 
-## 2026-09-28 · 2.11.0
+## 2.11.0 · 2026-09-28
 
 - Choose your time zone. Signing up asks, starting on your device's zone, and your profile can change
   it or go back to following your device. Every date and time on the site is shown on your clock,
@@ -205,7 +223,7 @@ day-by-day account of building it would say nothing to anyone using it now.
 - The feed attributions and upload pages no longer say there is nothing there while they are still
   loading.
 
-## 2026-09-27 · 2.10.0
+## 2.10.0 · 2026-09-27
 
 - A field session's playback page now plays the video with the session's sound beside it, shows the
   photographs taken during the session in a strip that glows as playback reaches each one (click to
@@ -214,7 +232,7 @@ day-by-day account of building it would say nothing to anyone using it now.
 - Videos in a field session now start where they were filmed. They used to be placed at the moment
   recording stopped, after the stretch they showed.
 
-## 2026-09-25 · 2.9.0
+## 2.9.0 · 2026-09-25
 
 - The IsHaunted store is built and waiting for its products: investigation gear from the site itself
   and from members who make their own. It opens once its shelves are stocked, and this page will say
@@ -236,7 +254,7 @@ day-by-day account of building it would say nothing to anyone using it now.
 - In the video editor, the media panel's tabs and cards are the right size again, and the cards can
   be clicked.
 
-## 2026-09-22 · 2.8.1
+## 2.8.1 · 2026-09-22
 
 - Text across the site is easier to read in dark mode. Links, the colored words used for status
   and warnings, and the outline buttons were all too close to the background behind them; they now
@@ -276,7 +294,7 @@ day-by-day account of building it would say nothing to anyone using it now.
 - On a phone, the heading on a group's Investigations tab no longer sits against its Schedule
   button.
 
-## 2026-09-21 · 2.8.0
+## 2.8.0 · 2026-09-21
 
 - You can put a public location on the map yourself — a landmark, a cemetery, a bridge. **Add a
   public location** is on the Places tab of what's near you. Until now a place only appeared as a
@@ -346,7 +364,7 @@ day-by-day account of building it would say nothing to anyone using it now.
 - Your media library holds what you uploaded, once each. Profile pictures, the site's default
   avatars, and files whose contents have gone are no longer listed.
 
-## 2026-09-20 · 2.7.0
+## 2.7.0 · 2026-09-20
 
 - Administrators can write the site's emails. Pick a letter, pick a table and a column, and add a
   token like {AppUsers.DisplayName} that is filled in when the letter is written. Dates and times
@@ -364,7 +382,7 @@ day-by-day account of building it would say nothing to anyone using it now.
   have already been cleared says so instead of showing an empty page, and the letter is drawn in
   a sealed frame that runs nothing.
 
-## 2026-09-19 · 2.6.0
+## 2.6.0 · 2026-09-19
 
 - Files you own can be deleted from the Media Library, not only from the upload page. If a
   group is using one, it still asks the two questions first — remove it everywhere, or hand
@@ -408,7 +426,7 @@ day-by-day account of building it would say nothing to anyone using it now.
   kept its full width while the finished video was half as long, and the difference came out as
   black nobody had been warned about. Speed can also be undone.
 
-## 2026-09-18 · 2.5.0
+## 2.5.0 · 2026-09-18
 
 - New board now asks what to start from. Five choices: a blank board, a moodboard of colored
   sections with a cluster of themes, a research plan with a four-square and a grid of four weeks, a
@@ -442,7 +460,7 @@ day-by-day account of building it would say nothing to anyone using it now.
   target is published. If the target is deleted, the card says so when clicked rather than going
   anywhere, and if only the card you pointed at is gone, the board still opens.
 
-## 2026-09-17 · 2.4.0
+## 2.4.0 · 2026-09-17
 
 - Your two-week renewal notice now quotes the right number. A group billed quarterly or every six
   months was shown its price "per month", and a tour business was shown the price of one tour
@@ -548,7 +566,7 @@ day-by-day account of building it would say nothing to anyone using it now.
   asking for what that kind of thing needs. Pick the kind while editing a card; changing it keeps what
   you typed. Until a card has a title, its heading says which kind it is rather than "Card".
 
-## 2026-09-16 · 2.3.0
+## 2.3.0 · 2026-09-16
 
 - A session's sound recordings no longer sit held out of a place's archive: the picture screener used to hold every audio file as an image that would not decode, so an archived night could show its readings but never its sound.
 - A field session that was sent from the app as one session file can now be added to a public place's archive, and its recordings play there like any other.
@@ -560,13 +578,13 @@ day-by-day account of building it would say nothing to anyone using it now.
 - A board can reach for a file the case already has, instead of sending a second copy of a photograph you uploaded last week.
 - Recordings dropped on a board play where they sit — sound as a waveform, video in its own small screen at card size, resizable to whatever suits.
 
-## 2026-09-15 · 2.2.1
+## 2.2.1 · 2026-09-15
 
 - When a site role cannot be saved, the page now says exactly why instead of naming a SuperAdmin rule that may have nothing to do with it.
 - Dates and times are typed the way you write them, like 09/15/2026 8:00 PM. A date that does not exist, such as September 31, is refused with a sentence saying why, instead of quietly becoming a different day; the calendar button is still there.
 - When an administrator's new account is refused, the page now says exactly why instead of a general apology.
 
-## 2026-09-14 · 2.2.0
+## 2.2.0 · 2026-09-14
 
 - In every table, the line under a row now runs under its action buttons too.
 - Buttons in tables are icons now, so a row stays on one line. Hover over one to see what it does.
@@ -660,7 +678,7 @@ day-by-day account of building it would say nothing to anyone using it now.
 - A photo whose thumbnail was interrupted while it was being made no longer shows as a blank square; the
   thumbnail is made again.
 
-## 2026-09-13 · 2.1.0
+## 2.1.0 · 2026-09-13
 
 - A guest who asks to stay with no room preference now sees "Waiting to be placed" for each night until the
   venue chooses a room, instead of "Just for the day". The booking board, door list, calendar file and
@@ -831,7 +849,7 @@ day-by-day account of building it would say nothing to anyone using it now.
   properly on the account it just made you, so you can choose your own seats next time.
 - A new help page, **Going to an Event**, covers all of it.
 
-## 2026-09-12 · 2.0.0
+## 2.0.0 · 2026-09-12
 
 - Events have a **Menus** page: every night, and under it every sitting you serve — breakfast,
   lunch, dinner, snacks, a late supper. Dishes are typed one to a line with the course before a
@@ -956,7 +974,7 @@ day-by-day account of building it would say nothing to anyone using it now.
 - The event page now links to the venue's rooms, so describing them is one click from the event
   that is going to offer them.
 
-## 2026-09-11 · 1.8.0
+## 1.8.0 · 2026-09-11
 
 - An investigation can now run across more than one day.
 - Ghost walking tours have their own kind of listing, with a reserved seat you can hold from your phone.
@@ -965,39 +983,39 @@ day-by-day account of building it would say nothing to anyone using it now.
 - Fixed a pop-up opening behind the window that had asked for it.
 - Countdowns and timers now measure elapsed time rather than counting ticks, so they no longer run slow on a busy machine.
 
-## 2026-09-10 · 1.7.0
+## 1.7.0 · 2026-09-10
 
 - Maps across the site are now Apple Maps.
 - You can sign in to the website with your Apple Account.
 - Addresses are looked up as you type when adding a place.
 - Deleting your account now also revokes the Apple sign-in that was attached to it.
 
-## 2026-09-09 · 1.6.2
+## 1.6.2 · 2026-09-09
 
 - The home map shows the cases that are yours.
 - Maps load what is in view instead of everything at once.
 
-## 2026-09-08 · 1.6.1
+## 1.6.1 · 2026-09-08
 
 - The help pages and the product documentation were rebuilt against the current site.
 
-## 2026-09-06 · 1.6.0
+## 1.6.0 · 2026-09-06
 
 - Anyone can report a case from the public site.
 - An export that is missing its media now says so instead of producing a broken file.
 - A canceled export stops immediately.
 - The administrator's user list keeps its actions on one line.
 
-## 2026-09-05 · 1.5.2
+## 1.5.2 · 2026-09-05
 
 - A pass of fixes across the video editor.
 
-## 2026-09-02 · 1.5.1
+## 1.5.1 · 2026-09-02
 
 - Fixed a save that appeared to hang when nothing had been typed.
 - Sessions that lost their owner are cleaned up, and the cleanup can be run selectively.
 
-## 2026-08-31 · 1.5.0
+## 1.5.0 · 2026-08-31
 
 - Groups can be deleted, properly, along with everything that belonged to them.
 - Field sessions published to a public place now say whether what was recorded was unusual.
@@ -1006,50 +1024,44 @@ day-by-day account of building it would say nothing to anyone using it now.
 - Errors are written to a log an administrator can actually read.
 - Menus and buttons that never applied to you are no longer shown at all.
 
-## 2026-08-30 · 1.4.0
+## 1.4.0 · 2026-08-30
 
 - Subscriptions are live end to end, from checkout to seats.
 - The pricing page shows real, round numbers.
 - Field sessions recorded at a public place accumulate into that place's own archive.
 
-## 2026-08-27 · 1.3.0
+## 1.3.0 · 2026-08-27
 
 - A guide can sign somebody up on the spot, with no account and no phone.
 - Trial notices tell you where you are before anything is charged.
 
-## 2026-08-26 · 1.2.0
+## 1.2.0 · 2026-08-26
 
 - A request to investigate is reviewed and voted on, and the first group to accept takes it.
 - What each role may do is now decided in one place, so a menu no longer leads to a refusal.
 - Clients can see which groups are able to take their case before choosing one.
 - Large files upload in pieces, so a dropped connection no longer costs the whole upload.
 
-## 2026-08-25 · 1.1.1
+## 1.1.1 · 2026-08-25
 
 - Media previews stream instead of loading the whole file first.
 
-## 2026-08-24 · 1.1.0
+## 1.1.0 · 2026-08-24
 
 - The feed opened: posts, replies, likes and media, with moderation behind it.
 - Work at a private residence can be marked private, and addresses are held back accordingly.
 
-## 2026-08-23 · 1.0.0
+## 1.0.0 · 2026-08-23
 
 - Roles and permissions can be granted and taken away from a screen.
 - Groups can give their members titles.
 - Investigations have duties, and cases have named contacts.
 - Profiles have avatars, including three you can choose without uploading anything.
 
-## 2026-08-22
-
 - Site-wide announcements.
 - Attendees can submit what they recorded at a public event, and a member accepts it.
 - Billing, subscriptions and what happens when one lapses.
 
-## 2026-08-20
-
 - Sign-up, permanent @names, and two-factor authentication.
-
-## 2026-08-16
 
 - The site opened to its first members.
