@@ -303,7 +303,10 @@ else
             : [];
 
         _circle = _form.ShowRegion && _form.RegionRadiusMiles > 0
-            ? new BenMapCircle(Latitude, Longitude, _form.RegionRadiusMiles * MetersPerMile,
+            // Around the MARKER when there is one: the circle is how far out that point may be.
+            // Centred on the view's middle instead, it stayed behind while the marker moved on.
+            ? new BenMapCircle(MarkerLatitude ?? Latitude, MarkerLongitude ?? Longitude,
+                _form.RegionRadiusMiles * MetersPerMile,
                 _form.RegionFillColor, _form.RegionFillOpacity,
                 _form.RegionStrokeColor, _form.RegionStrokeOpacity, _form.RegionStrokeWidth)
             : null;

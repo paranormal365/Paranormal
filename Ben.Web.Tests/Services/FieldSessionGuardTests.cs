@@ -63,6 +63,27 @@ public sealed class FieldSessionGuardTests
     public void Positions_off_the_earth_are_named(string extra, string expected)
         => Assert.Contains(expected, FieldSessionDocumentGuard.Refusal(Document(Reading(Start, extra: extra))));
 
+    [Theory]
+    [InlineData("\"emf\":48")]
+    [InlineData("\"room\":\"Cellar\"")]
+    [InlineData("\"marker\":[1,2]")]
+    public void A_measurement_given_as_a_bare_value_is_named(string measurement)
+    {
+        // It passed here and then ended the connection of everybody who opened the session to
+        // play it: the player read every measurement as an object (10/14/2026).
+        var refusal = FieldSessionDocumentGuard.Refusal(Document(Reading(Start, measurement)));
+        Assert.NotNull(refusal);
+        Assert.Contains("reading 1", refusal);
+        Assert.Contains("bare value", refusal);
+    }
+
+    [Fact]
+    public void A_reading_that_is_not_an_object_is_named_rather_than_thrown_on()
+    {
+        var refusal = FieldSessionDocumentGuard.Refusal(Document(Reading(Start) + ",42"));
+        Assert.Equal("reading 2 is not a reading.", refusal);
+    }
+
     [Fact]
     public void Too_many_readings_is_refused_with_the_limit()
     {

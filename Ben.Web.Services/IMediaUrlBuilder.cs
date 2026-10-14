@@ -35,6 +35,16 @@ public interface IMediaUrlBuilder
     string FieldSessionFile(Guid sessionId, Guid fileId);
 
     /// <summary>
+    /// Forgets the URL handed out for a session's recording, so the next
+    /// <see cref="FieldSessionFile"/> mints a fresh one.
+    /// </summary>
+    /// <remarks>
+    /// The URL carries a ticket that lasts an hour, and the page holds it for as long as it is
+    /// open. A long session played past that hour lost its recording mid-play.
+    /// </remarks>
+    void RenewFieldSessionFile(Guid sessionId, Guid fileId) { }
+
+    /// <summary>
     /// A recording reached through a share link, for a viewer with no account (item 207).
     /// </summary>
     /// <remarks>

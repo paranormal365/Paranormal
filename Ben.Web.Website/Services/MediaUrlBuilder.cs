@@ -55,6 +55,9 @@ public sealed class MediaUrlBuilder : IMediaUrlBuilder
         return url;
     }
 
+    public void RenewFieldSessionFile(Guid sessionId, Guid fileId)
+        => _urls.Remove($"session:{sessionId}:{fileId}");
+
     public string PlaceFileReview(Guid evidenceId)
     {
         var cacheKey = $"place-file-review:{evidenceId}";

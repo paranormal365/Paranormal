@@ -245,6 +245,11 @@
                             }
                         </div>
 
+                        @if (_mediaNotice is not null)
+                        {
+                            <div class="alert alert-info py-1 px-2 small mb-2" role="status" data-testid="media-notice">@_mediaNotice</div>
+                        }
+
                         <input type="range" class="form-range" min="0" max="1000" step="1"
                                value="@ScrubPosition"
                                @oninput="OnScrub" aria-label="Position in the session" />
@@ -500,6 +505,7 @@
                                                       MarkerBearing="@CurrentBearing"
                                                       MarkerLatitude="@CurrentPoint?.Latitude"
                                                       MarkerLongitude="@CurrentPoint?.Longitude"
+                                                      Zoom="@_mapZoom"
                                                       ReadOnly="true"
                                                       Height="240px" />
                                 }
@@ -733,11 +739,21 @@
         RegionStrokeColor = "#1f9d63",
     };
 
+    /// <summary>
+    /// The map's zoom, chosen ONCE from the session's first fix. Left to the map it was worked
+    /// out again from the accuracy at the playhead on every update, so the view zoomed in and out
+    /// as the fix improved and threw away any zoom the viewer had chosen.
+    /// </summary>
+    private double _mapZoom = 14;
+
     private double? CurrentAccuracyMeters => _readings
         .LastOrDefault(r => r.At <= _playhead && r.AccuracyMeters is not null)?.AccuracyMeters;
 
     private DateTime _start;
     private DateTime _end;
+    /// <summary>The phone's own end time, when it wrote one. Without it a recording that runs on
+    /// past the last reading stretches the end to where it stops.</summary>
+    private DateTime? _endedAt;
     private DateTime _playhead;
     private bool _playing;
     private int _rate = 1;
@@ -793,7 +809,7 @@
         {
             ReadDocument(detail.Document);
         }
-        catch (JsonException)
+        catch (Exception ex) when (ex is JsonException or InvalidOperationException or FormatException)
         {
             // The document is the evidence; if it cannot be read, say so rather than drawing an
             // empty chart that looks like a quiet night.
@@ -854,7 +870,7 @@
         {
             ReadDocument(shared.Document);
         }
-        catch (JsonException)
+        catch (Exception ex) when (ex is JsonException or InvalidOperationException or FormatException)
         {
             _refusal = "This session's document couldn't be read.";
         }
@@ -870,8 +886,26 @@
     /// </remarks>
     private void ReadDocument(string json)
     {
+        // "Try again" reads the document a second time; without this every reading, start and
+        // note was added twice.
+        _readings.Clear();
+        _mediaStarts.Clear();
+        _mediaNoteEnds.Clear();
+
         using var document = JsonDocument.Parse(json);
         var root = document.RootElement;
+
+        // The session's own bounds, when the phone wrote them. The phone's replay runs from
+        // started_at to ended_at; reading only the first and last READING cut off the tail of a
+        // recording that ran past the last one, and moved every elapsed label by the gap before
+        // the first.
+        DateTime? startedAt = null, endedAt = null;
+        if (root.TryGetProperty("session", out var sessionElement)
+            && sessionElement.ValueKind == JsonValueKind.Object)
+        {
+            startedAt = Moment(sessionElement, "started_at");
+            endedAt   = Moment(sessionElement, "ended_at");
+        }
 
         double? baseline = null;
         if (root.TryGetProperty("readings", out var readings)
@@ -879,8 +913,10 @@
         {
             foreach (var element in readings.EnumerateArray())
             {
-                if (!element.TryGetProperty("at", out var at)) continue;
-                var reading = new Reading { At = at.GetDateTime().ToUniversalTime() };
+                // A reading the player cannot place in time is skipped, not fatal: one bad line
+                // used to throw out of the page and end the viewer's connection.
+                if (element.ValueKind != JsonValueKind.Object || Moment(element, "at") is not { } at) continue;
+                var reading = new Reading { At = at };
 
                 if (element.TryGetProperty("measurements", out var measurements)
                     && measurements.ValueKind == JsonValueKind.Object)
@@ -892,18 +928,8 @@
                     }
                     reading.SoundDbfs = measurements.TryGetProperty("sound_level", out var sound)
                         ? Number(sound, "value") : null;
-                    if (measurements.TryGetProperty("marker", out var marker)
-                        && marker.TryGetProperty("value", out var kind)
-                        && kind.ValueKind == JsonValueKind.String)
-                    {
-                        reading.Marker = kind.GetString();
-                    }
-                    if (measurements.TryGetProperty("room", out var room)
-                        && room.TryGetProperty("value", out var roomName)
-                        && roomName.ValueKind == JsonValueKind.String)
-                    {
-                        reading.Room = roomName.GetString();
-                    }
+                    reading.Marker = measurements.TryGetProperty("marker", out var marker) ? Text(marker, "value") : null;
+                    reading.Room   = measurements.TryGetProperty("room", out var room) ? Text(room, "value") : null;
                 }
 
                 if (element.TryGetProperty("position", out var position)
@@ -936,16 +962,24 @@
                 // began its length earlier (see MediaStart). Reading them as starts placed every
                 // video after the stretch it filmed (2026-09-27); the phone's own importer has
                 // always subtracted the length.
+                //
+                // A clip recorded on its own (the capture button, not the session's sound) is
+                // different again: its audio_ref carries the clip's LENGTH and no offset, because
+                // it is written when the clip ends. It began that length earlier, as the phone's
+                // importer reads it (SessionImporter.swift); read as an offset of zero it sat a
+                // whole clip late on the timeline (10/14/2026).
                 if (element.TryGetProperty("audio_ref", out var audioRef))
                 {
-                    string? filename = null; double offset = 0;
+                    string? filename = null; double back = 0;
                     if (audioRef.ValueKind == JsonValueKind.String) filename = audioRef.GetString();
                     else if (audioRef.ValueKind == JsonValueKind.Object)
                     {
-                        filename = audioRef.TryGetProperty("filename", out var fn) && fn.ValueKind == JsonValueKind.String ? fn.GetString() : null;
-                        offset   = Number(audioRef, "start_offset_seconds") ?? 0;
+                        filename = Text(audioRef, "filename");
+                        back = Number(audioRef, "start_offset_seconds")
+                               ?? Number(audioRef, "duration_seconds")
+                               ?? 0;
                     }
-                    if (filename is not null) _mediaStarts.TryAdd(NormalisePath(filename), reading.At.AddSeconds(-offset));
+                    if (filename is not null) _mediaStarts.TryAdd(NormalisePath(filename), reading.At.AddSeconds(-back));
                 }
                 if (reading.Note is { } typed)
                 {
@@ -963,8 +997,9 @@
         _readings = _readings.OrderBy(r => r.At).ToList();
         if (_readings.Count == 0) return;
 
-        _start = _readings[0].At;
-        _end = _readings[^1].At;
+        _start = startedAt is { } began && began <= _readings[0].At ? began : _readings[0].At;
+        _endedAt = endedAt;
+        _end = endedAt is { } ended && ended >= _readings[^1].At ? ended : _readings[^1].At;
         _playhead = _start;
 
         // Against the base level the investigator actually set that night. Without one there is
@@ -977,6 +1012,10 @@
             .Where(r => r.Latitude is not null && r.Longitude is not null)
             .Select(r => new GeoPoint(r.Latitude!.Value, r.Longitude!.Value, r.At))
             .ToList();
+
+        _mapZoom = _readings.FirstOrDefault(r => r.AccuracyMeters is not null)?.AccuracyMeters is { } firstAccuracy
+            ? MapGeoJsonHelper.ZoomForRadius(firstAccuracy / 1609.34)
+            : 14;
 
         // Captures are noted with a marker label (the format has nowhere else to put them), but they
         // are not marks: photographs are in the strip and recordings on the stage, as on the phone.
@@ -1066,9 +1105,23 @@
         return Thin(points);
     }
 
+    // Every read checks the SHAPE first. TryGetProperty throws on anything but an object, and the
+    // upload guard did not refuse `"emf": 48`, so one such reading ended the viewer's connection.
     private static double? Number(JsonElement element, string name)
-        => element.TryGetProperty(name, out var value) && value.ValueKind == JsonValueKind.Number
+        => element.ValueKind == JsonValueKind.Object
+           && element.TryGetProperty(name, out var value) && value.ValueKind == JsonValueKind.Number
             ? value.GetDouble() : null;
+
+    private static string? Text(JsonElement element, string name)
+        => element.ValueKind == JsonValueKind.Object
+           && element.TryGetProperty(name, out var value) && value.ValueKind == JsonValueKind.String
+            ? value.GetString() : null;
+
+    private static DateTime? Moment(JsonElement element, string name)
+        => element.ValueKind == JsonValueKind.Object
+           && element.TryGetProperty(name, out var value) && value.ValueKind == JsonValueKind.String
+           && value.TryGetDateTime(out var moment)
+            ? moment.ToUniversalTime() : null;
 
     /// <summary>One stretch the app was put away for, and the sentence the phone wrote about it.</summary>
     public sealed record AwayStretch(DateTime From, DateTime To, string? Note);
@@ -1169,13 +1222,19 @@
         await PauseAsync();
         // A moment BEFORE the mark, so what led up to it can be seen rather than starting at it.
         _playhead = moment.AddSeconds(-3) < _start ? _start : moment.AddSeconds(-3);
+        AdvanceMap(force: true);
         await FollowMediaAsync();
     }
 
     private async Task TogglePlay()
     {
         if (_playing) { await PauseAsync(); return; }
-        if (_playhead >= _end) _playhead = _start;
+        _mediaNotice = null;
+        if (_playhead >= _end)
+        {
+            _playhead = _start;
+            AdvanceMap(force: true);
+        }
 
         // A recording that covers this moment is the clock: readings, room and map follow what
         // is heard. Seek it to the playhead and press play on it; only if the browser refuses —
@@ -1226,6 +1285,11 @@
         _ticker?.Cancel();
         _ticker = null;
         _anchorAt = null;
+        // A paused recording is no longer the clock. It kept the name, so the timeupdate its own
+        // pause() and every later seek fire still moved the playhead — back to where the drag had
+        // been a moment ago, or to the recording's first or last second once the drag left it.
+        // Play chooses the clock again from wherever the playhead is then.
+        _clockKey = null;
     }
 
     private async Task PauseAsync()
@@ -1349,11 +1413,17 @@
         if (_media is null || _session is null) return;
         var covering = AllCovering(_playhead);
         var soundPlays = covering.Any(IsAudioFile);
+        // ONE sound is heard: the clock when the clock is a sound, otherwise the latest to begin
+        // (AllCovering is newest first), as the phone chooses. Two overlapping recordings both
+        // played aloud, a beat apart.
+        var heard = _clockKey is { } clock && covering.Contains(clock) && IsAudioFile(clock)
+            ? clock
+            : covering.FirstOrDefault(IsAudioFile);
 
         foreach (var id in covering)
         {
             if (!_mediaRefs.TryGetValue(id, out var el) || MediaStartOf(id) is not { } startsAt) continue;
-            var muted = IsVideoFile(id) && soundPlays;
+            var muted = IsVideoFile(id) ? soundPlays : id != heard;
             if (id == _clockKey)
             {
                 try { await _media.InvokeVoidAsync("mute", el, muted); } catch (JSException) { }
@@ -1457,15 +1527,43 @@
     {
         if (double.IsNaN(seconds) || double.IsInfinity(seconds) || seconds <= 0) return;
         _mediaDurations[key] = seconds;
+
+        // A session the phone never closed ends at the last thing it recorded, sound included,
+        // as the phone's replay does — so the tail of a recording past the last reading can be
+        // reached. A session with an end time keeps it.
+        if (_endedAt is null && MediaStartOf(key) is { } startsAt && startsAt.AddSeconds(seconds) > _end)
+            _end = startsAt.AddSeconds(seconds);
+
+        // Its start can depend on its length (a clip noted when it ended), so the label and the
+        // stage are redrawn now rather than whenever something else happens to.
+        _ = InvokeAsync(StateHasChanged);
     }
 
     /// <summary>Files the browser reported it cannot decode; never chosen as the clock.</summary>
     private readonly HashSet<Guid> _undecodable = [];
 
+    /// <summary>Recordings whose link was renewed once already; a second failure is the file.</summary>
+    private readonly HashSet<Guid> _renewed = [];
+
+    /// <summary>Said once, above the player, when a recording's link had to be renewed.</summary>
+    private string? _mediaNotice;
+
     private void MarkUndecodable(Guid fileId)
     {
+        if (_clockKey == fileId || _following.Contains(fileId)) Pause();
+
+        // A recording that already told us its length DID decode. Failing later means its link
+        // ran out — the ticket in it lasts an hour — not that the browser cannot play it, and
+        // "won't play in this browser" was the wrong sentence about a working file. Renew the
+        // link once; the element loads it, and Play carries on from the playhead.
+        if (!Shared && _mediaDurations.ContainsKey(fileId) && _renewed.Add(fileId))
+        {
+            MediaUrls.RenewFieldSessionFile(SessionId, fileId);
+            _mediaNotice = "A recording's link ran out and has been renewed. Press Play to carry on.";
+            return;
+        }
+
         _undecodable.Add(fileId);
-        if (_clockKey == fileId) { _clockKey = null; Pause(); }
     }
 
     protected override async Task OnAfterRenderAsync(bool firstRender)
@@ -1674,7 +1772,11 @@
 
         if (!force)
         {
-            if ((_playhead - _mapAt).TotalSeconds < 1.0) return;
+            // Measured both ways. Only "forwards by less than a second" is too soon; behind the
+            // last move is a jump back, and it used to freeze the map until the playhead caught
+            // up with where it had been — a second play-through never moved it at all.
+            var since = (_playhead - _mapAt).TotalSeconds;
+            if (since is >= 0 and < 1.0) return;
             if (_mapPoint is not null && MetresBetween(_mapPoint, point) < 5.0) return;
         }
 

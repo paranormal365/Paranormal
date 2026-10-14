@@ -32,7 +32,9 @@ public static class FieldSessionDocumentGuard
         using var document = JsonDocument.Parse(json);
         var root = document.RootElement;
 
-        if (!root.TryGetProperty("session", out var session)
+        if (root.ValueKind != JsonValueKind.Object
+            || !root.TryGetProperty("session", out var session)
+            || session.ValueKind != JsonValueKind.Object
             || !session.TryGetProperty("started_at", out var startedAtEl)
             || !TryDate(startedAtEl, out var startedAt))
             return "the session does not say when it started.";
@@ -56,6 +58,8 @@ public static class FieldSessionDocumentGuard
         foreach (var reading in readings.EnumerateArray())
         {
             index++;
+            if (reading.ValueKind != JsonValueKind.Object)
+                return $"reading {index} is not a reading.";
             if (!reading.TryGetProperty("at", out var atEl) || !TryDate(atEl, out var at))
                 return $"reading {index} has no time.";
             if (at < windowStart || at > windowEnd)
@@ -66,6 +70,12 @@ public static class FieldSessionDocumentGuard
 
             if (reading.TryGetProperty("measurements", out var m) && m.ValueKind == JsonValueKind.Object)
             {
+                // Every measurement is { "value": … }. A bare `"emf": 48` passed here and then
+                // ended the connection of everybody who opened the session to play it.
+                foreach (var measurement in m.EnumerateObject())
+                    if (measurement.Value.ValueKind != JsonValueKind.Object)
+                        return $"reading {index} gives \"{measurement.Name}\" as a bare value; a measurement is {{ \"value\": … }}.";
+
                 if (Value(m, "emf") is { } emf && (double.IsNaN(emf) || emf < 0 || emf > MaxMicrotesla))
                     return $"reading {index} claims a magnetic field of {emf} µT; no phone measures that.";
                 if (Value(m, "sound_level") is { } dbfs && (double.IsNaN(dbfs) || dbfs > 0 || dbfs < MinSoundDbfs))
