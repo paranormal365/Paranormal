@@ -1,7 +1,7 @@
 using Ben.Data.Source.Entities;
-using Telerik.Windows.Documents.Fixed.FormatProviders.Pdf;
-using Telerik.Windows.Documents.Fixed.Model;
-using Telerik.Windows.Documents.Fixed.Model.Editing;
+using Telerik.Documents.Fixed.FormatProviders.Pdf;
+using Telerik.Documents.Fixed.Model;
+using Telerik.Documents.Fixed.Model.Editing;
 
 namespace Ben.Data.WebApi.Services;
 

@@ -15,11 +15,7 @@
          used from it (Grid, Scheduler, Editor, Map, date/time pickers, ColorPicker, ContextMenu).
          Those are restyled to match the template via wwwroot/theme/telerik-night.css in the host.
          Everything else is native Bootstrap markup or a component from Kit/. -->
-    <PackageReference Include="Telerik.UI.for.Blazor" Version="14.1.0" />
-    <!-- Pinned past the version Telerik's document libraries bring (9.0.9), which carries a published
-         high-severity advisory (GHSA-846f-f764-76mx, fixed in 10.0.13): a fresh restore refused to
-         build with warnings as errors (10/14/2026). Telerik 15.1 brings 10.0.13 itself; remove then. -->
-    <PackageReference Include="System.Security.Cryptography.Pkcs" Version="10.0.13" />
+    <PackageReference Include="Telerik.UI.for.Blazor" Version="15.1.0" />
   </ItemGroup>
 
   <ItemGroup>

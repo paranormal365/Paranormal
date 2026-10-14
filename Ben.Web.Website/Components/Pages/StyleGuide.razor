@@ -315,6 +315,12 @@ else
             <label class="form-label mt-3">TelerikScheduler — a group's week</label>
             <TelerikScheduler Data="@_appointments" @bind-Date="@_schedulerDate" Height="460px"
                               AllowCreate="false" AllowUpdate="false" AllowDelete="false">
+                @* As the group calendar: no New Event button of Telerik's own (its default since 15). *@
+                <SchedulerToolBar>
+                    <SchedulerToolBarNavigationTool />
+                    <SchedulerToolBarCalendarTool />
+                    <SchedulerToolBarViewsTool />
+                </SchedulerToolBar>
                 <SchedulerViews>
                     <SchedulerWeekView StartTime="@_dayStart" EndTime="@_dayEnd" />
                     <SchedulerMonthView />

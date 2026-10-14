@@ -58,7 +58,7 @@
         }
         <div class="d-flex justify-content-end mb-2">
             @* A Viewer reads the calendar and changes nothing on it (Ben, 2026-09-14): no New event, and the scheduler's own
-               create, drag and ✕ are off for them too. *@
+               create and drag are off for them too. *@
             @if (_isViewer)
             {
                 <span class="small text-secondary" id="calendar-viewer-note">You're a viewer in this group, so the calendar is read-only for you.</span>
@@ -103,6 +103,16 @@
                     <span class="cal-item__title">@appt.Title</span>
                 </div>
             </ItemTemplate>
+
+            @* The toolbar spelled out (Telerik 15, 10/14/2026). Its default gained a New Event button that
+               opens Telerik's own edit form, beside our New event above; and its ✕ on an appointment
+               moved into that form, which this page never shows — deleting is the Delete in our
+               editor, behind the same question. *@
+            <SchedulerToolBar>
+                <SchedulerToolBarNavigationTool />
+                <SchedulerToolBarCalendarTool />
+                <SchedulerToolBarViewsTool />
+            </SchedulerToolBar>
 
             <SchedulerViews>
                 <SchedulerDayView StartTime="@_dayStart" EndTime="@_dayEnd" />
@@ -455,7 +465,7 @@
 
             @if (!_isNewEvent)
             {
-                <button type="button" class="btn btn-danger" @onclick="DeleteFromDialog" disabled="@(!(!_isBusy))"><BenIcon Name="trash-2" Class="me-1" />Delete</button>
+                <button type="button" class="btn btn-danger" data-testid="calendar-editor-delete" @onclick="DeleteFromDialog" disabled="@(!(!_isBusy))"><BenIcon Name="trash-2" Class="me-1" />Delete</button>
             }
             <button type="button" class="btn btn-secondary" @onclick="@(() => _showEventDialog = false)">Cancel</button>
             <button type="button" class="btn btn-primary" @onclick="SaveEvent" disabled="@(!(!_isBusy && !string.IsNullOrWhiteSpace(_form.Title)))"><BenIcon Name="save" Class="me-1" />

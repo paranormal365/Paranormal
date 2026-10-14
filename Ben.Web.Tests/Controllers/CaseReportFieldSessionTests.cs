@@ -314,13 +314,13 @@ public class CaseReportFieldSessionTests
     private static string ExtractText(byte[] bytes)
     {
         using var stream = new MemoryStream(bytes);
-        var document = new Telerik.Windows.Documents.Fixed.FormatProviders.Pdf.PdfFormatProvider().Import(stream, null);
+        var document = new Telerik.Documents.Fixed.FormatProviders.Pdf.PdfFormatProvider().Import(stream, null);
         var builder = new System.Text.StringBuilder();
         foreach (var page in document.Pages)
         {
             foreach (var element in page.Content)
             {
-                if (element is Telerik.Windows.Documents.Fixed.Model.Text.TextFragment fragment)
+                if (element is Telerik.Documents.Fixed.Model.Text.TextFragment fragment)
                     builder.Append(fragment.Text).Append(' ');
             }
         }

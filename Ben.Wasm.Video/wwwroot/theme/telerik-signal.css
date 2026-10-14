@@ -3,8 +3,9 @@
  * the next reader looking for one. The canvas host still carries its own, older copy under the old
  * name — they had already drifted, 7.6 KB against 8.9 KB — and that is folded in with the editors.)
  *
- * Loaded after kendo-theme-bootstrap/all.css. Kendo themes in Telerik 14.x are CSS-variable
- * driven, so remapping the variables is enough to make the widgets kept from Telerik (Grid,
+ * Loaded after kendo-theme-bootstrap/all.css. Kendo themes are CSS-variable driven (Telerik 15.1 ships
+ * Kendo themes 14.6; checked 10/14/2026: every class and --kendo-* variable this file names is still
+ * there), so remapping the variables is enough to make the widgets kept from Telerik (Grid,
  * Scheduler, Editor, Map, date/time pickers, ColorPicker, ContextMenu) read as part of the
  * template rather than as a control suite dropped on top of it.
  *

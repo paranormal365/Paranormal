@@ -54,7 +54,7 @@
              2026.3.810 while Spreadsheet/Spreadsheet.FormatProviders.Pdf still required
              2026.2.519, and the PDF namespaces disappeared from the build. They move together or
              not at all. -->
-        <PackageReference Include="Telerik.Documents.Fixed" Version="2026.2.519" />
+        <PackageReference Include="Telerik.Documents.Fixed" Version="2026.3.923" />
     </ItemGroup>
 
     <ItemGroup>

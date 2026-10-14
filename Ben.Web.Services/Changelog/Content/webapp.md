@@ -50,8 +50,13 @@ day-by-day account of building it would say nothing to anyone using it now.
   the video editor, the audio editor or the CMS. Each has its own version, shown first, with the day
   it was released after it.
 
+- On a group's calendar, an event is deleted from its editor: open it and press **Delete**, which asks
+  first. The calendar's toolbar is lighter, and on a narrow screen its views fold into a list.
+
 ### Administration
 
+- The audit log's CSV export marks any cell that starts like a spreadsheet formula, so opening the
+  file in a spreadsheet cannot run it.
 - What's new shows SuperAdmins the work that is not released yet, and the changes to administration
   in each version, which nobody else sees.
 

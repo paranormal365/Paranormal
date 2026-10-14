@@ -70,6 +70,15 @@ public class CalendarDragTests : BenTestBase
         await TheEvent.ScrollIntoViewIfNeededAsync();
     }
 
+    /// <summary>Double-click opens our editor (Telerik's own form never shows); its Delete asks first.</summary>
+    private async Task OpenTheEditorAndDeleteAsync()
+    {
+        await TheEvent.DblClickAsync();
+        var delete = Page.GetByTestId("calendar-editor-delete");
+        await Expect(delete).ToBeVisibleAsync(new() { Timeout = 10_000 });
+        await delete.ClickAsync();
+    }
+
     [Test]
     public async Task AnEventDraggedToAnotherDay_MovesThere_AndTheMoveCanBeUndone()
     {
@@ -99,12 +108,13 @@ public class CalendarDragTests : BenTestBase
     }
 
     [Test]
-    public async Task TheCrossOnAnEvent_AsksFirst_AndCancelKeepsIt()
+    public async Task Deleting_an_event_AsksFirst_AndCancelKeepsIt()
     {
+        // Telerik 15 took the ✕ off appointments and put delete in its own edit form, which this page
+        // never shows (10/14/2026). Delete is the button in our editor, behind the same question.
         await OpenTheCalendarAsync();
 
-        await TheEvent.HoverAsync();
-        await TheEvent.Locator(".k-event-delete").ClickAsync();
+        await OpenTheEditorAndDeleteAsync();
         await Expect(Page.Locator("[data-testid=calendar-delete-message]")).ToContainTextAsync(_title, new() { Timeout = 10_000 });
         Assert.That(await StartOnServerAsync(), Is.Not.Null, "the event went before the question was answered");
 
@@ -112,8 +122,7 @@ public class CalendarDragTests : BenTestBase
         await Expect(Page.Locator("[data-testid=calendar-delete-message]")).ToHaveCountAsync(0);
         Assert.That(await StartOnServerAsync(), Is.Not.Null);
 
-        await TheEvent.HoverAsync();
-        await TheEvent.Locator(".k-event-delete").ClickAsync();
+        await OpenTheEditorAndDeleteAsync();
         await Page.Locator(".modal.show, [role=dialog]").GetByRole(AriaRole.Button, new() { Name = "Delete", Exact = true }).ClickAsync();
         await Expect(TheEvent).ToHaveCountAsync(0, new() { Timeout = 15_000 });
         Assert.That(await StartOnServerAsync(), Is.Null, "the event is still there after Delete");

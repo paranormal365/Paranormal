@@ -25,7 +25,12 @@ public class ViewerSeatTests : BenTestBase
 
         await Expect(Page.Locator("#calendar-viewer-note")).ToBeVisibleAsync(new() { Timeout = 20_000 });
         await Expect(Page.Locator("#calendar-new-event")).ToHaveCountAsync(0);
-        await Expect(Page.Locator(".k-event-delete")).ToHaveCountAsync(0);
+        // Telerik 15's toolbar has a New Event of its own by default; the calendar declares its tools
+        // so nobody gets one, and a viewer least of all (10/14/2026). Its ✕ on appointments is gone
+        // for everybody, so the place a delete could be is our editor's — never open for a viewer.
+        await Expect(Page.Locator(".k-scheduler-toolbar").GetByRole(AriaRole.Button, new() { NameString = "New Event" }))
+            .ToHaveCountAsync(0);
+        await Expect(Page.GetByTestId("calendar-editor-delete")).ToHaveCountAsync(0);
     }
 
     [Test]
