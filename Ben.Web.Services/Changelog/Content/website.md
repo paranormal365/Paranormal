@@ -22,6 +22,20 @@ it carry no number.
 The history before 2026-08-22 is summarized rather than listed: the site was not yet open, and a
 day-by-day account of building it would say nothing to anyone using it now.
 
+## 2026-10-14 · 2.21.0
+
+- Field sessions play back more smoothly. Dragging through a session while it plays carries on from
+  where you let go, instead of jumping back.
+- On the map, the marker follows the path that was walked and the arrow turns to show which way the
+  phone was facing. The map keeps it in view, and **Recenter** brings it back after you move the map.
+- Playback goes up to 32×, has buttons for the previous and next mark, and answers the arrow keys and
+  the space bar. The mark being passed lights up in the list, and the chart shows where playback is.
+- Clicking a photograph goes to the moment it was taken.
+- Sessions in a place's field archive can be played back from the place's page.
+- A photo shared by link no longer carries the location stored inside the picture.
+- A recording made on its own, separately from the session's sound, now sits where it began rather
+  than where it ended, and a recording that runs past the last reading can be played to its end.
+
 ## 2026-10-13 · 2.20.0
 
 - Events have designed menus. Make the items once and keep them for the event, your group or the

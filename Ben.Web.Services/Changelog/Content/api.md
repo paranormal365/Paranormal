@@ -24,6 +24,15 @@ before it carries no number.
 This stream deliberately does not repeat the website's list. A change people meet as a page
 belongs there; this is for the part underneath.
 
+## 2026-10-14 · 2.10.0
+
+- A field session can be read as a timeline, worked out once and shared by everybody watching it.
+  Shared links and the public archive get their own versions, with locations removed or replaced by
+  the place's public point.
+- Recordings on a shared link count once per visitor, not once for every part of the file a player
+  fetched.
+- A session whose readings name a measurement without its value is refused, with the reading named.
+
 ## 2026-10-05 · 2.9.0
 
 - The apps can ask which version of the iPhone and iPad app is newest on the App Store, so a phone

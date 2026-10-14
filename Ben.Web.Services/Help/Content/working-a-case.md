@@ -454,9 +454,19 @@ the recordings all play in sync.
 The playback page works just like the review screen in the app. Below the controls, the **video**
 at the playhead plays alongside the session's **sound**. The **photographs** taken during the night
 appear in a strip of thumbnails, and each one's border glows for three seconds as playback reaches
-the moment it was taken. Click a photograph to pause and see it full size, and click again to
-continue. When the camera saw movement while the phone was held still, the video is outlined and
-**Motion detected** appears for three seconds.
+the moment it was taken. Click a photograph to go to the moment it was taken and see it full size,
+and click again to carry on. When the camera saw movement while the phone was held still, the video
+is outlined and **Motion detected** appears for three seconds.
+
+Drag the bar under the controls, or drag across the chart, to move through the night; playback
+carries on from wherever you let go. The speed buttons go up to 32×, and the two buttons beside them
+step to the previous or next mark, starting a few seconds before it so you hear what led up to it.
+The left and right arrow keys move five seconds, and the space bar plays and pauses.
+
+On the map, the marker moves along the path that was walked and the arrow turns to show which way
+the phone was facing. The map keeps the marker in view as it goes. If you move or zoom the map
+yourself, it stays where you put it until you press **Recenter**. As playback passes a mark, its row
+in the **Marked** list lights up.
 
 ![The playback page: the video with its sound, a photograph glowing in the strip, and Motion detected](/help/media/working-a-case/field-session-player.png)
 
@@ -894,7 +904,9 @@ recorded there with the phone app and chose to publish. These aren't your group'
 tied to any case: someone went somewhere public, recorded, and decided to share the readings.
 
 Each row shows who recorded the session, when, roughly where they stood, how many readings it
-contains, and how many moments they flagged. That last number is the one to compare across rows. A
+contains, and how many moments they flagged. **Play it back** opens the session in the same player
+as above, with its readings, sound and marks on one timeline. The map shows the place itself rather
+than where the phone was, and recordings appear once they've been approved. That last number is the one to compare across rows. A
 spike that eleven out of twelve visitors flagged on the same stairs tells you something about the
 building; one that appears only once is probably noise. Comparing visits is the only way to tell
 the difference, and this is the only place on the site — or anywhere else we know of — where you

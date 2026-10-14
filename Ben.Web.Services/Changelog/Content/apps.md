@@ -22,6 +22,16 @@ on somebody's own phone. Several days can share a number, because one build carr
 work. A change not yet on the App Store is listed under the number the next build will have. Fixes
 move the last number, new things the middle one, a whole new part of the app the first.
 
+## 2026-10-14 · 1.1.4
+
+- In a session's review, tapping a photo goes to the moment it was taken, and the mark being passed
+  lights up in the list.
+- The map arrow turns smoothly and stays right when the map is turned. The map keeps the marker in
+  view, and **Recenter** brings it back after you move the map.
+- Pressing Play where nothing was recorded starts at the next recording.
+- A base level set again partway through a session counts from there on.
+- When there is no compass or course, the arrow follows the direction walked.
+
 ## 2026-10-13 · 1.1.3
 
 - Event menus look the way the hosts designed them, just as on the website: their colors, typefaces,
