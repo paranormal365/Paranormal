@@ -35,3 +35,18 @@ public sealed record DeskCase(
 public sealed record DeskGear(
     Guid CheckoutId, Guid EquipmentItemId, string DisplayName, string? OrganizationName,
     DateTime? DateCheckedOut, DateTime? DateDue, bool IsOverdue);
+
+/// <summary>
+/// The numbers the navigation bar shows, counted by the database (10/14/2026).
+/// </summary>
+/// <remarks>
+/// Ben: "Is there any way we speed up the logic for getting counts … so it doesn't get slower for
+/// site users the more users we have." The bar used to download every user (for a SuperAdmin's
+/// badge) and every group with its member, case and investigation counts and permissions, only to
+/// count the rows — a page load that grew with the site. Each figure here is one SQL COUNT or
+/// EXISTS over indexed columns.
+/// </remarks>
+/// <param name="OrganizationCount">Groups this person sees: all of them for a SuperAdmin, their active memberships otherwise.</param>
+/// <param name="HasStoreOrders">Whether they have any paid store order.</param>
+/// <param name="UserCount">Every account on the site; SuperAdmins only, null for anybody else.</param>
+public sealed record NavCountsResponse(int OrganizationCount, bool HasStoreOrders, int? UserCount);

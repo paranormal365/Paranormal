@@ -888,28 +888,26 @@ else
 
         try
         {
-            _myOrgs = (await AdminClient.GetMyMembershipOrganizationsAsync()).Items;
+            // Asked together: the bar's numbers do not wait on each other, or on the groups list.
+            var myOrgs = AdminClient.GetMyMembershipOrganizationsAsync();
+            var counts = AdminClient.GetMyNavCountsAsync();
+            await Task.WhenAll(myOrgs, counts);
 
-            if (!Features.IsOn(SiteFeatures.Store))
+            _myOrgs = myOrgs.Result.Items;
+
+            // Counted by the database (10/14/2026). This used to download every group — with its
+            // member, case and investigation counts and permissions, for a SuperAdmin — and every
+            // user, to show two numbers; on the live site that held "Your groups" and the desk back
+            // for about twenty seconds after a SuperAdmin signed in, and grew with every new member.
+            // A refused fetch leaves the badges off rather than showing zeroes, which would be the
+            // same lie in a smaller space.
+            if (counts.Result.Item is { } n)
             {
-                var orders = await AdminClient.GetMyStoreOrdersAsync();
-                _hasStoreOrders = !orders.Failed && orders.Items.Count > 0;
-            }
-
-            // Already scoped to the caller: a member gets their groups, a SuperAdmin gets all.
-            _organizationCount = (await AdminClient.GetOrganizationsAsync()).Items.Count;
-
-            // SuperAdmin only, because only they are shown the Users entry this badges.
-            //
-            // Counting a full list is the wrong shape at scale — this pulls every user row to
-            // display one number. Fine at today's size, and the honest fix is a count endpoint
-            // rather than a cleverer client; noted rather than pretended away.
-            if (TokenStore.IsSuperAdmin && !TokenStore.IsImpersonating)
-            {
-                // A badge number. A refused fetch leaves the badge off rather than showing
-                // zero users, which would be the same lie in a smaller space.
-                var users = await AdminClient.GetAllUsersAsync();
-                if (!users.Failed) _userCount = users.Items.Count;
+                _organizationCount = n.OrganizationCount;
+                if (!Features.IsOn(SiteFeatures.Store)) _hasStoreOrders = n.HasStoreOrders;
+                // SuperAdmin only, because only they are shown the Users entry this badges.
+                if (TokenStore.IsSuperAdmin && !TokenStore.IsImpersonating && n.UserCount is { } users)
+                    _userCount = users;
             }
         }
         catch (Exception)

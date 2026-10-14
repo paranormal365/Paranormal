@@ -69,4 +69,8 @@ public sealed class WebApiTokenStore : IWebApiTokenStore, IBenUserState
     private readonly TaskCompletionSource _authReadyTcs = new(TaskCreationOptions.RunContinuationsAsynchronously);
     public Task AuthReady => _authReadyTcs.Task;
     public void SignalAuthReady() => _authReadyTcs.TrySetResult();
+
+    public SemaphoreSlim RenewalGate { get; } = new(1, 1);
+    public event Action? SessionEnded;
+    public void EndSession() => SessionEnded?.Invoke();
 }

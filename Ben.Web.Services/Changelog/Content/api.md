@@ -42,6 +42,13 @@ belongs there; this is for the part underneath.
   fetched.
 - A session whose readings name a measurement without its value is refused, with the reading named.
 - The build report says which version is running.
+- The menu's numbers are counted by the service instead of being sent in full, so pages stay quick
+  as the site grows.
+
+### Administration
+
+- Any request that takes more than five seconds is recorded in the error log, with how long it took.
+
 
 ## 2.9.0 · 2026-10-05
 

@@ -155,6 +155,29 @@ public sealed class WebApiIdentityClient : IWebApiIdentityClient
 
     private sealed record ValidationProblem(string? Detail, Dictionary<string, string[]>? Errors);
 
+    public async Task<RefreshOutcome> TryRefreshAsync(string refreshToken, CancellationToken token = default)
+    {
+        try
+        {
+            using var response = await _httpClient.PostAsJsonAsync(
+                "/refresh", new WebApiRefreshRequest(refreshToken), token);
+
+            if (response.IsSuccessStatusCode)
+            {
+                var tokens = await response.Content.ReadFromJsonAsync<WebApiTokenResponse>(cancellationToken: token);
+                return tokens is { AccessToken.Length: > 0 } ? new RefreshOutcome(tokens, false) : new RefreshOutcome(null, true);
+            }
+
+            var code = (int)response.StatusCode;
+            var notNow = code >= 500 || code == 429 || code == 408;
+            return new RefreshOutcome(null, Refused: !notNow);
+        }
+        catch (Exception ex) when (ex is HttpRequestException || (ex is TaskCanceledException && !token.IsCancellationRequested))
+        {
+            return RefreshOutcome.Unanswered;
+        }
+    }
+
     public async Task<WebApiTokenResponse?> RefreshAsync(string refreshToken, CancellationToken token = default)
     {
         using var response = await _httpClient.PostAsJsonAsync(

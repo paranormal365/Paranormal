@@ -38,4 +38,21 @@ public interface IWebApiTokenStore : ITokenStore
 
     /// <summary>Marks <see cref="AuthReady"/> complete. Call once, after the first-render auth restore attempt finishes (success or failure).</summary>
     void SignalAuthReady();
+
+    /// <summary>
+    /// One renewal at a time for this circuit. Every part of a page asks the API at once, and with
+    /// an expired token each would otherwise spend the refresh token separately — and a refresh
+    /// token is good for one use (10/14/2026).
+    /// </summary>
+    SemaphoreSlim RenewalGate { get; }
+
+    /// <summary>
+    /// The API refused this session and it could not be renewed. <c>MainLayout</c> signs the person
+    /// out and takes them to sign in (Ben, 10/14/2026: "just redirect to the sign in page and
+    /// actually sign me out instead of telling and making me have to actually sign out").
+    /// </summary>
+    event Action? SessionEnded;
+
+    /// <summary>Raises <see cref="SessionEnded"/>.</summary>
+    void EndSession();
 }

@@ -174,7 +174,12 @@ builder.Services.AddHttpClient<IWebApiClient, WebApiClient>((sp, client) =>
     var options = sp.GetRequiredService<IOptions<WebApiOptions>>().Value;
     client.BaseAddress = new Uri(options.BaseUrl);
 }).AddHttpMessageHandler(sp =>
-    new ApiBasePathHandler(sp.GetRequiredService<IOptions<WebApiOptions>>().Value.BaseUrl));
+    new ApiBasePathHandler(sp.GetRequiredService<IOptions<WebApiOptions>>().Value.BaseUrl))
+  // Renews an expiring session, and ends one the API refuses (10/14/2026). The circuit's renewer
+  // travels on each request; this handler only acts on requests that carry one.
+  .AddHttpMessageHandler(() => new SessionRenewalHandler());
+// Per circuit, like the token store it keeps alive.
+builder.Services.AddScoped<SessionRenewer>();
 builder.Services.AddScoped<IWebApiAuthService, WebApiAuthService>();
 
 // The SAME instance, not a second one. WebApiAuthService holds the circuit's token store, so a

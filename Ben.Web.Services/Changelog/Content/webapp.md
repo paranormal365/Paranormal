@@ -52,6 +52,10 @@ day-by-day account of building it would say nothing to anyone using it now.
 
 - On a group's calendar, an event is deleted from its editor: open it and press **Delete**, which asks
   first. The calendar's toolbar is lighter, and on a narrow screen its views fold into a list.
+- Staying signed in works: the site renews your session as you use it. When a session does end,
+  the site signs you out and takes you to sign in, then back to the page you were on, instead of
+  showing you signed in while every page says you are not.
+- The home page and the menu load faster after signing in, especially for people in many groups.
 
 ### Administration
 

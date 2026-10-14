@@ -21,13 +21,18 @@ public sealed class WebApiClient : IWebApiClient
     /// <param name="cart">The circuit's cart token (storefront S3.4). Optional so the many tests that build a client by hand keep compiling.</param>
     /// <param name="visitor">The circuit's visitor address (S3.4). Optional for the same reason.</param>
     public WebApiClient(HttpClient httpClient, IWebApiTokenStore tokenStore,
-        StoreCartTokenHolder? cart = null, VisitorAddressHolder? visitor = null)
+        StoreCartTokenHolder? cart = null, VisitorAddressHolder? visitor = null,
+        SessionRenewer? renewer = null)
     {
         _httpClient = httpClient;
         _tokenStore = tokenStore;
         _cart = cart;
         _visitor = visitor;
+        _renewer = renewer;
     }
+
+    /// <summary>The circuit's session keeper (10/14/2026); see <see cref="SessionRenewalHandler"/>.</summary>
+    private readonly SessionRenewer? _renewer;
 
     /// <summary>The sentence a person is shown when the site cannot reach its own server.</summary>
     internal const string Unreachable = "The site couldn't be reached just now. Please try again in a moment.";
@@ -63,7 +68,13 @@ public sealed class WebApiClient : IWebApiClient
     {
         var req = Anonymous(method, url);
         if (!string.IsNullOrWhiteSpace(_tokenStore.AccessToken))
+        {
             req.Headers.Authorization = new AuthenticationHeaderValue("Bearer", _tokenStore.AccessToken);
+            // The handler renews an expiring session before this goes, and ends one the API refuses
+            // and cannot renew — instead of every page on the site saying "signed out" to somebody
+            // the menu still shows as signed in (10/14/2026).
+            if (_renewer is not null) req.Options.Set(SessionRenewalHandler.Key, _renewer);
+        }
         return req;
     }
 

@@ -38,6 +38,32 @@ public sealed class MyDeskController : BenControllerBase
         _security = security;
     }
 
+    /// <summary>The navigation bar's numbers, as counts (see <see cref="NavCountsResponse"/>).</summary>
+    [HttpGet("nav-counts")]
+    public async Task<ActionResult<NavCountsResponse>> GetNavCounts(CancellationToken ct)
+    {
+        var userId = GetCurrentUserId();
+        if (userId == Guid.Empty) return Unauthorized();
+        var isSuperAdmin = User.IsInRole(Ben.Data.Common.Constants.RoleNames.SuperAdmin);
+        await using var db = await _db.CreateDbContextAsync(ct);
+
+        // The same scoping as GET api/organizations (OrganizationSecurityService.GetOrganizationsForUserAsync):
+        // every group for a SuperAdmin, otherwise the groups with an active membership.
+        var organizationCount = isSuperAdmin
+            ? await db.Organizations.CountAsync(ct)
+            : await db.OrganizationUserMemberships
+                .Where(m => m.AppUserId == userId && m.IsActive)
+                .Select(m => m.OrganizationId).Distinct().CountAsync(ct);
+
+        // The same rows as GET api/me/store/orders: paid orders this person bought.
+        var hasStoreOrders = await db.StoreOrders
+            .AnyAsync(o => o.BuyerAppUserId == userId && o.PaidUtc != null, ct);
+
+        int? userCount = isSuperAdmin ? await db.AppUsers.CountAsync(ct) : null;
+
+        return Ok(new NavCountsResponse(organizationCount, hasStoreOrders, userCount));
+    }
+
     [HttpGet("desk")]
     public async Task<ActionResult<MemberDeskResponse>> GetDesk(CancellationToken ct)
     {
@@ -77,14 +103,21 @@ public sealed class MyDeskController : BenControllerBase
         // group they belonged to, and a membership rank on its own grants nothing below
         // Administrator: a new member's desk was a column of links that all answered 403. A door
         // must never offer what it cannot open.
+        //
+        // A SuperAdmin reads every group's cases, so their groups are all readable without asking
+        // one group at a time — each ask is its own round trip to the database, and on the live
+        // site those added up for a SuperAdmin in many groups (10/14/2026).
         var readableOrgIds = new List<Guid>();
-        foreach (var orgId in orgIds)
-        {
-            if (adminOrgIds.Contains(orgId)
-                || await _security.HasAccessAsync(
-                    userId, orgId, OrganizationSecurityTable.Case, OrganizationSecurityAction.Read, ct))
-                readableOrgIds.Add(orgId);
-        }
+        if (User.IsInRole(Ben.Data.Common.Constants.RoleNames.SuperAdmin))
+            readableOrgIds.AddRange(orgIds);
+        else
+            foreach (var orgId in orgIds)
+            {
+                if (adminOrgIds.Contains(orgId)
+                    || await _security.HasAccessAsync(
+                        userId, orgId, OrganizationSecurityTable.Case, OrganizationSecurityAction.Read, ct))
+                    readableOrgIds.Add(orgId);
+            }
 
         var myContactCaseIds = await db.CaseContacts.AsNoTracking()
             .Where(c => c.AppUserId == userId).Select(c => c.CaseId).ToListAsync(ct);

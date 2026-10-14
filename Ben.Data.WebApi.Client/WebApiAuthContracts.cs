@@ -23,6 +23,12 @@ public sealed record WebApiLoginRequest(
 public sealed record WebApiRefreshRequest(
     [property: JsonPropertyName("refreshToken")] string RefreshToken);
 
+/// <summary>A renewal's result: the new tokens, or whether the API refused the refresh token.</summary>
+public sealed record RefreshOutcome(WebApiTokenResponse? Tokens, bool Refused)
+{
+    public static RefreshOutcome Unanswered { get; } = new(null, false);
+}
+
 public sealed class WebApiTokenResponse
 {
     [JsonPropertyName("tokenType")]

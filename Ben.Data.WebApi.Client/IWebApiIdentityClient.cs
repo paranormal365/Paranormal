@@ -19,6 +19,14 @@ public interface IWebApiIdentityClient
     Task<WebApiTokenResponse?> RefreshAsync(string refreshToken, CancellationToken token = default);
 
     /// <summary>
+    /// Renews a session, saying WHY when it cannot: <see cref="RefreshOutcome.Refused"/> only when
+    /// the API turned the refresh token down. No connection, a 5xx, a 429 or a 408 says nothing about
+    /// the token, so the session is kept for the next try — the phone app's rule (TokenSession), so a
+    /// busy or restarting server never signs anybody out (10/14/2026).
+    /// </summary>
+    Task<RefreshOutcome> TryRefreshAsync(string refreshToken, CancellationToken token = default);
+
+    /// <summary>
     /// Asks for a password-reset email. Always reports success for a well-formed request —
     /// the endpoint deliberately does not reveal whether the address has an account.
     /// </summary>

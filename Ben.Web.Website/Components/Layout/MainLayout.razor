@@ -129,6 +129,7 @@
     protected override void OnInitialized()
     {
         TokenStore.StateChanged += HandleTokenStateChanged;
+        TokenStore.SessionEnded += HandleSessionEnded;
 
         // Restore the Entra token persisted from the SSR HTTP scope into this circuit scope.
         // EntraTokenPersister (App.razor) wrote this during the static pre-render.
@@ -157,6 +158,31 @@
         {
             await PersistAuthStateAsync();
             StateHasChanged();
+        });
+    }
+
+    private bool _sessionEnding;
+
+    /// <summary>
+    /// The API refused this session and it could not be renewed (see SessionRenewal). Sign out for
+    /// real and go to sign in, with the page to come back to — rather than leave the menu showing a
+    /// person every page says is signed out (Ben, 10/14/2026: "just redirect to the sign in page and
+    /// actually sign me out instead of telling and making me have to actually sign out").
+    /// </summary>
+    private void HandleSessionEnded()
+    {
+        _ = InvokeAsync(async () =>
+        {
+            if (_sessionEnding) return;   // every request on the page reports it; act once
+            _sessionEnding = true;
+
+            AuthService.Logout();
+            // Saved before leaving: the sign-in page loads fresh, and must not restore the dead session.
+            try { await PersistAuthStateAsync(); } catch { /* storage unavailable; the session is gone either way */ }
+
+            var here = "/" + NavManager.ToBaseRelativePath(NavManager.Uri);
+            var back = here.StartsWith("/login", StringComparison.OrdinalIgnoreCase) ? "/" : here;
+            NavManager.NavigateTo($"/login?ended=1&returnUrl={Uri.EscapeDataString(back)}", forceLoad: true);
         });
     }
 
@@ -373,6 +399,7 @@
     public void Dispose()
     {
         TokenStore.StateChanged -= HandleTokenStateChanged;
+        TokenStore.SessionEnded -= HandleSessionEnded;
     }
 
     // ── Persisted auth state ──────────────────────────────────────────────────

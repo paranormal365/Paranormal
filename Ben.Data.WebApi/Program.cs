@@ -798,6 +798,23 @@ app.UseForwardedHeaders(new ForwardedHeadersOptions
     ForwardedHeaders = ForwardedHeaders.XForwardedProto | ForwardedHeaders.XForwardedFor,
 });
 
+// A request that takes more than five seconds is written to the error log, which is the level the
+// database keeps (10/14/2026). A SuperAdmin's home page sat loading for about twenty seconds on the
+// live site and nothing recorded which call was slow; this says, next time, without anybody having
+// to reproduce it. The path and the time only — no query string, no body, nobody's details.
+app.Use(async (context, next) =>
+{
+    var started = System.Diagnostics.Stopwatch.GetTimestamp();
+    await next();
+    var elapsed = System.Diagnostics.Stopwatch.GetElapsedTime(started);
+    // Data answers only: uploads, downloads and renders are long by nature and would bury the rest.
+    if (elapsed > TimeSpan.FromSeconds(5)
+        && context.Response.ContentType?.StartsWith("application/json", StringComparison.OrdinalIgnoreCase) == true)
+        Log.Error("Slow request: {Method} {Path} took {ElapsedMs} ms and answered {StatusCode}",
+            context.Request.Method, context.Request.Path.Value, (long)elapsed.TotalMilliseconds,
+            context.Response.StatusCode);
+});
+
 // Say what the CORS posture is at startup — a misconfigured deploy should fail loudly here, not
 // as a mystery in a browser console three layers away.
 if (corsOrigins.Length == 0)

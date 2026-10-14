@@ -94,6 +94,15 @@
                     </div>
                 }
 
+                @if (Ended == "1" && _errorMessage is null)
+                {
+                    @* The session ran out and could not be renewed; the layout signed the person out
+                       and sent them here (10/14/2026). Said once, plainly, with the way back. *@
+                    <div class="alert alert-info py-2 mb-3" data-testid="login-session-ended">
+                        Your session ended. Sign in again to carry on where you were.
+                    </div>
+                }
+
                 @if (_errorMessage is not null)
                 {
                     <div class="alert alert-danger py-2 mb-3">
@@ -173,6 +182,9 @@
     /// <summary>Where to land after a successful sign-in — e.g. an invite link. Only a relative,
     /// local path is honored (never an absolute URL) to avoid an open-redirect via a crafted link.</summary>
     [SupplyParameterFromQuery] private string? ReturnUrl { get; set; }
+
+    /// <summary>"1" when the layout ended a session the API refused (see SessionRenewal).</summary>
+    [SupplyParameterFromQuery] private string? Ended { get; set; }
 
     private LoginModel _model = new();
     private string? _errorMessage;
