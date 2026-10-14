@@ -55,16 +55,19 @@ public sealed class FieldSessionShareController : BenControllerBase
     private readonly IFileStorageService _fileStorage;
     private readonly ILogger<FieldSessionShareController> _log;
     private readonly Services.FieldSessions.IBenBundleStore _bundles;
+    private readonly IMediaIngestService _mediaIngest;
 
     public FieldSessionShareController(
         IDbContextFactory<BenDataContext> db,
         IFileStorageService fileStorage,
         Services.FieldSessions.IBenBundleStore bundles,
+        IMediaIngestService mediaIngest,
         ILogger<FieldSessionShareController> log)
     {
         _db = db;
         _fileStorage = fileStorage;
         _bundles = bundles;
+        _mediaIngest = mediaIngest;
         _log = log;
     }
 
@@ -362,10 +365,23 @@ public sealed class FieldSessionShareController : BenControllerBase
 
         await RecordViewAsync(db, link, fileId, ct);
 
-        var stream = await _fileStorage.OpenReadAsync(recordingPath, ct);
-        return File(stream, file.UploadFile.ContentType ?? "application/octet-stream",
+        // The CLEANED copy, never the original. A photo's original still carries the phone's
+        // location in its EXIF, so a link made with positions withheld handed them out anyway in
+        // the one place nobody looks (10/14/2026). The original stays on disk as the evidence.
+        var served = _mediaIngest.ServingPathFor(recordingPath);
+        var stream = await _fileStorage.OpenReadAsync(served, ct);
+        return File(stream, ServedContentType(served, recordingPath, file.UploadFile.ContentType),
                     Path.GetFileName(file.RelativePath), enableRangeProcessing: true);
     }
+
+    /// <summary>
+    /// The type of what is actually sent: a cleaned picture is always a JPEG, whatever the
+    /// original was.
+    /// </summary>
+    internal static string ServedContentType(string served, string original, string? originalType)
+        => served != original && served.EndsWith(".clean.jpg", StringComparison.OrdinalIgnoreCase)
+            ? "image/jpeg"
+            : originalType ?? "application/octet-stream";
 
     // ── The rules, in one place each ──────────────────────────────────────────
 
@@ -414,11 +430,23 @@ public sealed class FieldSessionShareController : BenControllerBase
             .AnyAsync(m => m.OrganizationId == orgId && m.AppUserId == userId && m.IsActive, ct);
     }
 
+    /// <summary>
+    /// How long one visitor's playing of one recording counts as a single view. A player asks for
+    /// a recording in many byte ranges — every seek and every buffer refill is a request — and
+    /// each of those used to write a row and move the counter, so one person scrubbing a video
+    /// read as dozens of views.
+    /// </summary>
+    internal static readonly TimeSpan RecordingViewWindow = TimeSpan.FromMinutes(30);
+
     /// <summary>Writes the view down and moves the counters on the link.</summary>
     /// <remarks>
-    /// A failure here must never cost the recipient their view: the log is the owner's
+    /// <para>A failure here must never cost the recipient their view: the log is the owner's
     /// reassurance, not a condition of the sharing, and a database hiccup that turned a working
-    /// link into a 500 would be the counter breaking the thing it counts.
+    /// link into a 500 would be the counter breaking the thing it counts.</para>
+    ///
+    /// <para>Opening the link always counts. A recording counts once per visitor per
+    /// <see cref="RecordingViewWindow"/>, which still tells the owner WHICH recordings somebody
+    /// played.</para>
     /// </remarks>
     private async Task RecordViewAsync(
         BenDataContext db, FieldSessionShareLink link, Guid? fileId, CancellationToken ct)
@@ -426,25 +454,48 @@ public sealed class FieldSessionShareController : BenControllerBase
         try
         {
             var now = DateTime.UtcNow;
+            var viewer = ViewerHash(link.Token);
+
+            if (fileId is Guid recording)
+            {
+                var since = now - RecordingViewWindow;
+                var seen = await db.FieldSessionShareLinkViews.AsNoTracking().AnyAsync(v =>
+                    v.FieldSessionShareLinkId == link.Id
+                    && v.FieldSessionUploadFileId == recording
+                    && v.ViewerHash == viewer
+                    && v.ViewedUtc >= since, ct);
+                if (seen) return;
+            }
+
             db.FieldSessionShareLinkViews.Add(new FieldSessionShareLinkView
             {
                 FieldSessionShareLinkId  = link.Id,
                 ViewedUtc                = now,
-                ViewerHash               = ViewerHash(link.Token),
+                ViewerHash               = viewer,
                 UserAgent                = Truncate(Request.Headers.UserAgent.ToString(), 300),
                 FieldSessionUploadFileId = fileId,
             });
-
-            // Attached rather than re-read: the link came back AsNoTracking, and the two counters
-            // are the only columns this write touches.
-            var counters = new FieldSessionShareLink { Id = link.Id };
-            db.FieldSessionShareLinks.Attach(counters);
-            counters.ViewCount     = link.ViewCount + 1;
-            counters.LastViewedUtc = now;
-            db.Entry(counters).Property(l => l.ViewCount).IsModified     = true;
-            db.Entry(counters).Property(l => l.LastViewedUtc).IsModified = true;
-
             await db.SaveChangesAsync(ct);
+
+            // The counter is moved IN the database, not written back from the copy read at the
+            // start of the request: two viewers at once each wrote "what I read, plus one", and
+            // one of the two views was lost.
+            if (db.Database.IsRelational())
+            {
+                await db.FieldSessionShareLinks
+                    .Where(l => l.Id == link.Id)
+                    .ExecuteUpdateAsync(set => set
+                        .SetProperty(l => l.ViewCount, l => l.ViewCount + 1)
+                        .SetProperty(l => l.LastViewedUtc, now), ct);
+            }
+            else
+            {
+                // The in-memory provider used by the unit tests has no ExecuteUpdate.
+                var counters = await db.FieldSessionShareLinks.FirstAsync(l => l.Id == link.Id, ct);
+                counters.ViewCount += 1;
+                counters.LastViewedUtc = now;
+                await db.SaveChangesAsync(ct);
+            }
         }
         catch (Exception ex)
         {

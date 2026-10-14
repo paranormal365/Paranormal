@@ -125,6 +125,13 @@ public sealed class FieldSessionUploadControllerTests
                           buffer.Length, file.ContentType ?? "application/octet-stream", false);
                   });
 
+        // As the real one decides: a cleaned or stripped copy beside the original wins.
+        ingest.Setup(m => m.ServingPathFor(It.IsAny<string>()))
+              .Returns<string>(path =>
+                  written.ContainsKey(path + ".clean.jpg") ? path + ".clean.jpg"
+                  : written.ContainsKey(path + ".clean" + Path.GetExtension(path)) ? path + ".clean" + Path.GetExtension(path)
+                  : path);
+
         var controller = new FieldSessionUploadController(
             factory, storage.Object, ingest.Object,
             new Ben.Data.WebApi.Services.Media.MediaRetentionPolicy(
@@ -603,6 +610,38 @@ public sealed class FieldSessionUploadControllerTests
 
         Assert.IsType<NotFoundResult>(
             await Build(factory, StrangerId).GetFile(session.Id, file.Id, default));
+    }
+
+    [Fact]
+    public async Task A_recording_is_served_from_its_cleaned_copy_when_there_is_one()
+    {
+        // The original keeps whatever the device wrote into it — a photo's EXIF location among
+        // it — and this route is open to everybody who may read the session. The cleaned copy
+        // is what goes out; the original stays on disk as the evidence (10/14/2026).
+        var factory = await SeedAsync();
+        var submitted = await Build(factory, AttendeeId).SubmitDocument(
+            Document(ValidDocument()), Guid.NewGuid(), InvestigationId,
+            AttendeeId, "An Attendee", default);
+        var session = Assert.IsType<FieldSessionRecord>(
+            Assert.IsType<OkObjectResult>(submitted.Result).Value);
+        var attached = await Build(factory, AttendeeId).SubmitFile(
+            session.Id, Upload(M4a(5), "clip.m4a", "audio/mp4"),
+            "media/audio-003.m4a", null, default);
+        var file = Assert.IsType<FieldSessionFileRecord>(
+            Assert.IsType<OkObjectResult>(attached.Result).Value);
+
+        string original;
+        await using (var db = await factory.CreateDbContextAsync())
+            original = await db.FieldSessionUploadFiles.Where(f => f.Id == file.Id)
+                .Select(f => f.UploadFile!.StoragePath!).SingleAsync();
+        byte[] cleaned = [7, 7, 7];
+        Stored[original + ".clean.m4a"] = cleaned;
+
+        var streamed = Assert.IsType<FileStreamResult>(
+            await Build(factory, MemberId).GetFile(session.Id, file.Id, default));
+        using var read = new MemoryStream();
+        await streamed.FileStream.CopyToAsync(read);
+        Assert.Equal(cleaned, read.ToArray());
     }
 
     [Fact]

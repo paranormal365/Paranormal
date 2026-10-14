@@ -137,14 +137,18 @@ public sealed class FieldSessionShareControllerTests
         return factory;
     }
 
+    /// <summary>What ingest left beside the photo: its copy with the EXIF (and the location) gone.</summary>
+    private static readonly byte[] CleanedPhoto = [9, 9, 9, 9];
+
     private static FieldSessionShareController Build(
-        IDbContextFactory<BenDataContext> factory, Guid? userId)
+        IDbContextFactory<BenDataContext> factory, Guid? userId, string visitorAddress = "203.0.113.7")
     {
         var bytes = new Dictionary<string, byte[]>
         {
             [DocumentPath] = Encoding.UTF8.GetBytes(Document),
             [AudioPath]    = [1, 2, 3, 4],
             [PhotoPath]    = [5, 6, 7, 8],
+            [PhotoPath + ".clean.jpg"] = CleanedPhoto,
         };
 
         var storage = new Mock<Ben.Data.Common.Interfaces.IFileStorageService>();
@@ -154,14 +158,22 @@ public sealed class FieldSessionShareControllerTests
                .Returns<string, CancellationToken>((path, _) => Task.FromResult<Stream>(
                    bytes.TryGetValue(path, out var b) ? new MemoryStream(b) : Stream.Null));
 
+        // A REAL ingest over the same storage, so "which file is served" is answered by the code
+        // that answers it in production rather than by a stub that says what the test wants.
+        var ingest = new Ben.Data.WebApi.Services.MediaIngestService(
+            storage.Object, new Ben.Data.WebApi.Services.FileMetadataExtractorService(),
+            new Ben.Data.WebApi.Services.MediaSanitizationService(), TestMedia.Stripper(),
+            NullLogger<Ben.Data.WebApi.Services.MediaIngestService>.Instance);
+
         var controller = new FieldSessionShareController(
-            factory, storage.Object, TestBundles.Store(storage.Object), NullLogger<FieldSessionShareController>.Instance);
+            factory, storage.Object, TestBundles.Store(storage.Object), ingest,
+            NullLogger<FieldSessionShareController>.Instance);
 
         // No identity at all for the anonymous side: a share endpoint that only works because a
         // signed-in principal happened to be lying around would pass every test here and fail for
         // the one person the feature exists for.
         var http = new DefaultHttpContext();
-        http.Connection.RemoteIpAddress = System.Net.IPAddress.Parse("203.0.113.7");
+        http.Connection.RemoteIpAddress = System.Net.IPAddress.Parse(visitorAddress);
         if (userId is Guid id)
             http.User = new ClaimsPrincipal(new ClaimsIdentity(
                 [new Claim(ClaimTypes.NameIdentifier, id.ToString())], "Bearer"));
@@ -186,6 +198,13 @@ public sealed class FieldSessionShareControllerTests
         await using var db = await factory.CreateDbContextAsync();
         return await db.FieldSessionUploadFiles
             .Where(f => f.UploadFileId == AudioId).Select(f => f.Id).FirstAsync();
+    }
+
+    private static async Task<Guid> PhotoRowIdAsync(IDbContextFactory<BenDataContext> factory)
+    {
+        await using var db = await factory.CreateDbContextAsync();
+        return await db.FieldSessionUploadFiles
+            .Where(f => f.UploadFileId == PhotoId).Select(f => f.Id).FirstAsync();
     }
 
     // ── Who may hand a session to an outsider ─────────────────────────────────
@@ -440,6 +459,56 @@ public sealed class FieldSessionShareControllerTests
         var views = Assert.IsAssignableFrom<IEnumerable<FieldSessionShareViewRecord>>(
             Assert.IsType<OkObjectResult>(viewsResult.Result).Value).ToList();
         Assert.Equal(2, views.Count);
+    }
+
+    [Fact]
+    public async Task A_shared_photo_is_the_cleaned_copy_not_the_original()
+    {
+        // The original still carries the phone's location in its EXIF. A link made with positions
+        // withheld handed them out anyway, through the picture (10/14/2026).
+        var factory = await SeedAsync();
+        var link = await MakeLinkAsync(factory, OwnerId);
+        var photoRowId = await PhotoRowIdAsync(factory);
+
+        var served = Assert.IsType<FileStreamResult>(
+            await Build(factory, null).GetSharedFile(link.Token, photoRowId, default));
+        using var read = new MemoryStream();
+        await served.FileStream.CopyToAsync(read);
+
+        Assert.Equal(CleanedPhoto, read.ToArray());
+        Assert.Equal("image/jpeg", served.ContentType);
+    }
+
+    [Fact]
+    public async Task Scrubbing_a_recording_is_one_view_not_one_per_byte_range()
+    {
+        // A player fetches a recording in many byte ranges — every seek is a request. Each one
+        // used to write a row and move the counter, so one person scrubbing read as dozens.
+        var factory = await SeedAsync();
+        var link = await MakeLinkAsync(factory, OwnerId);
+        var audioRowId = await AudioRowIdAsync(factory);
+
+        for (var i = 0; i < 5; i++)
+            await Build(factory, null).GetSharedFile(link.Token, audioRowId, default);
+
+        await using var db = await factory.CreateDbContextAsync();
+        Assert.Equal(1, await db.FieldSessionShareLinkViews.CountAsync(v => v.FieldSessionUploadFileId == audioRowId));
+        Assert.Equal(1, (await db.FieldSessionShareLinks.SingleAsync(l => l.Id == link.Id)).ViewCount);
+    }
+
+    [Fact]
+    public async Task Two_visitors_playing_the_same_recording_are_two_views()
+    {
+        var factory = await SeedAsync();
+        var link = await MakeLinkAsync(factory, OwnerId);
+        var audioRowId = await AudioRowIdAsync(factory);
+
+        await Build(factory, null, "203.0.113.7").GetSharedFile(link.Token, audioRowId, default);
+        await Build(factory, null, "198.51.100.4").GetSharedFile(link.Token, audioRowId, default);
+
+        await using var db = await factory.CreateDbContextAsync();
+        Assert.Equal(2, await db.FieldSessionShareLinkViews.CountAsync(v => v.FieldSessionUploadFileId == audioRowId));
+        Assert.Equal(2, (await db.FieldSessionShareLinks.SingleAsync(l => l.Id == link.Id)).ViewCount);
     }
 
     [Fact]

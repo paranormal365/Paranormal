@@ -33,6 +33,14 @@ public static class MediaProxy
         if (ctx.Request.Headers.TryGetValue("Range", out var range))
             request.Headers.TryAddWithoutValidation("Range", range.ToString());
 
+        // Who is actually asking. Without these every relayed request reached the API as this
+        // website, so a share link's view log could not tell one visitor from another. The API
+        // believes X-Forwarded-For only from the local machine, as it does for WebApiClient.
+        if (ctx.Connection.RemoteIpAddress is { } visitor)
+            request.Headers.TryAddWithoutValidation("X-Forwarded-For", visitor.ToString());
+        if (ctx.Request.Headers.UserAgent is { Count: > 0 } agent)
+            request.Headers.TryAddWithoutValidation("User-Agent", agent.ToString());
+
         HttpResponseMessage response;
         try
         {

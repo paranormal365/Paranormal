@@ -549,10 +549,15 @@ public sealed partial class FieldSessionUploadController : BenControllerBase
             || !_fileStorage.Exists(recordingPath))
             return NotFound("That recording is no longer on the server.");
 
-        var stream = await _fileStorage.OpenReadAsync(recordingPath, ct);
+        // The cleaned copy, as the share link serves: a photo's original carries the phone's
+        // location in its EXIF, and this route is open to everybody who may READ the session —
+        // a stranger on an open investigation among them. The original stays on disk.
+        var served = _mediaIngest.ServingPathFor(recordingPath);
+        var stream = await _fileStorage.OpenReadAsync(served, ct);
         // enableRangeProcessing: a player has to be able to seek, and a two-hour recording that
         // must be fetched whole before it plays is a recording nobody reviews.
-        return File(stream, file.UploadFile.ContentType ?? "application/octet-stream",
+        return File(stream,
+                    FieldSessionShareController.ServedContentType(served, recordingPath, file.UploadFile.ContentType),
                     Path.GetFileName(file.RelativePath), enableRangeProcessing: true);
     }
 
