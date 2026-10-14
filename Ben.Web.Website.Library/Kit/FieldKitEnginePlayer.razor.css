@@ -7,6 +7,13 @@
 
 .fk-player:focus { outline: none; }
 
+/* ── The transport ── */
+/* Six speeds do not fit beside each other on a phone: they wrap rather than run off the card. */
+@media (max-width: 575.98px) {
+    .fk-player ::deep .fk-speeds { flex-wrap: wrap; }
+    .fk-player ::deep .fk-speeds > .btn { flex: 1 0 30%; }
+}
+
 /* ── The stage ── */
 .fk-player ::deep .fk-stage {
     position: relative;

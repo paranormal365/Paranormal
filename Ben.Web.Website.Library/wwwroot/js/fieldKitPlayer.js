@@ -229,7 +229,7 @@ class Player {
         this.playButton = el('button', { type: 'button', class: 'btn btn-primary' });
         this.playButton.addEventListener('click', () => this.toggle());
 
-        const speeds = el('div', { class: 'btn-group btn-group-sm', role: 'group', 'aria-label': 'Speed' });
+        const speeds = el('div', { class: 'btn-group btn-group-sm fk-speeds', role: 'group', 'aria-label': 'Speed' });
         this.speedButtons = SPEEDS.map(speed => {
             const button = el('button', { type: 'button', class: 'btn btn-outline-secondary' }, `${speed}×`);
             button.addEventListener('click', () => this.setRate(speed));
@@ -448,10 +448,13 @@ class Player {
         if (this.readPosition) {
             // Three decimals, never five: roughly which building, not which room. The accuracy
             // travels with it, always.
+            // Kilometres past one: the archive's public point is deliberately miles wide, and
+            // "±9656 m" read like a measurement rather than a blur.
+            const within = a => a >= 1000 ? `±${Math.round(a / 1000)} km` : `±${Math.round(a)} m`;
             this.readPosition.textContent = this.tl.positions === 1 ? 'not shared'
                 : !position ? 'no fix'
                 : position.accuracy != null
-                    ? `~${position.lat.toFixed(3)}, ${position.lon.toFixed(3)} ±${Math.round(position.accuracy)} m`
+                    ? `~${position.lat.toFixed(3)}, ${position.lon.toFixed(3)} ${within(position.accuracy)}`
                     : `~${position.lat.toFixed(3)}, ${position.lon.toFixed(3)}`;
         }
         if (this.roomSlot && this.last.room !== frame.room) {
