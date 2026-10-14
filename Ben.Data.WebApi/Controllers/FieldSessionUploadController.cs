@@ -455,8 +455,12 @@ public sealed partial class FieldSessionUploadController : BenControllerBase
     /// only copy that is definitely what the device wrote, and a playback page reading anything
     /// else is a page showing a story about the readings rather than the readings.
     /// </remarks>
+    /// <param name="document">
+    /// False for a caller that only wants the summary — the player, which reads the session as a
+    /// timeline instead — so the whole document is not read and sent for nothing.
+    /// </param>
     [HttpGet("{sessionId:guid}")]
-    public async Task<IActionResult> GetSession(Guid sessionId, CancellationToken ct)
+    public async Task<IActionResult> GetSession(Guid sessionId, CancellationToken ct, [FromQuery] bool document = true)
     {
         var userId = GetCurrentUserId();
         if (userId == Guid.Empty) return Unauthorized();
@@ -480,7 +484,9 @@ public sealed partial class FieldSessionUploadController : BenControllerBase
             || !_fileStorage.Exists(documentPath))
             return NotFound("This session's readings are no longer on the server.");
 
-        string document;
+        if (!document) return Ok(new FieldSessionDetail(ToRecord(session), ""));
+
+        string text;
         // For a bundle the document is a member of the session's one file rather than a file of
         // its own, so it is read out of it the same way a recording is.
         await using (var stream = session.IsBundle
@@ -491,10 +497,10 @@ public sealed partial class FieldSessionUploadController : BenControllerBase
             if (stream is null)
                 return NotFound("This session's readings are no longer on the server.");
             using var reader = new StreamReader(stream);
-            document = await reader.ReadToEndAsync(ct);
+            text = await reader.ReadToEndAsync(ct);
         }
 
-        return Ok(new FieldSessionDetail(ToRecord(session), document));
+        return Ok(new FieldSessionDetail(ToRecord(session), text));
     }
 
     /// <summary>

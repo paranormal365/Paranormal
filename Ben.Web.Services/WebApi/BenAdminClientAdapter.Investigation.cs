@@ -165,6 +165,10 @@ public sealed partial class BenAdminClientAdapter
         Guid sessionId, CancellationToken token = default)
         => _api.GetAsync<FieldSessionDetailRecord>($"/api/field-sessions/{sessionId}", token);
 
+    public Task<FieldSessionDetailRecord?> GetFieldSessionSummaryAsync(
+        Guid sessionId, CancellationToken token = default)
+        => _api.GetAsync<FieldSessionDetailRecord>($"/api/field-sessions/{sessionId}?document=false", token);
+
     public Task<Ben.Service.Models.FieldSessions.SessionTimeline?> GetFieldSessionTimelineAsync(
         Guid sessionId, CancellationToken token = default)
         => _api.GetAsync<Ben.Service.Models.FieldSessions.SessionTimeline>($"/api/field-sessions/{sessionId}/timeline", token);
@@ -199,6 +203,21 @@ public sealed partial class BenAdminClientAdapter
         string shareToken, CancellationToken token = default)
         => _api.GetAnonymousAsync<SharedFieldSessionDetailRecord>(
             $"/api/shared-sessions/{Uri.EscapeDataString(shareToken)}", token);
+
+    public Task<Ben.Service.Models.FieldSessions.PublicSessionSummary?> GetPublicFieldSessionSummaryAsync(
+        Guid sessionId, CancellationToken token = default)
+        => _api.GetAnonymousAsync<Ben.Service.Models.FieldSessions.PublicSessionSummary>(
+            $"/api/public/field-sessions/{sessionId}/summary", token);
+
+    public Task<Ben.Service.Models.FieldSessions.SessionTimeline?> GetPublicFieldSessionTimelineAsync(
+        Guid sessionId, CancellationToken token = default)
+        => _api.GetAnonymousAsync<Ben.Service.Models.FieldSessions.SessionTimeline>(
+            $"/api/public/field-sessions/{sessionId}/timeline", token);
+
+    public Task<SharedFieldSessionDetailRecord?> GetSharedFieldSessionSummaryAsync(
+        string shareToken, CancellationToken token = default)
+        => _api.GetAnonymousAsync<SharedFieldSessionDetailRecord>(
+            $"/api/shared-sessions/{Uri.EscapeDataString(shareToken)}?document=false", token);
 
     public Task<Ben.Service.Models.FieldSessions.SessionTimeline?> GetSharedFieldSessionTimelineAsync(
         string shareToken, CancellationToken token = default)

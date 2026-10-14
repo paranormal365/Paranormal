@@ -254,7 +254,7 @@ public sealed class FieldSessionShareController : BenControllerBase
     /// </remarks>
     [HttpGet("api/shared-sessions/{token}")]
     [AllowAnonymous]
-    public async Task<IActionResult> GetShared(string token, CancellationToken ct)
+    public async Task<IActionResult> GetShared(string token, CancellationToken ct, [FromQuery] bool document = true)
     {
         await using var db = await _db.CreateDbContextAsync(ct);
 
@@ -270,7 +270,7 @@ public sealed class FieldSessionShareController : BenControllerBase
         if (session.DocumentUploadFile.StoragePath is not { } path || !_fileStorage.Exists(path))
             return NotFound("This session's readings are no longer on the server.");
 
-        string document;
+        string text;
         // A bundle session keeps its document inside its one .ben, read as a range of it.
         await using (var stream = session.IsBundle
                          ? await _bundles.OpenEntryAsync(
@@ -279,10 +279,12 @@ public sealed class FieldSessionShareController : BenControllerBase
         {
             if (stream is null) return NotFound("This session's readings are no longer on the server.");
             using var reader = new StreamReader(stream);
-            document = await reader.ReadToEndAsync(ct);
+            text = await reader.ReadToEndAsync(ct);
         }
 
-        var prepared = SharedSessionDocument.Prepare(document, link.IncludePositions);
+        // Prepared even when the caller does not want the document back: "positions withheld"
+        // is said from what the sweep actually removed, not from the link's setting.
+        var prepared = SharedSessionDocument.Prepare(text, link.IncludePositions);
         // Null means the document could not be parsed, so its coordinates could not be removed.
         // Sending it anyway on the hope that it holds no fix is the one failure this feature must
         // not have, so the honest answer is that the readings cannot be shown.
@@ -301,7 +303,7 @@ public sealed class FieldSessionShareController : BenControllerBase
             .ToList();
 
         return Ok(new SharedFieldSessionDetail(
-            Document:          prepared.Value.Document,
+            Document:          document ? prepared.Value.Document : "",
             PositionsWithheld: prepared.Value.PositionsWithheld,
             DeviceModel:       session.DeviceModel,
             LocationLabel:     session.LocationLabel,

@@ -1,0 +1,23 @@
+@namespace Ben.Web.Website.Library.Kit
+@page "/places/{PlaceId:guid}/sessions/{SessionId:guid}"
+
+@*
+    A session from a place's field archive, played back (10/14/2026).
+
+    The place page listed each archived session's recordings as bare files — no timeline, no
+    readings, no map — so a visitor could hear a clip but not see what the meters said while it
+    played. This is the same player as everywhere else, anonymous, with every position at the
+    place's public point and the recordings only once they have been approved.
+*@
+
+<div class="container-fluid px-3" style="max-width:1200px;margin:0 auto;">
+    <a class="btn btn-link btn-sm px-0 mb-2" href="@($"/places/{PlaceId}")">
+        <BenIcon Name="chevron-left" Class="me-1" />Back to the place
+    </a>
+</div>
+<FieldKitEnginePlayer SessionId="@SessionId" Public="true" Standalone="true" />
+
+@code {
+    [Parameter] public Guid PlaceId { get; set; }
+    [Parameter] public Guid SessionId { get; set; }
+}

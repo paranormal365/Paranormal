@@ -1,0 +1,108 @@
+@namespace Ben.Web.Website.Library.Kit
+@using Ben.Web.Services
+
+@*
+    What the place's archive says about one night: was that unusual, or does this building do it
+    to everybody? Lifted out of the player unchanged (10/14/2026) so both players say it the same
+    way. Shown only when somebody else has recorded at the place.
+*@
+
+<div class="card mb-3 border-info">
+    <div class="card-body py-3">
+        <div class="small text-secondary mb-1">
+            What @Insights.PlaceName's archive says
+        </div>
+
+        <p class="mb-2">
+            <strong>@Insights.OthersWhoRecordedHere</strong>
+            other @(Insights.OthersWhoRecordedHere == 1 ? "person has" : "people have")
+            recorded here,
+            @if (Insights.OthersWhoFlaggedSomething > 0)
+            {
+                <text>and <strong>@Insights.OthersWhoFlaggedSomething</strong>
+                of them flagged something.</text>
+            }
+            else
+            {
+                @* The deflating answer is the archive's most valuable one, so it
+                   is said as plainly as the exciting one. *@
+                <text>and <strong>none</strong> of them flagged anything.</text>
+            }
+            @if (Insights.YourSessionsHere > 1)
+            {
+                <text> This is your <strong>@Ordinal(Insights.YourSessionsHere)</strong>
+                session here.</text>
+            }
+        </p>
+
+        @if (Insights.Detailed)
+        {
+            @if (Insights.YourMarkersPerHour is { } mine
+                 && Insights.PlaceMedianMarkersPerHour is { } median)
+            {
+                <div class="d-flex flex-wrap gap-3 align-items-center">
+                    <div class="border rounded px-3 py-2 text-center">
+                        <div class="fs-5 fw-semibold">@mine.ToString("0.#")</div>
+                        <div class="text-secondary" style="font-size:.75rem;">
+                            your flags per hour
+                        </div>
+                    </div>
+                    <div class="border rounded px-3 py-2 text-center">
+                        <div class="fs-5 fw-semibold">@median.ToString("0.#")</div>
+                        <div class="text-secondary" style="font-size:.75rem;">
+                            typical here
+                        </div>
+                    </div>
+                    <div>
+                        @if (Insights.StandsOut == true)
+                        {
+                            <span class="badge bg-warning text-dark">
+                                Busier than this place usually is
+                            </span>
+                        }
+                        else
+                        {
+                            <span class="badge bg-secondary">
+                                About what this place usually gives people
+                            </span>
+                        }
+                    </div>
+                </div>
+            }
+            else
+            {
+                @* Detailed, but nothing comparable — said rather than left blank,
+                   so nobody reads a missing panel as a quiet night. *@
+                <p class="text-secondary small mb-0">
+                    Not enough comparable sessions here yet to say whether this one
+                    was unusual.
+                </p>
+            }
+        }
+        else
+        {
+            @* The upsell names exactly what it is withholding. A paywall that
+               hides the shape of what you would get teaches people to assume it
+               is nothing. *@
+            <p class="text-secondary small mb-2">
+                A paid plan compares this session with theirs — your flagged moments
+                per hour against what this place typically gives people, and whether
+                this night stood out.
+            </p>
+            <a class="btn btn-outline-primary btn-sm" href="/pricing">See plans</a>
+        }
+    </div>
+</div>
+
+@code {
+    [Parameter, EditorRequired] public SessionInsightsRecord Insights { get; set; } = default!;
+
+    /// <summary>"3rd", "12th" — 11, 12 and 13 take "th" despite ending in 1, 2 and 3.</summary>
+    private static string Ordinal(int n)
+    {
+        var suffix = (n % 100) is >= 11 and <= 13
+            ? "th"
+            : (n % 10) switch { 1 => "st", 2 => "nd", 3 => "rd", _ => "th" };
+        return $"{n}{suffix}";
+    }
+}

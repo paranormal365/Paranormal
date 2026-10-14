@@ -139,6 +139,10 @@ public interface IBenInvestigationClient
     Task<FieldSessionDetailRecord?> GetFieldSessionAsync(
         Guid sessionId, CancellationToken token = default);
 
+    /// <summary>The session's summary without its document — for the player, which reads a timeline.</summary>
+    Task<FieldSessionDetailRecord?> GetFieldSessionSummaryAsync(
+        Guid sessionId, CancellationToken token = default);
+
     /// <summary>
     /// The session as a replay timeline: the document read once on the server by the rules the
     /// phone's replay follows (<c>ProjectNotes/specs/replay-semantics.md</c>). Null on the same
@@ -174,6 +178,18 @@ public interface IBenInvestigationClient
     /// three the same way and the page must not invent a distinction the server refused to make.
     /// </remarks>
     Task<SharedFieldSessionDetailRecord?> GetSharedFieldSessionAsync(
+        string shareToken, CancellationToken token = default);
+
+    /// <summary>A session from a place's public archive: its heading and the files a visitor may have.</summary>
+    Task<Ben.Service.Models.FieldSessions.PublicSessionSummary?> GetPublicFieldSessionSummaryAsync(
+        Guid sessionId, CancellationToken token = default);
+
+    /// <summary>A public archive session as a timeline, positions at the place's public point.</summary>
+    Task<Ben.Service.Models.FieldSessions.SessionTimeline?> GetPublicFieldSessionTimelineAsync(
+        Guid sessionId, CancellationToken token = default);
+
+    /// <summary>The shared session without its document — the opening is still counted.</summary>
+    Task<SharedFieldSessionDetailRecord?> GetSharedFieldSessionSummaryAsync(
         string shareToken, CancellationToken token = default);
 
     /// <summary>

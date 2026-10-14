@@ -119,6 +119,9 @@ export async function create(containerId, dotnetRef, options) {
         clearTimeout(sizeTimer)
         sizeTimer = setTimeout(() => {
             if (!entry.map) return
+            // A session player owns its view (it follows the marker), so a resize re-centres on
+            // the marker rather than snapping back to the view the map was made with.
+            if (entry.player) { if (entry.player.following) centreOnMarker(entry, false); return }
             if (entry.options.fitToPins && entry.annotations.length) fit(containerId)
             else if (!entry.userMoved) applyView(entry)
         }, 100)
@@ -586,9 +589,281 @@ export function describe(containerId) {
     }
 }
 
+// ── A session player's marker, path and pins (10/14/2026) ───────────────────
+//
+// Driven every animation frame by the Field Kit engine (wwwroot/js/fieldKitPlayer.js), not by
+// .NET: Ben asked for the map to "track the direction and location and move smoothly each
+// reading", and a marker moved from the server four times a second could only ever step. The
+// engine computes where they were (fieldKitTimeline.js, the shared replay rules); this draws it.
+//
+// Kept apart from setPins' annotations on purpose: setPins removes everything it drew, and the
+// test helpers (pins, pinCount) read that list.
+
+/** How quickly the arrow turns toward a new heading — a time constant, so it is frame-rate free. */
+const TURN_MS = 160
+/** The marker may wander this far toward an edge (as a share of the map) before the view follows. */
+const FOLLOW_MARGIN = 0.22
+/** The circle is redrawn at most this often; it is a radius, not a position, and costs an overlay. */
+const CIRCLE_MS = 100
+
+function reducedMotion() {
+    return window.matchMedia?.('(prefers-reduced-motion: reduce)').matches ?? false
+}
+
+/** The marker: an arrow when there is a direction, a dot when there is not. One element for both. */
+function playerMarker(color) {
+    return new mapkit.Annotation(new mapkit.Coordinate(0, 0), () => {
+        const wrap = document.createElement('div')
+        wrap.style.cssText = 'width:30px;height:30px;margin-left:-15px;margin-top:-15px;position:relative;'
+        wrap.setAttribute('data-testid', 'player-marker')
+        const arrow = document.createElement('div')
+        arrow.className = 'ben-map-arrow'
+        arrow.style.cssText = 'position:absolute;inset:0;will-change:transform;'
+        arrow.innerHTML =
+            `<svg viewBox="0 0 24 24" width="30" height="30" aria-hidden="true">
+               <path d="M12 2 L20 21 L12 16.5 L4 21 Z" fill="${color}"
+                     stroke="rgba(0,0,0,.55)" stroke-width="1" stroke-linejoin="round"/>
+             </svg>`
+        const dot = document.createElement('div')
+        dot.style.cssText = `position:absolute;left:8px;top:8px;width:14px;height:14px;border-radius:50%;` +
+                            `background:${color};box-shadow:0 0 0 2px rgba(0,0,0,.45);`
+        wrap.append(arrow, dot)
+        return wrap
+    }, { data: { player: true } })
+}
+
+/**
+ * Sets the player up on a map: the path walked, the pins for photos and marks, and the marker.
+ * Any previous player on the same map is replaced.
+ */
+export function playerInit(containerId, opts) {
+    const entry = _maps.get(containerId)
+    if (!entry) return
+    const apply = () => {
+        const map = entry.map
+        if (!map) return
+        playerClear(entry)
+
+        const color = opts.color ?? '#7c5cff'
+        const p = entry.player = {
+            color, following: true, displayed: null, target: null, lastAt: 0, lastCircleAt: 0,
+            lat: null, lon: null, accuracy: null, kind: null,
+            marker: playerMarker(color), circle: null, track: null, pins: [], recenter: null, gestures: null,
+        }
+
+        if (opts.track?.length > 1) {
+            p.track = new mapkit.PolylineOverlay(
+                opts.track.map(([lat, lon]) => new mapkit.Coordinate(lat, lon)),
+                { style: new mapkit.Style({ strokeColor: color, strokeOpacity: 0.75, lineWidth: 3 }) })
+            map.addOverlay(p.track)
+        }
+        p.pins = (opts.pins ?? []).map(pin => new mapkit.MarkerAnnotation(
+            new mapkit.Coordinate(pin.lat, pin.lon), {
+                title: pin.title ?? '', color: pin.color ?? '#6c757d',
+                glyphText: pin.glyph ?? '', size: { width: 22, height: 28 },
+                // Said when a pin is chosen, not printed under every pin: two marks a few metres
+                // apart wrote their names over each other.
+                titleVisibility: mapkit.FeatureVisibility.Hidden,
+                data: { player: true },
+            }))
+        if (p.pins.length) map.addAnnotations(p.pins)
+
+        // A gesture from the person means "leave the view to me" until they ask for it back.
+        // Detected from the DOM rather than MapKit's region events, which the follow camera's
+        // own moves fire too.
+        const let_go = e => {
+            if (e?.target?.closest?.('[data-testid="map-recenter"]')) return
+            if (!p.following) return
+            p.following = false
+            showRecenter(entry, true)
+        }
+        p.gestures = { pointerdown: let_go, mousedown: let_go, wheel: let_go, touchstart: let_go }
+        // In the CAPTURE phase: MapKit handles the pointer on its own inner elements and does not
+        // let the event bubble up to the container, so a listener there in the ordinary phase never
+        // heard a drag. The Recenter button is excluded by its own check below.
+        for (const [name, fn] of Object.entries(p.gestures)) entry.container.addEventListener(name, fn, { passive: true, capture: true })
+
+        // The first view: the whole walk, so a person sees where the night went before it plays.
+        const items = [...p.pins]
+        if (p.track) items.push(p.track)
+        if (items.length) {
+            entry.framing = true
+            try { map.showItems(items, { animate: false, padding: new mapkit.Padding(36, 36, 36, 36) }) } catch { }
+            setTimeout(() => { entry.framing = false }, 300)
+        }
+    }
+    if (entry.map) apply()
+    else _mapkitReady?.then(() => setTimeout(apply, 0))
+}
+
+function playerClear(entry) {
+    const p = entry.player
+    if (!p || !entry.map) return
+    try { if (p.marker && p.lat !== null) entry.map.removeAnnotation(p.marker) } catch { }
+    if (p.pins.length) try { entry.map.removeAnnotations(p.pins) } catch { }
+    if (p.track) try { entry.map.removeOverlay(p.track) } catch { }
+    if (p.circle) try { entry.map.removeOverlay(p.circle) } catch { }
+    if (p.gestures) for (const [name, fn] of Object.entries(p.gestures)) entry.container.removeEventListener(name, fn, { capture: true })
+    p.recenter?.remove()
+    entry.player = null
+}
+
+/**
+ * Moves the marker to where they were at this frame. Called every animation frame while playing.
+ * bearing null draws a dot; snap (a seek, a jump) turns the arrow at once instead of easing; fast
+ * (above 8×) moves the view without gliding, which at that speed would never catch up.
+ */
+export function playerMove(containerId, lat, lon, bearing, accuracy, snap, fast) {
+    const entry = _maps.get(containerId)
+    const p = entry?.player
+    if (!p || !entry.map) return
+    const map = entry.map
+
+    if (lat === null || lon === null) {
+        if (p.lat !== null) { try { map.removeAnnotation(p.marker) } catch { } }
+        p.lat = p.lon = null
+        setPlayerCircle(entry, null, null, null, true)
+        return
+    }
+
+    const coordinate = new mapkit.Coordinate(lat, lon)
+    if (p.lat === null) map.addAnnotation(p.marker)
+    p.marker.coordinate = coordinate
+    p.lat = lat; p.lon = lon
+
+    // The heading, eased toward its target the SHORT way round, frame-rate free. Unwound rather
+    // than kept in 0..360, so 350 → 10 turns 20 degrees, not 340.
+    const now = performance.now()
+    const element = p.marker.element
+    const arrow = element?.querySelector?.('.ben-map-arrow')
+    const dot = arrow?.nextElementSibling
+    if (bearing === null || bearing === undefined) {
+        p.target = null
+        if (arrow) arrow.style.display = 'none'
+        if (dot) dot.style.display = ''
+    } else {
+        if (p.displayed === null || snap || reducedMotion()) {
+            p.displayed = bearing
+        } else {
+            let delta = (bearing - p.displayed) % 360
+            if (delta > 180) delta -= 360
+            if (delta < -180) delta += 360
+            const dt = Math.min(250, Math.max(0, now - p.lastAt))
+            p.displayed += delta * (1 - Math.exp(-dt / TURN_MS))
+        }
+        p.target = bearing
+        if (arrow) { arrow.style.display = ''; arrow.style.transform = `rotate(${p.displayed}deg)` }
+        if (dot) dot.style.display = 'none'
+    }
+    p.lastAt = now
+
+    setPlayerCircle(entry, lat, lon, accuracy, snap)
+    if (p.following) follow(entry, coordinate, snap || fast)
+}
+
+function setPlayerCircle(entry, lat, lon, accuracy, force) {
+    const p = entry.player, map = entry.map
+    const now = performance.now()
+    if (!force && now - p.lastCircleAt < CIRCLE_MS) return
+    p.lastCircleAt = now
+    if (lat === null || !(accuracy > 0)) {
+        if (p.circle) { try { map.removeOverlay(p.circle) } catch { } p.circle = null }
+        return
+    }
+    p.accuracy = accuracy
+    if (p.circle) {
+        // Moved and resized in place: re-adding an overlay ten times a second flickers.
+        p.circle.coordinate = new mapkit.Coordinate(lat, lon)
+        p.circle.radius = accuracy
+        return
+    }
+    p.circle = new mapkit.CircleOverlay(new mapkit.Coordinate(lat, lon), accuracy, {
+        style: new mapkit.Style({ fillColor: p.color, fillOpacity: 0.12, strokeColor: p.color, strokeOpacity: 0.4, lineWidth: 1 }),
+    })
+    map.addOverlay(p.circle)
+}
+
+/** Keeps the marker in view: once it nears an edge, the view glides to put it back in the middle. */
+function follow(entry, coordinate, snap) {
+    const map = entry.map, container = entry.container
+    let point
+    try { point = map.convertCoordinateToPointOnPage(coordinate) } catch { return }
+    const box = container.getBoundingClientRect()
+    const x = (point.x - box.left - window.scrollX) / Math.max(1, box.width)
+    const y = (point.y - box.top - window.scrollY) / Math.max(1, box.height)
+    const inside = x > FOLLOW_MARGIN && x < 1 - FOLLOW_MARGIN && y > FOLLOW_MARGIN && y < 1 - FOLLOW_MARGIN
+    if (inside) return
+    // A seek, a fast speed, or a person who asked for less motion: straight there, no glide.
+    centreOnMarker(entry, !snap && !reducedMotion())
+}
+
+function centreOnMarker(entry, animate) {
+    const p = entry.player
+    if (!p || p.lat === null || !entry.map) return
+    const now = performance.now()
+    // One glide at a time: starting a new one every frame while the last is under way stutters.
+    if (animate && p.panUntil && now < p.panUntil) return
+    entry.framing = true
+    entry.map.setCenterAnimated(new mapkit.Coordinate(p.lat, p.lon), animate)
+    p.panUntil = now + (animate ? 450 : 0)
+    setTimeout(() => { entry.framing = false }, animate ? 500 : 50)
+}
+
+/** The "Recenter" button: shown once the person has moved the map, gone once they press it. */
+function showRecenter(entry, show) {
+    const p = entry.player
+    if (!p) return
+    if (!show) { p.recenter?.remove(); p.recenter = null; return }
+    if (p.recenter) return
+    const button = document.createElement('button')
+    button.type = 'button'
+    button.className = 'btn btn-sm btn-light shadow-sm'
+    button.textContent = 'Recenter'
+    button.setAttribute('data-testid', 'map-recenter')
+    button.style.cssText = 'position:absolute;top:8px;right:8px;z-index:5;'
+    // Its own gesture must not count as moving the map.
+    button.addEventListener('pointerdown', e => e.stopPropagation())
+    button.addEventListener('click', e => {
+        e.stopPropagation()
+        playerRecenter(entry.container.id)
+    })
+    entry.container.appendChild(button)
+    p.recenter = button
+}
+
+/** Whether a map has been made in this container yet — the player waits for it. */
+export function isMap(containerId) {
+    return _maps.has(containerId)
+}
+
+/** Back to following the marker. */
+export function playerRecenter(containerId) {
+    const entry = _maps.get(containerId)
+    const p = entry?.player
+    if (!p) return
+    p.following = true
+    showRecenter(entry, false)
+    centreOnMarker(entry, !reducedMotion())
+}
+
+/** What the player is drawing — for a test, which cannot read a canvas. */
+export function playerState(containerId) {
+    const entry = _maps.get(containerId)
+    const p = entry?.player
+    if (!p || !entry.map) return null
+    const r = entry.map.region
+    return {
+        lat: p.lat, lon: p.lon, bearing: p.target, displayedBearing: p.displayed,
+        accuracy: p.circle ? p.circle.radius : null, following: p.following,
+        trackPoints: p.track ? p.track.points.length : 0, pins: p.pins.length,
+        center: [r.center.latitude, r.center.longitude],
+    }
+}
+
 export function dispose(containerId) {
     const entry = _maps.get(containerId)
     if (!entry) return
+    playerClear(entry)
     entry.observer?.disconnect()
     if (entry.onWheel) entry.container?.removeEventListener('wheel', entry.onWheel)
     try { entry.map?.destroy() } catch { /* already gone with its container */ }

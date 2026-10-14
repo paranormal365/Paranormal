@@ -46,7 +46,7 @@ public class FieldSessionVariantCaptureTests : BenTestBase
             try
             {
                 await Page.WaitForSelectorAsync(
-                    "svg.k-chart-surface, .k-chart, .alert, [data-testid='current-room'], audio, video, input[type=range]",
+                    "svg.k-chart-surface, .k-chart, [data-fk-chart], .alert, [data-testid='current-room'], audio, video, input[type=range]",
                     new() { Timeout = 30_000 });
             }
             catch (TimeoutException) { row["timedOut"] = true; }
@@ -54,13 +54,13 @@ public class FieldSessionVariantCaptureTests : BenTestBase
 
             var body = await Page.Locator("main").InnerTextAsync();
             row["title"]              = await Page.TitleAsync();
-            row["chart"]              = await Page.Locator(".k-chart, svg.k-chart-surface").CountAsync() > 0;
+            row["chart"]              = await Page.Locator(".k-chart, svg.k-chart-surface, [data-fk-chart]").CountAsync() > 0;
             row["scrubber"]           = await Page.Locator("input[type=range]").CountAsync() > 0;
             row["noPositionNotice"]   = body.Contains("No position was recorded", StringComparison.OrdinalIgnoreCase);
             row["noReadingsNotice"]   = body.Contains("holds no readings", StringComparison.OrdinalIgnoreCase);
-            row["mapTiles"]           = await Page.Locator(".leaflet-container, .leaflet-tile, img[src*='tile']").CountAsync() > 0;
+            row["mapTiles"]           = await Page.Locator(".ben-map").CountAsync() > 0;
             row["currentRoomBadge"]   = await Page.Locator("[data-testid='current-room']").CountAsync() > 0;
-            row["chartCount"]         = await Page.Locator(".k-chart").CountAsync();
+            row["chartCount"]         = await Page.Locator(".k-chart, [data-fk-chart]").CountAsync();
             row["markerRoomBadges"]   = await Page.Locator("[data-testid='marker-room']").CountAsync();
             row["markerRows"]         = await Page.Locator("[data-testid='marker-row'], table tbody tr").CountAsync();
             row["audioElements"]      = await Page.Locator("audio").CountAsync();

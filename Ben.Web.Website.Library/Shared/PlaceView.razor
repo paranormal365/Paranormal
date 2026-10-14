@@ -540,7 +540,14 @@
                         @foreach (var fs in _sessions)
                         {
                             <tr>
-                                <td class="text-nowrap">@fs.StartedAt.ToViewerLocalTime(UserState).ToDisplayDate()</td>
+                                <td class="text-nowrap">
+                                    @fs.StartedAt.ToViewerLocalTime(UserState).ToDisplayDate()
+                                    @* The night itself, played back: readings, sound and marks on one
+                                       timeline (10/14/2026). The files below stay for anybody who
+                                       only wants the one recording. *@
+                                    <a class="d-block small" data-testid="archive-play"
+                                       href="@($"/places/{PlaceId}/sessions/{fs.Id}")">Play it back</a>
+                                </td>
                                 <td><UserNameLink AppUserId="@fs.ContributorAppUserId" DisplayName="@fs.ContributorName" /></td>
                                 <td>@(string.IsNullOrWhiteSpace(fs.LocationLabel) ? "—" : fs.LocationLabel)</td>
                                 <td class="text-end">@fs.ReadingCount.ToString("N0")</td>

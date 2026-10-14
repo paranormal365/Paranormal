@@ -6,8 +6,19 @@
     can be dropped into a case page or an investigation panel without moving any of it.
 *@
 
-<FieldKitPlayer SessionId="@SessionId" Standalone="true" />
+@* The browser keeps time (10/14/2026). The previous player stays one setting away —
+   FieldKit:Player = legacy — for a release, in case the new one has to be stepped back from. *@
+@if (FieldKitPlayerChoice.UseLegacy(Configuration))
+{
+    <FieldKitPlayer SessionId="@SessionId" Standalone="true" />
+}
+else
+{
+    <FieldKitEnginePlayer SessionId="@SessionId" Standalone="true" />
+}
 
 @code {
+    [Inject] private Microsoft.Extensions.Configuration.IConfiguration Configuration { get; set; } = default!;
+
     [Parameter] public Guid SessionId { get; set; }
 }

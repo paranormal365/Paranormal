@@ -1,0 +1,669 @@
+@namespace Ben.Web.Website.Library.Kit
+@using Microsoft.JSInterop
+@using System.Text.Json
+@using Ben.Web.Website.Library.Kit.Maps
+@using Ben.Web.Services
+@using Ben.Service.Models.FieldSessions
+@using TimelineMarker = Ben.Service.Models.FieldSessions.TimelineMarker
+@inject IBenAdminClient AdminClient
+@inject IBenUserState UserState
+@inject IMediaUrlBuilder MediaUrls
+@inject Microsoft.Extensions.Options.IOptions<Ben.Data.Common.SiteIdentity> SiteOptions
+@inject IJSRuntime JS
+@implements IAsyncDisposable
+
+@*
+    FieldKitEnginePlayer — playing back a session somebody recorded on their phone, with the
+    browser keeping time (10/14/2026).
+
+    The page is drawn ONCE, from the session's timeline (built on the server by the replay rules
+    the phone's review also follows — ProjectNotes/specs/replay-semantics.md). Everything that moves
+    with the playhead belongs to wwwroot/js/fieldKitPlayer.js: the transport, the scrubber, the
+    readouts, the stage, the photo glow, the map, the chart's playhead. While somebody watches,
+    this component does nothing at all, which is what lets a room full of people watch one night
+    without each of them costing the server four renders a second.
+
+    The elements the engine fills are rendered EMPTY here (data-fk="…"), so Blazor's next render
+    has nothing of theirs to undo. FieldKitPlayer, the previous player, stays behind the
+    FieldKit:Player=legacy setting for one release.
+*@
+
+@if (Standalone)
+{
+    <PageTitle>@(_session?.LocationLabel ?? "Field session") — @SiteOptions.Value.Name</PageTitle>
+}
+
+<div class="@(Standalone ? "container-fluid px-3" : "")"
+     style="@(Standalone ? "max-width:1200px;margin:0 auto;" : "")">
+
+    @if (_loading)
+    {
+        <BenLoaderOverlay Visible="true" Text="Reading the session…" />
+    }
+    else if (_signedOut)
+    {
+        <div class="card border-warning mt-4">
+            <div class="card-body">
+                <h5 class="card-title">Sign in to see this session</h5>
+                <p class="card-text">
+                    Field sessions are private to the person who recorded them and the
+                    investigation they were sent to. Sign in and this page will open.
+                </p>
+                <a class="btn btn-primary btn-sm" data-testid="sign-in-to-see"
+                   href="@($"/login?returnUrl={Uri.EscapeDataString($"/field-sessions/{SessionId}")}")">Sign in</a>
+            </div>
+        </div>
+    }
+    else if (_refusal is not null)
+    {
+        <div class="card border-warning">
+            <div class="card-body">
+                <h5 class="card-title">This session couldn't be loaded</h5>
+                <p class="card-text">@_refusal</p>
+                <button class="btn btn-outline-secondary btn-sm" @onclick="Load">Try again</button>
+            </div>
+        </div>
+    }
+    else if (_session is null || _timeline is null)
+    {
+        <div class="alert alert-secondary">This session isn't here.</div>
+    }
+    else
+    {
+        <div class="d-flex flex-wrap align-items-baseline gap-2 mb-3">
+            <h3 class="mb-0">@(_session.LocationLabel ?? "Field session")</h3>
+            <span class="text-muted small">
+                @_session.StartedAt.ToViewerLocalTime(UserState).ToDisplayDateTime()
+                · @Ben.Web.Website.Library.Kit.DeviceNames.Friendly(_session.DeviceModel)
+                @if (!string.IsNullOrWhiteSpace(_session.RecordedByName))
+                {
+                    <text> · recorded by @_session.RecordedByName</text>
+                }
+                else if (!Anonymous)
+                {
+                    <text> · <span class="text-warning">nobody signed in when recorded</span></text>
+                }
+            </span>
+        </div>
+
+        @if (Shared)
+        {
+            <div class="alert alert-secondary py-2 small" data-testid="share-banner">
+                <BenIcon Name="link" Class="me-1" />
+                You're viewing this through a shared link.
+                @if (_shareExpires is { } expires)
+                {
+                    <text> It stops working on @expires.ToViewerLocalTime(UserState).ToDisplayDateTime().</text>
+                }
+                @if (_positionsWithheld)
+                {
+                    <text> The locations recorded with these readings were not shared, so no map is shown.</text>
+                }
+            </div>
+        }
+
+        @if (_public is { } published)
+        {
+            <div class="alert alert-secondary py-2 small" data-testid="archive-banner">
+                <BenIcon Name="map-pin" Class="me-1" />
+                From the field archive for <a href="@($"/places/{published.PlaceId}")">@published.PlaceName</a>.
+                Where somebody stood is shown at the place's public point, never where their phone was.
+                @if (published.Files.Count == 0)
+                {
+                    <text> Its recordings and photos aren't shown at the moment.</text>
+                }
+            </div>
+        }
+
+        @if (_insights is { OthersWhoRecordedHere: > 0 } insights)
+        {
+            <FieldSessionInsightsCard Insights="@insights" />
+        }
+
+        @if (_timeline.Readings.T.Length == 0)
+        {
+            <div class="alert alert-secondary">This session's document holds no readings.</div>
+        }
+        else
+        {
+            <div class="fk-player" @ref="_root" data-testid="field-player">
+                <div class="card mb-3">
+                    <div class="card-body">
+                        <div data-fk="transport"></div>
+
+                        @if (_mediaNotice is not null)
+                        {
+                            <div class="alert alert-info py-1 px-2 small mb-2" role="status" data-testid="media-notice">@_mediaNotice</div>
+                        }
+
+                        @if (HasStage)
+                        {
+                            <div class="fk-stage" data-fk="stage" data-testid="media-stage">
+                                @foreach (var file in _session.Files.Where(f => IsVideo(f.RelativePath) && !_undecodable.Contains(f.Id)))
+                                {
+                                    <video @key="file.Id" class="fk-stage-video" preload="metadata" playsinline
+                                           style="display:none" src="@FileUrl(file.Id)" data-testid="stage-video"
+                                           data-fk-media="@file.Id"></video>
+                                }
+                                <div class="fk-stage-empty" data-fk="stage-note">
+                                    <BenIcon Name="moon" Class="fk-stage-icon text-muted" />
+                                    <span class="small text-muted font-monospace" data-fk="stage-note-text"></span>
+                                </div>
+                            </div>
+                        }
+
+                        @if (_timeline.Photos.Count > 0)
+                        {
+                            <div class="fk-photo-strip" data-fk="photos" data-testid="photo-strip"
+                                 aria-label="Photos taken during the session">
+                                @foreach (var photo in _timeline.Photos)
+                                {
+                                    <button type="button" @key="photo.FileId" class="fk-thumb"
+                                            data-testid="photo-thumb" data-fk-photo="@photo.FileId" data-fk-t="@photo.T"
+                                            title="Photo at @Elapsed(photo.T) — goes to that moment and shows it full size">
+                                        <img src="@FileUrl(photo.FileId)" alt="Photo at @Elapsed(photo.T)" loading="lazy" />
+                                        <span class="fk-thumb-time">@Elapsed(photo.T)</span>
+                                    </button>
+                                }
+                            </div>
+                        }
+
+                        <div class="row g-3 mt-1" data-testid="session-readout">
+                            <div class="col-6 col-md-3">
+                                <div class="text-muted small">Magnetic field@(_timeline.Trace.MagneticFromBase ? " (from base)" : "")</div>
+                                <div class="fs-5 font-monospace" data-fk="field"></div>
+                            </div>
+                            <div class="col-6 col-md-3">
+                                <div class="text-muted small">Sound</div>
+                                <div class="fs-5 font-monospace" data-fk="sound"></div>
+                            </div>
+                            <div class="col-6 col-md-3">
+                                <div class="text-muted small" data-fk="facing-title"></div>
+                                <div class="fs-5 font-monospace" data-fk="facing"></div>
+                            </div>
+                            <div class="col-6 col-md-3">
+                                <div class="text-muted small">Position</div>
+                                <div class="fs-6 font-monospace" data-fk="position"></div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="row g-3">
+                    <div class="col-12 col-lg-7">
+                        <div class="card h-100">
+                            <div class="card-header py-2">@ChartHeading</div>
+                            <div class="card-body">
+                                @if (_timeline.Trace.Magnetic.Count == 0 && _timeline.Trace.Sound.Count == 0)
+                                {
+                                    <div class="text-muted small p-3" data-testid="no-channels">
+                                        This session recorded no magnetic or sound readings.
+                                    </div>
+                                }
+                                @if (_timeline.Trace.Magnetic.Count > 0)
+                                {
+                                    <FieldTraceChart Points="@_timeline.Trace.Magnetic" DurationMs="@_timeline.DurationMs"
+                                                     Away="@_timeline.Away" Markers="@_timeline.Markers"
+                                                     Unit="@(_timeline.Trace.MagneticFromBase ? "mG from base" : "mG abs")"
+                                                     TestId="trace-magnetic" AriaLabel="Magnetic field over the session"
+                                                     Height="@(_timeline.Trace.Sound.Count > 0 ? 120 : 220)"
+                                                     ClockAt="@ClockAt" />
+                                }
+                                @if (_timeline.Trace.Sound.Count > 0)
+                                {
+                                    <FieldTraceChart Points="@_timeline.Trace.Sound" DurationMs="@_timeline.DurationMs"
+                                                     Away="@_timeline.Away" Markers="@_timeline.Markers"
+                                                     Unit="dBFS" TestId="trace-sound" AriaLabel="Sound over the session"
+                                                     Height="@(_timeline.Trace.Magnetic.Count > 0 ? 120 : 220)"
+                                                     ClockAt="@ClockAt" />
+                                }
+                                @if (_timeline.Away.Count > 0)
+                                {
+                                    <div class="text-muted small pt-2" data-testid="away-stretch">
+                                        <strong>Shaded:</strong> @AwaySentence()
+                                    </div>
+                                }
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="col-12 col-lg-5">
+                        <div class="card h-100">
+                            <div class="card-header py-2">Where they were</div>
+                            <div class="card-body p-2">
+                                <div class="mb-2" data-fk="room"></div>
+                                @if (FirstFix is not { } first)
+                                {
+                                    <div class="text-muted small p-3" data-testid="no-position">
+                                        @if (_positionsWithheld)
+                                        {
+                                            <text>The locations recorded during this session weren't shared through this link.</text>
+                                        }
+                                        else
+                                        {
+                                            <text>No position was recorded for this session.</text>
+                                        }
+                                    </div>
+                                }
+                                else
+                                {
+                                    <BenMap Pins="@NoPins" FitToPins="false" Height="260px"
+                                            CenterLatitude="@first.Lat" CenterLongitude="@first.Lon"
+                                            Zoom="@(_timeline.Positions == TimelinePositionPolicy.Exact ? 18 : 15)" />
+                                    @if (_timeline.Positions == TimelinePositionPolicy.PublicPoint)
+                                    {
+                                        <div class="text-muted small pt-2" data-testid="map-public-point">
+                                            Shown at the place's public point, not where the phone was.
+                                        </div>
+                                    }
+                                }
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                @if (_session.Files.Count > 0)
+                {
+                    <div class="card mt-3">
+                        <div class="card-header py-2">Recordings</div>
+                        <ul class="list-group list-group-flush">
+                            @foreach (var file in _session.Files)
+                            {
+                                var clip = _timeline.Clips.FirstOrDefault(c => c.FileId == file.Id);
+                                <li class="list-group-item d-flex align-items-center gap-3 flex-wrap" @key="file.Id">
+                                    <span class="font-monospace small">@file.RelativePath</span>
+                                    @if (clip?.StartMs is > 0 and var startMs)
+                                    {
+                                        <span class="text-muted small" data-testid="media-starts-at" data-fk-start="@file.Id">from @Elapsed(startMs)</span>
+                                    }
+                                    else if (clip is { StartMs: null })
+                                    {
+                                        @* Placed by the engine once the browser has read its length. *@
+                                        <span class="text-muted small" data-fk-start="@file.Id"></span>
+                                    }
+                                    @if (!file.DigestMatched)
+                                    {
+                                        <span class="badge text-bg-warning">arrived damaged</span>
+                                    }
+                                    @if (_undecodable.Contains(file.Id))
+                                    {
+                                        <span class="badge text-bg-warning" data-testid="undecodable">won't play in this browser</span>
+                                        <a class="btn btn-outline-secondary btn-sm ms-auto text-nowrap"
+                                           href="@FileUrl(file.Id)" download>Download the file</a>
+                                    }
+                                    else if (IsAudio(file.RelativePath))
+                                    {
+                                        <audio controls preload="metadata" class="ms-auto"
+                                               src="@FileUrl(file.Id)" data-fk-media="@file.Id"></audio>
+                                    }
+                                    else if (IsVideo(file.RelativePath))
+                                    {
+                                        <span class="ms-auto small text-muted">plays above, with the session</span>
+                                    }
+                                    else if (IsImage(file.RelativePath))
+                                    {
+                                        <a href="@FileUrl(file.Id)" target="_blank" rel="noopener"
+                                           class="ms-auto" data-testid="session-photo">
+                                            <img src="@FileUrl(file.Id)" alt="@file.RelativePath" loading="lazy"
+                                                 style="max-height:120px;width:auto;border-radius:.25rem;" />
+                                        </a>
+                                    }
+                                </li>
+                            }
+                        </ul>
+                    </div>
+                }
+
+                @if (_timeline.Markers.Count > 0)
+                {
+                    <div class="card mt-3">
+                        <div class="card-header py-2">Marked</div>
+                        <ul class="list-group list-group-flush">
+                            @foreach (var marker in _timeline.Markers)
+                            {
+                                <li class="list-group-item d-flex align-items-center gap-3 fk-marker" data-fk-marker="@marker.T"
+                                    data-testid="marker-row">
+                                    <BenIcon Name="@(marker.Automatic ? "zap" : "flag")"
+                                             Class="@(marker.Automatic ? "fk-marker-icon text-warning" : "fk-marker-icon text-info")" />
+                                    <button class="btn btn-sm btn-outline-secondary text-nowrap" data-fk-jump="@marker.T"
+                                            title="Go to a moment before this">
+                                        @Elapsed(marker.T)
+                                    </button>
+                                    <span>@marker.Title</span>
+                                    @if (MarkerFieldText(marker) is { } reading)
+                                    {
+                                        <span class="font-monospace small" data-testid="marker-field">@reading</span>
+                                    }
+                                    @if (!string.IsNullOrWhiteSpace(marker.Room))
+                                    {
+                                        <span class="badge text-bg-secondary" data-testid="marker-room">@marker.Room</span>
+                                    }
+                                    @if (!string.IsNullOrWhiteSpace(marker.Note))
+                                    {
+                                        <span class="text-muted small">@marker.Note</span>
+                                    }
+                                </li>
+                            }
+                        </ul>
+                    </div>
+                }
+            </div>
+
+            @if (!Anonymous)
+            {
+                <FieldSessionSharePanel SessionId="@SessionId" Files="@_session.Files" />
+            }
+        }
+    }
+</div>
+
+@code {
+    [Parameter, EditorRequired] public Guid SessionId { get; set; }
+
+    /// <summary>True when this is the whole page rather than a panel inside something else.</summary>
+    [Parameter] public bool Standalone { get; set; } = true;
+
+    /// <summary>The share link this is played through, when it is one (item 207).</summary>
+    [Parameter] public string? ShareToken { get; set; }
+
+    /// <summary>
+    /// A session from a place's public archive (10/14/2026): anonymous, positions at the place's
+    /// public point, recordings only once approved, served by the archive's own media route.
+    /// </summary>
+    [Parameter] public bool Public { get; set; }
+
+    private bool Shared => !string.IsNullOrWhiteSpace(ShareToken);
+
+    /// <summary>Somebody without an account: a share link or the public archive.</summary>
+    private bool Anonymous => Shared || Public;
+
+    private PublicSessionSummary? _public;
+
+    private static readonly IReadOnlyList<BenMapPin> NoPins = [];
+    private static readonly JsonSerializerOptions TimelineJson = new(JsonSerializerDefaults.Web);
+
+    private bool _loading = true;
+    private bool _signedOut;
+    private string? _refusal;
+    private FieldSessionSummaryRecord? _session;
+    private SessionTimeline? _timeline;
+    private SessionInsightsRecord? _insights;
+    private DateTime? _shareExpires;
+    private bool _positionsWithheld;
+    private string? _mediaNotice;
+    private readonly HashSet<Guid> _undecodable = [];
+    private readonly HashSet<Guid> _renewed = [];
+
+    private ElementReference _root;
+    private IJSObjectReference? _engine;
+    private DotNetObjectReference<FieldKitEnginePlayer>? _self;
+    private bool _started;
+    private Guid? _justRenewed;
+
+    /// <summary>
+    /// What was last ASKED for, set before the load starts. Checked against what had finished
+    /// loading, a parent re-render arriving mid-load (the sign-in state settling does it) started
+    /// a second load that tore down the player the first had just built.
+    /// </summary>
+    private Guid? _requestedFor;
+    private string? _requestedToken;
+    private bool? _requestedPublic;
+
+    protected override async Task OnParametersSetAsync()
+    {
+        // Re-runs only when the router reuses this page for a different session.
+        if (_requestedFor == SessionId && _requestedToken == ShareToken && _requestedPublic == Public) return;
+        _requestedFor = SessionId;
+        _requestedToken = ShareToken;
+        _requestedPublic = Public;
+        await Load();
+    }
+
+    private async Task Load()
+    {
+        _loading = true;
+        _refusal = null;
+        _signedOut = false;
+        _session = null;
+        _timeline = null;
+        await StopEngineAsync();
+        StateHasChanged();
+
+        if (Public) await LoadPublicAsync();
+        else if (Shared) await LoadSharedAsync();
+        else await LoadSignedInAsync();
+    }
+
+    private async Task LoadSignedInAsync()
+    {
+        // The circuit is not signed in during the static prerender; loading now would be refused
+        // and settle on a refusal that never retries.
+        if (!await UserState.WaitUntilAuthReadyAsync(RendererInfo.IsInteractive)) return;
+
+        var summary = AdminClient.GetFieldSessionSummaryAsync(SessionId);
+        var timeline = AdminClient.GetFieldSessionTimelineAsync(SessionId);
+        var insights = AdminClient.GetSessionInsightsAsync(SessionId);
+        var detail = await summary;
+        _timeline = await timeline;
+        _insights = await insights;
+        _loading = false;
+
+        if (detail is null)
+        {
+            if (!UserState.IsAuthenticated) { _signedOut = true; return; }
+            _refusal = "The server didn't return this session. It may have been removed, or you "
+                     + "may no longer have access to the investigation it belongs to.";
+            return;
+        }
+        _session = detail.Session;
+        if (_timeline is null) _refusal = "This session's document couldn't be read.";
+    }
+
+    private async Task LoadSharedAsync()
+    {
+        if (!RendererInfo.IsInteractive) return;
+
+        var summary = AdminClient.GetSharedFieldSessionSummaryAsync(ShareToken!);
+        var timeline = AdminClient.GetSharedFieldSessionTimelineAsync(ShareToken!);
+        var shared = await summary;
+        _timeline = await timeline;
+        _loading = false;
+
+        if (shared is null)
+        {
+            _refusal = "This link isn't working. It may have expired, or the person who sent it "
+                     + "may have withdrawn it. Ask them for a new one.";
+            return;
+        }
+
+        _shareExpires = shared.ExpiresUtc;
+        _positionsWithheld = shared.PositionsWithheld;
+        _session = new FieldSessionSummaryRecord(
+            Id: Guid.Empty, InvestigationId: null, DeviceSessionId: Guid.Empty,
+            DeviceModel: shared.DeviceModel, LocationLabel: shared.LocationLabel,
+            StartedAt: shared.StartedAt, EndedAt: shared.EndedAt,
+            ReadingCount: shared.ReadingCount, MarkerCount: shared.MarkerCount,
+            DocumentUploadFileId: Guid.Empty, RecordedByAppUserId: null, RecordedByName: null,
+            DateCreated: shared.StartedAt,
+            Files: shared.Files
+                .Select(f => new FieldSessionFileSummary(f.Id, f.RelativePath, f.FileSize, Sha256: null,
+                                                         DigestMatched: true, DateCreated: shared.StartedAt))
+                .ToList());
+        if (_timeline is null) _refusal = "This session's readings cannot be shown through a shared link.";
+    }
+
+    private async Task LoadPublicAsync()
+    {
+        if (!RendererInfo.IsInteractive) return;
+
+        var summary = AdminClient.GetPublicFieldSessionSummaryAsync(SessionId);
+        var timeline = AdminClient.GetPublicFieldSessionTimelineAsync(SessionId);
+        _public = await summary;
+        _timeline = await timeline;
+        _loading = false;
+
+        if (_public is null)
+        {
+            // One answer for "no such session" and "not published": the archive never says which.
+            _refusal = "This session isn't in the archive.";
+            return;
+        }
+        _session = new FieldSessionSummaryRecord(
+            Id: _public.Id, InvestigationId: null, DeviceSessionId: Guid.Empty,
+            DeviceModel: _public.DeviceModel, LocationLabel: _public.LocationLabel,
+            StartedAt: _public.StartedAt, EndedAt: _public.EndedAt,
+            ReadingCount: _timeline?.Readings.T.Length ?? 0, MarkerCount: _timeline?.Markers.Count ?? 0,
+            DocumentUploadFileId: Guid.Empty, RecordedByAppUserId: null, RecordedByName: _public.RecordedBy,
+            DateCreated: _public.StartedAt,
+            Files: _public.Files
+                .Select(f => new FieldSessionFileSummary(f.Id, f.RelativePath, 0, Sha256: null,
+                                                         DigestMatched: true, DateCreated: _public.StartedAt))
+                .ToList());
+        if (_timeline is null) _refusal = "This session's readings couldn't be read.";
+    }
+
+    // ── The engine ────────────────────────────────────────────────────────────
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (_timeline is null || _session is null || _root.Context is null) return;
+        try
+        {
+            if (!_started)
+            {
+                _engine ??= await JS.InvokeAsync<IJSObjectReference>("import", "./_content/Ben.Web.Website.Library/js/fieldKitPlayer.js");
+                _self ??= DotNetObjectReference.Create(this);
+                var urls = _session.Files.ToDictionary(f => f.Id.ToString(), f => FileUrl(f.Id));
+                await _engine.InvokeVoidAsync("init", _root, _self,
+                    JsonSerializer.Serialize(_timeline, TimelineJson), new { urls });
+                _started = true;
+                return;
+            }
+
+            // Rare: a recording that would not play, a renewed link. Elements may have changed.
+            if (_justRenewed is { } renewed)
+            {
+                _justRenewed = null;
+                await _engine!.InvokeVoidAsync("mediaRenewed", _root, renewed.ToString());
+            }
+            else
+            {
+                await _engine!.InvokeVoidAsync("rebind", _root);
+            }
+        }
+        catch (Exception ex) when (ex is JSDisconnectedException or ObjectDisposedException or TaskCanceledException)
+        {
+            // The page went away mid-call; there is nothing left to drive.
+        }
+    }
+
+    /// <summary>
+    /// A recording failed in the browser. One that already told the browser its length decoded
+    /// fine, so its link ran out (the ticket in it lasts an hour): renewed once. Anything else
+    /// is a file this browser cannot play, said beside it with the file still downloadable.
+    /// </summary>
+    [JSInvokable]
+    public Task OnMediaFailed(string fileId, bool decodedBefore)
+    {
+        if (!Guid.TryParse(fileId, out var id)) return Task.CompletedTask;
+        if (decodedBefore && !Anonymous && _renewed.Add(id))
+        {
+            MediaUrls.RenewFieldSessionFile(SessionId, id);
+            _justRenewed = id;
+            _mediaNotice = "A recording's link ran out and has been renewed. Press Play to carry on.";
+        }
+        else
+        {
+            _undecodable.Add(id);
+        }
+        return InvokeAsync(StateHasChanged);
+    }
+
+    private async Task StopEngineAsync()
+    {
+        if (!_started || _engine is null) return;
+        _started = false;
+        try { await _engine.InvokeVoidAsync("dispose", _root); }
+        catch (Exception ex) when (ex is JSDisconnectedException or ObjectDisposedException or JSException) { }
+    }
+
+    public async ValueTask DisposeAsync()
+    {
+        await StopEngineAsync();
+        try { if (_engine is not null) await _engine.DisposeAsync(); }
+        catch (JSDisconnectedException) { }
+        _self?.Dispose();
+    }
+
+    // ── What the page says ────────────────────────────────────────────────────
+
+    private string FileUrl(Guid fileId) => Public
+        ? AdminClient.GetArchiveMediaUrl(SessionId, fileId)
+        : Shared
+            ? MediaUrls.SharedFieldSessionFile(ShareToken!, fileId)
+            : MediaUrls.FieldSessionFile(SessionId, fileId);
+
+    private bool HasStage => _session?.Files.Any(f => IsAudio(f.RelativePath) || IsVideo(f.RelativePath) || IsImage(f.RelativePath)) == true;
+
+    private (double Lat, double Lon)? FirstFix
+    {
+        get
+        {
+            var r = _timeline!.Readings;
+            for (var i = 0; i < r.Lat.Length; i++)
+                if (r.Lat[i] is { } lat && r.Lon[i] is { } lon) return (lat, lon);
+            return null;
+        }
+    }
+
+    private string ChartHeading => (_timeline!.Trace.Magnetic.Count > 0, _timeline.Trace.Sound.Count > 0) switch
+    {
+        (true, true) => "Magnetic field and sound over the session",
+        (true, false) => "Magnetic field over the session",
+        (false, true) => "Sound over the session",
+        _ => "Readings over the session",
+    };
+
+    private string ClockAt(long ms)
+        => _timeline!.StartUtc.AddMilliseconds(ms).ToViewerLocalTime(UserState).ToString("HH:mm:ss");
+
+    private static string Elapsed(long ms)
+    {
+        var span = TimeSpan.FromMilliseconds(Math.Max(0, ms));
+        return $"{(int)span.TotalHours:00}:{span.Minutes:00}:{span.Seconds:00}";
+    }
+
+    /// <summary>The field at a mark, said the way the readout says it: from base, or absolute and labelled.</summary>
+    private string? MarkerFieldText(TimelineMarker marker)
+        => marker.FieldMilligauss is not { } value ? null
+         : _timeline!.Trace.MagneticFromBase ? value.ToString("+0;-0;0") + " mG"
+         : value.ToString("0") + " mG abs";
+
+    private string AwaySentence()
+    {
+        var away = _timeline!.Away;
+        var total = TimeSpan.FromMilliseconds(away.Sum(s => s.ToMs - s.FromMs));
+        var howLong = total.TotalHours >= 1 ? $"{(int)total.TotalHours} hr {total.Minutes} min"
+                    : total.TotalMinutes >= 1 ? $"{(int)total.TotalMinutes} min {total.Seconds} sec"
+                    : $"{total.Seconds} sec";
+        var note = away.Select(s => s.Note).FirstOrDefault(n => !string.IsNullOrWhiteSpace(n))
+                   ?? "The app was put away here.";
+        var times = away.Count == 1 ? "" : $" ({away.Count} times)";
+        return $"{note} Away for {howLong}{times}.";
+    }
+
+    private static bool IsAudio(string path) =>
+        path.EndsWith(".m4a", StringComparison.OrdinalIgnoreCase)
+        || path.EndsWith(".mp3", StringComparison.OrdinalIgnoreCase)
+        || path.EndsWith(".wav", StringComparison.OrdinalIgnoreCase);
+
+    private static bool IsVideo(string path) =>
+        path.EndsWith(".mov", StringComparison.OrdinalIgnoreCase)
+        || path.EndsWith(".mp4", StringComparison.OrdinalIgnoreCase);
+
+    private static bool IsImage(string path) =>
+        path.EndsWith(".jpg", StringComparison.OrdinalIgnoreCase)
+        || path.EndsWith(".jpeg", StringComparison.OrdinalIgnoreCase)
+        || path.EndsWith(".png", StringComparison.OrdinalIgnoreCase)
+        || path.EndsWith(".heic", StringComparison.OrdinalIgnoreCase);
+}

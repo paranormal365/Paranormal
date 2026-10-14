@@ -104,7 +104,7 @@ public class FieldSessionShareLinkTests : BenTestBase
 
         // The trace is drawn, not merely axed. A chart with axes and no line reads as a quiet
         // night rather than a page that failed to load its document.
-        var tracePaths = await Page.Locator(".k-chart svg path[stroke]:not([stroke='none'])").CountAsync();
+        var tracePaths = await Page.Locator("[data-testid='trace-magnetic'] path.fk-trace").CountAsync();
         Assert.That(tracePaths, Is.GreaterThan(0), "the magnetic trace should actually be drawn");
     }
 

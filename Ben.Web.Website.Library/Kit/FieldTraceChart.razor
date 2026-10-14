@@ -1,0 +1,112 @@
+@namespace Ben.Web.Website.Library.Kit
+@using Ben.Service.Models.FieldSessions
+@using SessionMark = Ben.Service.Models.FieldSessions.TimelineMarker
+
+@*
+    FieldTraceChart — one channel of a field session over time, drawn as SVG on the server.
+
+    Why not the Telerik chart the first player used (10/14/2026):
+    - Its x axis was the INDEX of each point, not its time, so a stretch with no readings was
+      squeezed to nothing and nothing could be placed "at 12:04:07" on it — no playhead, no marks.
+    - Re-rendering it on every tick was a large part of what each viewer cost the server.
+
+    Here x IS time: 0 to 1000 across the session, the same scale the scrubber uses. The engine
+    (fieldKitPlayer.js) moves the playhead line and handles a drag on the chart without asking the
+    server; this component is drawn once per page.
+*@
+
+<div class="fk-chart" data-fk-chart data-testid="@TestId">
+    <div class="fk-chart-plot" style="height:@(Height)px;">
+        <div class="fk-chart-y small text-muted">
+            <span>@Format(_max)</span>
+            <span>@Unit</span>
+            <span>@Format(_min)</span>
+        </div>
+        <svg viewBox="0 0 1000 @Height" preserveAspectRatio="none" role="img"
+             aria-label="@AriaLabel" class="fk-chart-svg">
+            @foreach (var away in Away)
+            {
+                <rect class="fk-away" x="@X(away.FromMs)" y="0" width="@Math.Max(1, X(away.ToMs) - X(away.FromMs))" height="@Height" />
+            }
+            @foreach (var marker in Markers)
+            {
+                <line class="@(marker.Automatic ? "fk-mark fk-mark--auto" : "fk-mark fk-mark--manual")"
+                      x1="@X(marker.T)" x2="@X(marker.T)" y1="0" y2="@Height" vector-effect="non-scaling-stroke" />
+            }
+            @if (_path.Length > 0)
+            {
+                <path class="fk-trace" d="@_path" vector-effect="non-scaling-stroke" />
+            }
+            <line class="fk-playhead" data-fk="playhead" x1="0" x2="0" y1="0" y2="@Height" vector-effect="non-scaling-stroke" />
+        </svg>
+    </div>
+    <div class="fk-chart-x small text-muted">
+        @foreach (var label in _labels)
+        {
+            <span>@label</span>
+        }
+    </div>
+</div>
+
+@code {
+    /// <summary>[ms, value] pairs in time order — <see cref="TimelineTrace"/>.</summary>
+    [Parameter, EditorRequired] public IReadOnlyList<double[]> Points { get; set; } = [];
+
+    [Parameter, EditorRequired] public long DurationMs { get; set; }
+
+    [Parameter] public IReadOnlyList<TimelineAway> Away { get; set; } = [];
+
+    [Parameter] public IReadOnlyList<SessionMark> Markers { get; set; } = [];
+
+    /// <summary>What the numbers are: "mG from base", "mG abs", "dBFS".</summary>
+    [Parameter, EditorRequired] public string Unit { get; set; } = "";
+
+    [Parameter] public string TestId { get; set; } = "trace";
+
+    [Parameter] public string AriaLabel { get; set; } = "Readings over the session";
+
+    [Parameter] public int Height { get; set; } = 150;
+
+    /// <summary>The clock time at a moment of the session, for the axis — the viewer's own time zone.</summary>
+    [Parameter, EditorRequired] public Func<long, string> ClockAt { get; set; } = _ => "";
+
+    private string _path = "";
+    private double _min, _max;
+    private List<string> _labels = [];
+
+    protected override void OnParametersSet()
+    {
+        if (Points.Count == 0)
+        {
+            _path = "";
+            _labels = [];
+            return;
+        }
+
+        _min = Points.Min(p => p[1]);
+        _max = Points.Max(p => p[1]);
+        if (_max - _min < 1e-9) { _min -= 1; _max += 1; }
+        // A little headroom, so the spike somebody came to see is not drawn into the frame's edge.
+        var pad = (_max - _min) * 0.08;
+        _min -= pad; _max += pad;
+
+        var sb = new System.Text.StringBuilder(Points.Count * 14);
+        for (var i = 0; i < Points.Count; i++)
+        {
+            sb.Append(i == 0 ? 'M' : 'L');
+            sb.Append(X((long)Points[i][0]).ToString("0.##", System.Globalization.CultureInfo.InvariantCulture));
+            sb.Append(' ');
+            sb.Append(Y(Points[i][1]).ToString("0.##", System.Globalization.CultureInfo.InvariantCulture));
+        }
+        _path = sb.ToString();
+
+        // About six labels, evenly spaced in TIME — one per reading drew seventy-four on top of each other.
+        _labels = Enumerable.Range(0, 6).Select(k => ClockAt(DurationMs * k / 5)).ToList();
+    }
+
+    private double X(long ms) => DurationMs <= 0 ? 0 : Math.Clamp(ms * 1000.0 / DurationMs, 0, 1000);
+
+    private double Y(double value) => Height - (value - _min) / (_max - _min) * Height;
+
+    private static string Format(double value) => Math.Abs(value) >= 100 ? value.ToString("0") : value.ToString("0.#");
+}

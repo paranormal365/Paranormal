@@ -131,10 +131,13 @@ public class FieldSessionPlaybackTests : BenTestBase
         // The trace is drawn, not written, so its presence has to be checked as a drawn path.
         // A chart that renders its axes and no line looks like a quiet night rather than a
         // broken chart, which is the failure worth catching here.
-        var tracePaths = await Page.Locator(".k-chart svg path[stroke]:not([stroke='none'])")
-            .CountAsync();
-        Assert.That(tracePaths, Is.GreaterThan(0),
+        // The player draws the trace itself as one SVG path over time (10/14/2026); a line with
+        // a single point would be axes and nothing else, so it must have somewhere to go.
+        var trace = Page.Locator("[data-testid='trace-magnetic'] path.fk-trace");
+        Assert.That(await trace.CountAsync(), Is.GreaterThan(0),
             "the magnetic trace should actually be drawn, not just its axes");
+        var segments = await trace.First.EvaluateAsync<int>("p => (p.getAttribute('d').match(/L/g) || []).length");
+        Assert.That(segments, Is.GreaterThan(0), "the trace should run between readings, not sit as one point");
 
         await Page.ScreenshotAsync(new() { Path = Path.Combine(Path.GetTempPath(), "fieldkit-player.png"), FullPage = true });
         // And it is attributed — the account that sent it is on the page.

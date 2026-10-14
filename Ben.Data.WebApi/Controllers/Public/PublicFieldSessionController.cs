@@ -154,6 +154,93 @@ public sealed class PublicFieldSessionController : ControllerBase
         return File(stream, BenBundle.ContentType, name, enableRangeProcessing: true);
     }
 
+    /// <summary>
+    /// One published session's heading and the files a visitor may be served — what the place
+    /// page's player needs besides the timeline (10/14/2026).
+    /// </summary>
+    [HttpGet("{sessionId:guid}/summary")]
+    public async Task<ActionResult<Ben.Service.Models.FieldSessions.PublicSessionSummary>> Summary(
+        Guid sessionId, CancellationToken ct = default)
+    {
+        await using var db = await _db.CreateDbContextAsync(ct);
+        var session = await Publishable(db)
+            .Where(s => s.Id == sessionId)
+            .Select(s => new
+            {
+                s.Id, PlaceId = s.PlaceId!.Value, PlaceName = s.Place!.Name, s.LocationLabel,
+                s.StartedAt, s.EndedAt, s.DeviceModel,
+                RecordedBy = s.RecordedByName ?? s.SubmittedByAppUser.DisplayName ?? "A contributor",
+            })
+            .FirstOrDefaultAsync(ct);
+        if (session is null) return NotFound();
+
+        // The same list the media route serves from, so the page and the door agree; empty while
+        // the session's media is held for review.
+        var files = (await ArchiveMediaPublication.ServableFilesAsync(db, sessionId, ct))
+            .Select(m => new Ben.Service.Models.FieldSessions.PublicSessionFile(m.UploadFileId, m.RelativePath, m.ContentType))
+            .ToList();
+
+        return Ok(new Ben.Service.Models.FieldSessions.PublicSessionSummary(
+            session.Id, session.PlaceId, session.PlaceName, session.LocationLabel,
+            session.StartedAt, session.EndedAt, session.DeviceModel, session.RecordedBy, files));
+    }
+
+    /// <summary>
+    /// A published session as a replay timeline: every position replaced by the place's public
+    /// point, and recordings only once its media has been approved.
+    /// </summary>
+    /// <remarks>
+    /// The positions go through <see cref="PublicSessionBundle.Sanitize"/> — the same sweep the
+    /// archive's downloadable copy uses — before anything is read out of the document, so the
+    /// timeline cannot carry a coordinate the bundle would not.
+    /// </remarks>
+    [HttpGet("{sessionId:guid}/timeline")]
+    public async Task<IActionResult> Timeline(
+        Guid sessionId, [FromServices] FieldSessionTimelineService timelines, CancellationToken ct = default)
+    {
+        await using var db = await _db.CreateDbContextAsync(ct);
+        var session = await Publishable(db)
+            .Include(s => s.Files).ThenInclude(f => f.UploadFile)
+            .Include(s => s.DocumentUploadFile)
+            .Include(s => s.Place)
+            .FirstOrDefaultAsync(s => s.Id == sessionId, ct);
+        if (session is null || session.DocumentUploadFile.StoragePath is not { Length: > 0 } path) return NotFound();
+
+        var approved = session.MediaReviewState == FeedMediaReviewState.Approved;
+        // By the id the archive's media route takes: the upload's own, or the row's for a
+        // recording inside the session's .ben.
+        var files = approved
+            ? session.Files
+                .Where(f => f.UploadFileId is not null || f.BundleEntryPath is { Length: > 0 })
+                .Select(f => new TimelineSourceFile(
+                    f.UploadFileId ?? f.Id, f.RelativePath, f.UploadFile?.StoragePath, f.BundleEntryPath,
+                    f.DateUpdated ?? f.DateCreated))
+                .ToList()
+            : [];
+
+        var (lat, lon) = PublicCoordinates.Approximate(session.Place!.Latitude, session.Place.Longitude);
+        Func<string, string?> redact = document =>
+        {
+            try
+            {
+                return System.Text.Encoding.UTF8.GetString(PublicSessionBundle.Sanitize(
+                    System.Text.Encoding.UTF8.GetBytes(document), (double?)lat, (double?)lon));
+            }
+            catch (System.Text.Json.JsonException)
+            {
+                return null;   // not refused on a hope: a document that cannot be swept is not shown
+            }
+        };
+
+        var payload = await timelines.GetAsync(new TimelineRequest(
+            session.Id, session.IsBundle, path, session.DocumentUploadFileId,
+            session.DocumentUploadFile.DateUpdated ?? session.DocumentUploadFile.DateCreated,
+            files, Ben.Service.Models.FieldSessions.TimelinePositionPolicy.PublicPoint, redact,
+            Variant: $"public:{session.PublishedAtUtc!.Value.Ticks}:{(int)session.MediaReviewState}:{lat}:{lon}"), ct);
+
+        return payload is null ? NotFound() : FieldSessionTimelineService.Respond(this, payload);
+    }
+
     /// <summary>The archive's own gate, as a query.</summary>
     private static IQueryable<Ben.Data.Source.Entities.FieldSessionUpload> Publishable(BenDataContext db)
         => db.FieldSessionUploads.AsNoTracking()
