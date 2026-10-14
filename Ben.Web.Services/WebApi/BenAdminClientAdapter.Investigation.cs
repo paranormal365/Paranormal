@@ -165,6 +165,10 @@ public sealed partial class BenAdminClientAdapter
         Guid sessionId, CancellationToken token = default)
         => _api.GetAsync<FieldSessionDetailRecord>($"/api/field-sessions/{sessionId}", token);
 
+    public Task<Ben.Service.Models.FieldSessions.SessionTimeline?> GetFieldSessionTimelineAsync(
+        Guid sessionId, CancellationToken token = default)
+        => _api.GetAsync<Ben.Service.Models.FieldSessions.SessionTimeline>($"/api/field-sessions/{sessionId}/timeline", token);
+
     // ── Sharing a session by link (item 207) ──────────────────────────────────
 
     public Task<LoadResult<FieldSessionShareRecord>> GetFieldSessionSharesAsync(
@@ -195,6 +199,11 @@ public sealed partial class BenAdminClientAdapter
         string shareToken, CancellationToken token = default)
         => _api.GetAnonymousAsync<SharedFieldSessionDetailRecord>(
             $"/api/shared-sessions/{Uri.EscapeDataString(shareToken)}", token);
+
+    public Task<Ben.Service.Models.FieldSessions.SessionTimeline?> GetSharedFieldSessionTimelineAsync(
+        string shareToken, CancellationToken token = default)
+        => _api.GetAnonymousAsync<Ben.Service.Models.FieldSessions.SessionTimeline>(
+            $"/api/shared-sessions/{Uri.EscapeDataString(shareToken)}/timeline", token);
 
     // ── The guide's code for a guest's phone (item 248) ───────────────────────
 

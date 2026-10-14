@@ -497,6 +497,43 @@ public sealed partial class FieldSessionUploadController : BenControllerBase
         return Ok(new FieldSessionDetail(ToRecord(session), document));
     }
 
+    /// <summary>
+    /// The session as a replay timeline (<see cref="Ben.Service.Models.FieldSessions.SessionTimeline"/>):
+    /// read once by the shared rules, and served from a cache to everybody watching.
+    /// </summary>
+    [HttpGet("{sessionId:guid}/timeline")]
+    public async Task<IActionResult> GetTimeline(
+        Guid sessionId,
+        [FromServices] Services.FieldSessions.FieldSessionTimelineService timelines,
+        CancellationToken ct)
+    {
+        var userId = GetCurrentUserId();
+        if (userId == Guid.Empty) return Unauthorized();
+
+        await using var db = await _db.CreateDbContextAsync(ct);
+        var session = await db.FieldSessionUploads.AsNoTracking()
+            .Include(s => s.Files).ThenInclude(f => f.UploadFile)
+            .Include(s => s.DocumentUploadFile)
+            .FirstOrDefaultAsync(s => s.Id == sessionId, ct);
+        if (session is null) return NotFound();
+        // Before the cache, always: a cached answer must not reach somebody the uncached one refuses.
+        if (!await MayReadAsync(db, session, userId, ct)) return NotFound();
+
+        if (session.DocumentUploadFile.StoragePath is not { } documentPath)
+            return NotFound("This session's readings are no longer on the server.");
+
+        var payload = await timelines.GetAsync(new Services.FieldSessions.TimelineRequest(
+            session.Id, session.IsBundle, documentPath, session.DocumentUploadFileId,
+            session.DocumentUploadFile.DateUpdated ?? session.DocumentUploadFile.DateCreated,
+            Services.FieldSessions.FieldSessionTimelineService.Sources(session.Files),
+            Ben.Service.Models.FieldSessions.TimelinePositionPolicy.Exact,
+            Redact: null, Variant: "readers"), ct);
+
+        return payload is null
+            ? NotFound("This session's readings are no longer on the server.")
+            : Services.FieldSessions.FieldSessionTimelineService.Respond(this, payload);
+    }
+
     /// <summary>Streams one of a session's recordings.</summary>
     /// <remarks>
     /// Outside the rate limiter for the same reason as the upload-file routes: the website

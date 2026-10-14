@@ -140,8 +140,8 @@ public sealed class FieldSessionShareControllerTests
     /// <summary>What ingest left beside the photo: its copy with the EXIF (and the location) gone.</summary>
     private static readonly byte[] CleanedPhoto = [9, 9, 9, 9];
 
-    private static FieldSessionShareController Build(
-        IDbContextFactory<BenDataContext> factory, Guid? userId, string visitorAddress = "203.0.113.7")
+    /// <summary>The files on "disk": the document, a recording, a photo and the photo's cleaned copy.</summary>
+    private static Mock<Ben.Data.Common.Interfaces.IFileStorageService> Storage()
     {
         var bytes = new Dictionary<string, byte[]>
         {
@@ -157,6 +157,21 @@ public sealed class FieldSessionShareControllerTests
         storage.Setup(s => s.OpenReadAsync(It.IsAny<string>(), It.IsAny<CancellationToken>()))
                .Returns<string, CancellationToken>((path, _) => Task.FromResult<Stream>(
                    bytes.TryGetValue(path, out var b) ? new MemoryStream(b) : Stream.Null));
+        return storage;
+    }
+
+    /// <summary>One timeline service per test, over the same files, so its cache is the test's own.</summary>
+    private static Ben.Data.WebApi.Services.FieldSessions.FieldSessionTimelineService Timelines()
+    {
+        var storage = Storage();
+        return new(storage.Object, TestBundles.Store(storage.Object),
+                   NullLogger<Ben.Data.WebApi.Services.FieldSessions.FieldSessionTimelineService>.Instance);
+    }
+
+    private static FieldSessionShareController Build(
+        IDbContextFactory<BenDataContext> factory, Guid? userId, string visitorAddress = "203.0.113.7")
+    {
+        var storage = Storage();
 
         // A REAL ingest over the same storage, so "which file is served" is answered by the code
         // that answers it in production rather than by a stub that says what the test wants.
@@ -509,6 +524,85 @@ public sealed class FieldSessionShareControllerTests
         await using var db = await factory.CreateDbContextAsync();
         Assert.Equal(2, await db.FieldSessionShareLinkViews.CountAsync(v => v.FieldSessionUploadFileId == audioRowId));
         Assert.Equal(2, (await db.FieldSessionShareLinks.SingleAsync(l => l.Id == link.Id)).ViewCount);
+    }
+
+    // ── The timeline (10/14/2026) ─────────────────────────────────────────────
+
+    private static async Task<Ben.Service.Models.FieldSessions.SessionTimeline> TimelineAsync(IActionResult result)
+    {
+        var file = Assert.IsType<FileContentResult>(result);
+        return System.Text.Json.JsonSerializer.Deserialize<Ben.Service.Models.FieldSessions.SessionTimeline>(
+            file.FileContents, new System.Text.Json.JsonSerializerOptions(System.Text.Json.JsonSerializerDefaults.Web))!;
+    }
+
+    [Fact]
+    public async Task A_shared_timeline_without_positions_carries_no_coordinate()
+    {
+        var factory = await SeedAsync();
+        var link = await MakeLinkAsync(factory, OwnerId);   // positions withheld by default
+
+        var result = await Build(factory, null).GetSharedTimeline(link.Token, Timelines(), default);
+        var bytes = Assert.IsType<FileContentResult>(result).FileContents;
+        var json = Encoding.UTF8.GetString(bytes);
+
+        Assert.DoesNotContain("36.1627", json);
+        Assert.DoesNotContain("-86.7816", json);
+        var timeline = await TimelineAsync(result);
+        Assert.Equal(Ben.Service.Models.FieldSessions.TimelinePositionPolicy.Withheld, timeline.Positions);
+        Assert.Empty(timeline.Track);
+    }
+
+    [Fact]
+    public async Task A_timeline_for_a_link_to_one_recording_holds_only_that_recording()
+    {
+        var factory = await SeedAsync();
+        var audioRowId = await AudioRowIdAsync(factory);
+        var link = await MakeLinkAsync(factory, OwnerId, fileId: audioRowId);
+
+        var timeline = await TimelineAsync(await Build(factory, null).GetSharedTimeline(link.Token, Timelines(), default));
+        Assert.Equal([audioRowId], timeline.Clips.Select(c => c.FileId));
+        Assert.Empty(timeline.Photos);
+    }
+
+    [Fact]
+    public async Task A_withdrawn_link_has_no_timeline_even_after_one_was_served()
+    {
+        var factory = await SeedAsync();
+        var link = await MakeLinkAsync(factory, OwnerId);
+        var timelines = Timelines();
+
+        // Served once, so it is in the cache — which must not be a way round the withdrawal.
+        Assert.IsType<FileContentResult>(await Build(factory, null).GetSharedTimeline(link.Token, timelines, default));
+        await Build(factory, OwnerId).RevokeShare(SessionId, link.Id, default);
+
+        Assert.IsType<NotFoundResult>(await Build(factory, null).GetSharedTimeline(link.Token, timelines, default));
+    }
+
+    [Fact]
+    public async Task Everybody_watching_one_link_is_served_one_timeline_built_once()
+    {
+        var factory = await SeedAsync();
+        var link = await MakeLinkAsync(factory, OwnerId);
+        var timelines = Timelines();
+
+        for (var viewer = 0; viewer < 5; viewer++)
+            Assert.IsType<FileContentResult>(
+                await Build(factory, null, $"203.0.113.{10 + viewer}").GetSharedTimeline(link.Token, timelines, default));
+
+        Assert.Equal(1, timelines.Builds);
+    }
+
+    [Fact]
+    public async Task Opening_the_timeline_is_not_a_second_view()
+    {
+        var factory = await SeedAsync();
+        var link = await MakeLinkAsync(factory, OwnerId);
+
+        await Build(factory, null).GetShared(link.Token, default);
+        await Build(factory, null).GetSharedTimeline(link.Token, Timelines(), default);
+
+        await using var db = await factory.CreateDbContextAsync();
+        Assert.Equal(1, (await db.FieldSessionShareLinks.SingleAsync(l => l.Id == link.Id)).ViewCount);
     }
 
     [Fact]

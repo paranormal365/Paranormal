@@ -315,6 +315,55 @@ public sealed class FieldSessionShareController : BenControllerBase
             Files:             files));
     }
 
+    /// <summary>
+    /// A shared session as a replay timeline: positions removed unless the link includes them,
+    /// and only the one recording when the link names one.
+    /// </summary>
+    /// <remarks>
+    /// Not counted as a view: the page that plays it opens <see cref="GetShared"/> too, and that
+    /// is the opening the owner is told about. Counting both would say every visitor came twice.
+    /// </remarks>
+    [HttpGet("api/shared-sessions/{token}/timeline")]
+    [AllowAnonymous]
+    public async Task<IActionResult> GetSharedTimeline(
+        string token,
+        [FromServices] Services.FieldSessions.FieldSessionTimelineService timelines,
+        CancellationToken ct)
+    {
+        await using var db = await _db.CreateDbContextAsync(ct);
+
+        var link = await ResolveAsync(db, token, ct);
+        if (link is null) return NotFound();
+
+        var session = await db.FieldSessionUploads.AsNoTracking()
+            .Include(s => s.Files).ThenInclude(f => f.UploadFile)
+            .Include(s => s.DocumentUploadFile)
+            .FirstOrDefaultAsync(s => s.Id == link.FieldSessionUploadId, ct);
+        if (session is null || session.DocumentUploadFile.StoragePath is not { } path) return NotFound();
+
+        var files = session.Files
+            .Where(f => link.FieldSessionUploadFileId is null || f.Id == link.FieldSessionUploadFileId);
+
+        // The same sweep GetShared uses, so a link's positions are withheld by ONE piece of code.
+        // A document it cannot parse is refused rather than sent on the hope it holds no fix.
+        Func<string, string?> redact = document =>
+            SharedSessionDocument.Prepare(document, link.IncludePositions)?.Document;
+
+        var payload = await timelines.GetAsync(new Services.FieldSessions.TimelineRequest(
+            session.Id, session.IsBundle, path, session.DocumentUploadFileId,
+            session.DocumentUploadFile.DateUpdated ?? session.DocumentUploadFile.DateCreated,
+            Services.FieldSessions.FieldSessionTimelineService.Sources(files),
+            link.IncludePositions
+                ? Ben.Service.Models.FieldSessions.TimelinePositionPolicy.Exact
+                : Ben.Service.Models.FieldSessions.TimelinePositionPolicy.Withheld,
+            redact,
+            Variant: $"share:{(link.IncludePositions ? "with" : "without")}-positions:{link.FieldSessionUploadFileId:N}"), ct);
+
+        return payload is null
+            ? NotFound("This session's readings cannot be shown through a shared link.")
+            : Services.FieldSessions.FieldSessionTimelineService.Respond(this, payload);
+    }
+
     /// <summary>Streams one recording from a shared session.</summary>
     /// <remarks>
     /// Outside the rate limiter for the same reason the signed-in file route is: every anonymous

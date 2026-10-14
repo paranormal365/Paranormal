@@ -230,6 +230,9 @@ builder.Services.AddSingleton<Ben.Data.WebApi.Services.Store.StoreImageStorage>(
 // the index it caches describes files that never change once written.
 builder.Services.AddSingleton<Ben.Data.WebApi.Services.FieldSessions.IBenBundleStore,
                               Ben.Data.WebApi.Services.FieldSessions.BenBundleStore>();
+// A session's replay timeline, built once per session and audience and served to everybody
+// watching (10/14/2026). Singleton: the cache is the point.
+builder.Services.AddSingleton<Ben.Data.WebApi.Services.FieldSessions.FieldSessionTimelineService>();
 // Author-written page markup is cleaned at the point it is stored, so what is in the database is
 // what will be rendered — see ICmsMarkupSanitizer for why provenance alone is not enough.
 builder.Services.AddSingleton<Ben.Data.WebApi.Services.ICmsMarkupSanitizer, Ben.Data.WebApi.Services.CmsMarkupSanitizer>();

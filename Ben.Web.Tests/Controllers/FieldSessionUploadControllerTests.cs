@@ -644,6 +644,59 @@ public sealed class FieldSessionUploadControllerTests
         Assert.Equal(cleaned, read.ToArray());
     }
 
+    /// <summary>A timeline service reading the same stored bytes the controllers write.</summary>
+    private static Ben.Data.WebApi.Services.FieldSessions.FieldSessionTimelineService Timelines()
+    {
+        var storage = new Mock<Ben.Data.Common.Interfaces.IFileStorageService>();
+        storage.Setup(s => s.Exists(It.IsAny<string>())).Returns<string>(path => Stored.ContainsKey(path));
+        storage.Setup(s => s.OpenReadAsync(It.IsAny<string>(), It.IsAny<CancellationToken>()))
+               .Returns<string, CancellationToken>((path, _) => Task.FromResult<Stream>(
+                   Stored.TryGetValue(path, out var bytes) ? new MemoryStream(bytes) : Stream.Null));
+        return new(storage.Object, TestBundles.Store(storage.Object),
+                   NullLogger<Ben.Data.WebApi.Services.FieldSessions.FieldSessionTimelineService>.Instance);
+    }
+
+    [Fact]
+    public async Task A_cached_timeline_is_still_refused_to_somebody_who_may_not_read_the_session()
+    {
+        var factory = await SeedAsync();
+        var submitted = await Build(factory, AttendeeId).SubmitDocument(
+            Document(ValidDocument()), Guid.NewGuid(), InvestigationId,
+            AttendeeId, "An Attendee", default);
+        var session = Assert.IsType<FieldSessionRecord>(Assert.IsType<OkObjectResult>(submitted.Result).Value);
+        var timelines = Timelines();
+
+        Assert.IsType<FileContentResult>(await Build(factory, MemberId).GetTimeline(session.Id, timelines, default));
+        // Warm in the cache now — and still nothing for a stranger.
+        Assert.IsType<NotFoundResult>(await Build(factory, StrangerId).GetTimeline(session.Id, timelines, default));
+    }
+
+    [Fact]
+    public async Task A_recording_attached_after_the_timeline_was_built_is_on_the_next_one()
+    {
+        // Files arrive after the document. A cache keyed on the document alone would serve the
+        // night without its recording for as long as the entry lived.
+        var factory = await SeedAsync();
+        var submitted = await Build(factory, AttendeeId).SubmitDocument(
+            Document(ValidDocument()), Guid.NewGuid(), InvestigationId,
+            AttendeeId, "An Attendee", default);
+        var session = Assert.IsType<FieldSessionRecord>(Assert.IsType<OkObjectResult>(submitted.Result).Value);
+        var timelines = Timelines();
+        var json = new System.Text.Json.JsonSerializerOptions(System.Text.Json.JsonSerializerDefaults.Web);
+
+        var before = System.Text.Json.JsonSerializer.Deserialize<Ben.Service.Models.FieldSessions.SessionTimeline>(
+            Assert.IsType<FileContentResult>(await Build(factory, MemberId).GetTimeline(session.Id, timelines, default)).FileContents, json)!;
+        Assert.Empty(before.Clips);
+
+        await Build(factory, AttendeeId).SubmitFile(
+            session.Id, Upload(M4a(5), "clip.m4a", "audio/mp4"), "media/audio-009.m4a", null, default);
+
+        var after = System.Text.Json.JsonSerializer.Deserialize<Ben.Service.Models.FieldSessions.SessionTimeline>(
+            Assert.IsType<FileContentResult>(await Build(factory, MemberId).GetTimeline(session.Id, timelines, default)).FileContents, json)!;
+        Assert.Single(after.Clips);
+        Assert.Equal(2, timelines.Builds);
+    }
+
     [Fact]
     public async Task A_recording_whose_bytes_are_gone_says_so_rather_than_streaming_nothing()
     {

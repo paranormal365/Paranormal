@@ -139,6 +139,14 @@ public interface IBenInvestigationClient
     Task<FieldSessionDetailRecord?> GetFieldSessionAsync(
         Guid sessionId, CancellationToken token = default);
 
+    /// <summary>
+    /// The session as a replay timeline: the document read once on the server by the rules the
+    /// phone's replay follows (<c>ProjectNotes/specs/replay-semantics.md</c>). Null on the same
+    /// refusals as <see cref="GetFieldSessionAsync"/>.
+    /// </summary>
+    Task<Ben.Service.Models.FieldSessions.SessionTimeline?> GetFieldSessionTimelineAsync(
+        Guid sessionId, CancellationToken token = default);
+
     // ── Sharing a session by link (item 207) ──────────────────────────────────
 
     /// <summary>Every link ever made for this session, live and dead, newest first.</summary>
@@ -166,6 +174,13 @@ public interface IBenInvestigationClient
     /// three the same way and the page must not invent a distinction the server refused to make.
     /// </remarks>
     Task<SharedFieldSessionDetailRecord?> GetSharedFieldSessionAsync(
+        string shareToken, CancellationToken token = default);
+
+    /// <summary>
+    /// A shared session as a replay timeline — positions removed unless the link includes them,
+    /// only the one recording when the link names one. Anonymous, like the page it feeds.
+    /// </summary>
+    Task<Ben.Service.Models.FieldSessions.SessionTimeline?> GetSharedFieldSessionTimelineAsync(
         string shareToken, CancellationToken token = default);
 
     // ── The guide's code for a guest's phone (item 248) ───────────────────────
