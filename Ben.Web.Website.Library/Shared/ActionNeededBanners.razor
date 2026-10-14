@@ -115,6 +115,13 @@
                         @onclick="() => DismissAsync(item)"></button>
             </div>
         }
+        @* Phones show three groups; this says how many more there are (CSS shows it only there). *@
+        @if (_visible.Count > 3)
+        {
+            <div class="work-waiting__more" data-testid="work-waiting-more">
+                and @(_visible.Count - 3) more group@(_visible.Count - 3 == 1 ? "" : "s") with work waiting
+            </div>
+        }
     </section>
 }
 

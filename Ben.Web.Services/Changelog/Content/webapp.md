@@ -56,6 +56,8 @@ day-by-day account of building it would say nothing to anyone using it now.
   the site signs you out and takes you to sign in, then back to the page you were on, instead of
   showing you signed in while every page says you are not.
 - The home page and the menu load faster after signing in, especially for people in many groups.
+- On a phone, the notices at the top of a page about work waiting take a line or two each, so the
+  page you opened starts on the screen rather than below it.
 
 ### Administration
 

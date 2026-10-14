@@ -77,3 +77,10 @@
 .section-banner--slim .section-banner__inner { padding: .7rem 1.25rem .75rem; }
 .section-banner--slim .section-banner__kicker { margin-bottom: .1rem; }
 .section-banner--slim .section-banner__line { font-size: .98rem; }
+
+/* On a phone the slim band over a working screen is decoration standing between somebody and the
+   thing they came to do — a seating plan's Save went below the edge (10/14/2026). A section's own
+   front page keeps its full photograph. */
+@media (max-width: 767.98px) {
+    .section-banner--slim { display: none; }
+}

@@ -29,3 +29,47 @@
 
 .work-waiting__row a { font-weight: 650; }
 .work-waiting__row .btn-close { font-size: .65rem; flex: none; }
+
+/* ── phones ──────────────────────────────────────────────────────────────
+   On a phone these notices came before every page and, with a few files and requests waiting,
+   filled 450px of an 812px screen before the page began: a seating plan's Save sat below the
+   edge (10/14/2026). On a phone each says what is waiting in a line or two and links to where the
+   full list is; the page it sits over gets the screen. */
+@media (max-width: 767.98px) {
+    .alert {
+        padding: .5rem .75rem;
+        font-size: .875rem;
+    }
+
+    /* The files list only: its first place stays a link, and the review page has them all. The
+       other notices end in the link that acts on them, so they are never cut short. */
+    #place-files-waiting .flex-grow-1 {
+        display: -webkit-box;
+        -webkit-line-clamp: 2;
+        -webkit-box-orient: vertical;
+        overflow: hidden;
+    }
+
+    .work-waiting__row {
+        padding: .35rem .75rem;
+    }
+
+    .work-waiting__row .flex-grow-1 {
+        min-width: 0;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+    }
+
+    /* Three groups, then a count of the rest. */
+    .work-waiting__row:nth-of-type(n + 5) { display: none; }
+    .work-waiting__more { display: block; }
+}
+
+.work-waiting__more {
+    display: none;
+    padding: .35rem .75rem;
+    border-top: 1px solid var(--ben-line);
+    font-size: .8rem;
+    color: var(--ben-ink-muted);
+}
