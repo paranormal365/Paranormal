@@ -299,8 +299,12 @@ if [[ "${BEN_STRIPE_E2E:-}" == "1" ]]; then
   fi
   STRIPE_FORWARD=1
 fi
+# The whole suite is one visitor (127.0.0.1) to the per-visitor limits: address lookups (20 a
+# minute for a person) and open checkouts (3 at once for a person), which a thousand tests in an hour
+# pass, and a refusal is not what those tests are about (10/14/2026). Raised here, for the test API
+# only; the tests of the limits themselves construct the services directly.
 start_host api  "$ROOT_DIR/Ben.Data.WebApi"  "$API_BIND"  "$API_URL/api/public/build" \
-  "FileStorage__RootPath=$UPLOADS_DIR $API_STRIPE_ENV"
+  "FileStorage__RootPath=$UPLOADS_DIR RateLimits__GeocodingPerMinute=600 Store__MaxOpenCheckoutsPerCaller=200 $API_STRIPE_ENV"
 if [[ "${STRIPE_FORWARD:-}" == "1" ]]; then
   echo "── Forwarding Stripe's test events to the API ──────────────────────────"
   # The events the webhook handles — the same list the live endpoint is given (stripe-go-live.md).

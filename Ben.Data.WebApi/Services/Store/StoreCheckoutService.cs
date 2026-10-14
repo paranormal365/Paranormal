@@ -42,8 +42,18 @@ public sealed record StoreCheckoutResult(
 public sealed class StoreCheckoutService(
     IDbContextFactory<BenDataContext> dbFactory, IStoreStripeGateway gateway, IStoreTaxService tax,
     StoreOrderPayments payments, StoreAlerts alerts, StorePaymentSetup setup, IOptions<StripeOptions> stripe,
-    ILogger<StoreCheckoutService> log, TimeProvider? clock = null)
+    ILogger<StoreCheckoutService> log, TimeProvider? clock = null,
+    Microsoft.Extensions.Configuration.IConfiguration? configuration = null)
 {
+    /// <summary>
+    /// Open checkouts one address or email may hold at once: StoreCheckoutRules' 3, unless
+    /// <c>Store:MaxOpenCheckoutsPerCaller</c> says otherwise. The browser suite is one address
+    /// (127.0.0.1) running every store test in an hour, and raises it for its own API (10/14/2026).
+    /// </summary>
+    private int MaxOpenCheckouts =>
+        configuration?.GetValue<int?>("Store:MaxOpenCheckoutsPerCaller") is { } n && n > 0
+            ? n : StoreCheckoutRules.MaxOpenCheckoutsPerCaller;
+
     public const string StripeDidNotAnswer = "Payment couldn't be started just now — nothing was charged. Try again in a moment.";
 
     private DateTime Now => (clock ?? TimeProvider.System).GetUtcNow().UtcDateTime;
@@ -135,7 +145,7 @@ public sealed class StoreCheckoutService(
         var openCount = await db.StoreOrders.CountAsync(o => o.Status == StoreOrderStatus.PendingPayment && o.ReservationReleasedUtc == null
             && (o.ReservationExpiresUtc == null || o.ReservationExpiresUtc > now)
             && (open == null || o.Id != open.Id) && ((ip != null && o.PlacedFromIp == ip) || o.BuyerEmailNormalized == emailKey), ct);
-        if (openCount >= StoreCheckoutRules.MaxOpenCheckoutsPerCaller)
+        if (openCount >= MaxOpenCheckouts)
             return StoreCheckoutResult.Refused(StoreCheckoutOutcome.Conflict, StoreCheckoutSentences.TooManyOpen);
 
         // 3. The code, re-checked with the email and the account now known.

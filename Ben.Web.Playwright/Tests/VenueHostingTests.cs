@@ -212,7 +212,11 @@ public class VenueHostingTests : BenTestBase
         var yes = Page.Locator(".venue-request", new() { HasTextString = _eventName })
             .Locator("button", new() { HasTextString = "Say yes" });
         await Expect(yes).ToBeVisibleAsync(new() { Timeout = 30_000 });
-        await yes.ScrollIntoViewIfNeededAsync();
+        // Centred, the way a person scrolls to a button. "If needed" puts it flush against the edge of
+        // the page's scroll area, and with enough requests above it the layout's fractional pixels
+        // left a third of a pixel outside the window — 0.994 of a button that is entirely visible
+        // (10/14/2026). The whole of it must still be on screen.
+        await yes.EvaluateAsync("e => e.scrollIntoView({ block: 'center', inline: 'nearest' })");
         await Expect(yes).ToBeInViewportAsync(new() { Ratio = 1f });
 
         var slides = await Page.EvaluateAsync<bool>(
