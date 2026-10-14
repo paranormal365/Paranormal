@@ -628,7 +628,9 @@ public actor FieldSessionEngine {
     @discardableResult
     public func noteCapture(kind: CaptureKind, relativePath: String,
                             durationSeconds: Double? = nil) async -> FieldReading {
-        sequence -= 1   // `reading` increments; keep the numbering continuous
+        // Its own number, like every other reading. This used to step the counter back first, so
+        // a capture shared the number of the reading before it and the count came out one short
+        // for every photo (10/14/2026).
         let entry = reading(
             at: now(), triggeredBy: .manual,
             marker: nil,

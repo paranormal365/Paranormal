@@ -400,6 +400,30 @@ struct FieldSessionEngineTests {
         #expect(reading.position?.latitude == 36.1)
     }
 
+    @Test func everyReadingHasItsOwnSequenceNumberCapturesIncluded() async throws {
+        // A capture took the number of the reading before it (10/14/2026): it stepped the counter
+        // back before `reading()` stepped it forward, so two readings shared a number and the
+        // count of readings came out one short for every photo.
+        let clock = ManualClock(start)
+        let (engine, log, directory) = await makeEngine(clock: clock)
+        defer { try? FileManager.default.removeItem(at: directory) }
+
+        await engine.ingest(position: PositionSample(at: start, latitude: 36.1, longitude: -86.7,
+                                                     accuracyMeters: 30))
+        await engine.noteCapture(kind: .photo, relativePath: "media/photo-001.jpg")
+        await engine.noteCapture(kind: .photo, relativePath: "media/photo-002.jpg")
+        let counted = await engine.readingCount()
+        await engine.stop()
+
+        let readings = try await log.readings()
+        let numbers = readings.compactMap(\.sequence)
+        #expect(readings.count >= 2)
+        #expect(numbers.count == readings.count)
+        #expect(Set(numbers).count == numbers.count)
+        #expect(numbers == numbers.sorted())
+        #expect(counted == readings.count)
+    }
+
     @Test func anAudioCaptureCarriesItsDurationInTheFileReference() async throws {
         let clock = ManualClock(start)
         let (engine, log, directory) = await makeEngine(clock: clock)
