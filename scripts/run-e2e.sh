@@ -92,7 +92,33 @@ CONN="Server=${SQL_SERVER};Database=${DB_NAME};User Id=${SQL_USER};Password=${SQ
 # pointing at files that do not exist, and every thumbnail silently 404s. (Done exactly that on
 # 2026-08-27 and spent a while reading it as a seeding bug.) Tying the name to the database means
 # a fresh database always gets a fresh directory, and the two can never drift apart.
-UPLOADS_DIR="$ROOT_DIR/.uploads-${DB_NAME}"
+#
+# And in the MAIN checkout, whichever checkout runs the suite (10/14/2026). The database lives on the
+# SQL server and is shared by every worktree; an uploads directory inside each worktree was not. A
+# run in one worktree moved the seeded files to ITS directory, and from every other worktree the
+# shared rows then pointed at files that were not there: thumbnails, store images, a video import and
+# a CMS page all failed with nothing wrong in the code. One database, one directory.
+MAIN_DIR="$(git -C "$ROOT_DIR" worktree list --porcelain 2>/dev/null | sed -n '1s/^worktree //p')"
+MAIN_DIR="${MAIN_DIR:-$ROOT_DIR}"
+UPLOADS_DIR="$MAIN_DIR/.uploads-${DB_NAME}"
+
+# The feed's image screener needs a model that is not in git (87 MB; scripts/get-screener-model.sh).
+# Without it the API holds every new photo for a moderator, so the tests that add evidence to a place
+# and expect to see it fail — in a new worktree, every time (10/14/2026). A worktree borrows the main
+# checkout's copy; with no copy anywhere the run stops and says how to get one.
+SCREENER_MODEL="Ben.Data.WebApi/Models/nsfw/model_quantized.onnx"
+if [[ ! -f "$ROOT_DIR/$SCREENER_MODEL" ]]; then
+  if [[ -f "$MAIN_DIR/$SCREENER_MODEL" ]]; then
+    mkdir -p "$(dirname "$ROOT_DIR/$SCREENER_MODEL")"
+    cp -c "$MAIN_DIR/$SCREENER_MODEL" "$ROOT_DIR/$SCREENER_MODEL" 2>/dev/null \
+      || cp "$MAIN_DIR/$SCREENER_MODEL" "$ROOT_DIR/$SCREENER_MODEL"
+    echo "   screener model copied from the main checkout"
+  else
+    echo "The image screener's model is missing ($SCREENER_MODEL), so every uploaded photo would wait" >&2
+    echo "for a moderator and the evidence tests would fail. Run scripts/get-screener-model.sh first." >&2
+    exit 1
+  fi
+fi
 
 # BIND on 127.0.0.1; BROWSE on localhost. The two are deliberately different.
 #

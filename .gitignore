@@ -57,6 +57,12 @@ telerik-license.txt
 # UAT settings carry no secret: integrated security to the UAT copy of the database, and the
 # log sink pointed at the same place. Tracked so the UAT environment is reproducible.
 !**/appsettings.UAT.json
+# The two WebAssembly editors' development settings are only addresses (localhost API and site),
+# and a browser downloads them anyway. Without the canvas's, a fresh checkout's canvas has no API to
+# sign in against, and the six canvas browser tests fail (found 10/14/2026; the video editor's was
+# already tracked).
+!Ben.Wasm.Canvas/wwwroot/appsettings.Development.json
+!Ben.Wasm.Video/wwwroot/appsettings.Development.json
 
 # .NET user secrets
 **/secrets.json
