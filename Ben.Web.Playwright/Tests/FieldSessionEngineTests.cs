@@ -184,9 +184,7 @@ public class FieldSessionEngineTests : BenTestBase
         counting = false;
 
         TestContext.Out.WriteLine($"during 8 s of playback: {received} frames from the server, {sent} to it");
-        // Moved well past the start: proof it played. Not "about eight seconds": the clock holds while
-        // a recording buffers, by design, and on a busy machine it did — 4.9 s in 8 (10/14/2026).
-        Assert.That(await PlayheadAsync(), Is.GreaterThan(2_000), "it really was playing");
+        Assert.That(await PlayheadAsync(), Is.GreaterThan(5_000), "it really was playing");
         // A keep-alive or two is the connection, not the player.
         Assert.That(received, Is.LessThanOrEqualTo(3), "the server should draw nothing while somebody watches");
         Assert.That(sent, Is.LessThanOrEqualTo(3), "and the browser should tell it nothing");
