@@ -14,11 +14,13 @@
 set -euo pipefail
 cd "$(dirname "$0")/.."
 project="${WARNINGS_PROJECT:-$PWD/IsHaunted.xcodeproj}"
+project="${project:A}"   # resolved: Xcode may record /tmp/… for what the shell calls /private/tmp/…
 
 # Each DerivedData folder says which project it belongs to; only this checkout's count.
 logs=()
 for dir in ~/Library/Developer/Xcode/DerivedData/IsHaunted-*(N/); do
-  [[ "$(plutil -extract WorkspacePath raw "$dir/info.plist" 2>/dev/null)" == "$project" ]] || continue
+  recorded="$(plutil -extract WorkspacePath raw "$dir/info.plist" 2>/dev/null)" || continue
+  [[ "${recorded:A}" == "$project" ]] || continue
   logs+=("$dir"/Logs/Build/*.xcactivitylog(N))
 done
 if (( ${#logs} == 0 )); then
