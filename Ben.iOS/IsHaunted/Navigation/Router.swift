@@ -293,6 +293,9 @@ final class Router {
             } else {
                 openArea(.investigations, pushing: .investigationsList)
             }
+        case .paranormal:
+            selection = .fieldKit
+            paths[.fieldKit] = NavigationPath()
         case .notifications: push(.notifications)
         case .profile:
             selection = .profile

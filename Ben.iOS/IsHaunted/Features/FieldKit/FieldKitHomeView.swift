@@ -442,7 +442,7 @@ private struct SessionRow: View {
             VStack(alignment: .leading, spacing: 3) {
                 // iOS-4: an unnamed session reads as unnamed, and dimmer than a real name, so a
                 // list of them still scans by the date underneath rather than by a row of
-                // identical grey words.
+                // identical gray words.
                 Text(summary.title)
                     .foregroundStyle(summary.isUntitled ? Theme.fog : Theme.bone)
                     .italic(summary.isUntitled)

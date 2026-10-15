@@ -192,7 +192,9 @@ struct RootShell: View {
         }
         .modifier(MenuOverPage(over: menuIsAButton))
         .onChange(of: menuIsAButton, initial: true) { _, isButton in
-            columnVisibility = isButton ? .detailOnly : .automatic
+            // A full iPad shows its sidebar, upright as well as on its side: .automatic hid it when the
+            // iPad was held upright, and the store capture found no Profile to sign in with (10/15/2026).
+            columnVisibility = isButton ? .detailOnly : .all
         }
         .onChange(of: router.selection) { _, _ in closeMenuIfAButton() }
     }

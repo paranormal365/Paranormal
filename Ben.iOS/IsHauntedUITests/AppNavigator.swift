@@ -28,6 +28,22 @@ enum AppNavigator {
         }
     }
 
+    /// Types into a field after clearing what is already there.
+    ///
+    /// The new-session sheet fills the name in from where the phone is ("224 High St, Red Boiling
+    /// Springs"), so typing a name after a tap ran the two together (10/15/2026, once the capture's
+    /// simulator had a location).
+    static func replaceText(in field: XCUIElement, with text: String) {
+        // At the far right, so the cursor lands after the filled-in text: a tap in the middle left the
+        // end of the address behind ("…north wallSprings").
+        field.coordinate(withNormalizedOffset: CGVector(dx: 0.97, dy: 0.5)).tap()
+        let current = field.value as? String ?? ""
+        if !current.isEmpty, current != field.placeholderValue {
+            field.typeText(String(repeating: XCUIKeyboardKey.delete.rawValue, count: current.count + 2))
+        }
+        field.typeText(text)
+    }
+
     /// Opens a top-level section by its visible name.
     @discardableResult
     static func openSection(_ name: String, in app: XCUIApplication,

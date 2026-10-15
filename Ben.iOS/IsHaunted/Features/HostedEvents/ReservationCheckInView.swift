@@ -5,7 +5,7 @@ import BenKit
 ///
 /// Ben, 2026-09-13: the scanner *"looks up and clicking the reservation allows the doorman to check them in as
 /// having arrived to event."* So a scan never admits anybody by itself: it finds the reservation, the door taps it,
-/// sees who it is — the lead name, how many, the nights and the room or seat, the colour they wear, anything the
+/// sees who it is — the lead name, how many, the nights and the room or seat, the color they wear, anything the
 /// kitchen needs to know — and checks them in. Tapping a party on tonight's list opens the same screen.
 struct ReservationCheckInView: View {
     let door: HostedEventDoor

@@ -131,6 +131,18 @@ enum Experience: String, CaseIterable, Identifiable {
     case uneasy = "Felt uneasy"
 
     var id: String { rawValue }
+
+    var symbol: String {
+        switch self {
+        case .coldSpot: "thermometer.snowflake"
+        case .touched: "hand.point.up.left"
+        case .heardVoice: "waveform"
+        case .heardSound: "ear"
+        case .sawSomething: "eye"
+        case .smell: "nose"
+        case .uneasy: "exclamationmark.triangle"
+        }
+    }
 }
 
 /// The line across the top of the page while asking or listening: what is being typed, or how long
@@ -215,6 +227,72 @@ struct RailNoticeView: View {
                 .overlay(Capsule().strokeBorder(Theme.ecto.opacity(0.5)))
                 .transition(.move(edge: .top).combined(with: .opacity))
                 .accessibilityIdentifier("rail-notice")
+        }
+    }
+}
+
+extension MarkerKind {
+    /// Whether details can be added to this kind of mark after the session. Everything a person or
+    /// the phone marked, except the app being put away and coming back, which are bookkeeping.
+    var takesDetails: Bool { self != .appBackgrounded && self != .appReturned }
+}
+
+/// Writing more about one mark, after the session (Ben, 10/15/2026). The mark's own time, kind and
+/// words are shown above and can't be changed; only the text below can.
+struct MarkDetailsSheet: View {
+    let marker: FieldMarkerRecord
+    let startedAt: Date
+    let save: (String) async throws -> Void
+
+    @Environment(\.dismiss) private var dismiss
+    @State private var text = ""
+    @State private var problem: String?
+    @State private var saving = false
+    @FocusState private var focused: Bool
+
+    var body: some View {
+        NavigationStack {
+            SignalForm {
+                Section {
+                    LabeledContent("Marked") {
+                        Text("\(marker.kind.title) at \(SessionClock.elapsed(from: startedAt, to: marker.at))")
+                    }
+                    if let room = marker.room { LabeledContent("Room", value: room) }
+                    if let note = marker.note { LabeledContent("At the time", value: note) }
+                } footer: {
+                    Text("This is what was recorded, and it stays as it is.")
+                }
+                Section {
+                    TextEditor(text: $text)
+                        .frame(minHeight: 140)
+                        .focused($focused)
+                        .accessibilityIdentifier("marker-details-field")
+                } header: {
+                    Text("Details")
+                } footer: {
+                    Text("What happened, who else noticed, how long it lasted. Saved with the mark, marked as added after the session, and sent with it.")
+                }
+                if let problem {
+                    Text(problem).foregroundStyle(Theme.warning)
+                }
+            }
+            .navigationTitle("Add details")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) { Button("Cancel") { dismiss() } }
+                ToolbarItem(placement: .confirmationAction) {
+                    Button("Save") {
+                        saving = true
+                        Task {
+                            do { try await save(text); dismiss() } catch { problem = error.localizedDescription }
+                            saving = false
+                        }
+                    }
+                    .disabled(saving)
+                    .accessibilityIdentifier("marker-details-save")
+                }
+            }
+            .onAppear { text = marker.details ?? ""; focused = true }
         }
     }
 }

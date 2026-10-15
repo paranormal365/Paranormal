@@ -45,7 +45,6 @@ struct LiveSessionView: View {
     @Environment(\.investigationRail) private var rail
     @State private var call = CallAndResponse()
     @State private var flashlight = Flashlight()
-    @State private var choosingExperience = false
     @State private var notice = RailNotice()
     /// Typing the question while it is asked, where the phone can do it with no connection.
     @AppStorage("fieldkit.type-questions") private var typeQuestions = true
@@ -93,17 +92,6 @@ struct LiveSessionView: View {
             .sheet(isPresented: $askingForNote) { noteComposer }
             .permissionRefusedAlert($refusedPermission)
             .sheet(isPresented: $choosingRoom) { roomSheet }
-            .confirmationDialog("What happened?", isPresented: $choosingExperience) {
-                ForEach(Experience.allCases) { experience in
-                    Button(experience.rawValue) {
-                        Task {
-                            await active?.mark(kind: .manual, note: experience.rawValue)
-                            notice.show("Logged: \(experience.rawValue)")
-                        }
-                    }
-                }
-                Button("Something else…") { askingForNote = true }
-            }
             .onChange(of: store.active?.isRecording) { _, recording in
                 if recording != true { Task { await call.reset(dictation: dictation) } }
             }
@@ -248,7 +236,8 @@ struct LiveSessionView: View {
         }
     }
 
-    /// The investigation's controls, in the order they are reached for. On the iPhone Duo opened,
+    /// The investigation's controls, in the order they are reached for. Mark, Note and the base keep the
+    /// identifiers of the page buttons they replace, so anything driving the screen finds them either way. On the iPhone Duo opened,
     /// iOS stacks these down the side column. Stop stays alone in the bar at the bottom, away from
     /// them, so a mis-tap in the dark can't end a recording.
     /// "00:01:23" since the session started, for the notice a mark leaves.
@@ -270,10 +259,29 @@ struct LiveSessionView: View {
                     Image(systemName: "flag")
                 }
                 .accessibilityLabel("Mark this moment")
-                .accessibilityIdentifier("rail-mark")
+                .accessibilityIdentifier("mark-now")
             }
             ToolbarItem(placement: .primaryAction) {
-                Button { choosingExperience = true } label: {
+                // A menu, not a confirmation dialog: the dialog drew the choices in violet on translucent
+                // gray, which couldn't be read on the opened Duo (Ben, 10/15/2026). A menu draws them in
+                // the system's own readable text, each with its picture.
+                Menu {
+                    Section("What happened?") {
+                        ForEach(Experience.allCases) { experience in
+                            Button {
+                                Task {
+                                    await active.mark(kind: .manual, note: experience.rawValue)
+                                    notice.show("Logged: \(experience.rawValue)")
+                                }
+                            } label: {
+                                Label(experience.rawValue, systemImage: experience.symbol)
+                            }
+                        }
+                    }
+                    Button { askingForNote = true } label: {
+                        Label("Something else…", systemImage: "square.and.pencil")
+                    }
+                } label: {
                     Image(systemName: "hand.raised")
                 }
                 .accessibilityLabel("Log an experience")
@@ -293,7 +301,7 @@ struct LiveSessionView: View {
             ToolbarItem(placement: .primaryAction) {
                 Button { askingForNote = true } label: { Image(systemName: "square.and.pencil") }
                     .accessibilityLabel("Note")
-                    .accessibilityIdentifier("rail-note")
+                    .accessibilityIdentifier("open-note")
             }
         }
         ToolbarItem(placement: .primaryAction) {
@@ -310,7 +318,7 @@ struct LiveSessionView: View {
                 }
             } label: { Image(systemName: "target") }
                 .accessibilityLabel(active.baselines.isSet ? "Reset the base" : "Set the base")
-                .accessibilityIdentifier("rail-base")
+                .accessibilityIdentifier("set-base-level")
         }
         if flashlight.isAvailable {
             ToolbarItem(placement: .primaryAction) {
@@ -565,7 +573,7 @@ struct LiveSessionView: View {
         }
         .padding(.horizontal, 16)
         .padding(.vertical, 10)
-        // Signal's card colour with a hairline above, not the system's grey bar.
+        // Signal's card color with a hairline above, not the system's gray bar.
         .background(Theme.mist)
         .overlay(alignment: .top) { Rectangle().fill(Theme.fog.opacity(0.25)).frame(height: 0.5) }
     }

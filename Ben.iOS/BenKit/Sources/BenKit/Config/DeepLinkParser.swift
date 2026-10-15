@@ -29,6 +29,9 @@ public enum DeepLink: Sendable, Equatable {
     /// different surface from the client's `myCaseDetail` even for the same case.
     case orgCase(organizationId: UUID, caseId: UUID)
     case myInvestigations
+    /// `ishaunted://paranormal` — the Paranormal Platform's own screen, for an App Store
+    /// In-App Event card that opens straight onto it (10/15/2026).
+    case paranormal
     case notifications
     case profile
     /// `/validate-email/{token}` — the emailed confirmation link.
@@ -121,6 +124,8 @@ public enum DeepLinkParser {
         case "attending":
             guard components.count > 1 else { return nil }
             return .attending(token: components[1])
+        case "paranormal":
+            return .paranormal
         case "field-kit":
             guard components.count > 2 else { return nil }
             switch components[1].lowercased() {

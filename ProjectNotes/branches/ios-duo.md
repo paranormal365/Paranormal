@@ -66,6 +66,42 @@ time.
 - The simulator ignores a request to turn the opened Duo upright, so portrait is untested until a real
   phone or Device Hub.
 
+## Readable menus (Ben, 10/15)
+
+The hand button's list was a confirmation dialog, drawn by iOS in violet on translucent gray: unreadable
+on the opened Duo. It is now a menu (system ink, an icon per experience). Every other confirmation dialog
+and alert takes the system's ink too (`UIAlertController` appearance in `SignalAppearance`); destructive
+choices stay red.
+
+## Adding details to a mark (Ben, 10/15)
+
+"Website is readonly. The app is where it should be able to be edited before submission if they marked
+any events." and "Only allow the text to be added to the details for marks during the session... nothing
+else can be added."
+
+- `FieldMarker.details` / `detailsAddedAt`; `FieldSessionStore.addDetails` refuses a sent session
+  (`alreadySent`) and a copy from someone else's file or a public place (`notYours`).
+- The readings log is never rewritten. The package carries a top-level `mark_details` array beside the
+  readings (`at`, `marker`, `details`, `added_at`), sealed with the rest at Send; the schema allows extra
+  root fields. Opening a `.ben` reads them back.
+- The review shows "Added after the session: …" under the mark and offers **Add details** until it's sent.
+- The website's timeline builder attaches them to their mark by moment and kind; the engine player shows
+  them read-only.
+- Tests: `MarkDetailsTests` (5) and `FieldSessionTimelineBuilderTests.Details_added_after_the_session_reach_their_mark_and_nothing_else`.
+
+## Found and fixed along the way
+
+- The ☰ change set the iPad's sidebar to `.automatic`, which hid it on an upright iPad; it is `.all` now.
+- The capture tests typed a session's name after the address the app fills in ("…north wallSprings");
+  `AppNavigator.replaceText` taps the field's end and clears it first.
+
+## App Store pages
+
+`Ben.iOS/store-pages/` (`build.py`, `pages.py`, `events.py`) and `Ben.iOS/scripts/capture-store-pages.sh`
+build the main page and seven custom product pages for iPhone, iPhone Duo and iPad, with previews, the
+In-App Events and the featuring nomination, into `screenshots-1.1.4/`. The capture's raw frames and
+recordings stay out of git.
+
 ## Still to do
 
 - Duo App Store screenshots (outer 1398 × 2034, inner 2853 × 2007), captured on the simulator.

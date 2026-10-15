@@ -34,8 +34,7 @@ final class FieldKitDemoDriveUITests: XCTestCase {
         // the footage. Name the room (it reads well on screen) and actually start.
         let field = app.textFields.firstMatch
         XCTAssertTrue(field.waitForExistence(timeout: 10), "the new-session sheet should appear")
-        field.tap()
-        field.typeText("Cellar stairs")
+        AppNavigator.replaceText(in: field, with: "Cellar stairs")
         let begin = app.buttons["Open the session"].firstMatch
         XCTAssertTrue(begin.waitForExistence(timeout: 5))
         Thread.sleep(forTimeInterval: 1)

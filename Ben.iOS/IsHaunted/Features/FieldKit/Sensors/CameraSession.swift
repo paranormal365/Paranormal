@@ -484,7 +484,7 @@ private final class ClipCapture: NSObject, AVCaptureFileOutputRecordingDelegate,
 
 /// Compares consecutive frames and reports how much changed.
 ///
-/// Frame differencing on a heavily downsampled grey image: crude, cheap, and honest about being
+/// Frame differencing on a heavily downsampled gray image: crude, cheap, and honest about being
 /// crude. It cannot tell a person from a curtain or a passing headlight, which is exactly why the
 /// threshold is adjustable and every trigger records what fraction changed.
 private final class FrameDelegate: NSObject, AVCaptureVideoDataOutputSampleBufferDelegate,

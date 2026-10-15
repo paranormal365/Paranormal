@@ -37,6 +37,13 @@ it is hidden from everybody else, but still takes its number. No other sub-headi
 - Pressing Play where nothing was recorded starts at the next recording.
 - A base level set again partway through a session counts from there on.
 - When there is no compass or course, the arrow follows the direction walked.
+- Made for iPhone Duo. Folded it's a phone; opened, the inner screen fills with the session, the
+  menu becomes a ☰ button, and the controls for the investigation run down the side: mark, log what
+  happened, ask a question and listen, note, change room, reset the base and the flashlight.
+- Asking a question can write it down as you ask it, then counts how long the room has had to answer.
+- After a session and before sending it, you can add details to anything you marked. What was recorded
+  at the moment stays exactly as it was; your details are kept beside it and sent with it.
+- Pop-up choices and alerts are easier to read on iPad.
 
 ## 1.1.3 · 2026-10-13
 

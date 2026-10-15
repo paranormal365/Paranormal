@@ -62,8 +62,7 @@ final class DuoInvestigationColumnTests: XCTestCase {
         AppNavigator.startNewSession(in: app)
         let field = app.textFields.firstMatch
         XCTAssertTrue(field.waitForExistence(timeout: 10))
-        field.tap()
-        field.typeText("Cellar stairs\n")
+        AppNavigator.replaceText(in: field, with: "Cellar stairs\n")
         // The keyboard covers "Open the session" on the open Duo; scroll the sheet to it.
         // The list builds the button only once it scrolls into view.
         let open = app.buttons["confirm-start-session"].firstMatch
@@ -82,7 +81,7 @@ final class DuoInvestigationColumnTests: XCTestCase {
         snap("duo-05-recording")
 
         // ── The column, top to bottom ─────────────────────────────────────
-        XCTAssertTrue(tapIfThere(app.buttons["rail-mark"].firstMatch), "Mark should be in the column")
+        XCTAssertTrue(tapIfThere(app.buttons["mark-now"].firstMatch), "Mark should be in the column")
         XCTAssertTrue(app.descendants(matching: .any)["rail-notice"].waitForExistence(timeout: 2),
                       "a mark should say it happened")
         snap("duo-06-marked")
@@ -91,7 +90,12 @@ final class DuoInvestigationColumnTests: XCTestCase {
         XCTAssertTrue(tapIfThere(app.buttons["rail-experience"].firstMatch), "Experience should be in the column")
         settle(1)
         snap("duo-07-experience-list")
-        _ = tapIfThere(app.buttons["Cold spot"].firstMatch, timeout: 3)
+        // A menu's choice is reached by its words, not as a button in the screen's own tree.
+        let coldSpot = app.buttons.matching(NSPredicate(format: "label == %@", "Cold spot")).firstMatch
+        XCTAssertTrue(coldSpot.waitForExistence(timeout: 3), "the experience menu should list Cold spot")
+        // By position: on the beta's simulator an accessibility tap on a menu item waited a minute and
+        // never chose it.
+        coldSpot.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5)).tap()
         settle(0.8)
         snap("duo-08-experience-logged")
         settle(2)
@@ -128,11 +132,11 @@ final class DuoInvestigationColumnTests: XCTestCase {
         }
         settle(2)
 
-        XCTAssertTrue(tapIfThere(app.buttons["rail-base"].firstMatch), "Base should be in the column")
+        XCTAssertTrue(tapIfThere(app.buttons["set-base-level"].firstMatch), "Base should be in the column")
         settle(3)
         snap("duo-14-base-reset")
 
-        XCTAssertTrue(tapIfThere(app.buttons["rail-note"].firstMatch), "Note should be in the column")
+        XCTAssertTrue(tapIfThere(app.buttons["open-note"].firstMatch), "Note should be in the column")
         settle(2)
         snap("duo-15-note")
         _ = tapIfThere(app.buttons["Cancel"].firstMatch, timeout: 2)

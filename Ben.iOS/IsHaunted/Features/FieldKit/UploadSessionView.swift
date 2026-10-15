@@ -148,7 +148,7 @@ struct UploadSessionView: View {
     /// who does not know that reads a refusal as the app losing their evidence.
     ///
     /// Placed ABOVE the trimmer rather than beside the Send button, because it is the thing that
-    /// tells you what to do with the trimmer. A rule you meet only when a button greys out is a
+    /// tells you what to do with the trimmer. A rule you meet only when a button grays out is a
     /// rule you meet too late.
     @ViewBuilder
     private var limitsSection: some View {
@@ -776,7 +776,7 @@ struct UploadSessionView: View {
             SessionTrimPlan.clipLabel(base: summary.locationLabel, window: $0,
                                       sessionStart: summary.startedAt, isWholeSession: false)
         } ?? summary.locationLabel
-        let request = DeviceDataExporter.Request(
+        var request = DeviceDataExporter.Request(
             sessionId: sessionId,
             startedAt: summary.startedAt,
             endedAt: summary.endedAt,
@@ -787,6 +787,7 @@ struct UploadSessionView: View {
             trigger: SamplingPolicy.default.trigger(),
             includedMedia: captures.filter { chosen.contains($0.id) }.map(\.relativePath),
             window: window)
+        request.markDetails = store.markDetails(for: sessionId)
 
         return try await DeviceDataExporter(files: store.files).buildDocument(
             request, log: ReadingLog(fileURL: store.files.readingLogURL(for: sessionId)))

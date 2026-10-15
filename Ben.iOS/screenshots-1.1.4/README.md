@@ -13,7 +13,7 @@ Ben.iOS/scripts/capture-app-store-media.sh ipad   1.1.4
 ## What changed in the capture
 
 - **The arrange step is not optional.** Captured without it, the first frame was the test runs'
-  leftovers ("First visit for me 91216954d947423aa", a grey picture).
+  leftovers ("First visit for me 91216954d947423aa", a gray picture).
 - **It now clears the whole feed, not its first page.** The iPad's feed is tall enough to scroll past
   the four store posts, and it showed two of the SuperAdmin's posts from weeks earlier ("posted from
   elsewhere #ta…") that the first page never reached. The iPad's feed now ends on the group session

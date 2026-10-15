@@ -19,7 +19,7 @@ struct AnalogMeterView: View {
     var value: Double?
     /// Half the dial's span: the scale runs −range…+range.
     var range: Double
-    /// Where the report level sits, in the same units. Beyond it, the arc is warning-coloured.
+    /// Where the report level sits, in the same units. Beyond it, the arc is warning-colored.
     var reportAt: Double
     var unit: String
     /// The absolute reading, shown as a number under the dial.
@@ -172,7 +172,7 @@ struct AnalogMeterView: View {
                                          y: centre.y + sin(a) * (radius - 12)))
             }
             // A needle at the stop is a reading whose real value is unknown, and it says so by
-            // colour rather than quietly resting at the maximum.
+            // color rather than quietly resting at the maximum.
             .stroke(pegged ? Theme.danger : Theme.ecto,
                     style: .init(lineWidth: 3, lineCap: .round))
         }

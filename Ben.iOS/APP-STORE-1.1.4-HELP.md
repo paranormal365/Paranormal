@@ -57,3 +57,35 @@ When it is:
    named in `ProjectNotes/FeatureHistory` for the launch and meter shots): every one that shows the
    tab bar or the Field Kit screen shows the old name.
 3. Rebuild the product PDF and the app guides.
+
+## Added 10/15/2026: iPhone Duo, and details added to marks
+
+Also held back until 1.1.4 is live. In `the-mobile-apps.md`:
+
+1. At the end of **What's in the app today**, add:
+
+   > **On iPhone Duo**, the app is a phone when folded. Open it and the inner screen gets the room it
+   > deserves: the menu becomes a **☰** button at the top of the right-hand column, and while a session
+   > runs, the rest of that column holds the investigation's own controls, top to bottom: **mark** the
+   > moment, **log what happened** (a cold spot, a touch, a voice, a sound, something seen or smelled,
+   > or feeling uneasy), **ask a question and listen**, a **note**, **change room**, **reset the base**,
+   > the **flashlight**, and the levels. **Stop** stays on its own at the bottom, away from the rest.
+   > Fold or unfold whenever you like: the session keeps recording.
+
+2. In **EVP question and answer**, add:
+
+   > On iPhone Duo, the microphone in the side column does the same in fewer steps: press it while you
+   > ask, and the phone writes down what you say if typing is on (in the session's levels; it happens on
+   > the phone, and nothing is sent). Press it again to stop writing and start listening, and a strip
+   > across the top counts how long the room has had to answer. Press it again for the next question,
+   > or **Done listening** when you've finished.
+
+3. In **Reviewing what you recorded**, after the marks paragraph, add:
+
+   > **Adding details to a mark.** In the dark you tap "Cold spot" and keep going; afterwards you can say
+   > more. Until the session is sent, each mark in the review has **Add details**: write or say what
+   > happened, who else noticed, how long it lasted. What was recorded at the moment never changes: the
+   > time, the kind of mark and anything said then. Your details are kept beside it, marked as added
+   > after the session, and go with the session when you send it. Once it's sent, it can't be changed;
+   > the website shows the details under the mark and doesn't edit them. Only text can be added: no
+   > new marks, photos or recordings.

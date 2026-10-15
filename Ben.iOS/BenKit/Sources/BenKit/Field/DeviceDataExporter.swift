@@ -89,6 +89,8 @@ public struct DeviceDataExporter: Sendable {
         /// file name would break every reference in the document. The session's own copy is never
         /// touched either way.
         public var substitutes: [String: URL]
+        /// Details added to marks after the session (`FieldSessionStore.markDetails(for:)`).
+        public var markDetails: [DeviceDataEnvelope.MarkDetails] = []
         /// The account signed in when this was recorded, and the device that recorded it.
         ///
         /// Both go into the seal. Neither is required: a session recorded with nobody signed in
@@ -151,7 +153,10 @@ public struct DeviceDataExporter: Sendable {
                            locationLabel: request.locationLabel,
                            timezone: request.timezone,
                            trigger: request.trigger,
-                           recordedByAccountId: request.recordedByAccountId))
+                           recordedByAccountId: request.recordedByAccountId),
+            // Only the marks inside a chosen stretch: details for a mark that was cut would name a
+            // moment the document no longer has.
+            markDetails: Self.details(request.markDetails, within: request.window))
 
         // Encoded with no readings, then the array spliced in — so the readings never have to
         // be held as objects.
@@ -170,6 +175,12 @@ public struct DeviceDataExporter: Sendable {
         readings.append(0x5D)                        // ]
         document.replaceSubrange(insertion, with: readings)
         return document
+    }
+
+    static func details(_ all: [DeviceDataEnvelope.MarkDetails],
+                        within window: SessionWindow?) -> [DeviceDataEnvelope.MarkDetails]? {
+        let kept = all.filter { detail in window.map { detail.at >= $0.start && detail.at <= $0.end } ?? true }
+        return kept.isEmpty ? nil : kept
     }
 
     /// Writes the whole bundle: `data.json` plus the chosen media under `media/`.

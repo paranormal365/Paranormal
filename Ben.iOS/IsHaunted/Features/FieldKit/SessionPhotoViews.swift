@@ -8,7 +8,7 @@ struct SessionPhotoTile: View {
     let url: URL
     let maxPixels: Int
     let contentMode: ContentMode
-    /// What shows around a picture that does not fill its frame — the card colour in a strip,
+    /// What shows around a picture that does not fill its frame — the card color in a strip,
     /// black when it is shown full size.
     var background: Color = Theme.mist
 
@@ -23,7 +23,7 @@ struct SessionPhotoTile: View {
                     .resizable()
                     .aspectRatio(contentMode: contentMode)
             } else if missing {
-                // A row whose bytes were cleared from the phone says so, rather than showing a grey
+                // A row whose bytes were cleared from the phone says so, rather than showing a gray
                 // square nobody can explain.
                 VStack(spacing: 4) {
                     Image(systemName: "photo.badge.exclamationmark")

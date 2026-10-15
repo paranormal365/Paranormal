@@ -91,7 +91,7 @@ struct SessionTrimSlider: View {
                     .frame(height: trackHeight)
 
                 // What will be sent: thicker, and in the site's own accent rather than a shade of
-                // the same grey — the difference has to be obvious across a dark room.
+                // the same gray — the difference has to be obvious across a dark room.
                 Capsule()
                     .fill(Theme.ecto)
                     .frame(width: max(0, outX - inX), height: keptHeight)

@@ -102,8 +102,7 @@ final class FieldKitScreenshotTests: XCTestCase {
         AppNavigator.startNewSession(in: app)
         let field = app.textFields.firstMatch
         XCTAssertTrue(field.waitForExistence(timeout: 10))
-        field.tap()
-        field.typeText("Back bedroom, north wall")
+        AppNavigator.replaceText(in: field, with: "Back bedroom, north wall")
         XCTAssertTrue(app.buttons["confirm-start-session"].waitForExistence(timeout: 5))
         app.buttons["confirm-start-session"].tap()
 

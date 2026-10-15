@@ -122,6 +122,23 @@ public static class FieldSessionTimelineBuilder
             }
         }
 
+        // ── Details added to marks after the session (10/15/2026) ─────────────
+        // Beside the readings, never in them: each names its mark by the mark's moment and kind.
+        var details = new Dictionary<(long, string), (string Text, DateTime? AddedAt)>();
+        if (root.ValueKind == JsonValueKind.Object
+            && root.TryGetProperty("mark_details", out var added) && added.ValueKind == JsonValueKind.Array)
+        {
+            foreach (var entry in added.EnumerateArray())
+            {
+                if (entry.ValueKind != JsonValueKind.Object) continue;
+                var at = Moment(entry, "at");
+                var kindOf = entry.TryGetProperty("marker", out var k) && k.ValueKind == JsonValueKind.String ? k.GetString() : null;
+                var text = entry.TryGetProperty("details", out var d) && d.ValueKind == JsonValueKind.String ? d.GetString() : null;
+                if (at is null || string.IsNullOrWhiteSpace(kindOf) || string.IsNullOrWhiteSpace(text)) continue;
+                details[(Ms(at.Value), kindOf)] = (text.Trim(), Moment(entry, "added_at"));
+            }
+        }
+
         // ── Markers (M1) ───────────────────────────────────────────────────────
         var markers = new List<TimelineMarker>();
         for (var i = 0; i < n; i++)
@@ -132,7 +149,9 @@ public static class FieldSessionTimelineBuilder
                 ? Math.Round((value - (emfBase[i] ?? lastBase ?? 0)) * 10, 1)
                 : null;
             var roomName = room[i] is { } r ? rooms[r] : null;
-            markers.Add(new TimelineMarker(t[i], kind, Title(kind), AutomaticKinds.Contains(kind), row.Note, roomName, field));
+            details.TryGetValue((t[i], kind), out var addedLater);
+            markers.Add(new TimelineMarker(t[i], kind, Title(kind), AutomaticKinds.Contains(kind), row.Note, roomName, field,
+                addedLater.Text, addedLater.AddedAt));
         }
 
         // ── Recordings and photographs (M2–M5) ────────────────────────────────

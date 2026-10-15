@@ -151,7 +151,7 @@ private struct PropertyPhotoPicture: View {
                 Theme.mist.frame(maxWidth: .infinity, minHeight: 104)
             } else {
                 // The row survives its bytes when somebody has cleared the phone. Saying so
-                // beats a grey square nobody can explain.
+                // beats a gray square nobody can explain.
                 VStack(spacing: 4) {
                     Image(systemName: "icloud")
                     Text("on the server").font(.caption2)

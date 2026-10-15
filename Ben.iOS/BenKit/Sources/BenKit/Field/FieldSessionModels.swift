@@ -200,8 +200,13 @@ public final class FieldMarker {
     @Attribute(.unique) public var id: UUID
     public var at: Date
     public var kindRaw: String
-    /// Editable in review — a marker dropped in the dark gets its explanation later.
+    /// What was said or chosen at the moment ("Cold spot"). Never changed afterwards.
     public var note: String?
+    /// More about it, written after the session and before it was sent (Ben, 10/15/2026): "they
+    /// could just be able to add more information about them before submitting them". Kept apart
+    /// from `note`, with when it was written, so the moment itself stays exactly as recorded.
+    public var details: String?
+    public var detailsAddedAt: Date?
 
     /// Set when a recording was running: which file, and how far into it.
     public var audioFilename: String?
