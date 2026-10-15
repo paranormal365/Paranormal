@@ -52,8 +52,8 @@ PAGES = [
                  sub="Visits, contacts, evidence and what happens next."),
             dict(frame="iphone-case-visits.png", headline="Every visit,|on the record.",
                  sub="Who went, when, and what they recorded."),
-            dict(frame="22-case-messages.png", headline="Talk with your client|inside the case.",
-                 sub="No more texts and emails lost between investigators."),
+            # 22-case-messages.png left out (10/15/2026): the seeded case's thread is buried under
+            # browser-test messages in the capture database. Put it back once that thread is clean.
             dict(frame="23-case-reports.png", headline="Reports your client|can read.",
                  sub="Published from the case when it's ready."),
             dict(frame="11-fieldkit-live-excursion.png", headline="Your team records|the same night.",
@@ -64,7 +64,7 @@ PAGES = [
         video=[
             dict(frame="02-cases.png", seconds=5, caption="Every case your|group is on."),
             dict(frame="21-case-detail.png", seconds=6, caption="The whole case|in one place."),
-            dict(frame="22-case-messages.png", seconds=5, caption="Talk with your|client."),
+            dict(frame="iphone-case-visits.png", seconds=5, caption="Every visit,|on the record."),
             dict(frame="11-fieldkit-live-excursion.png", seconds=6, caption="Your team|records."),
             dict(frame="13-fieldkit-review.png", seconds=6, caption="Review it|together."),
         ],

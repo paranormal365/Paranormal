@@ -9,9 +9,8 @@ Groups on a paid plan: several investigators, cases with clients, and a team in 
 | 1 | `02-cases.png` | Every case your group is on. |
 | 2 | `21-case-detail.png` | The whole case in one place. |
 | 3 | `iphone-case-visits.png` | Every visit, on the record. |
-| 4 | `22-case-messages.png` | Talk with your client inside the case. |
-| 5 | `23-case-reports.png` | Reports your client can read. |
-| 6 | `11-fieldkit-live-excursion.png` | Your team records the same night. |
-| 7 | `13-fieldkit-review.png` | Review it together. |
+| 4 | `23-case-reports.png` | Reports your client can read. |
+| 5 | `11-fieldkit-live-excursion.png` | Your team records the same night. |
+| 6 | `13-fieldkit-review.png` | Review it together. |
 
 Header and search images: `../../creative-assets/groups/`.

@@ -136,6 +136,7 @@ final class HelpMediaCaptureTests: XCTestCase {
             if app.descendants(matching: .any)["event-pass-code"].firstMatch.waitForExistence(timeout: 8) {
                 settle(2)
                 snap("iphone-event-pass")
+                settle(6)   // held on screen: the store preview cuts its pass scene from the recording here
                 return
             }
             app.navigationBars.buttons.element(boundBy: 0).tap()
