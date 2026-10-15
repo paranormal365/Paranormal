@@ -13857,3 +13857,58 @@ few minutes on the website (memory cache keyed by user id, cleared on sign-out a
 a group), render "Your groups" from it at once, and refresh in the background as now. The very first
 load after signing in still shifts; every later page does not. The browser suite waits it out meanwhile
 (BenTestBase.WaitForYourGroupsInTheMenuAsync).
+
+## 260. IsHaunted on Apple TV, Apple Watch and Apple Vision Pro (FUTURE — Ben, 10/15/2026)
+
+Ben, 10/15/2026: "I would like to address creating versions for TvOS and VisionOS and a version for
+watchOS that works to help capture events and experiences and controls the iOS version. For TvOS, it
+would just be the player and play sessions both public from the site and those saved to the users phone
+or iPad. VisionOS will have its own branch to work on later based on what we can do with it."
+
+Three apps, built one at a time, each on its own branch with its own README. They all share BenKit, the
+Swift package the iPhone and iPad app already uses for its API calls, models and session format, so
+the work in each is mostly the screens.
+
+### Apple Watch: capture on the wrist, and a remote for the phone
+
+What it's for: during a session the phone is often set down, propped up or on a tripod. The watch lets
+the investigator act without touching it.
+
+- **Capture events and experiences:** mark a moment, start an EVP question, note what was felt ("cold
+  spot", "touched", "heard a voice") from a short list, or dictate a note. Each lands on the phone's
+  session timeline at the moment it was made, the same as a mark made on the phone.
+- **Control the phone:** start and stop a session, set the base, start and stop audio, take a photo,
+  turn the blackout screen on and off. The watch shows what the phone is doing: recording time, the
+  magnetic reading, the sound level.
+- **What the watch itself might add**, to look into when it starts: heart rate during the session
+  (with the person's permission, only into their own session), and the watch's own movement. Whether
+  any watch's compass gives readings worth recording is a question to answer on a real watch before
+  promising it.
+- How: WatchConnectivity between the watch and the phone; the phone stays the recorder and keeps the
+  session file. The watch needs to work without the phone's screen awake.
+
+### Apple TV: the session player
+
+Only the player: watch sessions back on the big screen.
+
+- **Public sessions from the site:** the ones published at public places, the same as the website's
+  player shows anyone. Browse by place, nearby, or newest.
+- **Sessions saved on the person's own iPhone or iPad:** these live only on the phone until uploaded,
+  so the TV needs a way to reach them. Options to weigh when this starts: send a session from the
+  phone to the TV on the same network; sign the TV in and show the sessions the person has uploaded to
+  their own account; or iCloud. The first keeps the "stays on your phone" promise the app makes.
+- The player follows the shared replay rules (`ProjectNotes/specs/replay-semantics.md`), so the TV,
+  the phone and the website play a session the same way: one timeline, every recorded channel, the
+  map and the marks. Designed for the remote: no small targets, focus that moves sensibly.
+
+### Apple Vision Pro: its own branch, later
+
+To be worked out from what the platform can do. Ideas to explore, not commitments: a session played
+back around you, the readings placed where they were taken in the room, a research board as a space
+to walk through. Ben will decide its scope when it starts.
+
+### First step when it starts
+
+Move whatever the iPhone app keeps in its own target that the other apps would need (the session
+player's timing, the readings' formats) into BenKit, with tests, so all four apps play and record
+the same way. Then the watch app first: it adds to sessions that already exist.
