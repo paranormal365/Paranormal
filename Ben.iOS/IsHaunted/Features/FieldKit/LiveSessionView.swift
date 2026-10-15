@@ -44,6 +44,10 @@ struct LiveSessionView: View {
 
     /// Room under the scrolling content for the pinned bar, so nothing ends up behind it.
     private static let barClearance: CGFloat = 96
+    /// The narrowest pane that gets the instruments and the controls side by side.
+    private static let twoColumnWidth: CGFloat = 760
+    /// One column on a wide pane stays a phone's width rather than stretching edge to edge.
+    private static let oneColumnWidth: CGFloat = 560
 
     private var store: FieldSessionStore { dependencies.fieldKit }
     private var active: ActiveFieldSession? { store.active }
@@ -151,22 +155,31 @@ struct LiveSessionView: View {
             // sits UNDER the bar, and a tap aimed at the last control lands on Stop instead —
             // which is how a test aiming for "Mark" ended the session. In the field that is
             // somebody losing a recording to a mis-tap in the dark.
-            if sizeClass == .regular {
-                HStack(alignment: .top, spacing: 20) {
-                    ScrollView {
-                        instruments(active).frame(maxWidth: 420).padding(.bottom, Self.barClearance)
-                    }
-                    ScrollView { controls(active).padding(.bottom, Self.barClearance) }
-                }
-                .padding(.horizontal, 16)
-            } else {
-                ScrollView {
-                    VStack(spacing: 18) {
-                        instruments(active)
-                        controls(active)
+            //
+            // Two columns only when there is room for two. "Regular" width alone is not enough: the
+            // iPhone Duo opened, with the sidebar showing, is regular but leaves this pane about
+            // 630 points, and two columns there broke the run time onto two lines and wrapped
+            // every button (10/15/2026). Below the threshold it is the phone's single column.
+            GeometryReader { space in
+                if sizeClass == .regular && space.size.width >= Self.twoColumnWidth {
+                    HStack(alignment: .top, spacing: 20) {
+                        ScrollView {
+                            instruments(active).frame(maxWidth: 420).padding(.bottom, Self.barClearance)
+                        }
+                        ScrollView { controls(active).padding(.bottom, Self.barClearance) }
                     }
                     .padding(.horizontal, 16)
-                    .padding(.bottom, Self.barClearance)
+                } else {
+                    ScrollView {
+                        VStack(spacing: 18) {
+                            instruments(active)
+                            controls(active)
+                        }
+                        .padding(.horizontal, 16)
+                        .padding(.bottom, Self.barClearance)
+                        .frame(maxWidth: Self.oneColumnWidth)
+                        .frame(maxWidth: .infinity)
+                    }
                 }
             }
         } else if summary != nil {
