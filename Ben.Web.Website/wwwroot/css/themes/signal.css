@@ -203,7 +203,9 @@ h1, h2, h3, .h1, .h2, .h3, .display-1, .display-2, .display-3, .display-4 {
 .ben-brand__tile { width: 2.1rem; height: 2.1rem; border-radius: calc(var(--ben-radius-sm) + 1px);
                    display: grid; place-items: center; flex: none;
                    background-image: var(--ben-accent-grad); box-shadow: var(--ben-glow); }
-.ben-brand__tile img { width: 68%; height: 68%; filter: brightness(0) invert(1); }
+/* The white ghost with its face (static/images/is-haunted-mark.svg, the app icon's own artwork, 10/15/2026).
+   It used to be the color logo washed white with brightness(0) invert(1), which wiped out the eyes. */
+.ben-brand__tile img { width: 68%; height: 68%; }
 .ben-brand__dot { background-image: var(--ben-accent-grad); -webkit-background-clip: text;
                   background-clip: text; color: transparent; }
 

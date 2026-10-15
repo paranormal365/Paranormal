@@ -44,6 +44,7 @@ it is hidden from everybody else, but still takes its number. No other sub-headi
 - After a session and before sending it, you can add details to anything you marked. What was recorded
   at the moment stays exactly as it was; your details are kept beside it and sent with it.
 - Pop-up choices and alerts are easier to read on iPad.
+- The app icon's ghost has its face again.
 
 ## 1.1.3 · 2026-10-13
 

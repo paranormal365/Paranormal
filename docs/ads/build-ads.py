@@ -172,7 +172,7 @@ def page(ad):
 <section class="page front">
   <div class="hero" style="background-image:url({STOCK}{ad['hero']})"></div>
   <div class="brandbar">
-    <div class="brand"><img src="../assets/is-haunted-logo.svg" alt=""><div>IsHaunted.com<small>Web &amp; iPhone</small></div></div>
+    <div class="brand"><img src="../../Ben.Web.Website/wwwroot/static/images/app/app-icon.png" alt=""><div>IsHaunted.com<small>Web &amp; iPhone</small></div></div>
     <div class="pill">{e(ad['pill'])}</div>
   </div>
   <div class="headline">
@@ -520,7 +520,7 @@ def brochure(mails):
 
     pages.append(f"""<section class="page cover">
   <div class="cover-hero" style="background-image:url({S}s3-candle-chandelier.jpg)"></div>
-  <div class="brand"><img src="../assets/is-haunted-logo.svg" alt=""><div>IsHaunted.com<small>Web &amp; iPhone</small></div></div>
+  <div class="brand"><img src="../../Ben.Web.Website/wwwroot/static/images/app/app-icon.png" alt=""><div>IsHaunted.com<small>Web &amp; iPhone</small></div></div>
   <div class="cover-title"><div class="kicker">Hosted Events</div>
     <h1>Haunted weekends,<br><em>sold out</em> and run<br>from your phone.</h1>
     <p>Rooms or seats, confirmations with passes, a door that works with no signal, and every letter written for you.</p></div>
