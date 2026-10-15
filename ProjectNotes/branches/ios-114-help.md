@@ -20,5 +20,7 @@ early so release day is a merge, not a rewrite. **Do not merge until 1.1.4 is re
    (`ProjectNotes/FeatureHistory/README-docs-refresh-1005.md`): iPhone 17 Pro and iPad Pro 13-inch,
    `HelpMediaCaptureTests` and the group-session frames. Not the App Store capture database: its
    frames from 10/15 have cluttered test sessions, an empty public-sessions list and an empty door.
+   Include `iphone-launch-notified.png`: its notification still says "Tap to join it in Field Kit"
+   (the server now says "the Paranormal Platform"); its icons were updated to the new one on 10/15.
 2. Rebuild the product PDF and the app guides, and copy the iPhone guide to the website.
 3. Merge to develop and master once 1.1.4 is released, then deploy the website.
