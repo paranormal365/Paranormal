@@ -62,3 +62,20 @@ version."
   art and the fixed iPad preview; the seven custom pages and the iPhone Duo event draft have the new
   art. The app's icon shown at the top of App Store Connect and on the App Store changes by itself when
   1.1.4 is released.
+
+## Third pass, 10/15/2026: the final sweep
+
+A check over every tracked image found what the first pass missed:
+- **65 seat-guide screenshots** in `docs/web-media` (the first scan never looked there): the face
+  painted on, each checked by eye; the seven seat guides rebuilt.
+- **The iPhone notification screenshot** (`help/media/the-mobile-apps/iphone-launch-notified.png` and
+  `docs/ios-media/iphone/54-launch-notified.png`): the old green app icon on the notification and on the
+  home screen, replaced with the new one; the iPhone guide rebuilt and copied to the site. The picture
+  still says "Field Kit" in the notification's text, which the server no longer sends; it is on the
+  1.1.4 help branch's list of pictures to retake.
+- The home-page help screenshot's QR: the first patch let the old icon's dark pixels through as
+  specks; set in again through a plain rounded mask, and it still scans.
+
+What the check still reports, and why it is fine: the 32 px favicons (the face is too small to see at
+that size), the In-App Event cards (the face is there; the background fooled the check), and
+`static/images/ghost glass 699x640.png`, which no page uses.
