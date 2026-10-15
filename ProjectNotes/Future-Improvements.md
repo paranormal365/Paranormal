@@ -13912,3 +13912,41 @@ to walk through. Ben will decide its scope when it starts.
 Move whatever the iPhone app keeps in its own target that the other apps would need (the session
 player's timing, the readings' formats) into BenKit, with tests, so all four apps play and record
 the same way. Then the watch app first: it adds to sessions that already exist.
+
+## 261. Live streaming a session from the app (FUTURE — Ben, 10/15/2026)
+
+Ben, 10/15/2026: "Ability to live stream from app. This live stream will be through a custom version of
+the session player where it can stream the desired parts of the session being recorded. If recording is
+not able during a live stream, it will be something we look at, but this is the starting concept I had."
+
+### The idea
+
+While a session records, the investigator chooses which parts of it to put out live, and viewers watch
+it in a live version of the session player: the same timeline, gauge, map and marks the website's player
+shows for a finished session, filling in as they happen.
+
+- **Chosen parts, not everything.** The investigator picks what goes out: for example video and the
+  magnetic gauge, but not the room's sound, or not the location. Marks, experiences logged and EVP
+  questions could appear on the stream's timeline as they are made.
+- **The live player** is a custom version of the existing session player (`ProjectNotes/specs/
+  replay-semantics.md` holds its rules), reading a live feed instead of a finished file.
+- **Recording while streaming is the goal.** If the phone can't do both at once (the camera, the
+  microphone and the upload all competing), that is the first thing to find out, and to design around:
+  for example streaming a lighter version while the full-quality session keeps recording on the phone.
+
+### Questions to answer when it starts
+
+- Who can watch: the investigator's group only, invited people, or anyone (a public place's stream)?
+  The privacy rules for private residences (item 184) apply to a live stream at least as strictly as
+  to a published session; coordinates stay withheld unless chosen.
+- The streaming path: Apple's own (HLS through a streaming service) or a WebRTC service, and its cost
+  per viewer-hour; it is a running cost, so which pricing band includes it.
+- Bandwidth in the field: a cellar with no signal can't stream, so the app must say so plainly and keep
+  recording rather than fail.
+- Whether a finished stream becomes an ordinary session afterwards (it should: the phone kept recording).
+
+### First step when it starts
+
+On a real phone: record a session with video and audio while sending the camera and the readings
+somewhere at the same time, and measure what breaks (frame rate, recording gaps, heat, battery).
+That decides the design.
