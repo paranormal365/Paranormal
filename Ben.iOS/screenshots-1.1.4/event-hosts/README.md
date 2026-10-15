@@ -12,7 +12,7 @@ Groups and venues hosting haunted dinners, weekends and investigations.
 | 4 | `iphone-event-pass.png` | Every guest has a QR pass. |
 | 5 | `iphone-event-menus.png` | Your menus, in your design. |
 | 6 | `iphone-event-programme.png` | The program, night by night. |
-| 7 | `iphone-event-hub.png` | Everything for the night in one place. |
+| 7 | `iphone-event-hub.png` | Everything your guests need, in one place. |
 | 8 | `iphone-event-room.png` | Guests share the night. |
 
 Header and search images: `../../creative-assets/event-hosts/`.

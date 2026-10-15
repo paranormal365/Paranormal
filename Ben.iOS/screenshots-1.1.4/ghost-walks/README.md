@@ -6,11 +6,11 @@ Tour groups and their guides.
 
 | # | Screenshot | Headline |
 |---|---|---|
-| 1 | `06-tours.png` | Your walk, where people look for one. |
-| 2 | `05-events.png` | Reserve a place in a tap. |
-| 3 | `iphone-event-pass.png` | A pass for the night. |
+| 1 | `06-tours.png` | Found from miles around, in a tap. |
+| 2 | `05-events.png` | Guests reserve in a tap. |
+| 3 | `iphone-event-pass.png` | Every guest gets a pass. |
 | 4 | `11-fieldkit-live-excursion.png` | Everyone records the walk. |
-| 5 | `12-fieldkit-marks.png` | Mark the cold spots. |
+| 5 | `12-fieldkit-marks.png` | Guests mark the cold spots. |
 | 6 | `iphone-event-room.png` | Photos from the walk. |
 
 Header and search images: `../../creative-assets/ghost-walks/`.

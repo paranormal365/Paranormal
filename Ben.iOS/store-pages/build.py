@@ -136,26 +136,131 @@ def clip_times(pool, frame):
     return rec["file"], max(0.0, shot["timestamp"] - rec["timestamp"])
 
 
+# Where a scene really is in its recording (10/15/2026). The timestamps put a scene seconds away from
+# what was on screen, 33 s on one iPad recording, so scenes were cut from the home screen, from black,
+# or from the screen before. The frame the test saved is the truth: every recording frame near the
+# stamped moment is compared with it, and the scene is cut where they match.
+SAMPLE_FPS = 4
+SEARCH = 45.0          # seconds either side of the stamped moment
+MATCH = 0.97           # a frame this close to the saved one is the same screen
+LEAD_IN = 2.0          # at most this much of the way there before it, if none of it is off-app
+
+
+def steady(rec):
+    """The recording at a steady 30 fps with a keyframe every second, made once and kept beside it.
+    The simulator writes a frame only when the screen changes, so a cut that starts between changes
+    came out black, or as the previous screen, until the next one."""
+    rec = pathlib.Path(rec)
+    out = rec.parent / "steady" / rec.name
+    if not out.exists() or out.stat().st_mtime < rec.stat().st_mtime:
+        out.parent.mkdir(exist_ok=True)
+        subprocess.run([FFMPEG, "-loglevel", "error", "-y", "-i", str(rec), "-vf", "fps=30", "-c:v", "libx264",
+                        "-preset", "veryfast", "-crf", "16", "-g", "30", "-pix_fmt", "yuv420p", "-an", str(out)],
+                       check=True)
+    return out
+
+
+def _sample(rec, start, length, size, mode):
+    from PIL import Image
+    w, h = size
+    fmt, bpp = ("gray", 1) if mode == "L" else ("rgb24", 3)
+    raw = subprocess.run([FFMPEG, "-v", "error", "-ss", f"{start:.2f}", "-t", f"{length:.2f}", "-i", str(rec),
+                          "-vf", f"fps={SAMPLE_FPS},scale={w}:{h},format={fmt}", "-f", "rawvideo", "-"],
+                         capture_output=True).stdout
+    n = len(raw) // (w * h * bpp)
+    return [Image.frombytes(mode, (w, h), raw[i * w * h * bpp:(i + 1) * w * h * bpp]) for i in range(n)]
+
+
+def _look(path):
+    from PIL import Image
+    img = Image.open(path)
+    return img.convert("L").resize((64, max(16, round(64 * img.height / img.width))))
+
+
+def _alike(a, b):
+    from PIL import ImageChops, ImageStat
+    if a.size != b.size:
+        return 0.0
+    return 1 - ImageStat.Stat(ImageChops.difference(a, b)).mean[0] / 255
+
+
+def _off_app(img):
+    """Black, or the colorful home screen: never in a preview."""
+    from PIL import ImageStat
+    mean = sum(ImageStat.Stat(img).mean) / 3
+    sat = ImageStat.Stat(img.convert("HSV")).mean[1]
+    return mean < 4 or (sat > 90 and mean > 40)
+
+
+def find_scene(raw, pool, frame, length):
+    """(recording, start, footage seconds) for a scene, or None when the saved screen is not in the recording.
+    Footage may be shorter than asked; the rest is the last matching frame held."""
+    from PIL import Image, ImageChops, ImageStat
+    found = clip_times(pool, frame)
+    if not found or not (raw / frame).exists():
+        return None
+    rec, at = found
+    ref = Image.open(raw / frame)
+    w, h = 64, max(16, round(64 * ref.height / ref.width))
+    ref = ref.convert("L").resize((w, h))
+    t0 = max(0.0, at - SEARCH)
+    video = steady(raw / rec)
+    gray = _sample(video, t0, 2 * SEARCH, (w, h), "L")
+    color = _sample(video, t0, 2 * SEARCH, (48, 96), "RGB")
+    if not gray:
+        return None
+    score = [1 - ImageStat.Stat(ImageChops.difference(ref, g)).mean[0] / 255 for g in gray]
+    best = max(range(len(score)), key=score.__getitem__)
+    if score[best] < MATCH:
+        return None
+    # iPad screens look alike when small (the sidebar, a dark page), so "close" is close to the best
+    # match, not merely above a floor: the feed passed for the tours list at 0.97.
+    floor = max(MATCH, score[best] - 0.006)
+    lo = hi = best
+    while lo > 0 and score[lo - 1] >= floor:
+        lo -= 1
+    while hi + 1 < len(score) and score[hi + 1] >= floor:
+        hi += 1
+    # Lead in only through on-app frames, and only as much as the scene has room for.
+    room = max(0.0, length - (hi - lo + 1) / SAMPLE_FPS)
+    lead = 0
+    while (lead + 1) / SAMPLE_FPS <= min(LEAD_IN, room) and lo - lead - 1 >= 0 \
+            and not _off_app(color[min(lo - lead - 1, len(color) - 1)]):
+        lead += 1
+    start = t0 + (lo - lead) / SAMPLE_FPS
+    footage = min(length, (hi - lo + 1 + lead) / SAMPLE_FPS)
+    return rec, start, footage
+
+
 def preview(page, device, raw, pool, out):
     w, h = PREVIEW[device]
     scenes = []
     with tempfile.TemporaryDirectory() as tmp:
         tmp = pathlib.Path(tmp)
+        seen = []
         for i, scene in enumerate(page["video"]):
-            found = clip_times(pool, scene["frame"])
-            if not found:
-                print(f"   {page['key']}/{device}: no footage for {scene['frame']}, scene left out")
-                continue
-            rec, at = found
-            start = max(0.0, at - scene.get("before", 1.2))
             length = scene.get("seconds", 4.0)
+            if (raw / scene["frame"]).exists():
+                look = _look(raw / scene["frame"])
+                if any(_alike(look, earlier) >= 0.9995 for earlier in seen):
+                    print(f"   {page['key']}/{device}: {scene['frame']} repeats an earlier screen, scene left out")
+                    continue
+                seen.append(look)
+            found = find_scene(raw, pool, scene["frame"], length)
+            if not found:
+                print(f"   {page['key']}/{device}: {scene['frame']} is not in its recording, scene left out")
+                continue
+            rec, start, footage = found
             cap = tmp / f"cap{i}.png"
             caption_png(scene["caption"], w, h, cap)
             part = tmp / f"s{i}.mp4"
-            # The footage fills the frame (cropped from the top), the caption sits over it.
-            subprocess.run([FFMPEG, "-loglevel", "error", "-y", "-ss", f"{start:.2f}", "-t", f"{length:.2f}",
-                            "-i", str(raw / rec), "-i", str(cap), "-filter_complex",
-                            f"[0:v]scale={w}:-2:flags=lanczos,crop={w}:{h}:0:0,fps=30,format=yuv420p[v];"
+            # The footage fills the frame (cropped from the top), the caption sits over it; when the screen was
+            # up for less than the scene, its last frame is held rather than cutting into whatever came next.
+            hold = max(0.0, length - footage)
+            subprocess.run([FFMPEG, "-loglevel", "error", "-y", "-ss", f"{start:.2f}", "-t", f"{footage:.2f}",
+                            "-i", str(steady(raw / rec)), "-i", str(cap), "-filter_complex",
+                            f"[0:v]scale={w}:-2:flags=lanczos,crop={w}:{h}:0:0,fps=30,format=yuv420p,"
+                            f"tpad=stop_mode=clone:stop_duration={hold:.2f}[v];"
                             f"[v][1:v]overlay=0:0[o]", "-map", "[o]", "-an", "-r", "30", str(part)], check=True)
             # The real length: a scene near the end of its recording comes out shorter than asked, and the
             # cross-fades below are placed by length, so a guessed one cut every scene after it.
@@ -208,13 +313,20 @@ def build(version, wanted):
             outdir = folder / device
             shutil.rmtree(outdir, ignore_errors=True)
             outdir.mkdir(parents=True)
-            n = 0
+            n, seen = 0, []
             for shot in (page["duo"] if device == "iphone-duo" else page["shots"]):
                 frame = shot["frame"]
                 image = raw / frame
                 if not image.exists():
                     print(f"   {device}: missing {frame}, left out")
                     continue
+                # A capture that never reached its screen saves the one it was on: on iPad the visits
+                # frame is My Cases again. The same screen twice on one page is left out the second time.
+                look = _look(image)
+                if any(_alike(look, earlier) >= 0.9995 for earlier in seen):
+                    print(f"   {device}: {frame} repeats an earlier screen, left out")
+                    continue
+                seen.append(look)
                 n += 1
                 still(page, device, dict(shot, image=image), n, outdir / f"{n:02d}-{pathlib.Path(frame).stem}.png")
             print(f"   {device}: {n} screenshots")
