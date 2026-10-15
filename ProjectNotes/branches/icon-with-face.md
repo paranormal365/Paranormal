@@ -40,3 +40,25 @@ full-color logo, face included.
 Upload the rebuilt header and search art to the 1.1.4 version and the seven custom pages, and the
 event art to the iPhone Duo event draft. The Halloween Night event is already in review with its old
 card art; leave it.
+
+## Second pass, 10/15/2026 (feature/icon-everywhere)
+
+Ben: "Update the icon everywhere it is used ... Don't worry about the ads. They can keep the old green
+version."
+
+- **Ads, flyer and the hosted-events brochure put back** to the green logo, as they were before this
+  work (PDFs on the site too). New ads will be made with the new icon.
+- **Help screenshots:** 102 website screenshots (`wwwroot/help/media`, `Help/Media`) show the site
+  header, whose tile had the faceless ghost. Rather than retake them all, the face was painted onto the
+  ghost in each one, at exactly the place and size the site now draws it: the tile found by its
+  violet-to-cyan colour near the top left, squared, the mark at 68% of it, the face layer rendered from
+  the same SVG. Every one was checked by eye before and after.
+- **`getting-started/home-app.png`** showed the old green app icon and old QR in the home page's app
+  section: both replaced in place; the QR in the screenshot still scans.
+- Product documentation and the seven seat guides rebuilt again, since they embed those screenshots.
+- Not touched: `docs/media/hosted-events` (used only by the ads and the investor overview) and the
+  untracked Thomas House files.
+- App Store Connect: 1.1.4 resubmitted with build 15 (icon with the face), the new header and search
+  art and the fixed iPad preview; the seven custom pages and the iPhone Duo event draft have the new
+  art. The app's icon shown at the top of App Store Connect and on the App Store changes by itself when
+  1.1.4 is released.
