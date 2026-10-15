@@ -14,4 +14,4 @@
 | Event card (16:9) | `card.png`, 1920 × 1080 |
 | Event details page (9:16) | `details.png`, 1080 × 1920 |
 
-**Before submitting:** Needs walks and nights listed on the live site for the dates; check before submitting.
+**Before submitting:** ON HOLD (10/15/2026): the live site lists no public events. Submit once a group lists real Halloween walks or nights.

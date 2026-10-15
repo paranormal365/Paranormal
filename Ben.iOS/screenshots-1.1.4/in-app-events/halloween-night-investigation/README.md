@@ -14,4 +14,4 @@
 | Event card (16:9) | `card.png`, 1920 × 1080 |
 | Event details page (9:16) | `details.png`, 1080 × 1920 |
 
-**Before submitting:** Uses the same new link as the Duo event, so it also needs 1.1.4 approved first.
+**Before submitting:** Submitted 10/15/2026 (Apple requires a deep link). In 1.1.3 the link just opens the app; from 1.1.4 it opens the Paranormal tab.

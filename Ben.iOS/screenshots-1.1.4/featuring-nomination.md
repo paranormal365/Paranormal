@@ -10,6 +10,9 @@ least two weeks' notice and up to three months for wider consideration, so this 
 | Nomination name | IsHaunted 1.1.4: iPhone Duo and Halloween |
 | Publish date | the day 1.1.4 is released (aim for 10/23/2026, the day iPhone Duo goes on sale) |
 | Countries or regions | United States (where the haunted places, groups and events in the app are) |
+| Platforms | iOS (iPhone, iPad) |
+| Localization | English (U.S.) |
+| Supplemental Materials | https://ishaunted.com and https://ishaunted.com/events (up to 5 links) |
 | Related In-App Events | Halloween Ghost Walks; Investigate on iPhone Duo; Record Halloween Night |
 
 ## Description
@@ -29,6 +32,10 @@ least two weeks' notice and up to three months for wider consideration, so this 
 
 (About 1,000 characters. Apple's form gives a box for this; if it limits length, the first paragraph
 stands on its own.)
+
+## Helpful Details (379/500)
+
+> IsHaunted 1.1.4 adds support for iPhone Duo: open, the Paranormal Platform's gauges fill the inner screen with the investigation controls in a column beside them; folded, it is a phone and keeps recording. We can send a TestFlight invitation so an editor can try it on an iPhone Duo. The ghost walks and Halloween nights in the app are listed by real groups in the United States.
 
 ## Why now (if the form asks)
 
