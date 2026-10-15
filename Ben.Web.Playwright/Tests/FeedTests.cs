@@ -72,6 +72,28 @@ public class FeedTests : BenTestBase
     // ── Posting and linkifying ────────────────────────────────────────────────
 
     [Test]
+    [Description("Deleting in the middle of a draft deletes there, not at the end (Ben, 10/15/2026).")]
+    public async Task DeletingMidSentenceStaysWhereTheCursorIs()
+    {
+        await LoginAsync(UserEmail, UserPassword);
+        await GoToFeedAsync();
+
+        var box = Page.Locator("#feed-composer");
+        await box.ClickAsync();
+        await box.PressSequentiallyAsync("The cold spot was on the stair landing tonight");
+        // The cursor goes after "stair", then six quick deletes, faster than the server's reply: each
+        // keystroke used to be echoed back, and a stale echo moved the cursor to the end of the text.
+        await box.EvaluateAsync("el => { const at = el.value.indexOf('stair') + 5; el.setSelectionRange(at, at); }");
+        for (var i = 0; i < 6; i++) await box.PressAsync("Backspace", new() { Delay = 0 });
+        await Page.WaitForTimeoutAsync(1500);   // every echo the server was going to send has arrived
+
+        await Expect(box).ToHaveValueAsync("The cold spot was on the landing tonight");
+        var caret = await box.EvaluateAsync<int>("el => el.selectionStart");
+        Assert.That(caret, Is.EqualTo("The cold spot was on the ".Length),
+            "the cursor should stay where the deleting happened");
+    }
+
+    [Test]
     [Description("A post reaches the feed, and its @name and #tag come back as links.")]
     public async Task PostingLinkifiesMentionsAndTags()
     {

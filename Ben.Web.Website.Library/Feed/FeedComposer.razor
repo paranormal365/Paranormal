@@ -22,11 +22,15 @@
 <div class="card mb-3">
     <div class="card-body">
         <label class="visually-hidden" for="feed-composer">@Placeholder</label>
-        <textarea id="feed-composer" class="form-control border-0 px-0"
+        @* value is what the CODE last put in the box, never what was typed: echoing each keystroke back
+           from the server wrote a stale copy over the box whenever the reply lagged, and the browser
+           then moved the cursor to the end (Ben, 10/15/2026: deleting mid-sentence deleted the end).
+           @key recreates the box when the code changes the text, so a clear always lands. *@
+        <textarea @key="_shownVersion" id="feed-composer" class="form-control border-0 px-0"
                   rows="@(_body.Length > 120 ? 4 : 2)"
                   maxlength="@MaxLength"
                   placeholder="@Placeholder"
-                  value="@_body"
+                  value="@_shown"
                   @oninput="OnBodyInput"
                   @onfocusin="@(() => _bodyLeft = false)" @onfocusout="@(() => _bodyLeft = true)"></textarea>
         <BenComposerLinkCard Text="@_body" LeftTheBox="@_bodyLeft" />
@@ -403,7 +407,7 @@
     {
         var body = _body ?? "";
         var gap = body.Length == 0 || body.EndsWith(' ') || body.EndsWith('\n') ? "" : " ";
-        _body = body + gap + text;
+        SetBody(body + gap + text);
         _emojiOpen = false;
     }
 
@@ -433,6 +437,17 @@
     [Parameter] public EventCallback<FeedPostRecord> OnPosted { get; set; }
 
     private string _body = string.Empty;
+    /// <summary>The text the box was last given by code; typing changes <see cref="_body"/> only.</summary>
+    private string _shown = string.Empty;
+    private int _shownVersion;
+
+    /// <summary>Changes the text from code (an emoji, a GIF, clearing after posting) and redraws the box with it.</summary>
+    private void SetBody(string text)
+    {
+        _body = text;
+        _shown = text;
+        _shownVersion++;
+    }
     private bool _bodyLeft;
     private string? _error;
     private bool _busy;
@@ -562,7 +577,7 @@
                 return;
             }
 
-            _body = string.Empty;
+            SetBody(string.Empty);
             _media = null;
             _experienceTypeId = null;
             _poll = null;
