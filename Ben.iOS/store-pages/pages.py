@@ -207,10 +207,10 @@ PAGES = [
         ],
     ),
     dict(
-        key="researchers", name="Researchers", art="researchers",
-        kicker="For researchers",
-        for_="Researchers who build a case's history and evidence on the research boards.",
-        promo="Notes, photos, marks and readings stamped with the time and place, ready for your research boards on IsHaunted.com.",
+        key="researchers", name="Research & History", art="researchers",
+        kicker="For research & history",
+        for_="Researchers and historians who build a place's or a case's history and evidence on the research boards.",
+        promo="For research and history: notes, photos, marks and readings stamped with the time and place, ready for your research boards on IsHaunted.com.",
         shots=[
             dict(frame="46-note-typed.png", headline="Write it down|as it happens.",
                  sub="Typed or spoken, stamped with the time and place."),

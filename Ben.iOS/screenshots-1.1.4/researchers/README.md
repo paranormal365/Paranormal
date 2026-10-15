@@ -1,8 +1,8 @@
-# Researchers
+# Research & History
 
-Researchers who build a case's history and evidence on the research boards.
+Researchers and historians who build a place's or a case's history and evidence on the research boards.
 
-**Promotional text:** Notes, photos, marks and readings stamped with the time and place, ready for your research boards on IsHaunted.com.
+**Promotional text:** For research and history: notes, photos, marks and readings stamped with the time and place, ready for your research boards on IsHaunted.com.
 
 | # | Screenshot | Headline |
 |---|---|---|

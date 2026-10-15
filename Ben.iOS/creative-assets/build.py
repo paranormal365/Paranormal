@@ -97,7 +97,7 @@ PAGES = {
     ),
     # Researchers: what the phone keeps for the research board on the website.
     "researchers": dict(
-        photo="i2-dark-hallway.jpg", kicker="For researchers",
+        photo="i2-dark-hallway.jpg", kicker="For research & history",
         web=("working-a-case/board-family-tree.png", None),
         headline=("Keep every", "detail."),
         lede="Notes, photos, marks and readings stamped with the time and place, ready for your research on IsHaunted.com.",
