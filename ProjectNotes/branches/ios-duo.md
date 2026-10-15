@@ -26,6 +26,27 @@ Tested in the iPhone Duo simulator (Xcode 27.2 beta 3, iOS 27.2), folded and ope
   iPad (1,024 points or wider) keeps its usual sidebar. The sidebar button at its top still hides it
   altogether.
 
+- **A ☰ menu instead of a standing sidebar** (Ben, 10/15: "maybe a hamburger-style approach?"). When the
+  window is under 1,000 points wide (the Duo opened), the menu is hidden and the ☰ button opens it over the
+  page; choosing a section closes it. A full iPad keeps its sidebar.
+
+## The investigation column (Ben, 10/15)
+
+"The hamburger should manage getting to other parts of the app, the controls along side during the
+Paranormal Platform running should all be to control their investigation." On the Duo opened, iOS puts a
+screen's toolbar buttons in a column at the right edge, so while a session runs the column holds (top to
+bottom): Mark, Log an experience, Ask and listen, Note, Change room, Set/reset base, Flashlight (on phones
+with a light), and Levels. Those buttons leave the page. Stop stays alone in the bottom bar.
+
+- **Log an experience:** Cold spot, Touched, Heard a voice, Heard a sound, Saw something, Smelled something,
+  Felt uneasy, or Something else (opens the note). A mark at that moment with those words.
+- **Ask and listen** (`CallAndResponse` in `InvestigationRail.swift`): press while asking; press again to
+  file the question and wait for an answer (the same EVP question and wait marks the EVP screen makes);
+  press again for the next question; hold to stop listening. With "Type my questions as I ask them" on
+  (Levels, on by default), on-device dictation types the question while it is asked and stops when listening
+  starts. A strip across the top shows what is being typed, or how long the room has had to answer.
+- Folded, and on iPad, the session screen is unchanged.
+
 ## Still to do
 
 - Duo App Store screenshots (outer 1398 × 2034, inner 2853 × 2007), captured on the simulator.

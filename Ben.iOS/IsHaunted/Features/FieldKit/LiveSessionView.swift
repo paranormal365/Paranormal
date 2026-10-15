@@ -41,6 +41,13 @@ struct LiveSessionView: View {
     @State private var choosingRoom = false
     @State private var askingForNote = false
     @State private var errorMessage: String?
+    /// The investigation's controls are in the side column (the iPhone Duo opened).
+    @Environment(\.investigationRail) private var rail
+    @State private var call = CallAndResponse()
+    @State private var flashlight = Flashlight()
+    @State private var choosingExperience = false
+    /// Typing the question while it is asked, where the phone can do it with no connection.
+    @AppStorage("fieldkit.type-questions") private var typeQuestions = true
 
     /// Room under the scrolling content for the pinned bar, so nothing ends up behind it.
     private static let barClearance: CGFloat = 96
@@ -59,6 +66,11 @@ struct LiveSessionView: View {
         // underneath the bar and a tap aimed at Mark landed on Stop — a mis-tap in the dark
         // that ends a recording. A stack cannot get this wrong.
         VStack(spacing: 0) {
+            if let active, active.sessionId == sessionId {
+                CallAndResponseBanner(call: call, session: active)
+                    .padding(.horizontal, 16)
+                    .padding(.top, 8)
+            }
             panel
             stopBarIfActive
         }
@@ -76,6 +88,17 @@ struct LiveSessionView: View {
             .sheet(isPresented: $askingForNote) { noteComposer }
             .permissionRefusedAlert($refusedPermission)
             .sheet(isPresented: $choosingRoom) { roomSheet }
+            .confirmationDialog("What happened?", isPresented: $choosingExperience) {
+                ForEach(Experience.allCases) { experience in
+                    Button(experience.rawValue) {
+                        Task { await active?.mark(kind: .manual, note: experience.rawValue) }
+                    }
+                }
+                Button("Something else…") { askingForNote = true }
+            }
+            .onChange(of: store.active?.isRecording) { _, recording in
+                if recording != true { Task { await call.reset(dictation: dictation) } }
+            }
             .alert("Couldn't stop the session",
                    isPresented: Binding(get: { errorMessage != nil },
                                         set: { if !$0 { errorMessage = nil } })) {
@@ -144,6 +167,9 @@ struct LiveSessionView: View {
                 }
                 applyBlackout(false)
                 UIApplication.shared.isIdleTimerDisabled = false
+                flashlight.off()
+                let call = call, dictation = dictation
+                Task { await call.reset(dictation: dictation) }
             }
             .task { await bringUp() }
     }
@@ -199,13 +225,79 @@ struct LiveSessionView: View {
         if let active, active.sessionId == sessionId { stopBar(active) }
     }
 
+    private var dictation: DictationService? { store.sensors().dictation }
+
     @ToolbarContentBuilder
     private var toolbarItems: some ToolbarContent {
+        if rail, let active, active.sessionId == sessionId {
+            railItems(active)
+        }
         ToolbarItem(placement: .primaryAction) {
             Button { showingSettings = true } label: {
                 Image(systemName: "slider.horizontal.3")
             }
             .accessibilityLabel("Levels")
+        }
+    }
+
+    /// The investigation's controls, in the order they are reached for. On the iPhone Duo opened,
+    /// iOS stacks these down the side column. Stop stays alone in the bar at the bottom, away from
+    /// them, so a mis-tap in the dark can't end a recording.
+    @ToolbarContentBuilder
+    private func railItems(_ active: ActiveFieldSession) -> some ToolbarContent {
+        if active.isRecording {
+            ToolbarItem(placement: .primaryAction) {
+                Button { Task { await active.mark(kind: .manual) } } label: {
+                    Image(systemName: "flag")
+                }
+                .accessibilityLabel("Mark this moment")
+                .accessibilityIdentifier("rail-mark")
+            }
+            ToolbarItem(placement: .primaryAction) {
+                Button { choosingExperience = true } label: {
+                    Image(systemName: "hand.raised")
+                }
+                .accessibilityLabel("Log an experience")
+                .accessibilityIdentifier("rail-experience")
+            }
+            ToolbarItem(placement: .primaryAction) {
+                Button {
+                    Task { await call.press(session: active, dictation: dictation, typeQuestions: typeQuestions) }
+                } label: {
+                    Image(systemName: call.phase == .asking ? "mic.fill" : call.phase == .listening ? "ear" : "mic")
+                        .foregroundStyle(call.phase == .asking ? Theme.danger : Theme.ecto)
+                }
+                .simultaneousGesture(LongPressGesture(minimumDuration: 0.6).onEnded { _ in
+                    Task { await call.stopListening(session: active) }
+                })
+                .accessibilityLabel(call.phase == .asking ? "Done asking, listen for an answer"
+                                    : call.phase == .listening ? "Ask the next question" : "Ask a question")
+                .accessibilityIdentifier("rail-ask")
+            }
+            ToolbarItem(placement: .primaryAction) {
+                Button { askingForNote = true } label: { Image(systemName: "square.and.pencil") }
+                    .accessibilityLabel("Note")
+                    .accessibilityIdentifier("rail-note")
+            }
+        }
+        ToolbarItem(placement: .primaryAction) {
+            Button { choosingRoom = true } label: { Image(systemName: "door.left.hand.open") }
+                .accessibilityLabel("Change room")
+                .accessibilityIdentifier("rail-room")
+        }
+        ToolbarItem(placement: .primaryAction) {
+            Button { Task { await active.setBaselines() } } label: { Image(systemName: "target") }
+                .accessibilityLabel(active.baselines.isSet ? "Reset the base" : "Set the base")
+                .accessibilityIdentifier("rail-base")
+        }
+        if flashlight.isAvailable {
+            ToolbarItem(placement: .primaryAction) {
+                Button { flashlight.toggle() } label: {
+                    Image(systemName: flashlight.isOn ? "flashlight.on.fill" : "flashlight.off.fill")
+                }
+                .accessibilityLabel(flashlight.isOn ? "Turn the flashlight off" : "Turn the flashlight on")
+                .accessibilityIdentifier("rail-flashlight")
+            }
         }
     }
 
@@ -543,6 +635,7 @@ struct LiveSessionView: View {
     @ViewBuilder
     private func controls(_ active: ActiveFieldSession) -> some View {
         VStack(spacing: 14) {
+            if !rail {
             HStack(spacing: 12) {
                 Button {
                     Task { await active.setBaselines() }
@@ -593,7 +686,9 @@ struct LiveSessionView: View {
                     .buttonStyle(.signalSecondary)
                     .accessibilityIdentifier("open-evp")
                 }
-
+            }
+            }
+            if active.isRecording {
                 FieldCaptureBar(session: active, camera: camera)
             }
 
@@ -735,6 +830,7 @@ private struct LevelsSheet: View {
     @State private var reportAtMilligauss: Double = 20
     @State private var reportAtDecibels: Double = 12
     @State private var debounceSeconds: Double = 3
+    @AppStorage("fieldkit.type-questions") private var typeQuestions = true
 
     var body: some View {
         NavigationStack {
@@ -755,6 +851,12 @@ private struct LevelsSheet: View {
                     Text("Base level")
                 } footer: {
                     Text("What this room reads when nothing is happening. Everything is measured against it — an absolute field reading means nothing on its own, because the Earth alone is around 500 mG.")
+                }
+
+                Section {
+                    Toggle("Type my questions as I ask them", isOn: $typeQuestions)
+                } footer: {
+                    Text("When you ask a question with the microphone button, the phone writes down what you say until you press it again to listen. It happens on this phone; nothing is sent anywhere.")
                 }
 
                 Section {

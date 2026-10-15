@@ -14,10 +14,14 @@ struct RootShell: View {
     /// The whole window's width, for sizing the sidebar.
     @State private var windowWidth: CGFloat = 0
 
-    /// Below this the sidebar is kept narrow. The iPhone Duo open is 951 points: at the iPad's usual
-    /// 320-point sidebar a third of the screen went to the menu (Ben, 10/15/2026). A full iPad is 1024
-    /// or wider and keeps its usual sidebar.
+    /// Below this the menu is a ☰ button rather than a standing sidebar. The iPhone Duo open is 951
+    /// points: a standing sidebar took a third of it, and even a narrow one a quarter (Ben, 10/15/2026:
+    /// "Like maybe a hamburger-style approach?"). A full iPad is 1024 or wider and keeps its sidebar.
     private static let narrowWindow: CGFloat = 1000
+    /// Whether the sidebar is showing, so the ☰ button can open it and choosing a section close it.
+    @State private var columnVisibility: NavigationSplitViewVisibility = .automatic
+
+    private var menuIsAButton: Bool { windowWidth > 0 && windowWidth < Self.narrowWindow }
 
     var body: some View {
         Group {
@@ -159,7 +163,7 @@ struct RootShell: View {
 
     private var splitView: some View {
         @Bindable var router = router
-        return NavigationSplitView {
+        return NavigationSplitView(columnVisibility: $columnVisibility) {
             List(selection: Binding(
                 get: { Optional(router.selection) },
                 set: { if let value = $0 { router.selection = value } })
@@ -171,6 +175,7 @@ struct RootShell: View {
                 Section {
                     Button {
                         router.push(.notifications)
+                        closeMenuIfAButton()
                     } label: {
                         Label("Notifications", systemImage: "bell")
                             .badge(dependencies.notifications.badgeCount)
@@ -179,19 +184,45 @@ struct RootShell: View {
             }
             .navigationTitle("IsHaunted")
             // Wide enough for the longest entry ("Investigations", "Notifications") and no wider.
-            .navigationSplitViewColumnWidth(min: 190, ideal: windowWidth < Self.narrowWindow ? 236 : 320, max: 360)
+            .navigationSplitViewColumnWidth(min: 190, ideal: menuIsAButton ? 236 : 320, max: 360)
+            // On a narrow screen the ☰ button on each section's front page replaces the system's own.
+            .toolbar(removing: menuIsAButton ? .sidebarToggle : nil)
         } detail: {
-            sectionStack(router.selection)
+            sectionStack(router.selection, menuButton: menuIsAButton)
         }
+        .modifier(MenuOverPage(over: menuIsAButton))
+        .onChange(of: menuIsAButton, initial: true) { _, isButton in
+            columnVisibility = isButton ? .detailOnly : .automatic
+        }
+        .onChange(of: router.selection) { _, _ in closeMenuIfAButton() }
     }
 
-    private func sectionStack(_ section: AppSection) -> some View {
+    private func closeMenuIfAButton() {
+        if menuIsAButton { withAnimation { columnVisibility = .detailOnly } }
+    }
+
+    private func sectionStack(_ section: AppSection, menuButton: Bool = false) -> some View {
         NavigationStack(path: router.path(for: section)) {
             sectionRoot(section)
                 .signalPage()
+                .toolbar {
+                    if menuButton {
+                        ToolbarItem(placement: .topBarLeading) {
+                            Button {
+                                withAnimation { columnVisibility = .all }
+                            } label: {
+                                Image(systemName: "line.3.horizontal")
+                            }
+                            .accessibilityLabel("Menu")
+                            .accessibilityIdentifier("shell-menu")
+                        }
+                    }
+                }
                 .navigationDestination(for: AppRoute.self) { route in
                     destination(route)
                         .signalPage()
+                        // Set on each pushed screen: a value set around the stack did not reach them.
+                        .environment(\.investigationRail, menuButton)
                 }
         }
         // One stack per section, by identity. The split view's detail column is ONE place that
@@ -340,5 +371,18 @@ struct PlaceholderScreen: View {
             Text("This screen arrives in \(slice).")
         }
         .navigationTitle(title)
+    }
+}
+
+/// The menu slides in over the page on a narrow screen, rather than pushing the page aside.
+private struct MenuOverPage: ViewModifier {
+    let over: Bool
+
+    func body(content: Content) -> some View {
+        if over {
+            content.navigationSplitViewStyle(.prominentDetail)
+        } else {
+            content.navigationSplitViewStyle(.balanced)
+        }
     }
 }
