@@ -89,7 +89,7 @@ public class FeedTests : BenTestBase
 
         await Expect(box).ToHaveValueAsync("The cold spot was on the landing tonight");
         var caret = await box.EvaluateAsync<int>("el => el.selectionStart");
-        Assert.That(caret, Is.EqualTo("The cold spot was on the ".Length),
+        Assert.That(caret, Is.EqualTo("The cold spot was on the".Length),
             "the cursor should stay where the deleting happened");
     }
 
