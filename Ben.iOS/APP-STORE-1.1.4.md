@@ -1,4 +1,7 @@
-# App Store update: IsHaunted 1.1.4 (build 13)
+# App Store update: IsHaunted 1.1.4 (build 14)
+
+**Submitted 10/15/2026, build 14** — archived with Xcode 27.1 RC (27A9275, iOS 27.1 SDK) for iPhone Duo.
+Release is set to manual. What was entered in App Store Connect is in §4.
 
 1.1.4 brings three things:
 - the session review now plays back as the website's player does;
@@ -66,3 +69,13 @@ Follow `APP-STORE-1.1.4-HELP.md`:
 4. Rebuild the product PDF and the app guides.
 
 If Apple rejects it for code, the next build is **14**. An uploaded build number is never reused.
+
+## 4. As submitted (10/15/2026)
+
+- **Build:** 14 (13 was archived with Xcode 27.0 and never submitted).
+- **Subtitle:** The Paranormal Platform (was "Paranormal Toolkit").
+- **Promotional text:** Now made for iPhone Duo: open it and the whole investigation fills the inner screen, with every control for the night down the side.
+- **What's New:** iPhone Duo; ask a question and listen; add details to marks; Field Kit is now the Paranormal Platform; the session review changes; menus and alerts easier to read.
+- **Description:** opens with the Paranormal Platform; new "Made for iPhone Duo" and "Events" sections; ask-and-listen and add-details in "In the field".
+- **Review notes:** Field Kit → Paranormal Platform (formerly Field Kit); a paragraph on the iPhone Duo controls and Add details.
+- **Media:** `screenshots-1.1.4/main/` — iPhone 6.5" (8 + preview), iPad 13" (8 + preview), iPhone Duo (5).
