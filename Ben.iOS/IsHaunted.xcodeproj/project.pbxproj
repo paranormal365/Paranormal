@@ -347,8 +347,21 @@
 				DEVELOPMENT_TEAM = 5778H75249;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = Support/Info.plist;
+				INFOPLIST_KEY_CFBundleDisplayName = IsHaunted;
+				INFOPLIST_KEY_ITSAppUsesNonExemptEncryption = NO;
+				INFOPLIST_KEY_LSSupportsOpeningDocumentsInPlace = NO;
+				INFOPLIST_KEY_NSCalendarsUsageDescription = "Add public events and investigations you're attending to your own calendar.";
+				INFOPLIST_KEY_NSCalendarsWriteOnlyAccessUsageDescription = "Add public events and investigations you're attending to your own calendar.";
+				INFOPLIST_KEY_NSCameraUsageDescription = "Capture photos and video during a field session, and for feed posts and case occurrences.";
+				INFOPLIST_KEY_NSLocationWhenInUseUsageDescription = "Finds ghost walks near you, and stamps where you were standing on every reading, photo and recording in a field session, so a spike in the cellar isn't confused with one in the hall. Looking for tours uses your position once, for that search. A session's readings stay on this device unless you choose to upload them to your group.";
+				INFOPLIST_KEY_NSMicrophoneUsageDescription = "Measures sound level and records audio during field sessions and EVP recordings, and captures sound with video for feed posts and case evidence.";
+				INFOPLIST_KEY_NSMotionUsageDescription = "Reads the magnetometer and barometer during a field session — magnetic field strength, and how far up or down you've moved between floors.";
+				INFOPLIST_KEY_NSPhotoLibraryAddUsageDescription = "Save investigation media you download to your photo library.";
+				INFOPLIST_KEY_NSSpeechRecognitionUsageDescription = "Turns spoken notes into text during a field session. This happens entirely on your device — nothing you say is sent anywhere.";
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
 				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
+				INFOPLIST_KEY_UISupportedInterfaceOrientations = "UIInterfaceOrientationPortrait UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
+				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPad = "UIInterfaceOrientationPortrait UIInterfaceOrientationPortraitUpsideDown UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/Frameworks",
@@ -372,8 +385,21 @@
 				DEVELOPMENT_TEAM = 5778H75249;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = Support/Info.plist;
+				INFOPLIST_KEY_CFBundleDisplayName = IsHaunted;
+				INFOPLIST_KEY_ITSAppUsesNonExemptEncryption = NO;
+				INFOPLIST_KEY_LSSupportsOpeningDocumentsInPlace = NO;
+				INFOPLIST_KEY_NSCalendarsUsageDescription = "Add public events and investigations you're attending to your own calendar.";
+				INFOPLIST_KEY_NSCalendarsWriteOnlyAccessUsageDescription = "Add public events and investigations you're attending to your own calendar.";
+				INFOPLIST_KEY_NSCameraUsageDescription = "Capture photos and video during a field session, and for feed posts and case occurrences.";
+				INFOPLIST_KEY_NSLocationWhenInUseUsageDescription = "Finds ghost walks near you, and stamps where you were standing on every reading, photo and recording in a field session, so a spike in the cellar isn't confused with one in the hall. Looking for tours uses your position once, for that search. A session's readings stay on this device unless you choose to upload them to your group.";
+				INFOPLIST_KEY_NSMicrophoneUsageDescription = "Measures sound level and records audio during field sessions and EVP recordings, and captures sound with video for feed posts and case evidence.";
+				INFOPLIST_KEY_NSMotionUsageDescription = "Reads the magnetometer and barometer during a field session — magnetic field strength, and how far up or down you've moved between floors.";
+				INFOPLIST_KEY_NSPhotoLibraryAddUsageDescription = "Save investigation media you download to your photo library.";
+				INFOPLIST_KEY_NSSpeechRecognitionUsageDescription = "Turns spoken notes into text during a field session. This happens entirely on your device — nothing you say is sent anywhere.";
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
 				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
+				INFOPLIST_KEY_UISupportedInterfaceOrientations = "UIInterfaceOrientationPortrait UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
+				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPad = "UIInterfaceOrientationPortrait UIInterfaceOrientationPortraitUpsideDown UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/Frameworks",
