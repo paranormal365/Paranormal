@@ -42,7 +42,7 @@ STOCK = "../media/stock/"
 PUB   = "../../Ben.Web.Website/wwwroot/help/media/"
 ADMIN = "../../Ben.Web.Services/Help/Media/"
 WALK  = "../web-media/"
-LOGO  = "../../Ben.Web.Website/wwwroot/static/images/app/app-icon.png"
+LOGO  = "../assets/is-haunted-logo.svg"
 
 ICONS = {
     "globe":    '<circle cx="12" cy="12" r="10"/><path d="M2 12h20M12 2a15 15 0 0 1 0 20M12 2a15 15 0 0 0 0 20"/>',
