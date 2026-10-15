@@ -19,6 +19,14 @@ final class LiveDictation: DictationService, @unchecked Sendable {
     private var request: SFSpeechAudioBufferRecognitionRequest?
     private var task: SFSpeechRecognitionTask?
     private var latest = ""
+    /// True while the session's own microphone is running. Dictation then leaves the shared audio
+    /// session on when it stops: switching it off would end the session's recording too (10/15/2026,
+    /// asking a question with the microphone in the middle of a recorded session).
+    private let audioInUse: @Sendable () -> Bool
+
+    init(audioInUse: @escaping @Sendable () -> Bool = { false }) {
+        self.audioInUse = audioInUse
+    }
 
     var isAvailableOffline: Bool {
         get async {
@@ -108,7 +116,7 @@ final class LiveDictation: DictationService, @unchecked Sendable {
         // place for the next attempt to trip over.
         engine.inputNode.removeTap(onBus: 0)
         if engine.isRunning { engine.stop() }
-        try? AVAudioSession.sharedInstance().setActive(false)
+        if !audioInUse() { try? AVAudioSession.sharedInstance().setActive(false) }
 
         // A beat for the recogniser to hand back its last revision — stopping mid-word otherwise
         // loses the end of the sentence, which is usually the part that mattered.

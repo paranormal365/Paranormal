@@ -46,6 +46,7 @@ struct LiveSessionView: View {
     @State private var call = CallAndResponse()
     @State private var flashlight = Flashlight()
     @State private var choosingExperience = false
+    @State private var notice = RailNotice()
     /// Typing the question while it is asked, where the phone can do it with no connection.
     @AppStorage("fieldkit.type-questions") private var typeQuestions = true
 
@@ -74,6 +75,10 @@ struct LiveSessionView: View {
             panel
             stopBarIfActive
         }
+            // Over the reading count in the bottom bar: at the top it covered the run time.
+            .overlay(alignment: .bottomLeading) {
+                RailNoticeView(notice: notice).padding(.leading, 12).padding(.bottom, 14)
+            }
             .background(Theme.ink)
             .navigationTitle(summary?.title ?? "Session")
             .navigationBarTitleDisplayMode(.inline)
@@ -91,7 +96,10 @@ struct LiveSessionView: View {
             .confirmationDialog("What happened?", isPresented: $choosingExperience) {
                 ForEach(Experience.allCases) { experience in
                     Button(experience.rawValue) {
-                        Task { await active?.mark(kind: .manual, note: experience.rawValue) }
+                        Task {
+                            await active?.mark(kind: .manual, note: experience.rawValue)
+                            notice.show("Logged: \(experience.rawValue)")
+                        }
                     }
                 }
                 Button("Something else…") { askingForNote = true }
@@ -243,11 +251,22 @@ struct LiveSessionView: View {
     /// The investigation's controls, in the order they are reached for. On the iPhone Duo opened,
     /// iOS stacks these down the side column. Stop stays alone in the bar at the bottom, away from
     /// them, so a mis-tap in the dark can't end a recording.
+    /// "00:01:23" since the session started, for the notice a mark leaves.
+    private func runTime(_ active: ActiveFieldSession) -> String {
+        let seconds = max(0, Int(Date.now.timeIntervalSince(active.startedAt)))
+        return String(format: "%02d:%02d:%02d", seconds / 3600, seconds / 60 % 60, seconds % 60)
+    }
+
     @ToolbarContentBuilder
     private func railItems(_ active: ActiveFieldSession) -> some ToolbarContent {
         if active.isRecording {
             ToolbarItem(placement: .primaryAction) {
-                Button { Task { await active.mark(kind: .manual) } } label: {
+                Button {
+                    Task {
+                        await active.mark(kind: .manual)
+                        notice.show("Marked at \(runTime(active))")
+                    }
+                } label: {
                     Image(systemName: "flag")
                 }
                 .accessibilityLabel("Mark this moment")
@@ -267,9 +286,6 @@ struct LiveSessionView: View {
                     Image(systemName: call.phase == .asking ? "mic.fill" : call.phase == .listening ? "ear" : "mic")
                         .foregroundStyle(call.phase == .asking ? Theme.danger : Theme.ecto)
                 }
-                .simultaneousGesture(LongPressGesture(minimumDuration: 0.6).onEnded { _ in
-                    Task { await call.stopListening(session: active) }
-                })
                 .accessibilityLabel(call.phase == .asking ? "Done asking, listen for an answer"
                                     : call.phase == .listening ? "Ask the next question" : "Ask a question")
                 .accessibilityIdentifier("rail-ask")
@@ -286,7 +302,13 @@ struct LiveSessionView: View {
                 .accessibilityIdentifier("rail-room")
         }
         ToolbarItem(placement: .primaryAction) {
-            Button { Task { await active.setBaselines() } } label: { Image(systemName: "target") }
+            Button {
+                let wasSet = active.baselines.isSet
+                Task {
+                    await active.setBaselines()
+                    notice.show(wasSet ? "Base reset" : "Base set")
+                }
+            } label: { Image(systemName: "target") }
                 .accessibilityLabel(active.baselines.isSet ? "Reset the base" : "Set the base")
                 .accessibilityIdentifier("rail-base")
         }

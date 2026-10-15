@@ -47,6 +47,25 @@ with a light), and Levels. Those buttons leave the page. Stop stays alone in the
   starts. A strip across the top shows what is being typed, or how long the room has had to answer.
 - Folded, and on iPad, the session screen is unchanged.
 
+### Found by the walk-through and fixed (10/15)
+
+`IsHauntedUITests/DuoInvestigationColumnTests` drives a recorded session through every control in the
+column on the opened Duo. Its own screenshots come out black on the beta's two-screen simulator, so the
+frames are cut from a recording of the inner screen (`simctl io recordVideo --display=3`) at each step's
+time.
+
+- **A press left no trace.** Mark and the experience list changed nothing on screen. A short line now says
+  what happened ("Marked at 00:00:06", "Logged: Cold spot", "Base set"), over the reading count in the
+  bottom bar so it never covers the run time.
+- **Holding the microphone to stop listening didn't work** in the column, and nobody would find it.
+  "Done listening" in the listening strip ends the wait instead.
+- **Dictation switched the shared audio off when it stopped**, which would also have cut the session's
+  own sound recording. It now leaves it on while the session's microphone is in use.
+- **A second press could land while the first was still being handled**; presses are now taken one at a
+  time.
+- The simulator ignores a request to turn the opened Duo upright, so portrait is untested until a real
+  phone or Device Hub.
+
 ## Still to do
 
 - Duo App Store screenshots (outer 1398 × 2034, inner 2853 × 2007), captured on the simulator.

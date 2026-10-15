@@ -306,6 +306,10 @@ final class LiveAudioCapture: AudioLevelSource, AudioRecording, @unchecked Senda
         if !engine.isRunning { try engine.start() }
     }
 
+    /// Whether the microphone is in use here — the level meter or a recording — so that something
+    /// else using it for a moment (dictation) leaves the shared audio session switched on.
+    var isUsingMicrophone: Bool { hasTap() }
+
     private func hasTap() -> Bool {
         lock.lock(); defer { lock.unlock() }
         return tapInstalled
@@ -680,7 +684,7 @@ enum LiveSensors {
             location: LiveLocation(),
             altitude: LiveAltimeter(),
             deviceMovement: LiveDeviceMovement(),
-            dictation: LiveDictation(),
+            dictation: LiveDictation(audioInUse: { audio.isUsingMicrophone }),
             batteryPercent: { battery.percent() })
     }
 }

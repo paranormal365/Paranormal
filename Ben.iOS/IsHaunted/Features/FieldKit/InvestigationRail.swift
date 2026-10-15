@@ -21,8 +21,8 @@ extension EnvironmentValues {
 /// then when they start the listening, we stop trying to type what is being said."
 ///
 /// Press: asking. Press again: the question is filed (with what was typed of it) and the wait for an
-/// answer begins. Press again: the next question, which closes that wait. Holding the button while
-/// listening ends the wait without asking again.
+/// answer begins. Press again: the next question, which closes that wait. Done listening, in the
+/// strip across the top, ends the wait without asking again.
 @MainActor
 @Observable
 final class CallAndResponse {
@@ -35,7 +35,13 @@ final class CallAndResponse {
 
     private var listener: Task<Void, Never>?
 
+    /// Set while a press is being handled, so a second press can't land half-way through the first.
+    private var handling = false
+
     func press(session: ActiveFieldSession, dictation: DictationService?, typeQuestions: Bool) async {
+        guard !handling else { return }
+        handling = true
+        defer { handling = false }
         switch phase {
         case .idle, .listening:
             heard = ""
@@ -147,10 +153,17 @@ struct CallAndResponseBanner: View {
                             .lineLimit(2)
                     }
                     Spacer(minLength: 0)
+                    if call.phase == .listening {
+                        Button("Done listening") { Task { await call.stopListening(session: session) } }
+                            .buttonStyle(.signalSecondary)
+                            .accessibilityIdentifier("done-listening")
+                    }
                 }
                 .padding(12)
                 .background(Theme.mist, in: RoundedRectangle(cornerRadius: 12))
             }
+            // Contain, so the strip's own name doesn't replace Done listening's for VoiceOver.
+            .accessibilityElement(children: .contain)
             .accessibilityIdentifier("call-and-response")
         }
     }
@@ -165,6 +178,43 @@ struct CallAndResponseBanner: View {
             return call.heard.isEmpty ? clock : "\(clock) · \(call.heard)"
         case .idle:
             return ""
+        }
+    }
+}
+
+/// A line that says what a button in the side column just did, then fades: the column's buttons
+/// change nothing else on screen, and in the dark a press that leaves no trace reads as a press that
+/// missed (found 10/15/2026 on the Duo walk-through).
+@MainActor
+@Observable
+final class RailNotice {
+    private(set) var text: String?
+    private var clearing: Task<Void, Never>?
+
+    func show(_ text: String) {
+        withAnimation { self.text = text }
+        clearing?.cancel()
+        clearing = Task { [weak self] in
+            try? await Task.sleep(for: .seconds(2.5))
+            guard !Task.isCancelled else { return }
+            withAnimation { self?.text = nil }
+        }
+    }
+}
+
+struct RailNoticeView: View {
+    let notice: RailNotice
+
+    var body: some View {
+        if let text = notice.text {
+            Label(text, systemImage: "checkmark.circle.fill")
+                .font(.callout.weight(.semibold))
+                .foregroundStyle(Theme.bone)
+                .padding(.horizontal, 16).padding(.vertical, 10)
+                .background(Theme.mist, in: Capsule())
+                .overlay(Capsule().strokeBorder(Theme.ecto.opacity(0.5)))
+                .transition(.move(edge: .top).combined(with: .opacity))
+                .accessibilityIdentifier("rail-notice")
         }
     }
 }

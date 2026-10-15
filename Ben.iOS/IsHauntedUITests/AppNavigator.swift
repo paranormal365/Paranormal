@@ -42,6 +42,13 @@ enum AppNavigator {
                         timeout: TimeInterval = 25) -> XCUIElement? {
         let deadline = Date().addingTimeInterval(timeout)
         repeat {
+            // On a narrow regular-width window (the iPhone Duo opened) the sections are behind
+            // the ☰ button rather than in a standing sidebar.
+            let menu = app.buttons["shell-menu"].firstMatch
+            if menu.exists && menu.isHittable && !app.cells[name].firstMatch.isHittable {
+                menu.tap()
+                _ = app.wait(for: .runningForeground, timeout: 0.8)
+            }
             // Order matters: on iPad a sidebar row is a cell that also CONTAINS a static text,
             // and tapping the inner label is less reliable than tapping the row.
             for candidate in [app.buttons[name].firstMatch,
