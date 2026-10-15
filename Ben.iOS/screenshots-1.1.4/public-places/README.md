@@ -2,7 +2,7 @@
 
 Owners of haunted sites open to the public, and the people who visit them.
 
-**Promotional text:** Find the sessions people published at haunted places near you, then add your own night to the place for everyone to see.
+**Promotional text:** Visitors find your haunted place, record their night there, and add it to your place's page for everyone who comes next.
 
 | # | Screenshot | Headline |
 |---|---|---|

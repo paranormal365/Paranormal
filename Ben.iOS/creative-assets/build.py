@@ -125,9 +125,9 @@ PAGES = {
     ),
     # Haunted places open to the public, and the sessions people publish there.
     "public-places": dict(
-        photo="v1-venue-exterior.jpg", kicker="Haunted places",
-        headline=("See what others", "recorded here."),
-        lede="Find the sessions people published at public places near you, then add your own night to the place.",
+        photo="v1-venue-exterior.jpg", kicker="For haunted places",
+        headline=("Your place,", "found and recorded."),
+        lede="Visitors find your haunted place, record their night there, and add it to your place's page.",
         header=["01-home.png", "04-field-kit.png", "71-my-evidence.png", "13-fieldkit-review.png"],
         search=["01-home.png", "71-my-evidence.png", "13-fieldkit-review.png", "04-field-kit.png"],
     ),
@@ -151,7 +151,7 @@ PAGES = {
     "ghost-walks": dict(
         photo="w2-cobblestone-night.jpg", kicker="For ghost walk tours",
         headline=("Lead the walk.", "Everyone records."),
-        lede="Guests reserve a walk, join the session the guide starts, and send what they recorded to the group.",
+        lede="Guests reserve your walk, join the session your guide starts, and send what they recorded to your group.",
         header=["05-events.png", "04-field-kit.png", "57-join-ask.png", "56-launch-send-to.png"],
         search=["05-events.png", "57-join-ask.png", "56-launch-send-to.png", "04-field-kit.png"],
     ),

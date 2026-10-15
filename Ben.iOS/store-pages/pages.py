@@ -131,7 +131,7 @@ PAGES = [
         key="public-places", name="Haunted places", art="public-places",
         kicker="For haunted places",
         for_="Owners of haunted sites open to the public, and the people who visit them.",
-        promo="Find the sessions people published at haunted places near you, then add your own night to the place for everyone to see.",
+        promo="Visitors find your haunted place, record their night there, and add it to your place's page for everyone who comes next.",
         shots=[
             # iphone-public-sessions.png left out (10/15/2026): the capture database has no published sessions,
             # so the screen is the empty list. Put it back once a session is published to a seeded place.
