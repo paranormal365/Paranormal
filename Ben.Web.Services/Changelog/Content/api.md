@@ -50,6 +50,8 @@ belongs there; this is for the part underneath.
 - Any request that takes more than five seconds is recorded in the error log, with how long it took.
 - Saving a person's site roles works again. Since early September every save was refused with a
   server error.
+- A request the person gave up on, by closing the page or leaving it, is no longer written to the
+  error log as a fault.
 
 
 ## 2.9.0 · 2026-10-05

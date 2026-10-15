@@ -903,6 +903,18 @@ app.UseExceptionHandler(handler =>
             return;
         }
 
+        // The caller went away mid-request — a page closed, a circuit ended — and the database
+        // call it was waiting on was cancelled with it. SQL Server reports that as "Operation
+        // cancelled by user" or an aborted batch, not as a cancellation, so it arrived here as an
+        // ERROR with a stack trace: nine in one browser run on 10/14/2026, every one of them
+        // /api/me/notification-summary, none of them a fault. Nobody is waiting for this answer.
+        if (feature?.Error is not null && context.RequestAborted.IsCancellationRequested)
+        {
+            logger.LogInformation("Request abandoned by its caller at {Path}: {Reason}",
+                feature.Path, feature.Error.GetBaseException().Message);
+            return;
+        }
+
         if (feature?.Error is not null)
         {
             logger.LogError(feature.Error,

@@ -177,12 +177,12 @@ public class VotingTests : BenTestBase
     {
         await LoginAsync(UserEmail, UserPassword);
         await Page.GotoAsync(BaseUrl);
-        await Page.WaitForLoadStateAsync(LoadState.NetworkIdle);
+        // Not NetworkIdle: the home page never goes quiet (the circuit, the moving header), so the
+        // wait timed out after thirty seconds on a page that had finished loading (full run of
+        // 10/14/2026, screenshot kept). The vote buttons are the signal, and they come in a batch.
+        await WaitForTheCircuitAsync();
         await Page.WaitForSelectorAsync(".card", new() { Timeout = 15_000 });
-        // All cards should have vote buttons loaded from batch endpoint
-        var voteWidgets = Page.Locator(".case-vote-widget");
-        var count = await voteWidgets.CountAsync();
-        Assert.That(count, Is.GreaterThan(0), "Expected vote widgets on authenticated list cards.");
+        await Expect(Page.Locator(".case-vote-widget").First).ToBeVisibleAsync(new() { Timeout = 15_000 });
     }
 
     // ── Vote counts persist ───────────────────────────────────────────────────
