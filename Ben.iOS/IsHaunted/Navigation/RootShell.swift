@@ -11,6 +11,13 @@ struct RootShell: View {
     @Environment(AppDependencies.self) private var dependencies
     @Environment(\.scenePhase) private var scenePhase
     @State private var showSignInFromBanner = false
+    /// The whole window's width, for sizing the sidebar.
+    @State private var windowWidth: CGFloat = 0
+
+    /// Below this the sidebar is kept narrow. The iPhone Duo open is 951 points: at the iPad's usual
+    /// 320-point sidebar a third of the screen went to the menu (Ben, 10/15/2026). A full iPad is 1024
+    /// or wider and keeps its usual sidebar.
+    private static let narrowWindow: CGFloat = 1000
 
     var body: some View {
         Group {
@@ -20,6 +27,7 @@ struct RootShell: View {
                 tabView
             }
         }
+        .onGeometryChange(for: CGFloat.self) { $0.size.width } action: { windowWidth = $0 }
         // Which sections exist depends on the chrome, and the chrome depends on width — so a
         // link to Events has to be told where Events currently lives.
         .onAppear { router.availableSections = shownSections }
@@ -170,6 +178,8 @@ struct RootShell: View {
                 }
             }
             .navigationTitle("IsHaunted")
+            // Wide enough for the longest entry ("Investigations", "Notifications") and no wider.
+            .navigationSplitViewColumnWidth(min: 190, ideal: windowWidth < Self.narrowWindow ? 236 : 320, max: 360)
         } detail: {
             sectionStack(router.selection)
         }

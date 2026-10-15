@@ -20,6 +20,12 @@ Tested in the iPhone Duo simulator (Xcode 27.2 beta 3, iOS 27.2), folded and ope
   time onto two lines and wrapped every button. `LiveSessionView` now uses two columns only when the pane
   is at least 760 points wide; below that it is the phone's single column, kept to 560 points wide.
 
+- **The sidebar took a third of the open screen** (Ben, 10/15). At the iPad's usual 320 points it left the
+  page 630 of the Duo's 951. When the whole window is under 1,000 points wide, `RootShell` now gives the
+  sidebar 236 points, just wide enough for "Investigations" and "Notifications" on one line. A full-size
+  iPad (1,024 points or wider) keeps its usual sidebar. The sidebar button at its top still hides it
+  altogether.
+
 ## Still to do
 
 - Duo App Store screenshots (outer 1398 × 2034, inner 2853 × 2007), captured on the simulator.
