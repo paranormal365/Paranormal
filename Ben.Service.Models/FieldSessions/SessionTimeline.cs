@@ -94,7 +94,12 @@ public sealed record TimelineMarker(
     string? Note,
     string? Room,
     /// <summary>The field at the mark, mG from the base in force, or absolute when none.</summary>
-    double? FieldMilligauss);
+    double? FieldMilligauss,
+    /// <summary>What the investigator added about this mark after the session, before sending it
+    /// (the package's <c>mark_details</c>, 10/15/2026). Shown as written; the website never edits it.</summary>
+    string? Details = null,
+    /// <summary>When those details were written.</summary>
+    DateTime? DetailsAddedAt = null);
 
 /// <summary>A photograph and the moment it was taken.</summary>
 public sealed record TimelinePhoto(long T, Guid FileId, string Path);

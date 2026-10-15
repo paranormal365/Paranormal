@@ -144,7 +144,8 @@ public enum SessionImporter {
     /// and a capture as one whose `marker` names a `CaptureKind` with the path in the note —
     /// see `FieldSessionEngine`. Base levels ride on every `emf` and `sound_level` measurement
     /// as `baseline`, so the last one written is what the session was measured against.
-    public static func rebuild(from readings: [FieldReading]) -> Rebuilt {
+    public static func rebuild(from readings: [FieldReading],
+                               markDetails: [DeviceDataEnvelope.MarkDetails] = []) -> Rebuilt {
         var markers: [FieldMarkerRecord] = []
         var captures: [CaptureFacts] = []
         var emfBaseline: Double?
@@ -193,6 +194,15 @@ public enum SessionImporter {
             }
         }
 
+        // Details added after the session sit beside the readings, named by the mark's moment and kind.
+        for detail in markDetails {
+            if let index = markers.firstIndex(where: {
+                abs($0.at.timeIntervalSince(detail.at)) < 0.001 && $0.kind.rawValue == detail.marker
+            }) {
+                markers[index].details = detail.details
+                markers[index].detailsAddedAt = detail.addedAt
+            }
+        }
         return Rebuilt(markers: markers, captures: captures,
                        baselines: Baselines(magneticMicrotesla: emfBaseline, soundDbfs: soundBaseline))
     }

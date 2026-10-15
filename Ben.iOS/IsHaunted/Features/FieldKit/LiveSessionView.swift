@@ -41,9 +41,20 @@ struct LiveSessionView: View {
     @State private var choosingRoom = false
     @State private var askingForNote = false
     @State private var errorMessage: String?
+    /// The investigation's controls are in the side column (the iPhone Duo opened).
+    @Environment(\.investigationRail) private var rail
+    @State private var call = CallAndResponse()
+    @State private var flashlight = Flashlight()
+    @State private var notice = RailNotice()
+    /// Typing the question while it is asked, where the phone can do it with no connection.
+    @AppStorage("fieldkit.type-questions") private var typeQuestions = true
 
     /// Room under the scrolling content for the pinned bar, so nothing ends up behind it.
     private static let barClearance: CGFloat = 96
+    /// The narrowest pane that gets the instruments and the controls side by side.
+    private static let twoColumnWidth: CGFloat = 760
+    /// One column on a wide pane stays a phone's width rather than stretching edge to edge.
+    private static let oneColumnWidth: CGFloat = 560
 
     private var store: FieldSessionStore { dependencies.fieldKit }
     private var active: ActiveFieldSession? { store.active }
@@ -55,9 +66,18 @@ struct LiveSessionView: View {
         // underneath the bar and a tap aimed at Mark landed on Stop — a mis-tap in the dark
         // that ends a recording. A stack cannot get this wrong.
         VStack(spacing: 0) {
+            if let active, active.sessionId == sessionId {
+                CallAndResponseBanner(call: call, session: active)
+                    .padding(.horizontal, 16)
+                    .padding(.top, 8)
+            }
             panel
             stopBarIfActive
         }
+            // Over the reading count in the bottom bar: at the top it covered the run time.
+            .overlay(alignment: .bottomLeading) {
+                RailNoticeView(notice: notice).padding(.leading, 12).padding(.bottom, 14)
+            }
             .background(Theme.ink)
             .navigationTitle(summary?.title ?? "Session")
             .navigationBarTitleDisplayMode(.inline)
@@ -72,6 +92,9 @@ struct LiveSessionView: View {
             .sheet(isPresented: $askingForNote) { noteComposer }
             .permissionRefusedAlert($refusedPermission)
             .sheet(isPresented: $choosingRoom) { roomSheet }
+            .onChange(of: store.active?.isRecording) { _, recording in
+                if recording != true { Task { await call.reset(dictation: dictation) } }
+            }
             .alert("Couldn't stop the session",
                    isPresented: Binding(get: { errorMessage != nil },
                                         set: { if !$0 { errorMessage = nil } })) {
@@ -140,6 +163,9 @@ struct LiveSessionView: View {
                 }
                 applyBlackout(false)
                 UIApplication.shared.isIdleTimerDisabled = false
+                flashlight.off()
+                let call = call, dictation = dictation
+                Task { await call.reset(dictation: dictation) }
             }
             .task { await bringUp() }
     }
@@ -151,22 +177,31 @@ struct LiveSessionView: View {
             // sits UNDER the bar, and a tap aimed at the last control lands on Stop instead —
             // which is how a test aiming for "Mark" ended the session. In the field that is
             // somebody losing a recording to a mis-tap in the dark.
-            if sizeClass == .regular {
-                HStack(alignment: .top, spacing: 20) {
-                    ScrollView {
-                        instruments(active).frame(maxWidth: 420).padding(.bottom, Self.barClearance)
-                    }
-                    ScrollView { controls(active).padding(.bottom, Self.barClearance) }
-                }
-                .padding(.horizontal, 16)
-            } else {
-                ScrollView {
-                    VStack(spacing: 18) {
-                        instruments(active)
-                        controls(active)
+            //
+            // Two columns only when there is room for two. "Regular" width alone is not enough: the
+            // iPhone Duo opened, with the sidebar showing, is regular but leaves this pane about
+            // 630 points, and two columns there broke the run time onto two lines and wrapped
+            // every button (10/15/2026). Below the threshold it is the phone's single column.
+            GeometryReader { space in
+                if sizeClass == .regular && space.size.width >= Self.twoColumnWidth {
+                    HStack(alignment: .top, spacing: 20) {
+                        ScrollView {
+                            instruments(active).frame(maxWidth: 420).padding(.bottom, Self.barClearance)
+                        }
+                        ScrollView { controls(active).padding(.bottom, Self.barClearance) }
                     }
                     .padding(.horizontal, 16)
-                    .padding(.bottom, Self.barClearance)
+                } else {
+                    ScrollView {
+                        VStack(spacing: 18) {
+                            instruments(active)
+                            controls(active)
+                        }
+                        .padding(.horizontal, 16)
+                        .padding(.bottom, Self.barClearance)
+                        .frame(maxWidth: Self.oneColumnWidth)
+                        .frame(maxWidth: .infinity)
+                    }
                 }
             }
         } else if summary != nil {
@@ -186,13 +221,113 @@ struct LiveSessionView: View {
         if let active, active.sessionId == sessionId { stopBar(active) }
     }
 
+    private var dictation: DictationService? { store.sensors().dictation }
+
     @ToolbarContentBuilder
     private var toolbarItems: some ToolbarContent {
+        if rail, let active, active.sessionId == sessionId {
+            railItems(active)
+        }
         ToolbarItem(placement: .primaryAction) {
             Button { showingSettings = true } label: {
                 Image(systemName: "slider.horizontal.3")
             }
             .accessibilityLabel("Levels")
+        }
+    }
+
+    /// The investigation's controls, in the order they are reached for. Mark, Note and the base keep the
+    /// identifiers of the page buttons they replace, so anything driving the screen finds them either way. On the iPhone Duo opened,
+    /// iOS stacks these down the side column. Stop stays alone in the bar at the bottom, away from
+    /// them, so a mis-tap in the dark can't end a recording.
+    /// "00:01:23" since the session started, for the notice a mark leaves.
+    private func runTime(_ active: ActiveFieldSession) -> String {
+        let seconds = max(0, Int(Date.now.timeIntervalSince(active.startedAt)))
+        return String(format: "%02d:%02d:%02d", seconds / 3600, seconds / 60 % 60, seconds % 60)
+    }
+
+    @ToolbarContentBuilder
+    private func railItems(_ active: ActiveFieldSession) -> some ToolbarContent {
+        if active.isRecording {
+            ToolbarItem(placement: .primaryAction) {
+                Button {
+                    Task {
+                        await active.mark(kind: .manual)
+                        notice.show("Marked at \(runTime(active))")
+                    }
+                } label: {
+                    Image(systemName: "flag")
+                }
+                .accessibilityLabel("Mark this moment")
+                .accessibilityIdentifier("mark-now")
+            }
+            ToolbarItem(placement: .primaryAction) {
+                // A menu, not a confirmation dialog: the dialog drew the choices in violet on translucent
+                // gray, which couldn't be read on the opened Duo (Ben, 10/15/2026). A menu draws them in
+                // the system's own readable text, each with its picture.
+                Menu {
+                    Section("What happened?") {
+                        ForEach(Experience.allCases) { experience in
+                            Button {
+                                Task {
+                                    await active.mark(kind: .manual, note: experience.rawValue)
+                                    notice.show("Logged: \(experience.rawValue)")
+                                }
+                            } label: {
+                                Label(experience.rawValue, systemImage: experience.symbol)
+                            }
+                        }
+                    }
+                    Button { askingForNote = true } label: {
+                        Label("Something else…", systemImage: "square.and.pencil")
+                    }
+                } label: {
+                    Image(systemName: "hand.raised")
+                }
+                .accessibilityLabel("Log an experience")
+                .accessibilityIdentifier("rail-experience")
+            }
+            ToolbarItem(placement: .primaryAction) {
+                Button {
+                    Task { await call.press(session: active, dictation: dictation, typeQuestions: typeQuestions) }
+                } label: {
+                    Image(systemName: call.phase == .asking ? "mic.fill" : call.phase == .listening ? "ear" : "mic")
+                        .foregroundStyle(call.phase == .asking ? Theme.danger : Theme.ecto)
+                }
+                .accessibilityLabel(call.phase == .asking ? "Done asking, listen for an answer"
+                                    : call.phase == .listening ? "Ask the next question" : "Ask a question")
+                .accessibilityIdentifier("rail-ask")
+            }
+            ToolbarItem(placement: .primaryAction) {
+                Button { askingForNote = true } label: { Image(systemName: "square.and.pencil") }
+                    .accessibilityLabel("Note")
+                    .accessibilityIdentifier("open-note")
+            }
+        }
+        ToolbarItem(placement: .primaryAction) {
+            Button { choosingRoom = true } label: { Image(systemName: "door.left.hand.open") }
+                .accessibilityLabel("Change room")
+                .accessibilityIdentifier("rail-room")
+        }
+        ToolbarItem(placement: .primaryAction) {
+            Button {
+                let wasSet = active.baselines.isSet
+                Task {
+                    await active.setBaselines()
+                    notice.show(wasSet ? "Base reset" : "Base set")
+                }
+            } label: { Image(systemName: "target") }
+                .accessibilityLabel(active.baselines.isSet ? "Reset the base" : "Set the base")
+                .accessibilityIdentifier("set-base-level")
+        }
+        if flashlight.isAvailable {
+            ToolbarItem(placement: .primaryAction) {
+                Button { flashlight.toggle() } label: {
+                    Image(systemName: flashlight.isOn ? "flashlight.on.fill" : "flashlight.off.fill")
+                }
+                .accessibilityLabel(flashlight.isOn ? "Turn the flashlight off" : "Turn the flashlight on")
+                .accessibilityIdentifier("rail-flashlight")
+            }
         }
     }
 
@@ -438,7 +573,7 @@ struct LiveSessionView: View {
         }
         .padding(.horizontal, 16)
         .padding(.vertical, 10)
-        // Signal's card colour with a hairline above, not the system's grey bar.
+        // Signal's card color with a hairline above, not the system's gray bar.
         .background(Theme.mist)
         .overlay(alignment: .top) { Rectangle().fill(Theme.fog.opacity(0.25)).frame(height: 0.5) }
     }
@@ -530,6 +665,7 @@ struct LiveSessionView: View {
     @ViewBuilder
     private func controls(_ active: ActiveFieldSession) -> some View {
         VStack(spacing: 14) {
+            if !rail {
             HStack(spacing: 12) {
                 Button {
                     Task { await active.setBaselines() }
@@ -580,7 +716,9 @@ struct LiveSessionView: View {
                     .buttonStyle(.signalSecondary)
                     .accessibilityIdentifier("open-evp")
                 }
-
+            }
+            }
+            if active.isRecording {
                 FieldCaptureBar(session: active, camera: camera)
             }
 
@@ -722,6 +860,7 @@ private struct LevelsSheet: View {
     @State private var reportAtMilligauss: Double = 20
     @State private var reportAtDecibels: Double = 12
     @State private var debounceSeconds: Double = 3
+    @AppStorage("fieldkit.type-questions") private var typeQuestions = true
 
     var body: some View {
         NavigationStack {
@@ -742,6 +881,12 @@ private struct LevelsSheet: View {
                     Text("Base level")
                 } footer: {
                     Text("What this room reads when nothing is happening. Everything is measured against it — an absolute field reading means nothing on its own, because the Earth alone is around 500 mG.")
+                }
+
+                Section {
+                    Toggle("Type my questions as I ask them", isOn: $typeQuestions)
+                } footer: {
+                    Text("When you ask a question with the microphone button, the phone writes down what you say until you press it again to listen. It happens on this phone; nothing is sent anywhere.")
                 }
 
                 Section {

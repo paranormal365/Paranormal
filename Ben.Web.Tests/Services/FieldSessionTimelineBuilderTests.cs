@@ -143,6 +143,36 @@ public sealed class FieldSessionTimelineBuilderTests
     // ── Markers (M1) ────────────────────────────────────────────────────────────
 
     [Fact]
+    public void Details_added_after_the_session_reach_their_mark_and_nothing_else()
+    {
+        // The package carries them beside the readings (10/15/2026), naming the mark by moment and kind.
+        var node = System.Text.Json.Nodes.JsonNode.Parse(Document(Fixture("media")))!;
+        var mark = node["readings"]!.AsArray()
+            .First(r => r!["measurements"]?["marker"]?["value"]?.GetValue<string>() == "manual_marker")!;
+        node["mark_details"] = new System.Text.Json.Nodes.JsonArray(
+            new System.Text.Json.Nodes.JsonObject
+            {
+                ["at"] = mark["at"]!.GetValue<string>(),
+                ["marker"] = "manual_marker",
+                ["details"] = " Left side of the stairs, about ten seconds. ",
+                ["added_at"] = "2026-10-15T22:00:00Z",
+            },
+            // Names a moment no mark has: ignored, not attached to the nearest one.
+            new System.Text.Json.Nodes.JsonObject
+            {
+                ["at"] = "2001-01-01T00:00:00Z", ["marker"] = "manual_marker", ["details"] = "stray",
+            });
+
+        var timeline = FieldSessionTimelineBuilder.Build(node.ToJsonString(), MediaFiles(), TimelinePositionPolicy.Exact);
+
+        var marked = timeline.Markers.Single(m => m.Kind == "manual_marker");
+        Assert.Equal("Left side of the stairs, about ten seconds.", marked.Details);
+        Assert.Equal(new DateTime(2026, 10, 15, 22, 0, 0, DateTimeKind.Utc), marked.DetailsAddedAt?.ToUniversalTime());
+        Assert.Equal("footsteps upstairs", marked.Note);   // the moment's own words, untouched
+        Assert.All(timeline.Markers.Where(m => m.Kind != "manual_marker"), m => Assert.Null(m.Details));
+    }
+
+    [Fact]
     public void Captures_are_not_markers_and_each_marker_has_its_title()
     {
         var timeline = FieldSessionTimelineBuilder.Build(Document(Fixture("media")), MediaFiles(), TimelinePositionPolicy.Exact);

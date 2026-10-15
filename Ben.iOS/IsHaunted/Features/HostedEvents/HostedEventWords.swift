@@ -1,7 +1,7 @@
 import SwiftUI
 import BenKit
 
-/// How a hosted booking's state is said and coloured — one place, so the list, the event screen and the pass agree.
+/// How a hosted booking's state is said and colored — one place, so the list, the event screen and the pass agree.
 enum HostedEventWords {
     static func status(_ booking: MyHostedEventBooking) -> (text: String, colour: Color) {
         switch booking.status {

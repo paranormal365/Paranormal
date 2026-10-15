@@ -342,6 +342,13 @@
                                     {
                                         <span class="text-muted small">@marker.Note</span>
                                     }
+                                    @if (!string.IsNullOrWhiteSpace(marker.Details))
+                                    {
+                                        @* Written by the investigator after the session, before sending it; read-only here. *@
+                                        <div class="small w-100 mt-1" data-testid="marker-details">
+                                            <span class="text-secondary">Added after the session:</span> @marker.Details
+                                        </div>
+                                    }
                                 </li>
                             }
                         </ul>

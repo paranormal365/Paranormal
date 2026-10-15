@@ -52,16 +52,22 @@ public struct FieldMarkerRecord: Sendable, Equatable, Identifiable {
     public var longitude: Double?
     public var audioFilename: String?
     public var audioOffsetSeconds: Double?
+    /// Added after the session, before it was sent; nil until then.
+    public var details: String?
+    public var detailsAddedAt: Date?
 
     public init(id: UUID = UUID(), at: Date, kind: MarkerKind, note: String? = nil,
                 room: String? = nil,
                 magneticMicrotesla: Double? = nil, soundDbfs: Double? = nil,
                 latitude: Double? = nil, longitude: Double? = nil,
-                audioFilename: String? = nil, audioOffsetSeconds: Double? = nil) {
+                audioFilename: String? = nil, audioOffsetSeconds: Double? = nil,
+                details: String? = nil, detailsAddedAt: Date? = nil) {
         self.id = id
         self.at = at
         self.kind = kind
         self.note = note
+        self.details = details
+        self.detailsAddedAt = detailsAddedAt
         self.room = room
         self.magneticMicrotesla = magneticMicrotesla
         self.soundDbfs = soundDbfs

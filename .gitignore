@@ -164,3 +164,7 @@ docs/.print-media/
 
 # Ad actors (cast, rig, SVG poses): kept for reuse, deliberately untracked
 docs/ads/actors/
+
+# Working material for the App Store pages: every capture run's frames and screen recordings (1 GB+).
+# Rebuilt by Ben.iOS/scripts/capture-store-pages.sh; the finished pages beside it are kept.
+Ben.iOS/screenshots-*/raw/

@@ -6,7 +6,7 @@ import SwiftUI
 /// site's `.btn-primary`, and the one thing on a screen that should look pressed. Secondary: a
 /// capsule outline with the words in the accent — the site's outline buttons.
 ///
-/// A button that means something other than "go" keeps its own colour and the system style: the
+/// A button that means something other than "go" keeps its own color and the system style: the
 /// live session's red Stop and green Start, EVP mode's amber "waiting". A gradient there would say
 /// "the main action" about a button that is saying "careful".
 struct SignalPrimaryButtonStyle: ButtonStyle {

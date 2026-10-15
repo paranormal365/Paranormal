@@ -76,7 +76,7 @@ struct NotificationsView: View {
     }
 }
 
-/// One waiting item. Colour comes from AGE, never count — see `NotificationUrgency`.
+/// One waiting item. Color comes from AGE, never count — see `NotificationUrgency`.
 struct NotificationRowView: View {
     let row: NotificationRow
     let onOpen: () -> Void

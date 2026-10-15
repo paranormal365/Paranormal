@@ -36,9 +36,18 @@ struct SessionReviewView: View {
     @State private var choosingPhoto = false
     /// What the place's archive says about this night. Nil until asked, or when it has nothing.
     @State private var insights: SessionInsights?
+    /// The mark whose details are being written.
+    @State private var detailing: FieldMarkerRecord?
 
     private var store: FieldSessionStore { dependencies.fieldKit }
     private var summary: FieldSessionSummary? { store.summary(for: sessionId) }
+
+    /// Marks can have details added until the session is sent, and only on the phone that recorded it
+    /// (Ben, 10/15/2026). Text only: nothing else can be added to a session once it has ended.
+    private var canAddDetails: Bool {
+        guard let summary else { return false }
+        return !summary.isUploaded && !summary.isImported && !summary.isPublicArchiveCopy && !summary.isOpen
+    }
 
     /// Recorded on this phone and ended in the last hour — the review somebody lands on straight
     /// from Stop, which is where the next session is most likely wanted.
@@ -142,6 +151,12 @@ struct SessionReviewView: View {
         }
         .sheet(isPresented: $choosingPhoto) {
             PropertyPhotosView(sessionId: sessionId).environment(dependencies)
+        }
+        .sheet(item: $detailing) { marker in
+            MarkDetailsSheet(marker: marker, startedAt: replay.timeline.startedAt) { text in
+                try store.addDetails(sessionId, toMarker: marker.id, text)
+                await load()
+            }
         }
         .onChange(of: replay.frame) { _, frame in followMedia(frame) }
         .overlay {
@@ -542,6 +557,11 @@ struct SessionReviewView: View {
                                     Text(note).font(.caption2).foregroundStyle(Theme.fog)
                                         .lineLimit(2)
                                 }
+                                if let details = marker.details {
+                                    Text("Added after the session: \(details)")
+                                        .font(.caption2).foregroundStyle(Theme.bone)
+                                        .accessibilityIdentifier("marker-details")
+                                }
                             }
                             Spacer()
                             Text(SessionClock.elapsed(from: replay.timeline.startedAt, to: marker.at))
@@ -557,6 +577,12 @@ struct SessionReviewView: View {
                     .accessibilityAddTraits(current ? .isSelected : [])
                     .accessibilityValue(current ? "now" : "")
                     .accessibilityIdentifier("replay-marker-row")
+                    if canAddDetails && marker.kind.takesDetails {
+                        Button(marker.details == nil ? "Add details" : "Change details") { detailing = marker }
+                            .font(.caption2.weight(.semibold))
+                            .padding(.leading, 30)
+                            .accessibilityIdentifier("add-marker-details")
+                    }
                 }
             }
         }

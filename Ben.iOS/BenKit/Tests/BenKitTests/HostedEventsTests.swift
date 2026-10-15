@@ -131,6 +131,8 @@ struct HostedEventsTests {
 
     @Test func myEventsLinksLandOnTheirScreens() {
         #expect(DeepLinkParser.parse(URL(string: "https://ishaunted.com/my-events")!) == .myEvents)
+        // An In-App Event card that opens the Paranormal Platform (10/15/2026).
+        #expect(DeepLinkParser.parse(URL(string: "ishaunted://paranormal")!) == .paranormal)
         #expect(DeepLinkParser.parse(URL(string: "ishaunted://my-events/\(Self.eventId.uuidString)/pass")!)
                 == .eventPass(Self.eventId))
         // A shape with no screen falls back to the list rather than to nowhere.

@@ -193,7 +193,8 @@ public final class FieldSessionStore {
                     magneticMicrotesla: marker.emfMicrotesla, soundDbfs: marker.soundDbfs,
                     latitude: marker.latitude, longitude: marker.longitude,
                     audioFilename: marker.audioFilename,
-                    audioOffsetSeconds: marker.audioOffsetSeconds)
+                    audioOffsetSeconds: marker.audioOffsetSeconds,
+                    details: marker.details, detailsAddedAt: marker.detailsAddedAt)
             }
 
         // Only timed media can sit on a timeline. A photo is an instant, not a stretch, so it
@@ -279,7 +280,7 @@ public final class FieldSessionStore {
             throw FieldSessionError.unavailable
         }
 
-        let request = DeviceDataExporter.Request(
+        var request = DeviceDataExporter.Request(
             sessionId: id,
             startedAt: session.startedAt,
             endedAt: session.endedAt,
@@ -291,6 +292,7 @@ public final class FieldSessionStore {
             includedMedia: includedMedia,
             recordedByAccountId: session.recordedByAccountId ?? recordedByAccountId,
             deviceId: session.sourceDeviceId ?? DeviceModel.vendorIdentifier())
+        request.markDetails = markDetails(for: id)
 
         // Into the scratch directory, not the session's own: the bundle is a copy made to be
         // handed over, and the session keeps everything it had.
@@ -354,7 +356,8 @@ public final class FieldSessionStore {
             for reading in opened.envelope.readings { try await log.append(reading) }
             try await log.close()
 
-            let rebuilt = SessionImporter.rebuild(from: opened.envelope.readings)
+            let rebuilt = SessionImporter.rebuild(from: opened.envelope.readings,
+                                                  markDetails: opened.envelope.markDetails ?? [])
 
             // A clip whose reading carried no length gets it from the file — the same rule the
             // capture bar applies when the camera hands one over.
@@ -399,6 +402,8 @@ public final class FieldSessionStore {
                     audioOffsetSeconds: marker.audioOffsetSeconds,
                     emfMicrotesla: marker.magneticMicrotesla, soundDbfs: marker.soundDbfs,
                     latitude: marker.latitude, longitude: marker.longitude, room: marker.room)
+                stored.details = marker.details
+                stored.detailsAddedAt = marker.detailsAddedAt
                 context.insert(stored)
                 stored.session = row
             }
@@ -689,6 +694,38 @@ public final class FieldSessionStore {
         load()
     }
 
+    /// Adds to what a mark says, after the session (Ben, 10/15/2026). The mark's own time, kind and
+    /// words stay as recorded; this text is kept beside them with when it was written. Empty text
+    /// takes the details away again.
+    ///
+    /// **Only before the session is sent.** Once it has gone to the website the package there is
+    /// the record, and a different version on the phone would contradict it. A copy opened from a
+    /// file or from a public place is somebody else's record and refuses too.
+    public func addDetails(_ id: UUID, toMarker markerId: UUID, _ text: String) throws {
+        guard let context else { throw FieldSessionError.unavailable }
+        guard let session = try fetch(id, in: context) else { throw FieldSessionError.sessionMissing }
+        guard session.uploadedAt == nil else { throw FieldSessionError.alreadySent }
+        guard session.importedAt == nil, session.isPublicArchiveCopy != true else {
+            throw FieldSessionError.notYours
+        }
+        guard let marker = session.markers.first(where: { $0.id == markerId }) else { return }
+        let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        marker.details = trimmed.isEmpty ? nil : trimmed
+        marker.detailsAddedAt = trimmed.isEmpty ? nil : now()
+        try context.save()
+        load()
+    }
+
+    /// The details added to a session's marks, for its package.
+    public func markDetails(for id: UUID) -> [DeviceDataEnvelope.MarkDetails] {
+        guard let context, let session = try? fetch(id, in: context) else { return [] }
+        return session.markers
+            .filter { $0.details != nil }
+            .sorted { $0.at < $1.at }
+            .map { .init(at: $0.at, marker: $0.kindRaw, details: $0.details ?? "",
+                         addedAt: $0.detailsAddedAt ?? $0.at) }
+    }
+
     public func rename(_ id: UUID, locationLabel: String?) throws {
         guard let context else { throw FieldSessionError.unavailable }
         guard let session = try fetch(id, in: context) else { return }
@@ -792,6 +829,12 @@ public enum FieldSessionError: Error, LocalizedError, Equatable {
     /// The bundle's seal no longer describes its contents: bytes lost in transit, or changed.
     case bundleTampered
 
+    /// A mark was changed on a session that has already been sent.
+    case alreadySent
+
+    /// A mark was changed on a session opened from someone else's file or a public place.
+    case notYours
+
     public var errorDescription: String? {
         switch self {
         case .unavailable: "Field sessions can't be stored on this device."
@@ -800,6 +843,10 @@ public enum FieldSessionError: Error, LocalizedError, Equatable {
             "\"\(title)\" is already on this phone. Delete that copy first if you want this one instead."
         case .notASessionBundle(let reason):
             "That isn't a session file this app can open: \(reason)"
+        case .alreadySent:
+            "This session has been sent, so its marks can't be changed. What you sent is the record."
+        case .notYours:
+            "This session was recorded by someone else, so its marks can't be changed here."
         case .bundleTampered:
             "This file doesn't match its own seal — some of it was lost or changed on the way here. "
             + "Ask for it to be sent again."

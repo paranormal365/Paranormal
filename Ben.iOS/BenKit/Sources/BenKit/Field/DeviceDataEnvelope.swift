@@ -11,18 +11,49 @@ public struct DeviceDataEnvelope: Codable, Sendable, Equatable {
     public var session: Session
     /// Empty in the envelope itself; the exporter writes the real array by splicing log lines.
     public var readings: [FieldReading]
+    /// What was added to marks after the session, before it was sent (Ben, 10/15/2026). Beside the
+    /// readings rather than in them: the readings are written once, during the session, and sent
+    /// byte for byte as recorded. Each entry names its mark by the mark's moment and kind. Left out
+    /// of the document entirely when nothing was added.
+    public var markDetails: [MarkDetails]?
 
     public init(formatVersion: String = "1.0.0",
-                device: Device, session: Session, readings: [FieldReading] = []) {
+                device: Device, session: Session, readings: [FieldReading] = [],
+                markDetails: [MarkDetails]? = nil) {
         self.formatVersion = formatVersion
         self.device = device
         self.session = session
         self.readings = readings
+        self.markDetails = markDetails
     }
 
     private enum CodingKeys: String, CodingKey {
         case formatVersion = "format_version"
         case device, session, readings
+        case markDetails = "mark_details"
+    }
+
+    /// More about one mark, written after the session.
+    public struct MarkDetails: Codable, Sendable, Equatable {
+        /// The mark's own moment, the same as its reading's `at`.
+        public var at: Date
+        /// The mark's kind, the same as its reading's `marker` label ("manual_marker").
+        public var marker: String
+        public var details: String
+        /// When this was written.
+        public var addedAt: Date
+
+        public init(at: Date, marker: String, details: String, addedAt: Date) {
+            self.at = at
+            self.marker = marker
+            self.details = details
+            self.addedAt = addedAt
+        }
+
+        private enum CodingKeys: String, CodingKey {
+            case at, marker, details
+            case addedAt = "added_at"
+        }
     }
 
     /// Identifies the INSTRUMENT, not the operator. An unattributed reading cannot be assessed

@@ -167,8 +167,8 @@ struct EventDetailView: View {
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .padding()
-        // Mist, the app's own panel colour. Haunt is an ACCENT — used as a background it came out
-        // a bright purple with grey text on it, which is what the first build of this looked like.
+        // Mist, the app's own panel color. Haunt is an ACCENT — used as a background it came out
+        // a bright purple with gray text on it, which is what the first build of this looked like.
         .background(Theme.mist, in: RoundedRectangle(cornerRadius: 12))
     }
 
