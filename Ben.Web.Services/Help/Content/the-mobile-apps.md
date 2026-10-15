@@ -30,6 +30,11 @@ your iPhone's camera does the same.*
 using screens from the app itself: Field Kit, marking and watching, playing a night back, and events
 and the door.
 
+**Is mine the newest?** Profile shows which version you have, under **App**, and checks whether a
+newer one is in the App Store each time you open it. When there is, it says what changed and
+**Update in the App Store** takes you straight there. **Check for updates** asks again. If the new
+version needs a newer iOS than your phone has, it says so, so you know to update iOS first.
+
 ## What you need an account for — and what you don't
 
 Reading the feed and browsing public events need **no account at all**, just like on the website.
@@ -728,7 +733,7 @@ here.
 
 **The event** on What I'm going to (or **Program and room** on a confirmed booking) opens everything
 for that event in one place. A row only appears when there's something in it: if there's no program
-yet, or the venue hasn't shared menus with you, they simply aren't listed. If the hosts have
+yet, or no menus are published, they simply aren't listed. If the hosts have
 explained how to get in and get around — stairs, a step-free entrance, parking, low light — it's
 under **Getting in and getting around**.
 
@@ -739,7 +744,11 @@ under **Getting in and getting around**.
   session is full, you go on its waiting list and it tells you your place in line; if there aren't
   enough places left for your whole party, it says that too. **Give up** or **Leave** passes your
   place to the next person. The calendar button at the top adds the whole program to your calendar.
-- **Menus** — each meal with its time, course by course, with the venue's dietary labels.
+- **Menus** — each menu looks the way the hosts designed it, just as on the website: when it's
+  served, its price, what the event covers, and the marks on each dish. **PDF** opens the same PDF
+  the website gives, to save or share. Anyone can see published menus, without signing in: they're
+  also on the event's own page in the app, under **See the menus**, with what the event's price
+  includes.
 - **Downloads** — the files the organizers share with guests. Tap one to open it, and share it from
   there.
 - **The room** — what people at the event are posting. Press the pencil to write a post, or to add
@@ -751,7 +760,7 @@ under **Getting in and getting around**.
 
 ![The program, with a place signed up for and a party waiting](/help/media/the-mobile-apps/iphone-event-programme.png)
 
-![A menu, course by course](/help/media/the-mobile-apps/iphone-event-menus.png)
+![A menu, drawn in the look the hosts chose](/help/media/the-mobile-apps/iphone-event-menus.png)
 
 ![The room, with a photo posted from the phone](/help/media/the-mobile-apps/iphone-event-room.png)
 
