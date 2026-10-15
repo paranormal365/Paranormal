@@ -30,6 +30,10 @@ it is hidden from everybody else, but still takes its number. No other sub-headi
 
 **Tracked from 10/14/2026.** 1.0.0 is the editor as it stood then, summarized.
 
+## Unreleased
+
+- The browser tab shows the IsHaunted icon.
+
 ## 1.0.0 · 2026-10-01
 
 - A full editing suite in the browser, under **My Videos** and on a case's Video tab, and as a

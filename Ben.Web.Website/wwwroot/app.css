@@ -566,17 +566,6 @@ blockquote strong, blockquote b,
     --ben-placeholder-color: rgba(255, 255, 255, .55);   /* the site-wide placeholder rule reads this, !important */
 }
 
-/* ── The brand on a phone's light header ─────────────────────────────────────
-   Below 992px the brand sits on the header's own ground rather than the navigation's, and in light mode that ground is
-   white — the mark is a pale ghost drawn for a dark backdrop, so it read as a faint outline. It gets the navigation's
-   colour behind it, as it has beside the sidebar on a wide screen (UI test pass, 2026-09-14). */
-html:not([data-bs-theme="dark"]) .ben-mark-on-light {
-    /* The same answer for the mark wherever it stands on a light card — the sign-in page's, found the same day. */
-    background-color: var(--app-nav-bg, #2f3849);
-    border-radius: 50%;
-    padding: 6px;
-}
-
 @media (max-width: 991.98px) {
     /* Only a mark standing straight on the bar. The Signal lockup sets it in a gradient tile and turns it
        white, and this backing turned white with it: on a phone in the light theme the logo was a white

@@ -33,6 +33,10 @@ day-by-day account of building it would say nothing to anyone using it now.
 
 ## Unreleased
 
+- The site's icon is now the app's icon, the violet ghost, and the ghost has its face again: in the
+  browser tab, on a phone's home screen, at the top of every email, beside the site's name, on the
+  sign-in page and in the app section of the home page. The App Store QR codes and the guides and
+  flyers show it too.
 - Field Kit is now called the Paranormal Platform, and the site's tagline reads “The Paranormal
   Platform”.
 - Field sessions play back more smoothly and in step with the clock: Play starts at once, and the

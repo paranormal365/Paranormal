@@ -30,6 +30,10 @@ it is hidden from everybody else, but still takes its number. No other sub-headi
 
 **Tracked from 10/14/2026.** 1.0.0 is the boards as they stood then, summarized.
 
+## Unreleased
+
+- The browser tab shows the IsHaunted icon.
+
 ## 1.0.0 · 2026-09-18
 
 - A case's **Research** tab holds its boards: cards, notes, pictures, files, recordings, links and
