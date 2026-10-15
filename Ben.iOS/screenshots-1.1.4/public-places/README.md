@@ -11,5 +11,7 @@ Owners of haunted sites open to the public, and the people who visit them.
 | 3 | `11-fieldkit-live-excursion.png` | Record your visit. |
 | 4 | `55-publish-to-archive.png` | Add your night to the place. |
 | 5 | `01-home.png` | Found by people looking nearby. |
+| 6 | `13-fieldkit-review.png` | Play the night back. |
+| 7 | `12-fieldkit-marks.png` | Every mark, right where it happened. |
 
 Header and search images: `../../creative-assets/public-places/`.
