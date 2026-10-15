@@ -141,6 +141,11 @@ SILENT="$OUT/app-preview/$DEVICE_KIND-preview.mp4"
 # App Review refused a preview with NO audio stream at all ("unsupported or corrupted audio",
 # 2026-09-09), so a silent track is not optional. -c:v copy keeps the captured picture untouched.
 FFMPEG=../Ben.Video.Sidecar/ffmpeg/osx-arm64/ffmpeg
+# The binary is gitignored, so a worktree has none: use the main checkout's (1.1.4, 10/14/2026 —
+# the set captured and the preview stopped at "command not found").
+if [[ ! -x "$FFMPEG" ]]; then
+  FFMPEG="$(git worktree list --porcelain | sed -n '1s/^worktree //p')/Ben.Video.Sidecar/ffmpeg/osx-arm64/ffmpeg"
+fi
 "$FFMPEG" -y -i /tmp/cut-$DEVICE_KIND.mp4 -f lavfi -i anullsrc=channel_layout=stereo:sample_rate=44100 \
   -c:v copy -c:a aac -b:a 128k -shortest -movflags +faststart "$SILENT" 2>/dev/null
 

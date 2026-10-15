@@ -63,9 +63,23 @@ public sealed class StoreShotsArrange : BenTestBase
         // The SuperAdmin's own leftovers ("posted from elsewhere #ta…") are not a seeded account's,
         // so the page above will not touch them. Reported by the member and hidden from the report,
         // as HelpMediaCapture clears the feed — except the session cards, which are the product.
+        //
+        // Every page, not the first: the iPad's taller feed scrolled past the four store posts onto
+        // two of these from weeks earlier, which the first page did not reach (1.1.4, 10/14/2026).
         var member = await ApiAsAsync(MemberEmail, MemberPassword);
-        var page = await admin.GetAsync("/api/feed?mode=all");
-        foreach (var post in (await page.JsonAsync())!.Value.GetProperty("posts").EnumerateArray())
+        var leftovers = new List<JsonElement>();
+        string? cursor = null;
+        for (var pages = 0; pages < 20; pages++)
+        {
+            var page = await admin.GetAsync("/api/feed?mode=all"
+                + (cursor is null ? "" : "&cursor=" + Uri.EscapeDataString(cursor)));
+            var json = (await page.JsonAsync())!.Value;
+            leftovers.AddRange(json.GetProperty("posts").EnumerateArray().Select(p => p.Clone()));
+            cursor = json.TryGetProperty("nextCursor", out var next) && next.ValueKind == JsonValueKind.String
+                ? next.GetString() : null;
+            if (cursor is null) break;
+        }
+        foreach (var post in leftovers)
         {
             var body = post.GetProperty("body").GetString() ?? "";
             if (post.GetProperty("authorDisplayName").GetString() != "AverageBen" || body.Contains("is starting now")) continue;

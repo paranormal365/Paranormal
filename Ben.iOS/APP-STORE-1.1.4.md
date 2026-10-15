@@ -11,7 +11,7 @@
 | Build | **13** (`CURRENT_PROJECT_VERSION`). The highest ever archived or uploaded was 12 (1.1.3). |
 | Replaces | 1.1.3 (12), in review since 10/14/2026 |
 | Server work first | **No.** Nothing here asks the API for anything new. |
-| Screenshots | **Yes, recapture.** Every store screenshot shows the tab bar, and its first tab now reads **Paranormal**. |
+| Screenshots | **Recaptured** in `screenshots-1.1.4/`: every store screenshot shows the tab bar, and its middle tab now reads **Paranormal**. |
 | Subtitle | **The Paranormal Platform** (23 of 30), replacing "Paranormal field investigation". |
 
 ## 1. What changed
@@ -39,8 +39,9 @@ once 1.1.3 is approved or rejected.
 
 1. **Before archiving:** run `scripts/build.sh` and then `scripts/warnings.sh`. Fix anything it lists
    (APP-STORE.md §5).
-2. **Recapture the store screenshots** for the new tab name: `scripts/capture-app-store-media.sh iphone 1.1.4`
-   and `… ipad 1.1.4`, with the local API running (see `screenshots/README`).
+2. **Store screenshots: done** (10/14), in `screenshots-1.1.4/` — nine frames per device and a preview
+   each, with **Paranormal** on the tab bar. Look through them once; `screenshots-1.1.4/README.md`
+   says what was left out and why.
 3. Product → **Archive** on the IsHaunted scheme. In Organizer, choose the **IsHaunted 1.1.4 (13)**
    archive, then **Distribute App** → App Store Connect → **Upload**. Leave "Manage version and build
    number" **off**.
