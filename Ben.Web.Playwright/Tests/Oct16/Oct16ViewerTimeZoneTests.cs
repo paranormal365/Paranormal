@@ -23,9 +23,9 @@ namespace Ben.Web.Playwright.Tests.Oct16;
 ///
 /// <para><b>What it cannot catch.</b> Pointed at a remote site (BEN_BASE_URL elsewhere), this
 /// machine's zone is not necessarily the server's; the test then proves the round trip in the
-/// viewer's zone but not that the server's zone stayed out of it. It also cannot see the old,
-/// already-saved rows the branch notes say stay an hour late — nothing on any screen can edit a
-/// case-less visit (see the report).</para>
+/// viewer's zone but not that the server's zone stayed out of it. Correcting the old,
+/// already-saved rows that stayed an hour late is Oct16CaselessVisitTests' job (fix/oct16-gaps
+/// added Edit for a visit with no case).</para>
 ///
 /// <para>Sarah (an administrator of Paranormal365) schedules. Her profile's own zone is set for the
 /// test and put back afterwards, because a saved zone outranks the browser's.</para>
@@ -156,14 +156,18 @@ public class Oct16ViewerTimeZoneTests : Oct16TestBase
 
         var dialog = await OpenTheScheduleWindowAsync();
 
-        // The line the branch added, naming the clock the boxes are typed on. It takes the letters
-        // of today, not of the visit (see the report), so today's are what it is held to.
+        // The line naming the clock the boxes are typed on. Since fix/oct16-gaps (gap 2) it reads
+        // the letters at the typed start, not today's: first the offered start (7:00 PM
+        // tomorrow), then the start typed below.
+        var offered = TimeZoneInfo.ConvertTimeFromUtc(DateTime.UtcNow, zone).Date.AddDays(1).AddHours(19);
         await Expect(Page.GetByTestId("newinvestigationwindow-zone"))
-            .ToHaveTextAsync($"Times are in your time zone ({Letters(viewerZone, DateTime.UtcNow)}).", new() { Timeout = 15_000 });
+            .ToHaveTextAsync($"Times are in your time zone ({Letters(viewerZone, UtcFrom(offered, viewerZone))}).", new() { Timeout = 15_000 });
 
         await dialog.Locator("#newinvestigationwindow-title-48f3").FillAsync(title);
         await TypeIntoAsync(dialog.Locator("#newinvestigationwindow-when-60b5"), $"{day:MM/dd/yyyy} 07:00 PM");
         await Expect(dialog.Locator("#newinvestigationwindow-when-60b5")).ToHaveValueAsync($"{day:MM/dd/yyyy} 07:00 PM");
+        await Expect(Page.GetByTestId("newinvestigationwindow-zone"))
+            .ToHaveTextAsync($"Times are in your time zone ({letters}).", new() { Timeout = 10_000 });
         await dialog.Locator("#newinvestigationwindow-ends-7c31").FillAsync("07:00");
 
         // An existing landmark, chosen from "this place may already be on file", so no run makes a

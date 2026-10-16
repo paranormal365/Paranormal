@@ -124,6 +124,102 @@ public abstract class Oct16TestBase : BenTestBase
         => TimeZoneInfo.ConvertTimeToUtc(DateTime.SpecifyKind(wallClock, DateTimeKind.Unspecified),
                                          TimeZoneInfo.FindSystemTimeZoneById(ianaZone));
 
+    /// <summary>A UTC instant on a zone's wall clock.</summary>
+    protected static DateTime WallClockIn(DateTime utc, string ianaZone)
+        => TimeZoneInfo.ConvertTimeFromUtc(DateTime.SpecifyKind(utc, DateTimeKind.Utc),
+                                           TimeZoneInfo.FindSystemTimeZoneById(ianaZone));
+
+    /// <summary>A date as the site's date boxes hold it: 10/16/2026.</summary>
+    protected static string BoxDate(DateTime day)
+        => day.ToString("MM/dd/yyyy", System.Globalization.CultureInfo.InvariantCulture);
+
+    /// <summary>A date and time as the site's date-and-time boxes hold it: 10/16/2026 07:00 PM.</summary>
+    protected static string BoxDateTime(DateTime wallClock)
+        => wallClock.ToString("MM/dd/yyyy hh:mm tt", System.Globalization.CultureInfo.InvariantCulture);
+
+    // ── Visits with no case (fix/oct16-gaps) ────────────────────────────────
+
+    /// <summary>
+    /// A visit with no case at Bell Witch Cave, kept to the group where the plan allows it. The
+    /// caller deletes it with <see cref="DeleteVisitAsync"/>, which the API allows since
+    /// fix/oct16-gaps.
+    /// </summary>
+    protected static async Task<string> CaselessVisitAsync(
+        IAPIRequestContext api, string orgId, string title, DateTime startUtc, DateTime endUtc)
+    {
+        // GroupOnly = 1 keeps it off the cave's public page; a plan that shares every landmark
+        // visit refuses that, and then the server's default is taken.
+        object Visit(int? visibility) => new
+        {
+            title, scheduledDateTime = startUtc, endDateTime = endUtc, placeId = BellWitchCaveId, visibility,
+        };
+        var url = $"/api/organizations/{orgId}/investigations";
+        var response = await api.PostAsync(url, new() { DataObject = Visit(1) });
+        if (!response.Ok) response = await api.PostAsync(url, new() { DataObject = Visit(null) });
+        return (await OkJsonAsync(response, $"scheduling \"{title}\"")).GetProperty("id").GetString()!;
+    }
+
+    /// <summary>
+    /// Deletes a visit with no case. Anybody marked as there is unmarked first, because the server
+    /// refuses to delete a visit that would lose an attendance. Gone already is fine.
+    /// </summary>
+    protected static async Task DeleteVisitAsync(IAPIRequestContext api, string orgId, string visitId)
+    {
+        var roster = await api.GetAsync($"/api/organizations/{orgId}/investigations/{visitId}/roster");
+        if (roster.Status == 404) return;
+        if (roster.Ok)
+        {
+            foreach (var entry in (await roster.JsonAsync())!.Value.EnumerateArray())
+            {
+                if (entry.TryGetProperty("didAttend", out var attended) && attended.ValueKind == JsonValueKind.True)
+                    await api.PutAsync(
+                        $"/api/organizations/{orgId}/investigations/{visitId}/attendees/{entry.GetProperty("attendeeId").GetString()}/attendance",
+                        new() { DataObject = new { didAttend = (bool?)null, statedArrivalTime = (DateTime?)null } });
+            }
+        }
+
+        var gone = await api.DeleteAsync($"/api/organizations/{orgId}/investigations/{visitId}");
+        Assert.That(gone.Ok || gone.Status == 404, Is.True,
+            $"The test visit {visitId} could not be deleted ({gone.Status}): {await gone.TextAsync()}");
+    }
+
+    /// <summary>Real keystrokes into a BenDateField, then Tab, which is when it reads the text.</summary>
+    protected static async Task TypeIntoDateFieldAsync(ILocator box, string text)
+    {
+        await box.ClickAsync();
+        await box.PressAsync("ControlOrMeta+a");
+        await box.PressAsync("Backspace");
+        await box.PressSequentiallyAsync(text, new() { Delay = 15 });
+        await box.PressAsync("Tab");
+    }
+
+    /// <summary>
+    /// Opens the group calendar and the editor of the entry titled <paramref name="title"/>, which
+    /// must be in the week the calendar opens on. Answers the open editor.
+    /// </summary>
+    protected async Task<ILocator> OpenCalendarEntryAsync(string orgId, string title)
+    {
+        await Page.GotoAsync($"{BaseUrl}/organizations/{orgId}/calendar");
+        await WaitForTheCircuitAsync();
+        await SkipAnyTourAsync();
+
+        var entry = Page.Locator(".k-event", new() { HasTextString = title });
+        var dialog = Page.Locator(".modal.show").First;
+        await Expect(entry.First).ToBeVisibleAsync(new() { Timeout = 30_000 });
+        await entry.First.ScrollIntoViewIfNeededAsync();
+        for (var attempt = 0; attempt < 4; attempt++)
+        {
+            await entry.First.DblClickAsync();
+            try
+            {
+                await Expect(dialog.Locator("#orgscheduler-title-d7a1")).ToHaveValueAsync(title, new() { Timeout = 8_000 });
+                break;
+            }
+            catch (PlaywrightException) when (attempt < 3) { }
+        }
+        return dialog;
+    }
+
     // ── The theme ───────────────────────────────────────────────────────────
 
     /// <summary>

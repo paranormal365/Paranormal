@@ -17,8 +17,9 @@ namespace Ben.Web.Playwright.Tests.Oct16;
 /// <para><b>Seats.</b> Sarah administers Paranormal365 and manages by role (the seeded Owner is the
 /// SuperAdmin, who passes every check by being SuperAdmin, so he would prove nothing). James is a
 /// plain Member. Victor is a Viewer, who must not be offered. One visit, "Oct16 team visit" at Bell
-/// Witch Cave, is made the first time and reused, because nothing on the site can delete a
-/// case-less visit; every test starts it with an empty team.</para>
+/// Witch Cave, is made the first time and reused (written before fix/oct16-gaps let a case-less
+/// visit be deleted; Oct16TeamRemovalTests makes and deletes its own); every test starts it with an
+/// empty team.</para>
 /// </remarks>
 [TestFixture]
 [Category("Oct16")]
@@ -152,8 +153,11 @@ public class Oct16InvestigationTeamTests : Oct16TestBase
         Assert.That((await RosterAsync()).Single(r => r.GetProperty("appUserId").GetString() == _jamesId)
                         .GetProperty("isLead").GetBoolean(), Is.True, "The radio says lead and the server does not.");
 
-        // ✕ takes him off: chip, row and count go, and he is offered again.
+        // ✕ asks first since fix/oct16-gaps (gap 5); "Take them off" takes him off: chip, row and
+        // count go, and he is offered again.
         await JamesRow.Locator($"button[title='Take {_jamesName} off the team']").ClickAsync();
+        await Expect(Page.Locator($"#roster-remove-ask-{_visitId}")).ToContainTextAsync($"Take {_jamesName} off the team?");
+        await Page.Locator($"#roster-remove-yes-{_visitId}").ClickAsync();
         await Expect(JamesChip).ToHaveCountAsync(0, new() { Timeout = 15_000 });
         await Expect(TeamCard).ToContainTextAsync("Nobody has been added to this investigation yet.");
         await Expect(PeopleCount).ToHaveTextAsync("0");
