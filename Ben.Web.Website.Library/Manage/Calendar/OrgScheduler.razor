@@ -391,16 +391,20 @@
                                         <button type="button" class="btn @(ThemeConstants.Button.FillMode.Outline == ThemeConstants.Button.FillMode.Solid ? "btn-secondary" : "btn-outline-secondary") btn-sm" @onclick="SearchPlacesAsync" disabled="@(!(!string.IsNullOrWhiteSpace(_placeSearch)))">Search</button>
                                     </div>
 
-                                    @if (_placeSearchError is not null)
+                                    @if (_placeFinder.IsSearching)
                                     {
-                                        <div class="form-text text-danger" role="alert">@_placeSearchError</div>
+                                        <div class="form-text" role="status">Searching…</div>
                                     }
-                                    else if (_placeCandidates.Count > 0)
+                                    else if (_placeFinder.Error is { } searchError)
+                                    {
+                                        <div class="form-text text-danger" role="alert">@searchError</div>
+                                    }
+                                    else if (_placeFinder.Results.Count > 0)
                                     {
                                         @* Public places only: the search never returns somebody's
                                            home, because a public event can't be held at one. *@
                                         <div class="list-group mt-2" style="max-height:180px;overflow-y:auto;">
-                                            @foreach (var candidate in _placeCandidates)
+                                            @foreach (var candidate in _placeFinder.Results)
                                             {
                                                 var chosen = candidate;
                                                 <button type="button"
@@ -414,7 +418,7 @@
                                             }
                                         </div>
                                     }
-                                    else if (_placeSearched)
+                                    else if (_placeFinder.FoundNothing)
                                     {
                                         <div class="form-text">
                                             No public places match that. A private home can't be used
@@ -1222,9 +1226,7 @@
     // ── Choosing a place for a public event ─────────────────────────────────
 
     private string _placeSearch = "";
-    private bool _placeSearched;
-    private string? _placeSearchError;
-    private List<PlaceCandidate> _placeCandidates = [];
+    private readonly PlaceSearch _placeFinder = new();
     private string? _selectedPlaceName;
 
     /// <summary>
@@ -1235,28 +1237,19 @@
     /// Witch" found nothing (10/16/2026). The search used now returns public locations only, the
     /// same rule the server applies when a public event is saved.</para>
     ///
-    /// <para>A failed search says so. Shown as "no places", a refusal sends somebody off to make a
-    /// second copy of a place that already exists.</para>
+    /// <para><see cref="PlaceSearch"/> keeps the state: "Searching…" while it waits, a failure
+    /// shown as a failure, and "no places match" only once a search has really come back empty.
+    /// This form used to say "No places found" the moment Search was pressed, before any answer.</para>
     /// </remarks>
-    private async Task SearchPlacesAsync()
-    {
-        _placeSearched = true;
-        var found = await AdminClient.SearchPublicPlacesAsync(_placeSearch.Trim());
-
-        _placeSearchError = !found.Failed ? null
-            : found.SessionExpired ? "You've been signed out. Sign in again to search places."
-            : "Couldn't search places just now. Try again in a moment.";
-        _placeCandidates = [.. found.Items];
-    }
+    private Task SearchPlacesAsync()
+        => _placeFinder.SearchAsync(_placeSearch, text => AdminClient.SearchPublicPlacesAsync(text));
 
     private void SelectPlace(PlaceCandidate candidate)
     {
         _form.PlaceId      = candidate.Id;
         _selectedPlaceName = candidate.Name ?? candidate.StreetAddress1 ?? "Selected place";
-        _placeCandidates   = [];
         _placeSearch       = "";
-        _placeSearched     = false;
-        _placeSearchError  = null;
+        _placeFinder.Clear();
     }
 
     private void ClearPlace()

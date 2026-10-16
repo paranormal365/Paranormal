@@ -373,7 +373,7 @@
                                         else
                                         {
                                             <div class="input-group" style="max-width:32rem;">
-                                                <input class="form-control" placeholder="Search venues by name"
+                                                <input class="form-control" placeholder="Search by venue name or town"
                                                        value="@_venueSearch"
                                                        @oninput="e => _venueSearch = e.Value?.ToString() ?? string.Empty" />
                                                 <button type="button" class="btn btn-outline-secondary"
@@ -381,10 +381,18 @@
                                                         disabled="@string.IsNullOrWhiteSpace(_venueSearch)"
                                                         @onclick="SearchVenuesAsync">Search</button>
                                             </div>
-                                            @if (_venueCandidates.Count > 0)
+                                            @if (_venueFinder.IsSearching)
+                                            {
+                                                <div class="form-text" role="status">Searching…</div>
+                                            }
+                                            else if (_venueFinder.Error is { } searchError)
+                                            {
+                                                <div class="form-text text-danger" role="alert" id="venue-search-error">@searchError</div>
+                                            }
+                                            else if (_venueFinder.Results.Count > 0)
                                             {
                                                 <div class="list-group mt-2" style="max-width:32rem; max-height:12rem; overflow-y:auto;">
-                                                    @foreach (var candidate in _venueCandidates)
+                                                    @foreach (var candidate in _venueFinder.Results)
                                                     {
                                                         var pick = candidate;
                                                         <button type="button" class="list-group-item list-group-item-action py-1"
@@ -394,9 +402,12 @@
                                                     }
                                                 </div>
                                             }
-                                            else if (_venueSearched)
+                                            else if (_venueFinder.FoundNothing)
                                             {
-                                                <div class="form-text">No venues found by that name.</div>
+                                                <div class="form-text">
+                                                    No listed venues match that. If it's new, enter it
+                                                    below. A private home can't be used.
+                                                </div>
                                             }
 
                                             <div class="row g-2 mt-2" style="max-width:40rem;">
@@ -979,8 +990,7 @@
 
     private bool _changingVenue;
     private string _venueSearch = "";
-    private bool _venueSearched;
-    private List<PlaceCandidate> _venueCandidates = [];
+    private readonly PlaceSearch _venueFinder = new();
     private PlaceCandidate? _pickedVenue;
     private readonly NewVenueForm _newVenue = new();
 
@@ -1417,8 +1427,7 @@
     {
         _changingVenue = true;
         _venueSearch = "";
-        _venueSearched = false;
-        _venueCandidates = [];
+        _venueFinder.Clear();
         _pickedVenue = null;
         _newVenue.Clear();
     }
@@ -1427,27 +1436,21 @@
     {
         _changingVenue = false;
         _pickedVenue = null;
-        _venueCandidates = [];
-        _venueSearched = false;
+        _venueFinder.Clear();
         _newVenue.Clear();
     }
 
-    private async Task SearchVenuesAsync()
-    {
-        _venueSearched = true;
-
-        // The refusal is shown rather than swallowed. A search that was refused and a search that
-        // found nothing look identical to a person, and telling them "no venues found" when the
-        // truth is "we couldn't ask" sends them off to invent a venue that already exists.
-        var found = await AdminClient.FindPlaceCandidatesAsync(
-            street: null, city: null, state: null, zip: null,
-            name: _venueSearch.Trim(), latitude: null, longitude: null);
-
-        if (found.Failed) { _error = found.Reason ?? "Venues couldn't be searched just now."; _venueCandidates = []; return; }
-
-        _error = null;
-        _venueCandidates = [.. found.Items];
-    }
+    /// <remarks>
+    /// <para>A search, not the duplicate-place matcher this used to ask: the matcher wants the
+    /// exact name, so part of one found nothing (10/16/2026). The search returns public locations
+    /// only, which is exactly what <c>HostedEventController</c> accepts as a venue.</para>
+    ///
+    /// <para><see cref="PlaceSearch"/> says "Searching…" while it waits and shows a refusal next to
+    /// the box rather than "no venues found". A search that was refused and one that found nothing
+    /// must not look alike: the second sends somebody off to enter a venue that already exists.</para>
+    /// </remarks>
+    private Task SearchVenuesAsync()
+        => _venueFinder.SearchAsync(_venueSearch, text => AdminClient.SearchPublicPlacesAsync(text), "venues");
 
     private static string PlaceLabel(PlaceCandidate place)
         => string.Join(", ", new[] { place.Name, place.StreetAddress1, place.City, place.State }

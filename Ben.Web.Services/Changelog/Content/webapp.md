@@ -33,8 +33,9 @@ day-by-day account of building it would say nothing to anyone using it now.
 
 ## Unreleased
 
-- On a group's calendar, the place box on a public event finds a place from part of its name or its
-  town, so "Bell Witch" finds Bell Witch Cave. If the search can't run, it says so instead of
+- Choosing a place for a public calendar event, or a venue for an event, finds it from part of its
+  name or its town, so "Bell Witch" finds Bell Witch Cave. The first press of Search now shows the
+  answer, the box says "Searching…" while it looks, and a search that can't run says so instead of
   reporting that nothing was found.
 - The site's icon is now the app's icon, the violet ghost, and the ghost has its face again: in the
   browser tab, on a phone's home screen, at the top of every email, beside the site's name, on the

@@ -1015,7 +1015,8 @@ and its controls are shown but disabled.
 
 ### A venue we haven't listed
 
-Search for the venue by name, and if it is already listed, use that one. Venues are shared across
+Search for the venue by part of its name or its town, and if it is already listed, use that one.
+Only public places are listed; a private home can't be a venue. Venues are shared across
 the whole site, so a building's map pin, its history and everything anyone has recorded there stay
 together on one record.
 

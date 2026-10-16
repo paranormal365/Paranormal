@@ -108,17 +108,25 @@
                     else
                     {
                         <div class="input-group">
-                            <input id="new-event-place" class="form-control" placeholder="Search venues by name"
+                            <input id="new-event-place" class="form-control" placeholder="Search by venue name or town"
                                    value="@_placeSearch"
                                    @oninput="e => _placeSearch = e.Value?.ToString() ?? string.Empty" />
                             <button type="button" class="btn btn-outline-secondary" id="search-event-place"
                                     disabled="@string.IsNullOrWhiteSpace(_placeSearch)"
                                     @onclick="SearchPlacesAsync">Search</button>
                         </div>
-                        @if (_placeCandidates.Count > 0)
+                        @if (_placeFinder.IsSearching)
+                        {
+                            <div class="form-text" role="status">Searching…</div>
+                        }
+                        else if (_placeFinder.Error is { } searchError)
+                        {
+                            <div class="form-text text-danger" role="alert" id="event-place-search-error">@searchError</div>
+                        }
+                        else if (_placeFinder.Results.Count > 0)
                         {
                             <div class="list-group mt-2" style="max-height:12rem; overflow-y:auto;">
-                                @foreach (var candidate in _placeCandidates)
+                                @foreach (var candidate in _placeFinder.Results)
                                 {
                                     var pick = candidate;
                                     <button type="button" class="list-group-item list-group-item-action py-1"
@@ -128,9 +136,12 @@
                                 }
                             </div>
                         }
-                        else if (_placeSearched)
+                        else if (_placeFinder.FoundNothing)
                         {
-                            <div class="form-text">No venues found by that name.</div>
+                            <div class="form-text">
+                                No listed venues match that. If it's new, enter it below. A private
+                                home can't be used.
+                            </div>
                         }
 
                         @* Ben, 2026-09-11: "They may need to enter the name and address and
@@ -293,8 +304,7 @@
     private HostedEventPlanRecord? _plan;
     private PlaceCandidate? _chosenPlace;
     private string _placeSearch = "";
-    private bool _placeSearched;
-    private List<PlaceCandidate> _placeCandidates = [];
+    private readonly PlaceSearch _placeFinder = new();
     private bool _enteringVenue;
     private readonly NewVenueForm _venue = new();
 
@@ -391,22 +401,17 @@
         NavManager.NavigateTo($"/organizations/{OrgId}/events/{created.Id}");
     }
 
-    private async Task SearchPlacesAsync()
-    {
-        _placeSearched = true;
-
-        // The refusal is shown rather than swallowed. A search that was refused and a search that
-        // found nothing look identical to a person, and telling them "no venues found" when the
-        // truth is "we couldn't ask" sends them off to invent a venue that already exists.
-        var found = await AdminClient.FindPlaceCandidatesAsync(
-            street: null, city: null, state: null, zip: null,
-            name: _placeSearch.Trim(), latitude: null, longitude: null);
-
-        if (found.Failed) { _error = found.Reason ?? "Venues couldn't be searched just now."; _placeCandidates = []; return; }
-
-        _error = null;
-        _placeCandidates = [.. found.Items];
-    }
+    /// <remarks>
+    /// <para>A search, not the duplicate-place matcher this used to ask: the matcher wants the
+    /// exact name, so part of one found nothing (10/16/2026). The search returns public locations
+    /// only, which is exactly what <c>HostedEventController</c> accepts as a venue.</para>
+    ///
+    /// <para><see cref="PlaceSearch"/> says "Searching…" while it waits and shows a refusal as a
+    /// refusal. This box used to set "searched" before the answer came, so the first press showed
+    /// nothing useful and only a second press seemed to work (production, 10/16/2026).</para>
+    /// </remarks>
+    private Task SearchPlacesAsync()
+        => _placeFinder.SearchAsync(_placeSearch, text => AdminClient.SearchPublicPlacesAsync(text), "venues");
 
     private void ChoosePlace(PlaceCandidate place)
     {
@@ -418,8 +423,7 @@
     {
         _chosenPlace = null;
         _form.PlaceId = null;
-        _placeCandidates = [];
-        _placeSearched = false;
+        _placeFinder.Clear();
     }
 
     private static string PlaceLabel(PlaceCandidate place)

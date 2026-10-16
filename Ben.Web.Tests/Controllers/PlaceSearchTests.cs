@@ -164,6 +164,26 @@ public class PlaceSearchTests
         Assert.Empty(await SearchAsync(f, "Farmhouse"));
     }
 
+    /// <summary>
+    /// The same search serves a hosted event's venue box, so it has to return exactly what
+    /// <c>HostedEventController.ValidateAsync</c> accepts: any place that isn't a private
+    /// residence. Written over every kind there is, so a new kind added later is decided here
+    /// rather than slipping through.
+    /// </summary>
+    [Fact]
+    public async Task It_returns_every_kind_of_place_a_venue_may_be_and_no_other()
+    {
+        var f = await SeedAsync(Enum.GetValues<PlaceKind>()
+            .Select(k => Place($"Riverside {k}", kind: k))
+            .ToArray());
+
+        var kinds = (await SearchAsync(f, "Riverside")).Select(p => p.Kind).OrderBy(k => k);
+
+        Assert.Equal(
+            Enum.GetValues<PlaceKind>().Where(k => k != PlaceKind.PrivateResidence).OrderBy(k => k),
+            kinds);
+    }
+
     [Fact]
     public async Task The_answer_is_capped()
     {
