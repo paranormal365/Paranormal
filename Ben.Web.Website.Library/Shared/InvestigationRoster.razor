@@ -247,8 +247,10 @@
             @* Manage-gated: correcting somebody else's attendance is not a participant's job. *@
             @if (CanManage)
             {
+                @* Below 768px each person is a card (10/16/2026); see InvestigationRoster.razor.css.
+                   Every cell names its column in data-label for that reason. *@
                 <div class="table-responsive mt-3">
-                    <table class="table table-sm align-middle mb-0">
+                    <table class="table table-sm align-middle mb-0 roster-manage">
                         <thead>
                             <tr>
                                 <th>Who</th><th>Arrived</th><th class="text-center">Attended</th><th class="text-center">Lead</th>
@@ -267,35 +269,43 @@
                                    the chips above said one person and the radio below said the
                                    other. *@
                                 <tr @key="entry.AttendeeId">
-                                    <td>@entry.DisplayName</td>
-                                    <td class="text-nowrap">
+                                    <td class="roster-manage__who" data-label="Who">@entry.DisplayName</td>
+                                    <td class="text-nowrap" data-label="Arrived">
                                         @(entry.DateArrived?.ToViewerLocalTime(UserState).ToDisplayDateTime() ?? "—")
                                         @if (entry.DidAttend == true && !entry.SelfReported)
                                         {
                                             <span class="badge bg-secondary ms-1" title="Recorded by someone else, not by them">Recorded</span>
                                         }
                                     </td>
-                                    <td class="text-center">
+                                    <td class="text-center" data-label="Attended">
                                         <input type="checkbox" class="form-check-input"
+                                               @key="@($"{entry.AttendeeId}-{_refusedAttendance}")"
+                                               id="@($"roster-attended-{entry.AttendeeId}")"
+                                               aria-label="@($"{entry.DisplayName} attended")"
                                                checked="@(entry.DidAttend == true)"
                                                @onchange="@(e => OverrideAsync(entry, (bool)(e.Value ?? false)))" />
                                     </td>
-                                    <td class="text-center">
+                                    <td class="text-center" data-label="Lead">
                                         @* A radio, not a checkbox: exactly one person leads a
                                            visit, and the server clears the previous holder either
                                            way. A checkbox would suggest several are allowed. *@
                                         <input type="radio" class="form-check-input"
+                                               id="@($"roster-lead-{entry.AttendeeId}")"
+                                               aria-label="@($"{entry.DisplayName} leads this visit")"
                                                name="@($"lead-{InvestigationId}")"
                                                checked="@entry.IsLead"
                                                @onchange="@(() => SetLeadAsync(entry, true))" />
                                     </td>
                                     @if (CanChangeTeam)
                                     {
-                                        <td class="text-end">
+                                        <td class="text-end roster-manage__remove" data-label="Team">
+                                            @* Asks first (10/16/2026). It used to take somebody off
+                                               in one click, and their duties went with them unsaid. *@
                                             <button type="button" class="btn btn-outline-danger btn-sm text-nowrap"
+                                                    id="@($"roster-remove-{entry.AttendeeId}")"
                                                     title="Take @entry.DisplayName off the team"
                                                     disabled="@_teamBusy"
-                                                    @onclick="@(() => RemoveFromTeamAsync(entry))">
+                                                    @onclick="@(() => AskToRemove(entry))">
                                                 <BenIcon Name="x" /><span class="visually-hidden">Take @entry.DisplayName off the team</span>
                                             </button>
                                         </td>
@@ -305,6 +315,22 @@
                         </tbody>
                     </table>
                 </div>
+
+                @if (_confirmRemove is { } leaving)
+                {
+                    <div class="alert alert-warning py-2 small mt-2 mb-0 d-flex flex-wrap align-items-center gap-2"
+                         role="alert" id="@($"roster-remove-ask-{InvestigationId}")">
+                        <span class="flex-grow-1">@RemovalQuestion(leaving.DisplayName, DutiesOf(leaving.AttendeeId), leaving.IsLead)</span>
+                        <button type="button" class="btn btn-danger btn-sm roster-touch"
+                                id="@($"roster-remove-yes-{InvestigationId}")"
+                                disabled="@_teamBusy" @onclick="@(() => RemoveFromTeamAsync(leaving))">
+                            @(_teamBusy ? "Taking them off…" : "Take them off")
+                        </button>
+                        <button type="button" class="btn btn-outline-secondary btn-sm roster-touch"
+                                id="@($"roster-remove-no-{InvestigationId}")"
+                                disabled="@_teamBusy" @onclick="@(() => _confirmRemove = null)">Keep them</button>
+                    </div>
+                }
 
                 <div class="form-text mt-1">
                     The lead can edit this investigation, and stops being able to when the lead
@@ -325,7 +351,7 @@
            verdict, like everything else that changes somebody else's record here. *@
         @if (CanManage && CanChangeTeam && !_rosterResult.Failed)
         {
-            <div class="mt-3" id="@($"investigation-team-add-{InvestigationId}")">
+            <div class="mt-3 roster-add" id="@($"investigation-team-add-{InvestigationId}")">
                 @if (_teamError is not null)
                 {
                     <div class="alert alert-danger py-2 small mb-2" role="alert">@_teamError</div>
@@ -355,10 +381,10 @@
                                    Data="@Addable" @bind-Value="@_addUserId"
                                    TextField="@nameof(TeamOption.Label)" ValueField="@nameof(TeamOption.UserId)"
                                    DefaultText="Choose a member…" Width="240px" Class="form-select-sm" />
-                        <button type="button" class="btn btn-primary btn-sm"
+                        <button type="button" class="btn btn-primary btn-sm roster-touch"
                                 disabled="@(_addUserId == Guid.Empty || _teamBusy)"
                                 @onclick="AddToTeamAsync">
-                            <BenIcon Name="plus" Class="me-1" />@(_teamBusy ? "Adding…" : "Add")
+                            <BenIcon Name="plus" Class="me-1" />@(_adding ? "Adding…" : "Add")
                         </button>
                     </div>
                     <div class="form-text">
@@ -631,13 +657,15 @@
         // reading off their own watch. Converted through the reader's zone, not the server's.
         DateTime? stated = _statedArrival?.ToUtcFromViewerLocal(UserState);
 
-        var result = await AdminClient.CheckInToInvestigationAsync(OrgId, InvestigationId, stated);
+        // The server's own sentence (10/16/2026). This used to say "Check the arrival time is not in
+        // the future." for every failure, including ones that had nothing to do with the time.
+        var (result, error) = await AdminClient.CheckInToInvestigationAsync(OrgId, InvestigationId, stated);
 
         _checkingIn = false;
 
         if (result is null)
         {
-            _error = "That could not be saved. Check the arrival time is not in the future.";
+            _error = error ?? "Your arrival couldn't be saved just now.";
             return;
         }
 
@@ -649,13 +677,19 @@
     {
         _error = null;
 
-        var result = await AdminClient.OverrideInvestigationAttendanceAsync(
+        var (result, error) = await AdminClient.OverrideInvestigationAttendanceAsync(
             OrgId, InvestigationId, entry.AttendeeId, didAttend,
             didAttend ? entry.DateArrived ?? DateTime.UtcNow : null);
 
         if (result is null)
         {
-            _error = "That could not be saved.";
+            // The server's sentence (10/16/2026), and the box put back to what is saved: the
+            // browser has already ticked it, and a tick over a refusal reads as success.
+            _error = error ?? "That attendance couldn't be saved just now.";
+            // A new key draws a fresh box from what is saved; Blazor would otherwise leave the
+            // browser's own tick in place, because what it rendered has not changed.
+            _refusedAttendance++;
+            await LoadAsync();
             return;
         }
 
@@ -671,6 +705,7 @@
     private bool _membersFailed;
     private Guid _addUserId;
     private bool _teamBusy;
+    private bool _adding;
     private string? _teamError;
 
     /// <summary>
@@ -697,6 +732,7 @@
         if (_addUserId == Guid.Empty || _teamBusy) return;
 
         _teamBusy = true;
+        _adding = true;
         _teamError = null;
         try
         {
@@ -716,7 +752,53 @@
         finally
         {
             _teamBusy = false;
+            _adding = false;
         }
+    }
+
+    /// <summary>Who the ✕ was pressed for, waiting for a yes. Asked inline, never in a dialog.</summary>
+    private InvestigationRosterEntry? _confirmRemove;
+
+    /// <summary>Bumped when an Attended change is refused, so the box is drawn again from what is saved.</summary>
+    private int _refusedAttendance;
+
+    private void AskToRemove(InvestigationRosterEntry entry)
+    {
+        _teamError = null;
+        _confirmRemove = entry;
+    }
+
+    /// <summary>The names of the duties this person holds on this visit, in the board's order.</summary>
+    private IReadOnlyList<string> DutiesOf(Guid attendeeId)
+    {
+        if (_board is not { } board) return [];
+        return board.Duties
+            .Where(d => board.Assignments.Any(a => a.AttendeeId == attendeeId && a.DutyId == d.Id))
+            .Select(d => d.Name)
+            .ToList();
+    }
+
+    /// <summary>
+    /// The question the ✕ asks: who is going, and what goes with them (10/16/2026).
+    /// </summary>
+    /// <remarks>
+    /// "Take James off the team? Their duty (Lead) goes too." Before, the ✕ removed them in one
+    /// click and their duties went with them without a word.
+    /// </remarks>
+    internal static string RemovalQuestion(string? name, IReadOnlyList<string> duties, bool isLead)
+    {
+        var who = string.IsNullOrWhiteSpace(name) ? "this person" : name.Trim();
+        var question = $"Take {who} off the team?";
+
+        if (duties.Count == 1)
+            question += $" Their duty ({duties[0]}) goes too.";
+        else if (duties.Count > 1)
+            question += $" Their duties ({string.Join(", ", duties)}) go too.";
+
+        if (isLead)
+            question += " They lead this visit, so nobody will lead it until you choose someone.";
+
+        return question;
     }
 
     private async Task RemoveFromTeamAsync(InvestigationRosterEntry entry)
@@ -728,6 +810,7 @@
         try
         {
             var (roster, error) = await AdminClient.RemoveInvestigationTeamMemberAsync(OrgId, InvestigationId, entry.AttendeeId);
+            _confirmRemove = null;
             if (error is not null) { _teamError = error; return; }
 
             await LoadAsync();

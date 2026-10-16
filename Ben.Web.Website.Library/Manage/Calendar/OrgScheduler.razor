@@ -233,6 +233,13 @@
                         }
                     </div>
 
+                    @if (!_isNewEvent)
+                    {
+                        <div class="form-text" id="calendar-untick-note">
+                            Untick somebody to take them off the guest list when you save.
+                        </div>
+                    }
+
                     <div class="d-flex gap-2 align-items-center mt-2">
                         <input class="form-control form-control-sm" style="max-width:280px;"
                                placeholder="Invite someone else by email"
@@ -281,40 +288,57 @@
                             <a href="@($"/organizations/{OrgId}/tours/{guestTourId}/dates/{_editingEvent.Id}")">sign-ups page</a>.
                         </p>
                     }
-                    <div class="border rounded" style="max-height:200px;overflow-y:auto;">
-                        <table class="table table-sm align-middle mb-0">
-                            <tbody>
-                                @foreach (var guest in _guests.OrderBy(g => g.DisplayName, StringComparer.CurrentCultureIgnoreCase))
-                                {
-                                    var g = guest;
-                                    <tr @key="g.Id">
-                                        <td class="small">@(g.DisplayName ?? "A guest")</td>
-                                        <td><span class="badge @GuestAnswerBadge(g.RsvpStatus)">@GuestAnswer(g.RsvpStatus)</span></td>
-                                        @if (_mayAnswerForGuests && _editingEvent.TourId is null)
-                                        {
-                                            <td class="text-end text-nowrap">
-                                                @if (g.RsvpStatus == RsvpStatus.Accepted)
-                                                {
-                                                    <button type="button" class="btn btn-link btn-sm text-decoration-none"
-                                                            disabled="@(_guestBusy is not null)"
-                                                            @onclick="@(() => SetGuestAnswerAsync(g, RsvpStatus.Invited))">
-                                                        Mark as not answered
-                                                    </button>
-                                                }
-                                                else
-                                                {
-                                                    <button type="button" class="btn btn-outline-primary btn-sm"
-                                                            disabled="@(_guestBusy is not null)"
-                                                            @onclick="@(() => SetGuestAnswerAsync(g, RsvpStatus.Accepted))">
-                                                        @(_guestBusy == g.Id ? "Saving…" : "Mark as coming")
-                                                    </button>
-                                                }
-                                            </td>
-                                        }
-                                    </tr>
-                                }
-                            </tbody>
-                        </table>
+                    @* One row per guest: name and answer, then what the host can do about it
+                       (10/16/2026). Below 576px the actions drop to a line of their own, so a long
+                       name is never squeezed into two lines beside a button. See
+                       OrgScheduler.razor.css. *@
+                    <div class="border rounded guest-list" style="max-height:260px;overflow-y:auto;">
+                        <ul class="list-unstyled mb-0">
+                            @foreach (var guest in _guests.OrderBy(g => g.DisplayName, StringComparer.CurrentCultureIgnoreCase))
+                            {
+                                var g = guest;
+                                var canAct = _mayAnswerForGuests && _editingEvent.TourId is null;
+                                <li @key="g.Id" class="guest-row" id="@($"guest-row-{g.Id}")">
+                                    <div class="guest-row__who">
+                                        <span class="small fw-semibold">@(g.DisplayName ?? "A guest")</span>
+                                        <span class="badge @GuestAnswerBadge(g.RsvpStatus)">@GuestAnswer(g.RsvpStatus)</span>
+                                    </div>
+                                    @if (canAct && _guestRemoveAsk == g.Id)
+                                    {
+                                        <div class="guest-row__actions" role="group" aria-label="@($"Take {g.DisplayName ?? "this guest"} off the guest list?")">
+                                            <span class="small">Take @(g.DisplayName ?? "this guest") off the guest list?</span>
+                                            <button type="button" class="btn btn-danger btn-sm" id="@($"guest-remove-yes-{g.Id}")"
+                                                    disabled="@(_guestBusy is not null)"
+                                                    @onclick="@(() => RemoveGuestAsync(g))">
+                                                @(_guestBusy == g.Id ? "Saving…" : "Remove")
+                                            </button>
+                                            <button type="button" class="btn btn-outline-secondary btn-sm" id="@($"guest-remove-no-{g.Id}")"
+                                                    disabled="@(_guestBusy is not null)"
+                                                    @onclick="@(() => _guestRemoveAsk = null)">Keep</button>
+                                        </div>
+                                    }
+                                    else if (canAct)
+                                    {
+                                        <div class="guest-row__actions">
+                                            @foreach (var answer in AnswersFor(g.RsvpStatus))
+                                            {
+                                                var a = answer;
+                                                <button type="button" class="btn btn-outline-primary btn-sm"
+                                                        id="@($"guest-{GuestAnswerKey(a)}-{g.Id}")"
+                                                        disabled="@(_guestBusy is not null)"
+                                                        @onclick="@(() => SetGuestAnswerAsync(g, a))">
+                                                    @(_guestBusy == g.Id && _guestBusyAnswer == a ? "Saving…" : MarkAs(a))
+                                                </button>
+                                            }
+                                            <button type="button" class="btn btn-outline-danger btn-sm" id="@($"guest-remove-{g.Id}")"
+                                                    title="@($"Take {g.DisplayName ?? "this guest"} off the guest list")"
+                                                    disabled="@(_guestBusy is not null)"
+                                                    @onclick="@(() => { _guestError = null; _guestRemoveAsk = g.Id; })">Remove</button>
+                                        </div>
+                                    }
+                                </li>
+                            }
+                        </ul>
                     </div>
                     @if (_guestError is not null)
                     {
@@ -323,10 +347,10 @@
                     @if (_mayAnswerForGuests && _editingEvent.TourId is null)
                     {
                         <div class="form-text">
-                            For somebody who told you they're coming. People marked as coming get a
+                            For somebody who told you their answer. People marked as coming get a
                             reminder before it starts, and a guest from outside the group can then
-                            send what they record to this event. This saves straight away; you don't
-                            need to press Save.
+                            send what they record to this event. Remove takes them off the list.
+                            These save straight away; you don't need to press Save.
                         </div>
                     }
                 </div>
@@ -438,7 +462,7 @@
 
                         <div class="row g-3">
                             <div class="col-md-12">
-                                <label class="form-label fw-semibold">Where (a place)</label>
+                                <label class="form-label fw-semibold" for="calendar-place-search">Where (a place)</label>
                                 @if (_form.PlaceId is not null)
                                 {
                                     <div class="d-flex align-items-center gap-2">
@@ -449,10 +473,11 @@
                                 else
                                 {
                                     <div class="d-flex gap-2">
-                                        <input class="form-control form-control-sm" style="max-width:320px;"
-                                               placeholder="Search by place name or town"
+                                        <input id="calendar-place-search" class="form-control form-control-sm" style="max-width:320px;"
+                                               placeholder="@PlaceSearch.Placeholder"
                                                value="@_placeSearch"
-                                               @oninput="@(e => _placeSearch = e.Value?.ToString() ?? "")" />
+                                               @oninput="@(e => _placeSearch = e.Value?.ToString() ?? "")"
+                                               @onkeydown="@(e => PlaceSearch.IsSearchKey(e.Key, _placeSearch) ? SearchPlacesAsync() : Task.CompletedTask)" />
                                         <button type="button" class="btn @(ThemeConstants.Button.FillMode.Outline == ThemeConstants.Button.FillMode.Solid ? "btn-secondary" : "btn-outline-secondary") btn-sm" @onclick="SearchPlacesAsync" disabled="@(!(!string.IsNullOrWhiteSpace(_placeSearch)))">Search</button>
                                     </div>
 
@@ -636,11 +661,80 @@
     private Guid? _guestBusy;
     private bool _mayAnswerForGuests;
 
+    /// <summary>Which answer is being saved, so only the button pressed says "Saving…".</summary>
+    private RsvpStatus? _guestBusyAnswer;
+
+    /// <summary>The guest whose Remove is waiting for a yes. Asked inline, never in a dialog.</summary>
+    private Guid? _guestRemoveAsk;
+
+    /// <summary>
+    /// What a host may record for a guest, by what they answered (10/16/2026).
+    /// </summary>
+    /// <remarks>
+    /// Never the answer they already have. Before, anybody not coming was offered "Mark as coming"
+    /// and nothing else, so a guest who had said maybe could never be marked as not coming.
+    /// </remarks>
+    internal static IReadOnlyList<RsvpStatus> AnswersFor(RsvpStatus current) => current switch
+    {
+        RsvpStatus.Accepted  => [RsvpStatus.Declined, RsvpStatus.Invited],
+        RsvpStatus.Declined  => [RsvpStatus.Accepted, RsvpStatus.Invited],
+        RsvpStatus.Tentative => [RsvpStatus.Accepted, RsvpStatus.Declined],
+        _                    => [RsvpStatus.Accepted, RsvpStatus.Declined],
+    };
+
+    internal static string MarkAs(RsvpStatus answer) => answer switch
+    {
+        RsvpStatus.Accepted  => "Mark as coming",
+        RsvpStatus.Declined  => "Mark as not coming",
+        RsvpStatus.Tentative => "Mark as maybe",
+        _                    => "Mark as not answered",
+    };
+
+    private static string GuestAnswerKey(RsvpStatus answer) => answer switch
+    {
+        RsvpStatus.Accepted  => "coming",
+        RsvpStatus.Declined  => "not-coming",
+        RsvpStatus.Tentative => "maybe",
+        _                    => "not-answered",
+    };
+
+    /// <summary>Takes one guest off the list, after the host said yes. The refusal is shown.</summary>
+    private async Task RemoveGuestAsync(OrgCalendarEventAttendeeRecord guest)
+    {
+        if (_editingEvent is null || _guestBusy is not null) return;
+
+        _guestBusy = guest.Id;
+        _guestError = null;
+        try
+        {
+            var (removed, error) = await AdminClient.RemoveCalendarAttendeeAsync(OrgId, _editingEvent.Id, guest.Id);
+            if (!removed)
+            {
+                _guestError = error ?? "That guest couldn't be taken off the list just now. Nothing was changed.";
+                return;
+            }
+
+            _guests.RemoveAll(g => g.Id == guest.Id);
+            // Or Save would invite them straight back.
+            _form.InviteeIds.Remove(guest.AppUserId);
+            _guestRemoveAsk = null;
+        }
+        catch
+        {
+            _guestError = "That guest couldn't be taken off the list just now. Nothing was changed.";
+        }
+        finally
+        {
+            _guestBusy = null;
+        }
+    }
+
     private async Task SetGuestAnswerAsync(OrgCalendarEventAttendeeRecord guest, RsvpStatus answer)
     {
         if (_editingEvent is null || _guestBusy is not null) return;
 
         _guestBusy = guest.Id;
+        _guestBusyAnswer = answer;
         _guestError = null;
         try
         {
@@ -661,6 +755,7 @@
         finally
         {
             _guestBusy = null;
+            _guestBusyAnswer = null;
         }
     }
 
@@ -773,11 +868,16 @@
     /// <summary>
     /// Adds the chosen members and email invitees to a saved event.
     /// </summary>
-    /// <returns>The addresses that could not be invited, for reporting.</returns>
+    /// <returns>Who could not be invited or taken off, for reporting.</returns>
     /// <remarks>
-    /// Only ever adds. Removing an attendee is a separate, deliberate act with its own endpoint —
-    /// silently un-inviting someone because a checkbox was cleared during an unrelated edit would
-    /// be an unpleasant surprise for them and invisible to whoever did it.
+    /// <para>Adds the newly ticked members, and since 10/16/2026 takes off the members whose box was
+    /// unticked. Before, unticking somebody and saving did nothing at all, and nothing on the page
+    /// could take an invitee off a private event. The list says so under the boxes, so clearing
+    /// one is a deliberate act, not a surprise.</para>
+    ///
+    /// <para>Only members shown as boxes are ever taken off this way. A guest invited by email is
+    /// not a box; they come off with Remove in Who's coming. A tour date's seats are left alone:
+    /// they are answered on its sign-ups page.</para>
     /// </remarks>
     private async Task<List<string>> SendInvitesAsync(Guid eventId)
     {
@@ -796,6 +896,16 @@
         }
 
         var existing = attendees.Items.Select(a => a.AppUserId).ToHashSet();
+
+        foreach (var unticked in UntickedInvitees(attendees.Items, _members.Select(m => m.Id), _form.InviteeIds,
+                     isPublic: _form.IsPublic, isTourDate: _editingEvent?.TourId is not null || _form.TourId is not null))
+        {
+            var (removed, error) = await AdminClient.RemoveCalendarAttendeeAsync(OrgId, eventId, unticked.Id);
+            if (!removed)
+                failed.Add(error is null
+                    ? $"{unticked.DisplayName ?? "A guest"} is still on the guest list"
+                    : $"{unticked.DisplayName ?? "A guest"} is still on the guest list ({error.TrimEnd('.')})");
+        }
 
         foreach (var memberId in _form.InviteeIds.Where(id => !existing.Contains(id)))
         {
@@ -822,6 +932,22 @@
 
         _emailInvitees.Clear();
         return failed;
+    }
+
+    /// <summary>
+    /// The guest rows to take off because their member's box was unticked (10/16/2026).
+    /// </summary>
+    /// <remarks>
+    /// Only members drawn as boxes, and never on a public event or a tour date, where the boxes are
+    /// not shown and a guest is answered elsewhere.
+    /// </remarks>
+    internal static IReadOnlyList<OrgCalendarEventAttendeeRecord> UntickedInvitees(
+        IEnumerable<OrgCalendarEventAttendeeRecord> onTheList, IEnumerable<Guid> memberBoxes,
+        IReadOnlySet<Guid> ticked, bool isPublic, bool isTourDate)
+    {
+        if (isPublic || isTourDate) return [];
+        var boxes = memberBoxes.ToHashSet();
+        return onTheList.Where(a => boxes.Contains(a.AppUserId) && !ticked.Contains(a.AppUserId)).ToList();
     }
 
     private void ToggleInvitee(Guid memberId)
@@ -1072,6 +1198,7 @@
         _inviteEmail = "";
         _inviteError = null;
         _guestError = null;
+        _guestRemoveAsk = null;
         _guests = [];
         if (_editingEvent is null)
         {
@@ -1253,7 +1380,7 @@
                 await LoadEventsAsync();
 
                 if (failed.Count > 0)
-                    _error = $"Event saved, but these could not be invited: {string.Join(", ", failed)}.";
+                    _error = $"Event saved, but the guest list didn't change as asked: {string.Join("; ", failed)}.";
             }
         }
         catch (Exception ex) { _dialogError = ex.Message; }

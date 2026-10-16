@@ -243,7 +243,9 @@ public sealed class InvestigationController : BenControllerBase
         // "you may not edit the thing that does not exist".
         if (!await CanManageAsync(id, ct)) return Forbid();
 
-        entity.OrgCalendarEventId  = request.OrgCalendarEventId;
+        // Null leaves the link alone (10/16/2026). The case page always sends null, so every edit
+        // there used to unlink the visit from its calendar entry, which then sat at the old time.
+        entity.OrgCalendarEventId  = request.OrgCalendarEventId ?? entity.OrgCalendarEventId;
         entity.Title               = request.Title.Trim();
         entity.Description         = request.Description?.Trim();
         entity.Location            = request.Location?.Trim();
@@ -290,6 +292,8 @@ public sealed class InvestigationController : BenControllerBase
         if (await EnsurePublicSlugAsync(db, entity, ct) is string slugRefusal)
             return BadRequest(slugRefusal);
 
+        // The calendar entry made for the visit moves with it (10/16/2026).
+        await Services.Investigations.InvestigationLifecycle.SyncCalendarAsync(db, entity, ct);
         await db.SaveChangesAsync(ct);
         if (previouslyAt != entity.ScheduledDateTime
             && await db.Cases.AsNoTracking().FirstOrDefaultAsync(x => x.Id == caseId, ct) is { } caseForMail)
@@ -315,15 +319,6 @@ public sealed class InvestigationController : BenControllerBase
         if (!await CanManageAsync(id, ct)) return Forbid();
 
 
-        // Detach the binder entries first. The FK is NoAction (SQL Server won't allow SetNull —
-        // see BenDataContext), so without this the delete fails on a referential constraint. The
-        // notes and readings survive on the case timeline; the visit they were taken during is what
-        // is being removed, not the findings.
-        var binderEntries = await db.CaseTimelineEntries
-            .Where(e => e.InvestigationId == id)
-            .ToListAsync(ct);
-        foreach (var e in binderEntries) e.InvestigationId = null;
-
         // Field sessions recorded on this visit cascade away with it — but a case report may be
         // CITING one, and a report quietly losing its evidence is worse than a delete that does
         // not happen. (The database would refuse this anyway; without the check it arrives as a
@@ -339,6 +334,11 @@ public sealed class InvestigationController : BenControllerBase
                 + "then delete the investigation.");
         }
 
+        // Detaches the binder entries (their key is NoAction; the notes survive on the case
+        // timeline), and since 10/16/2026 also clears duty assignments, which made SQL Server
+        // refuse the delete for any visit where somebody held a duty, and takes the visit's own
+        // calendar entry with it. Shared with the group's Investigations page.
+        await Services.Investigations.InvestigationLifecycle.PrepareDeleteAsync(db, entity, ct);
         db.Investigations.Remove(entity);
         await db.SaveChangesAsync(ct);
         return NoContent();
@@ -378,6 +378,8 @@ public sealed class InvestigationController : BenControllerBase
             IsReadByClient = false, IsReadByOrg = true,
             DateCreated = DateTime.UtcNow, CreatedByAppUserId = userId,
         });
+        // The calendar entry says it is canceled rather than still showing the night (10/16/2026).
+        await Services.Investigations.InvestigationLifecycle.SyncCalendarAsync(db, investigation, ct);
         await db.SaveChangesAsync(ct);
         if (await db.Cases.AsNoTracking().FirstOrDefaultAsync(x => x.Id == caseId, ct) is { } caseForMail)
             await _clientMail.VisitCancelledAsync(db, caseForMail, investigation, ct);   // item 206
@@ -547,7 +549,7 @@ public sealed class InvestigationController : BenControllerBase
     ///
     /// <para>Assigned once. Renaming afterwards leaves the address alone.</para>
     /// </remarks>
-    private static async Task<string?> EnsurePublicSlugAsync(
+    internal static async Task<string?> EnsurePublicSlugAsync(
         BenDataContext db, Investigation entity, CancellationToken ct)
     {
         if (entity.Visibility != InvestigationVisibility.Public || entity.UrlName is not null)

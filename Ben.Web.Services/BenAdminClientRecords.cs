@@ -598,6 +598,19 @@ public sealed record InvestigationRosterEntry(
     DateTime? DateArrived,
     bool SelfReported);
 
+/// <summary>
+/// Changes a visit with no case (10/16/2026). Mirror of the WebApi record. Times are UTC; leaving
+/// out both <c>PlaceId</c> and <c>NewPlace</c> keeps the place it has.
+/// </summary>
+public sealed record UpdateOrgInvestigationRequest(
+    string Title,
+    DateTime ScheduledDateTime,
+    DateTime? EndDateTime = null,
+    string? Description = null,
+    Guid? PlaceId = null,
+    NewPlaceRequest? NewPlace = null,
+    Ben.Data.Common.Enums.InvestigationVisibility? Visibility = null);
+
 /// <summary>Schedules an investigation. With no <c>CaseId</c>, a place is required.</summary>
 public sealed record CreateOrgInvestigationRequest(
     string Title,

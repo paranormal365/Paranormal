@@ -98,19 +98,14 @@
                             <button type="button" class="btn btn-sm btn-link p-0"
                                     id="clear-event-place" @onclick="ClearPlace">change</button>
                         </div>
-                        @if (chosen.Kind == Ben.Data.Common.Enums.PlaceKind.PrivateResidence)
-                        {
-                            <div class="form-text text-danger">
-                                That is a private residence, so an event cannot be held there publicly.
-                            </div>
-                        }
                     }
                     else
                     {
                         <div class="input-group">
-                            <input id="new-event-place" class="form-control" placeholder="Search by venue name or town"
+                            <input id="new-event-place" class="form-control" placeholder="@PlaceSearch.Placeholder"
                                    value="@_placeSearch"
-                                   @oninput="e => _placeSearch = e.Value?.ToString() ?? string.Empty" />
+                                   @oninput="e => _placeSearch = e.Value?.ToString() ?? string.Empty"
+                                   @onkeydown="@(e => PlaceSearch.IsSearchKey(e.Key, _placeSearch) ? SearchPlacesAsync() : Task.CompletedTask)" />
                             <button type="button" class="btn btn-outline-secondary" id="search-event-place"
                                     disabled="@string.IsNullOrWhiteSpace(_placeSearch)"
                                     @onclick="SearchPlacesAsync">Search</button>

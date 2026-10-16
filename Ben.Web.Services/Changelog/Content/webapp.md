@@ -110,6 +110,29 @@ day-by-day account of building it would say nothing to anyone using it now.
 - On a phone, the **Ask for a place** button at the bottom of a hosted event's page moves out of the
   way while the request form is on screen, so it no longer covers the form's last lines or its send
   button. It comes back when you scroll away, and the end of the page is never stuck under it.
+- A visit with no case can be changed, canceled or deleted: press **Edit** on it in the group's
+  Investigations list. A visit saved at the wrong time can now be put right, and its calendar entry
+  moves with it. A visit with recordings, written-up accounts or anybody marked as there can't be
+  deleted; the window says so and suggests canceling it instead.
+- Editing a visit on a case's Investigations tab keeps it on the group's calendar at its new time.
+  A canceled visit's calendar entry says it's canceled.
+- Scheduling a visit with no case starts at 7:00 PM tomorrow, and the time zone it names is the one
+  in effect on the visit's date, so a November visit reads CST.
+- When scheduling a visit at a public location, typing part of a name finds a place we already
+  have, so "Bell Witch" finds Bell Witch Cave instead of making a second one.
+- Taking somebody off a visit's team asks first, and says which of their duties go with them.
+- If a check-in or an attendance change can't be saved, the team panel says why.
+- On a group's calendar, unticking an invited member and saving takes them off the event, and
+  **Remove** in Who's coming takes anybody off, after asking. A guest can be marked as coming, not
+  coming or not answered, whatever they said before.
+- Pressing Enter in a place or venue search box searches. The boxes say what to type: part of the
+  name, or the town.
+- The Your venue section has its own link at the top of a group's settings.
+- On a phone, a group's investigations are listed as cards, and a visit's team fits the screen.
+  Who's coming puts each guest's buttons on their own line, and an event's start time shows under
+  its date.
+- Search boxes, an event's "Coming along?" email and name boxes, and the case page's Add member list
+  are labeled for screen readers.
 
 ### Administration
 

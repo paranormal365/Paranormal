@@ -1,0 +1,170 @@
+/*
+    The group's investigations list, at every width (10/16/2026).
+
+    Found by the e2e run on a 375px phone: the list was a six-column table inside
+    .table-responsive, so it scrolled sideways, and the expanded Team panel (a full-width row under
+    the visit) took the table's width with it. Its "Add to the team" picker ran from x 52 to 680 and
+    the roster's ✕ and Lead columns were off the screen until the table was scrolled.
+
+    Two rules, so neither has to be perfect on its own:
+
+    1. The Team panel is never wider than the list's visible width, at ANY width. The list is a
+       size container, and the panel is held to 100cqi and stuck to the left edge, so even if the
+       table scrolls sideways (a long place name on a 1024px laptop) the panel stays in view.
+
+    2. Below 992px (Bootstrap's lg edge) each visit is a card, the site's established phone reflow
+       (PlaceRoomsManager.razor.css): the heading row is hidden and every cell names its column
+       from data-label. Cards start at lg rather than md because the When cell and the action
+       buttons do not wrap: at 768 to 991px (iPad portrait, an open folding phone at about 951px)
+       the table measured wider than the screen and scrolled sideways like the phone did.
+
+    Widths:
+      320 to 575px (small phone to Pro Max, a folded Duo):  one column per card, label on the
+                                                            left, like the rooms cards.
+      576 to 991px (large phone landscape, iPad portrait,  cells flow into as many columns as
+      an open Duo):                                         fit (at least 13rem each); the title
+                                                            and the buttons span the card.
+      992px and up (iPad landscape, laptops, desktops):     the table, exactly as before.
+
+    Colors are --bs-* variables only, so both themes follow data-bs-theme. Nothing moves, so there
+    is no reduced-motion block.
+*/
+
+.inv-list {
+    container-type: inline-size;
+}
+
+.inv-team-panel {
+    position: sticky;
+    left: 0;
+    /* The td's own padding is .25rem each side in a .table-sm. */
+    max-width: calc(100cqi - .5rem);
+}
+
+@media (max-width: 991.98px) {
+    .inv-table {
+        display: block;
+    }
+
+    .inv-table thead {
+        display: none;
+    }
+
+    .inv-table tbody {
+        display: flex;
+        flex-direction: column;
+        gap: .6rem;
+    }
+
+    .inv-table tr.inv-row {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(13rem, 1fr));
+        column-gap: 1rem;
+        padding: .5rem .75rem;
+        border: 1px solid var(--bs-border-color);
+        border-radius: .6rem;
+        background: var(--bs-body-bg);
+    }
+
+    .inv-table tr.inv-row.table-active {
+        border-color: var(--bs-primary);
+    }
+
+    .inv-table tr.inv-row > td {
+        display: block;
+        min-width: 0;
+        padding: .35rem 0;
+        border: 0;
+        background: transparent;
+        text-align: start !important;   /* over .text-end and .text-center */
+        white-space: normal !important; /* over .text-nowrap */
+        overflow-wrap: break-word;
+    }
+
+    /* The column's name, because there is no heading row to look up to. */
+    .inv-table tr.inv-row > td::before {
+        content: attr(data-label);
+        display: block;
+        font-size: .72rem;
+        font-weight: 650;
+        letter-spacing: .04em;
+        text-transform: uppercase;
+        color: var(--bs-secondary-color);
+    }
+
+    /* The visit's name leads the card, then when and where. */
+    .inv-table tr.inv-row > td.inv-title {
+        order: -1;
+        grid-column: 1 / -1;
+        font-weight: 600;
+    }
+
+    .inv-table tr.inv-row > td.inv-title::before {
+        display: none;
+    }
+
+    .inv-table tr.inv-row > td.inv-actions {
+        grid-column: 1 / -1;
+        display: flex;
+        flex-wrap: wrap;
+        gap: .5rem;
+        padding-top: .5rem;
+    }
+
+    .inv-table tr.inv-row > td.inv-actions::before {
+        flex: 0 0 100%;
+    }
+
+    /* The team opens under its card, as a card of its own. */
+    .inv-table tr.inv-team-row {
+        display: block;
+    }
+
+    .inv-table tr.inv-team-row > td {
+        display: block;
+        padding: .5rem;
+        border: 1px solid var(--bs-border-color);
+        border-radius: .6rem;
+    }
+
+    .inv-team-panel {
+        position: static;
+        max-width: 100%;
+    }
+}
+
+@media (max-width: 575.98px) {
+    .inv-table tr.inv-row {
+        grid-template-columns: minmax(0, 1fr);
+    }
+
+    /* Label on the left, value on the right, like the rooms cards. */
+    .inv-table tr.inv-row > td {
+        display: flex;
+        align-items: baseline;
+        gap: .75rem;
+        border-bottom: 1px solid var(--bs-border-color-translucent);
+    }
+
+    .inv-table tr.inv-row > td::before {
+        flex: 0 0 5.5rem;
+    }
+
+    .inv-table tr.inv-row > td.inv-title {
+        display: block;
+    }
+
+    .inv-table tr.inv-row > td.inv-actions {
+        display: flex;
+        border-bottom: 0;
+    }
+}
+
+/* At least 44px to touch, on phones and tablets, and anywhere the pointer is a finger. */
+@media (max-width: 991.98px), (pointer: coarse) {
+    .inv-table tr.inv-row > td.inv-actions .btn {
+        min-height: 44px;
+        display: inline-flex;
+        align-items: center;
+    }
+}
