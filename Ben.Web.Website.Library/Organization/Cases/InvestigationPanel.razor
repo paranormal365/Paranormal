@@ -892,7 +892,9 @@
         public string             Title             { get; set; } = "";
         public string             Description       { get; set; } = "";
         public string             Location          { get; set; } = "";
-        public DateTime           ScheduledDateTime { get; set; } = DateTime.Now.AddDays(7);
+        // A placeholder only: OpenAdd and OpenEdit always set it on the visit's clock before the
+        // dialog shows. Not DateTime.Now, which is the server's clock.
+        public DateTime           ScheduledDateTime { get; set; } = DateTime.UtcNow.AddDays(7);
 
         /// <summary>The two halves of the start, over one field. Splitting the state as well as
         /// the controls is how the halves drift apart.</summary>

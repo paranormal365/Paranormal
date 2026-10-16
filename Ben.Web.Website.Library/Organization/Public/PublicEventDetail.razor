@@ -1072,9 +1072,9 @@ else
     {
         if (night.StartsLocal is not { } from) return "";
 
-        var start = DateTime.Today.Add(from).ToString("h:mm tt");
+        var start = DateTime.MinValue.Add(from).ToString("h:mm tt");
         return night.EndsLocal is { } to
-            ? $"{start} – {DateTime.Today.Add(to):h:mm tt}"
+            ? $"{start} – {DateTime.MinValue.Add(to):h:mm tt}"
             : start;
     }
 }

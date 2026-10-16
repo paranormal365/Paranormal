@@ -139,7 +139,7 @@
                                                 <input class="form-check-input" type="checkbox" id="@($"meal-{id}")" checked="@_mealIds.Contains(id)"
                                                        @onchange="@(e => Set(() => { if ((bool)e.Value!) _mealIds.Add(id); else _mealIds.Remove(id); }))" />
                                                 <label class="form-check-label" for="@($"meal-{id}")">
-                                                    @meal.NightDate.ToString("dddd, MM/dd") · @meal.MealTitle@(meal.ServedAtLocal is { } at ? $", {DateTime.Today.Add(at):h:mm tt}" : "")
+                                                    @meal.NightDate.ToString("dddd, MM/dd") · @meal.MealTitle@(meal.ServedAtLocal is { } at ? $", {DateTime.MinValue.Add(at):h:mm tt}" : "")
                                                 </label>
                                             </div>
                                         }

@@ -28,7 +28,7 @@
             {
                 <button type="button" class="btn btn-primary"
                         disabled="@_checkingIn"
-                        @onclick="@(() => _showCheckIn = true)">
+                        @onclick="@OpenCheckIn">
                     <BenIcon Name="map-pin" Class="me-1" />@(_checkingIn ? "Saving…" : "I've arrived")
                 </button>
             }
@@ -357,7 +357,7 @@
         var isNewInvestigation = InvestigationId != _loadedFor;
         _loadedFor   = InvestigationId;
         _loadedToken = ReloadToken;
-        if (isNewInvestigation) { var now = DateTime.Now; _statedArrival = new DateTime(now.Year, now.Month, now.Day, now.Hour, now.Minute, 0); }
+        if (isNewInvestigation) _statedArrival = null;
         await LoadAsync();
     }
 
@@ -518,14 +518,32 @@
         }
     }
 
+    /// <summary>
+    /// Opens the check-in box with the time filled in as now, on the reader's own clock.
+    /// </summary>
+    /// <remarks>
+    /// Filled when the box opens rather than when the investigation loads: the reader's zone is
+    /// only known once the browser has said what it is, and on a Blazor Server page
+    /// <c>DateTime.Now</c> is the server's clock, which is nobody's in particular (10/16/2026).
+    /// </remarks>
+    private void OpenCheckIn()
+    {
+        if (_statedArrival is null)
+        {
+            var now = UserState.NowInViewerTimeZone();
+            _statedArrival = new DateTime(now.Year, now.Month, now.Day, now.Hour, now.Minute, 0);
+        }
+        _showCheckIn = true;
+    }
+
     private async Task CheckInAsync()
     {
         _checkingIn = true;
         _error = null;
 
-        // Parsed as local time and sent as UTC, because the field is what the person is reading
-        // off their own watch.
-        DateTime? stated = _statedArrival?.ToUniversalTime();
+        // Read on the person's own clock and sent as UTC, because the field is what they are
+        // reading off their own watch. Converted through the reader's zone, not the server's.
+        DateTime? stated = _statedArrival?.ToUtcFromViewerLocal(UserState);
 
         var result = await AdminClient.CheckInToInvestigationAsync(OrgId, InvestigationId, stated);
 

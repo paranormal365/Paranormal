@@ -140,13 +140,13 @@
         finally { _busy = false; }
     }
 
-    private void OpenPayment() { _payAll = false; _paidOn = DateTime.Today; _reference = null; _dialogError = null; _paying = true; }
+    private void OpenPayment() { _payAll = false; _paidOn = UserState.NowInViewerTimeZone().Date; _reference = null; _dialogError = null; _paying = true; }
 
     private async Task RecordAsync()
     {
         if (_result.Item is not { } d) return;
         var (cutoff, expected) = _payAll ? (DateTime.UtcNow, d.Earnings.Owed) : (d.Earnings.Cutoff, d.Earnings.PayableNow);
-        var paidOn = DateTime.SpecifyKind((_paidOn ?? DateTime.Today).Date, DateTimeKind.Utc);
+        var paidOn = DateTime.SpecifyKind((_paidOn ?? UserState.NowInViewerTimeZone()).Date, DateTimeKind.Utc);
         if (await RunAsync(AdminClient.RecordStoreSellerPaymentAsync(SellerId, new RecordSellerPaymentRequest(cutoff, expected, paidOn, _reference)),
                 $"Recorded — {StoreMoney.Format(expected)} to {d.Name}."))
             _paying = false;

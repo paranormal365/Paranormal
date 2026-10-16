@@ -67,6 +67,12 @@ day-by-day account of building it would say nothing to anyone using it now.
   page you opened starts on the screen rather than below it.
 - When asking for help, an address the map service could not look up just then says so, and Verify
   Address tries again; only an address the map really cannot find is reported as not found.
+- Times you enter when scheduling an investigation are saved in your own time zone; they were an
+  hour off. The form says which time zone it uses.
+- Dates you propose to a client are saved in your own time zone; they were several hours off.
+- When you check in at an investigation, the arrival time filled in for you is now your own time,
+  and the time you enter is saved as your time.
+- Date fields and calendars start on today in your own time zone.
 
 ### Administration
 
