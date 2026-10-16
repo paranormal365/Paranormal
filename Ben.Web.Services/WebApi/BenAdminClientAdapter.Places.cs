@@ -82,6 +82,10 @@ public sealed partial class BenAdminClientAdapter
             $"/api/places/candidates?{string.Join("&", query)}", token);
     }
 
+    public Task<LoadResult<PlaceCandidate>> SearchPublicPlacesAsync(string text, CancellationToken token = default)
+        => _api.GetListAsync<PlaceCandidate>(
+            $"/api/places/search?q={Uri.EscapeDataString(text ?? string.Empty)}", token);
+
     public Task<PublicPlaceResponse?> GetPublicPlaceAsync(Guid placeId, CancellationToken token = default)
         => _api.GetAnonymousAsync<PublicPlaceResponse>($"/api/public/places/{placeId}", token);
 

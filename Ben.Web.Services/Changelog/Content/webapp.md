@@ -42,6 +42,10 @@ day-by-day account of building it would say nothing to anyone using it now.
   if it worked. Taking off somebody who had a duty for the visit works now.
 - On a group's calendar, the event editor lists who is invited and their answer, and whoever runs the
   calendar can mark somebody as coming when they say so in person.
+- Choosing a place for a public calendar event, or a venue for an event, finds it from part of its
+  name or its town, so "Bell Witch" finds Bell Witch Cave. The first press of Search now shows the
+  answer, the box says "Searching…" while it looks, and a search that can't run says so instead of
+  reporting that nothing was found.
 - The site's icon is now the app's icon, the violet ghost, and the ghost has its face again: in the
   browser tab, on a phone's home screen, at the top of every email, beside the site's name, on the
   sign-in page and in the app section of the home page. The App Store QR codes and the guides and
