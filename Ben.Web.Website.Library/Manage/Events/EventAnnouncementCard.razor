@@ -125,7 +125,7 @@
                         <li class="list-group-item">
                             <div class="fw-semibold">@letter.Subject</div>
                             <div class="small text-secondary">
-                                @letter.SentUtc.ToViewerLocalTime(UserState).ToString("MM/dd/yyyy h:mm tt") · @letter.SentByName ·
+                                @letter.SentUtc.ToViewerLocalTime(UserState).ToDisplayDateTime() · @letter.SentByName ·
                                 to @Parties(letter.Recipients)@(letter.NightDate is { } d ? $" there on {d:ddd MM/dd}" : "")
                                 @(letter.IncludeUnconfirmed ? " (and people still waiting)" : "")
                                 · @letter.Emailed emailed

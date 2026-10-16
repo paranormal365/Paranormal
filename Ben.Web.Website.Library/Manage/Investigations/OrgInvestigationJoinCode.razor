@@ -142,7 +142,7 @@
                         {
                             <tr class="@(holder.RevokedUtc is null ? null : "opacity-50")">
                                 <td>@holder.Name</td>
-                                <td>@holder.IssuedUtc.ToViewerLocalTime(UserState).ToString("h:mm tt")</td>
+                                <td>@holder.IssuedUtc.ToViewerLocalTime(UserState).ToDisplayTime()</td>
                                 <td class="text-center">@holder.Sessions</td>
                                 <td class="text-end text-nowrap">
                                     @if (holder.RevokedUtc is null)

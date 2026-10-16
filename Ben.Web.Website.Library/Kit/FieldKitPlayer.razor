@@ -1045,7 +1045,7 @@
         var points = readings
             .Where(r => r.Microtesla is not null)
             .Select(r => new TracePoint(
-                r.At.ToViewerLocalTime(UserState).ToString("HH:mm:ss"),
+                r.At.ToViewerLocalTime(UserState).ToDisplayTimeWithSeconds(),
                 baseline is double b ? (r.Microtesla!.Value - b) * 10 : r.Microtesla!.Value * 10,
                 r.At))
             .ToList();
@@ -1099,7 +1099,7 @@
     {
         var points = readings
             .Where(r => r.SoundDbfs is not null)
-            .Select(r => new TracePoint(r.At.ToViewerLocalTime(UserState).ToString("HH:mm:ss"), r.SoundDbfs!.Value, r.At))
+            .Select(r => new TracePoint(r.At.ToViewerLocalTime(UserState).ToDisplayTimeWithSeconds(), r.SoundDbfs!.Value, r.At))
             .ToList();
 
         return Thin(points);

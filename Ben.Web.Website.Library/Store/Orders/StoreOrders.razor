@@ -61,7 +61,7 @@
                         <div class="col">
                             <h2 class="h5 fw-bold">Order no. @order.OrderNumber</h2>
                             <p class="mb-0 small">
-                                Date: @order.PlacedUtc.ToViewerLocalTime(User).ToString("MM/dd/yyyy h:mm tt") | Total: @StoreMoney.Format(order.Total)
+                                Date: @order.PlacedUtc.ToViewerLocalTime(User).ToDisplayDateTime() | Total: @StoreMoney.Format(order.Total)
                             </p>
                         </div>
                         <div class="col-12 border-top my-2 d-lg-none"></div>

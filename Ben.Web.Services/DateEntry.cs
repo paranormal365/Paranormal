@@ -8,9 +8,9 @@ public enum DateEntryMode
 {
     /// <summary><c>MM/dd/yyyy</c>. The time of day is kept from the field's current value.</summary>
     Date,
-    /// <summary><c>MM/dd/yyyy hh:mm tt</c>.</summary>
+    /// <summary><c>MM/dd/yyyy h:mm tt</c>.</summary>
     DateTime,
-    /// <summary><c>hh:mm tt</c>. The day is kept from the field's current value.</summary>
+    /// <summary><c>h:mm tt</c>. The day is kept from the field's current value.</summary>
     Time,
 }
 
@@ -48,8 +48,8 @@ public static partial class DateEntry
     public static string Example(DateEntryMode mode) => mode switch
     {
         DateEntryMode.Date     => "MM/DD/YYYY",
-        DateEntryMode.DateTime => "MM/DD/YYYY 08:00 PM",
-        _                      => "08:00 PM",
+        DateEntryMode.DateTime => "MM/DD/YYYY 8:00 PM",
+        _                      => "8:00 PM",
     };
 
     /// <summary>
@@ -95,7 +95,7 @@ public static partial class DateEntry
                     // a time nobody chose.
                     return current is { } now
                         ? new DateEntryResult(date!.Value.Date + now.TimeOfDay, null)
-                        : DateEntryResult.Fail($"Add a time after the date, like {date!.Value.ToString(DateTimeViewerExtensions.DatePattern, Invariant)} 08:00 PM.");
+                        : DateEntryResult.Fail($"Add a time after the date, like {date!.Value.ToString(DateTimeViewerExtensions.DatePattern, Invariant)} 8:00 PM.");
                 }
 
                 var (time, timeError) = ParseTime(timePart);
@@ -150,7 +150,7 @@ public static partial class DateEntry
     {
         var compact = typed.ToLowerInvariant().Replace(" ", string.Empty).Replace(".", string.Empty);
         var m = TimeShape().Match(compact);
-        if (!m.Success) return (null, "Write the time like 08:00 PM or 20:00.");
+        if (!m.Success) return (null, "Write the time like 8:00 PM or 20:00.");
 
         var hour = int.Parse(m.Groups[1].Value, Invariant);
         var minute = m.Groups[2].Success ? int.Parse(m.Groups[2].Value, Invariant) : 0;

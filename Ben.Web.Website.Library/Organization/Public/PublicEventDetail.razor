@@ -182,13 +182,14 @@ else
                 @if (_hosted is { } hostedPlaces)
                 {
                     <HostedEventPlaces Hosted="hostedPlaces" IsAuthenticated="_isAuthenticated">
-                        <SignedOut>
+                        <SignedOut Context="drawsHeading">
                             @* The umbrella's own email flow, unchanged and passed in rather than
                                copied: it is what issues the token, and a second copy would be a
-                               second way to reach it. *@
+                               second way to reach it. The component says whether it already has
+                               a heading above this, so "Coming along?" is never asked twice. *@
                             @if (!_event.Flags.RsvpHasClosed && !_event.Flags.IsFull)
                             {
-                                @AttendByEmail
+                                @AttendByEmail(drawsHeading)
                             }
                         </SignedOut>
                     </HostedEventPlaces>
@@ -285,7 +286,7 @@ else
                 }
                 else if (!_isAuthenticated && !_event.Flags.RsvpHasClosed && !_event.Flags.IsFull)
                 {
-                    @AttendByEmail
+                    @AttendByEmail(true)
                 }
                 else if (_event.Flags.RsvpBlockedReason is string reason)
                 {
@@ -567,19 +568,32 @@ else
     /// A fragment because two branches render it: an ordinary event's own sign-up, and a hosted
     /// event's, which draws the house first and puts this underneath. A second copy would be a
     /// second way to reach the same token, and the two would drift.
+    /// <para><c>drawsHeading</c> is <c>false</c> where something above has already
+    /// asked "Coming along?" — a hosted event's plan, with "Just for the day?" over this form — so
+    /// the question is asked once (10/16/2026: a signed-out visitor read it twice).</para>
     /// </remarks>
-    private RenderFragment AttendByEmail => @<text>
+    private RenderFragment<bool> AttendByEmail => drawsHeading => @<text>
                 @if (_emailSent)
                 {
-                    <div class="event-act__ask mb-1">Check your email</div>
+                    @if (drawsHeading)
+                    {
+                        <div class="event-act__ask mb-1">Check your email</div>
+                    }
                     <p class="text-secondary small mb-0">
+                        @if (!drawsHeading)
+                        {
+                            <strong>Check your email.</strong>
+                        }
                         If that address can come along, there's a link on its way. Click it to
                         confirm — it works once, and it's good for two weeks.
                     </p>
                 }
                 else
                 {
-                    <div class="event-act__ask mb-1">Coming along?</div>
+                    @if (drawsHeading)
+                    {
+                        <div class="event-act__ask mb-1">Coming along?</div>
+                    }
                     <p class="text-secondary small">
                         You don't need an account. Give us an email address and we'll send you a
                         link to confirm — no password to invent.
@@ -1111,7 +1125,7 @@ else
     {
         if (night.StartsLocal is not { } from) return "";
 
-        var start = DateTime.MinValue.Add(from).ToString("h:mm tt");
+        var start = DateTime.MinValue.Add(from).ToDisplayTime();
         return night.EndsLocal is { } to
             ? $"{start} – {DateTime.MinValue.Add(to):h:mm tt}"
             : start;

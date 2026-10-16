@@ -97,7 +97,7 @@
                             }
                         </td>
                         <td>
-                            <div>@row.DateLastSeen.ToViewerLocalTime(UserState).ToString("MM/dd/yyyy h:mm tt")</div>
+                            <div>@row.DateLastSeen.ToViewerLocalTime(UserState).ToDisplayDateTime()</div>
                             <div class="text-secondary small">
                                 since @row.DateFirstSeen.ToViewerLocalTime(UserState).ToString("MM/dd/yyyy")
                             </div>

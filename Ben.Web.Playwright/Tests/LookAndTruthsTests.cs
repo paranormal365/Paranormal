@@ -165,14 +165,17 @@ public class LookAndTruthsTests : BenTestBase
         // The heading renders long before the events do — this page said "Loading…" under a
         // finished h1 on the first run of this test. Wait for a time to exist before asserting
         // anything about how times are written.
-        await Expect(Page.GetByText(new Regex(@"\d\d:\d\d [AP]M")).First)
+        await Expect(Page.GetByText(new Regex(@"\d{1,2}:\d\d [AP]M")).First)
             .ToBeVisibleAsync(new() { Timeout = 20_000 });
 
         var body = await Page.InnerTextAsync("body");
-        Assert.That(body, Does.Match(@"\d\d:\d\d [AP]M"),
+        Assert.That(body, Does.Match(@"\d{1,2}:\d\d [AP]M"),
             "No clock time on the page at all — this test would pass for the wrong reason.");
-        Assert.That(body, Does.Not.Match(@"\d\d:\d\d:\d\d [AP]M"),
+        Assert.That(body, Does.Not.Match(@"\d{1,2}:\d\d:\d\d [AP]M"),
             "A scheduled time is printing seconds nobody typed.");
+        // And the hour is written the way people write it: "7:00 PM", never "07:00 PM" (10/16/2026).
+        Assert.That(body, Does.Not.Match(@"(?<![\d/:])0\d:\d\d [AP]M"),
+            "A clock time is printing a leading zero on the hour.");
     }
 
     // ── Signed in ────────────────────────────────────────────────────────────
