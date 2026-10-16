@@ -953,7 +953,11 @@ public sealed class HelpMediaCapture : BenTestBase
             // Approve the first, leave the second waiting.
             var attendees = await api.GetAsync(
                 $"/api/organizations/{orgId}/calendar/{eventId}/attendees", new() { Headers = authed });
-            var firstSeat = (await attendees.JsonAsync())!.Value.EnumerateArray().First()
+            // The guest's own party of two, not "the first row": the list has no fixed order, and
+            // approving the other guest's three left this one "Asked for" and the shot below with
+            // nothing reserved to show (10/16/2026).
+            var firstSeat = (await attendees.JsonAsync())!.Value.EnumerateArray()
+                .First(a => a.GetProperty("seats").GetInt32() == 2)
                 .GetProperty("id").GetString();
             await api.PostAsync(
                 $"/api/organizations/{orgId}/calendar/{eventId}/attendees/{firstSeat}/approve",
