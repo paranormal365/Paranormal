@@ -55,8 +55,11 @@ public static partial class DateEntry
     /// <summary>
     /// Reads <paramref name="text"/>. Blank text is <see cref="DateEntryResult.Empty"/>; whether blank is allowed is
     /// the field's decision. <paramref name="current"/> supplies the half a mode does not carry.
+    /// <paramref name="today"/> is the day a time typed into an empty time field lands on: the
+    /// reader's today, which the caller knows and this does not. Left out, UTC's today — never the
+    /// server's, which on a Blazor Server page is nobody's clock in particular.
     /// </summary>
-    public static DateEntryResult Parse(string? text, DateEntryMode mode, DateTime? current)
+    public static DateEntryResult Parse(string? text, DateEntryMode mode, DateTime? current, DateTime? today = null)
     {
         var typed = (text ?? string.Empty).Trim();
         if (typed.Length == 0) return DateEntryResult.Empty;
@@ -75,7 +78,7 @@ public static partial class DateEntry
                 var (time, error) = ParseTime(typed);
                 return error is not null
                     ? DateEntryResult.Fail(error)
-                    : new DateEntryResult((current?.Date ?? System.DateTime.Today) + time!.Value, null);
+                    : new DateEntryResult((current?.Date ?? today?.Date ?? System.DateTime.UtcNow.Date) + time!.Value, null);
             }
             default:
             {

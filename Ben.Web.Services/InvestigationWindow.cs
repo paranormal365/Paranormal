@@ -38,4 +38,20 @@ public static class InvestigationWindow
     /// </remarks>
     public static bool NeedsMultiDay(DateTime start, DateTime? end)
         => end is { } e && SingleDayEnd(start, e.TimeOfDay) != e;
+
+    /// <summary>
+    /// A window typed on the viewer's own clock, as the UTC instants it is stored as.
+    /// </summary>
+    /// <remarks>
+    /// <para>Ben, 10/16/2026: "if I enter 7pm to 7am, it knows I am referring to in my location".
+    /// Each end is converted on its own, through the viewer's zone, so a night that crosses a
+    /// daylight-saving change comes out the right length: 7 PM on 10/31 to 7 AM on 11/1 in
+    /// Central is thirteen hours, not twelve.</para>
+    ///
+    /// <para>Never <c>ToUniversalTime()</c>: on a Blazor Server page that converts through the
+    /// SERVER's zone, which put every investigation scheduled on production an hour out.</para>
+    /// </remarks>
+    public static (DateTime StartUtc, DateTime? EndUtc) ToUtc(
+        DateTime localStart, DateTime? localEnd, IBenUserState viewer)
+        => (localStart.ToUtcFromViewerLocal(viewer), localEnd?.ToUtcFromViewerLocal(viewer));
 }

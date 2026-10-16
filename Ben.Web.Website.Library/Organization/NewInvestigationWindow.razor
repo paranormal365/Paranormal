@@ -1,8 +1,10 @@
 @namespace Ben.Web.Website.Library.Organization
 @using Ben.Data.Common.Enums
 @using System.Timers
+@using Ben.Data.Common.Helpers
 
 @inject IBenAdminClient AdminClient
+@inject IBenUserState UserState
 @implements IDisposable
 
 @*
@@ -35,6 +37,7 @@
             <div class="col-md-6">
                 <label class="form-label fw-semibold" for="newinvestigationwindow-when-60b5">Starts</label>
                 <BenDateField Mode="DateEntryMode.DateTime" Id="newinvestigationwindow-when-60b5" @bind-Value="_when" />
+                <div class="form-text" data-testid="newinvestigationwindow-zone">Times are in your time zone (@MyLetters).</div>
             </div>
 
             @* One arrival and one departure, allowed to cross midnight — 3pm until 8am the next
@@ -272,7 +275,7 @@
 
     private string _title = "";
     private string _description = "";
-    private DateTime? _when = TomorrowToTheMinute();
+    private DateTime? _when;
     private DateTime? _end;
     private string _endTimeText = "";
     private bool   _multiDay;
@@ -331,11 +334,15 @@
         }
     }
 
-    private static DateTime TomorrowToTheMinute()
+    /// <summary>This time tomorrow on the person's own clock, to the minute.</summary>
+    private DateTime TomorrowToTheMinute()
     {
-        var t = DateTime.Now.AddDays(1);
+        var t = UserState.NowInViewerTimeZone().AddDays(1);
         return new DateTime(t.Year, t.Month, t.Day, t.Hour, t.Minute, 0);
     }
+
+    /// <summary>The letters of the clock the times are typed on: "CDT".</summary>
+    private string MyLetters => Zones.Abbreviation(UserState.ViewerTimeZone, DateTime.UtcNow);
 
     private bool CanSave =>
         !string.IsNullOrWhiteSpace(_title)
@@ -419,6 +426,10 @@
     /// </remarks>
     protected override async Task OnInitializedAsync()
     {
+        // The reader's zone arrives with sign-in; the suggested start is on their clock.
+        await UserState.AuthReady;
+        _when ??= TomorrowToTheMinute();
+
         try
         {
             var perms = await AdminClient.GetMyOrgPermissionsAsync(OrgId);
@@ -512,10 +523,13 @@
 
         try
         {
+            // Typed on the person's own clock, stored as UTC (10/16/2026: this went through the
+            // server's zone and every visit saved an hour out).
+            var (startUtc, endUtc) = Ben.Web.Services.InvestigationWindow.ToUtc(_when!.Value, EffectiveEnd(), UserState);
             var request = new CreateOrgInvestigationRequest(
                 Title: _title.Trim(),
-                ScheduledDateTime: _when!.Value.ToUniversalTime(),
-                EndDateTime: EffectiveEnd()?.ToUniversalTime(),
+                ScheduledDateTime: startUtc,
+                EndDateTime: endUtc,
                 Description: string.IsNullOrWhiteSpace(_description) ? null : _description.Trim(),
                 PlaceId: _chosenPlace?.Id,
                 // Only sent when no existing place was picked — otherwise the server would be

@@ -504,9 +504,9 @@ else
     }
 
     /// <summary>The day the calendar is showing. Starts on the next date this tour runs.</summary>
-    private DateTime _selectedDate = DateTime.Today;
-    private DateTime _calendarMin = DateTime.Today.AddYears(-1);
-    private DateTime _calendarMax = DateTime.Today.AddYears(1);
+    private DateTime _selectedDate = DateTime.UtcNow.Date;
+    private DateTime _calendarMin = DateTime.UtcNow.Date.AddYears(-1);
+    private DateTime _calendarMax = DateTime.UtcNow.Date.AddYears(1);
     private HashSet<DateTime> _dateDays = [];
 
     /// <summary>Whether this tour runs on that day, in the reader's own zone.</summary>

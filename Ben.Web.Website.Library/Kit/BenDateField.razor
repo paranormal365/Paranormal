@@ -1,4 +1,5 @@
 @typeparam TValue
+@inject IBenUserState UserState
 
 @*
     The site's date, date-and-time and time field (item 224). Replaces TelerikDatePicker, TelerikDateTimePicker and
@@ -46,7 +47,7 @@
     @if (_calendarOpen)
     {
         <div class="ben-date-field__calendar mt-1" @onkeydown="OnKeyDown">
-            <TelerikCalendar Value="@(Current ?? DateTime.Today)"
+            <TelerikCalendar Value="@(Current ?? ViewerToday)"
                              ValueChanged="@((DateTime picked) => OnCalendarPickedAsync(picked))"
                              Min="@(Min ?? new DateTime(1900, 1, 1))"
                              Max="@(Max ?? new DateTime(2199, 12, 31))" />
@@ -87,6 +88,9 @@
     private readonly string _fallbackId = "ben-date-" + Guid.NewGuid().ToString("N")[..8];
 
     private string ErrorId => $"{Id ?? _fallbackId}-error";
+
+    /// <summary>Today on the reader's clock — what an empty field's calendar opens on and a bare time lands on.</summary>
+    private DateTime ViewerToday => UserState.NowInViewerTimeZone().Date;
     private DateTime? Current => Value switch
     {
         DateTime d => d,
@@ -114,7 +118,7 @@
     private async Task OnTextChangedAsync(ChangeEventArgs e)
     {
         var typed = e.Value?.ToString() ?? string.Empty;
-        var result = DateEntry.Parse(typed, Mode, Current);
+        var result = DateEntry.Parse(typed, Mode, Current, ViewerToday);
 
         var error = result.Error;
         if (error is null && result.Value is null && !Nullable)

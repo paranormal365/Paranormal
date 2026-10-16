@@ -202,7 +202,7 @@
         {
             _requestNotes = string.Empty;
             // Seed with a week past whatever it is due now, since that is the usual ask.
-            _requestedDate = (Loan.DateDue ?? DateTime.Today).AddDays(7);
+            _requestedDate = (Loan.DateDue ?? UserState.NowInViewerTimeZone().Date).AddDays(7);
             await LoadRenewalsAsync();
         }
 

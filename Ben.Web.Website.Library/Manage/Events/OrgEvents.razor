@@ -328,8 +328,8 @@
         public string Name { get; set; } = "";
         public Guid? PlaceId { get; set; }
         public string TimeZoneId { get; set; } = "America/Chicago";
-        public DateTime StartsOn { get; set; } = DateTime.Today.AddDays(30);
-        public DateTime EndsOn { get; set; } = DateTime.Today.AddDays(30);
+        public DateTime StartsOn { get; set; } = DateTime.UtcNow.Date.AddDays(30); // a month out; a day either way does not matter
+        public DateTime EndsOn { get; set; } = DateTime.UtcNow.Date.AddDays(30); // a month out; a day either way does not matter
         public bool DatesAreSeparate { get; set; }
 
         public bool IsReady => !string.IsNullOrWhiteSpace(Name);

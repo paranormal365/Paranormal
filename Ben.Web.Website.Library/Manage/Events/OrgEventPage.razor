@@ -1011,8 +1011,8 @@
         public string? Tagline { get; set; }
         public string? Description { get; set; }
         public string TimeZoneId { get; set; } = "America/Chicago";
-        public DateTime StartsOn { get; set; } = DateTime.Today;
-        public DateTime EndsOn { get; set; } = DateTime.Today;
+        public DateTime StartsOn { get; set; } = DateTime.UtcNow.Date; // placeholder; replaced by the loaded event
+        public DateTime EndsOn { get; set; } = DateTime.UtcNow.Date;
         public TimeSpan? DefaultStartLocal { get; set; }
         public TimeSpan? DefaultEndLocal { get; set; }
         public bool HideExactLocation { get; set; }
