@@ -107,7 +107,7 @@
                                     <div class="small text-secondary">
                                         @if (post.PublishedUtc is { } published)
                                         {
-                                            <span>Published @published.ToViewerLocalTime(UserState).ToString("MMM d, yyyy, HH:mm")</span>
+                                            <span>Published @published.ToViewerLocalTime(UserState).ToString("MMM d, yyyy, h:mm tt", System.Globalization.CultureInfo.InvariantCulture)</span>
                                         }
                                         else
                                         {

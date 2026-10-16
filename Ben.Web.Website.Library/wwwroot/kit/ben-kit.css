@@ -235,3 +235,12 @@ label > .sa-icon,
 @media (prefers-reduced-motion: reduce) {
     .ben-empty__mark { animation: none; }
 }
+
+/* A hosted event's "Ask for a place" button sits fixed at the bottom of a phone's screen
+   (HostedEventShowcase). Room under the page's last line, so the footer and whatever ends the
+   page can always be scrolled clear of it (10/16/2026). On <body> because the button can be over
+   anything below it, footer included, and a scoped stylesheet cannot reach <body>. Matches the
+   d-md-none that hides the button from medium widths up. */
+@media (max-width: 767.98px) {
+    body:has(.hosted-sticky-ask) { padding-bottom: 5.5rem; }
+}

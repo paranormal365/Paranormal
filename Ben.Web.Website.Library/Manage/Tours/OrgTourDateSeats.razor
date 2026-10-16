@@ -110,7 +110,7 @@
                                     </td>
                                     <td>@seat.Seats</td>
                                     <td class="small text-secondary">
-                                        @(seat.DateRsvp?.ToViewerLocalTime(UserState).ToString("MM/dd/yyyy h:mm tt") ?? "—")
+                                        @(seat.DateRsvp?.ToViewerLocalTime(UserState).ToDisplayDateTime() ?? "—")
                                     </td>
                                     <td class="text-end text-nowrap">
                                         <button type="button" class="btn btn-primary btn-sm me-1"
@@ -257,7 +257,7 @@
     private string WhenText => _event is null
         ? ""
         // The walk's own clock, with its letters — the time guests were sold (2026-09-28).
-        : $"{Ben.Data.Common.Helpers.Zones.ToZone(_event.StartDateTime, Ben.Data.Common.Helpers.Zones.Find(_event.TimeZoneId)):MM/dd/yyyy hh:mm tt} "
+        : $"{Ben.Data.Common.Helpers.Zones.ToZone(_event.StartDateTime, Ben.Data.Common.Helpers.Zones.Find(_event.TimeZoneId)).ToDisplayDateTime()} "
           + Ben.Data.Common.Helpers.Zones.Abbreviation(Ben.Data.Common.Helpers.Zones.Find(_event.TimeZoneId), _event.StartDateTime);
 
     protected override async Task OnAfterRenderAsync(bool firstRender)

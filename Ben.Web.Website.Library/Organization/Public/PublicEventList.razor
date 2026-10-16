@@ -195,12 +195,12 @@
             {
                 new("Coming up", items.Count.ToString(), items.Count == 1 ? "night" : "nights",
                     Emphasis: true),
-                new("First", first.ToString("ddd MM/dd"), first.ToString("h:mm tt")),
+                new("First", first.ToString("ddd MM/dd"), first.ToDisplayTime()),
             };
 
             // Only when it says something the first one did not.
             if (last.Date != first.Date)
-                facts.Add(new BenFactItem("Last", last.ToString("ddd MM/dd"), last.ToString("h:mm tt")));
+                facts.Add(new BenFactItem("Last", last.ToString("ddd MM/dd"), last.ToDisplayTime()));
 
             // On a group's own page every night is theirs, so counting groups says nothing.
             if (UrlName is null)

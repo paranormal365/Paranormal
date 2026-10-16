@@ -94,6 +94,12 @@ day-by-day account of building it would say nothing to anyone using it now.
 - When you check in at an investigation, the arrival time filled in for you is now your own time,
   and the time you enter is saved as your time.
 - Date fields and calendars start on today in your own time zone.
+- Times read the way people write them, like 7:00 PM instead of 07:00 PM, across the site. Dates
+  are still MM/DD/YYYY.
+- On a hosted event's page, a visitor who isn't signed in is asked "Coming along?" once, not twice.
+- On a phone, the **Ask for a place** button at the bottom of a hosted event's page moves out of the
+  way while the request form is on screen, so it no longer covers the form's last lines or its send
+  button. It comes back when you scroll away, and the end of the page is never stuck under it.
 
 ### Administration
 

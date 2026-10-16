@@ -75,7 +75,7 @@ public class DateFieldTests : BenTestBase
         await Expect(field.Locator(".invalid-feedback")).ToHaveCountAsync(0);
     }
 
-    /// <summary>Hour 13 with PM was 03 PM on Telerik's time picker; here it is a sentence, and 8pm reads as 08:00 PM.</summary>
+    /// <summary>Hour 13 with PM was 03 PM on Telerik's time picker; here it is a sentence, and 8pm reads as 8:00 PM.</summary>
     [Test]
     public async Task An_impossible_hour_is_refused_and_a_casual_time_is_read()
     {
@@ -94,7 +94,7 @@ public class DateFieldTests : BenTestBase
 
         await input.FillAsync("8pm");
         await input.PressAsync("Tab");
-        await Expect(input).ToHaveValueAsync("08:00 PM", new() { Timeout = 10_000 });
+        await Expect(input).ToHaveValueAsync("8:00 PM", new() { Timeout = 10_000 });
         await Expect(field.Locator(".invalid-feedback")).ToHaveCountAsync(0);
     }
 }
