@@ -51,35 +51,52 @@ public sealed class MyNextEventsController : BenControllerBase
 
     public MyNextEventsController(IDbContextFactory<BenDataContext> db) => _db = db;
 
+    /// <summary>The most one answer carries, for the page that lists them all.</summary>
+    public const int MaxTake = 200;
+
+    /// <summary>
+    /// How far back <c>pastDays</c> may reach: the same 30 days <c>api/public/events/mine</c>
+    /// keeps a past event for, so "what was that place called?" the morning after has an answer.
+    /// </summary>
+    public const int MaxPastDays = 30;
+
+    /// <param name="take">How many to return: Home's card wants the next <see cref="Cap"/>;
+    /// <c>/my-events</c> asks for them all (up to <see cref="MaxTake"/>).</param>
+    /// <param name="pastDays">Also keep what ended within this many days (at most
+    /// <see cref="MaxPastDays"/>). Home leaves it at 0: a countdown has nothing to say about
+    /// last week. <c>/my-events</c> asks for 30, because it already keeps past bookings.</param>
     [HttpGet]
-    public async Task<ActionResult<MyNextEventsResponse>> Get(CancellationToken ct)
+    public async Task<ActionResult<MyNextEventsResponse>> Get(
+        CancellationToken ct, [FromQuery] int take = Cap, [FromQuery] int pastDays = 0)
     {
         var userId = GetCurrentUserId();
         if (userId == Guid.Empty) return Unauthorized();
 
         await using var db = await _db.CreateDbContextAsync(ct);
         var now = DateTime.UtcNow;
+        var since = now.AddDays(-Math.Clamp(pastDays, 0, MaxPastDays));
 
         var items = new List<MyNextEventItem>();
-        items.AddRange(await HostedBookingsAsync(db, userId, now, ct));
-        items.AddRange(await CalendarSignUpsAsync(db, userId, now, ct));
-        items.AddRange(await InvestigationsAsync(db, userId, now, ct));
+        items.AddRange(await HostedBookingsAsync(db, userId, since, ct));
+        items.AddRange(await CalendarSignUpsAsync(db, userId, since, ct));
+        items.AddRange(await InvestigationsAsync(db, userId, now, since, ct));
 
-        var upcoming = items
-            .Where(i => i.EndsAtUtc > now)
+        var kept = items
+            .Where(i => i.EndsAtUtc > since)
             .OrderBy(i => i.StartsAtUtc)
             .ThenBy(i => i.Title, StringComparer.Ordinal)
             .ToList();
 
-        return Ok(new MyNextEventsResponse([.. upcoming.Take(Cap)], upcoming.Count));
+        return Ok(new MyNextEventsResponse([.. kept.Take(Math.Clamp(take, 1, MaxTake))], kept.Count));
     }
 
     // ── Hosted events ────────────────────────────────────────────────────────
 
+    /// <param name="since">Keep what ends after this: now for Home, up to 30 days back for /my-events.</param>
     private static async Task<List<MyNextEventItem>> HostedBookingsAsync(
-        BenDataContext db, Guid userId, DateTime now, CancellationToken ct)
+        BenDataContext db, Guid userId, DateTime since, CancellationToken ct)
     {
-        var yesterday = now.Date.AddDays(-1);
+        var yesterday = since.Date.AddDays(-1);
         var bookings = await PublicHostedEventBookingController.MineQuery(db, userId)
             .Where(b => b.Status == HostedEventBookingStatus.Confirmed
                      || b.Status == HostedEventBookingStatus.Held
@@ -149,7 +166,7 @@ public sealed class MyNextEventsController : BenControllerBase
     // ── Calendar events and tour dates ───────────────────────────────────────
 
     private static async Task<List<MyNextEventItem>> CalendarSignUpsAsync(
-        BenDataContext db, Guid userId, DateTime now, CancellationToken ct)
+        BenDataContext db, Guid userId, DateTime since, CancellationToken ct)
     {
         var groups = await PublicEventController.ReaderOrganizationIdsAsync(db, userId, ct);
 
@@ -159,7 +176,7 @@ public sealed class MyNextEventsController : BenControllerBase
                      && (a.RsvpStatus == RsvpStatus.Accepted
                          || (a.SeatStatus == TourSeatStatus.Requested && a.RsvpStatus != RsvpStatus.Declined))
                      && a.SeatStatus != TourSeatStatus.TurnedDown
-                     && a.OrgCalendarEvent.EndDateTime > now
+                     && a.OrgCalendarEvent.EndDateTime > since
                      // A hosted event's calendar row mirrors its bookings, which are counted above.
                      && a.OrgCalendarEvent.HostedEventId == null)
             .Select(a => new
@@ -205,18 +222,18 @@ public sealed class MyNextEventsController : BenControllerBase
     // ── Investigations ───────────────────────────────────────────────────────
 
     private static async Task<List<MyNextEventItem>> InvestigationsAsync(
-        BenDataContext db, Guid userId, DateTime now, CancellationToken ct)
+        BenDataContext db, Guid userId, DateTime now, DateTime since, CancellationToken ct)
     {
-        var horizon = now - InvestigationWithoutEnd;
+        var horizon = since - InvestigationWithoutEnd;
 
-        // The member desk's rule: on the team, not declined, not called off, not over.
+        // The member desk's rule: on the team, not declined, not called off, not over. A completed
+        // one is left off what is coming up, and kept among the recent past on /my-events.
         var rows = await db.InvestigationAttendees.AsNoTracking()
             .Where(a => a.AppUserId == userId
                      && a.Rsvp != RsvpStatus.Declined
                      && a.Investigation.Status != InvestigationStatus.Cancelled
-                     && a.Investigation.Status != InvestigationStatus.Completed
                      && (a.Investigation.EndDateTime != null
-                            ? a.Investigation.EndDateTime > now
+                            ? a.Investigation.EndDateTime > since
                             : a.Investigation.ScheduledDateTime > horizon))
             .Select(a => new
             {
@@ -229,10 +246,14 @@ public sealed class MyNextEventsController : BenControllerBase
                 OrgZone = a.Investigation.Organization.TimeZoneId,
                 a.Rsvp,
                 a.DateCreated,
+                a.Investigation.Status,
             })
             .ToListAsync(ct);
 
-        return [.. rows.Select(r => new MyNextEventItem(
+        return [.. rows
+            .Where(r => r.Status != InvestigationStatus.Completed
+                     || (r.EndDateTime ?? r.ScheduledDateTime + InvestigationWithoutEnd) <= now)
+            .Select(r => new MyNextEventItem(
             MyNextEventKind.Investigation, r.Id, r.Title, r.OrgName,
             r.ScheduledDateTime,
             r.EndDateTime is { } end && end > r.ScheduledDateTime ? end : r.ScheduledDateTime + InvestigationWithoutEnd,

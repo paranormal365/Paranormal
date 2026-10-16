@@ -29,7 +29,10 @@ public interface IBenPlatformClient
     Task<ItemResult<MemberDeskResponse>> GetMyDeskAsync(CancellationToken token = default);
 
     /// <summary>The next few things the signed-in person is going to, for Home's countdown (10/16/2026).</summary>
-    Task<ItemResult<MyNextEventsResponse>> GetMyNextEventsAsync(CancellationToken token = default);
+    /// <param name="take">How many: Home wants the next ten; /my-events asks for them all (at most 200).</param>
+    /// <param name="pastDays">Also what ended within this many days (at most 30); 0 for Home.</param>
+    Task<ItemResult<MyNextEventsResponse>> GetMyNextEventsAsync(
+        int take = 10, int pastDays = 0, CancellationToken token = default);
 
     /// <summary>The navigation bar's numbers, counted by the database (10/14/2026).</summary>
     Task<ItemResult<NavCountsResponse>> GetMyNavCountsAsync(CancellationToken token = default);

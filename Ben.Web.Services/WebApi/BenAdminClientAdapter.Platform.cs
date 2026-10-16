@@ -25,8 +25,9 @@ public sealed partial class BenAdminClientAdapter
     public Task<ItemResult<MemberDeskResponse>> GetMyDeskAsync(CancellationToken token = default)
         => _api.GetItemAsync<MemberDeskResponse>("/api/me/desk", token);
 
-    public Task<ItemResult<MyNextEventsResponse>> GetMyNextEventsAsync(CancellationToken token = default)
-        => _api.GetItemAsync<MyNextEventsResponse>("/api/me/next-events", token);
+    public Task<ItemResult<MyNextEventsResponse>> GetMyNextEventsAsync(
+        int take = 10, int pastDays = 0, CancellationToken token = default)
+        => _api.GetItemAsync<MyNextEventsResponse>($"/api/me/next-events?take={take}&pastDays={pastDays}", token);
 
     public Task<ItemResult<NavCountsResponse>> GetMyNavCountsAsync(CancellationToken token = default)
         => _api.GetItemAsync<NavCountsResponse>("/api/me/nav-counts", token);

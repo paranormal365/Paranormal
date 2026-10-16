@@ -45,9 +45,10 @@ public sealed class MyNextEventsControllerTests
             },
         };
 
-    private static async Task<MyNextEventsResponse> GetAsync(IDbContextFactory<BenDataContext> f)
+    private static async Task<MyNextEventsResponse> GetAsync(
+        IDbContextFactory<BenDataContext> f, int take = MyNextEventsController.Cap, int pastDays = 0)
     {
-        var result = await Build(f).Get(default);
+        var result = await Build(f).Get(default, take, pastDays);
         return Assert.IsType<MyNextEventsResponse>(Assert.IsType<OkObjectResult>(result.Result).Value);
     }
 
@@ -316,7 +317,7 @@ public sealed class MyNextEventsControllerTests
         AddHostedBooking(w, "Seance Weekend", 4, HostedEventBookingStatus.Confirmed);
         await w.Db.SaveChangesAsync();
 
-        var result = await Build(w.Factory, Host).Get(default);
+        var result = await Build(w.Factory, Host).Get(default, MyNextEventsController.Cap, 0);
         var answer = Assert.IsType<MyNextEventsResponse>(Assert.IsType<OkObjectResult>(result.Result).Value);
         Assert.Empty(answer.Items);
     }
@@ -345,5 +346,51 @@ public sealed class MyNextEventsControllerTests
         var answer = await GetAsync(w.Factory);
         Assert.Equal(MyNextEventsController.Cap, answer.Items.Count);
         Assert.Equal(MyNextEventsController.Cap + 3, answer.Total);
+    }
+
+    // ── The whole list, for /my-events (10/16/2026) ─────────────────────────
+
+    /// <summary>/my-events lists them all, not Home's ten.</summary>
+    [Fact]
+    public async Task Asking_for_more_returns_more_than_homes_ten()
+    {
+        var w = await SeedAsync();
+        for (var i = 1; i <= MyNextEventsController.Cap + 3; i++)
+            AddCalendarEvent(w, $"Walk {i:00}", DateTime.UtcNow.AddDays(i));
+        await w.Db.SaveChangesAsync();
+
+        var answer = await GetAsync(w.Factory, take: MyNextEventsController.MaxTake);
+        Assert.Equal(MyNextEventsController.Cap + 3, answer.Items.Count);
+        Assert.Equal(MyNextEventsController.Cap + 3, answer.Total);
+    }
+
+    /// <summary>
+    /// /my-events already keeps past bookings, so it asks for the last 30 days of the rest too.
+    /// Home never does, and nothing older than 30 days comes back however it is asked.
+    /// </summary>
+    [Fact]
+    public async Task The_recent_past_comes_back_only_when_asked_and_never_beyond_thirty_days()
+    {
+        var w = await SeedAsync();
+        AddCalendarEvent(w, "Last week", DateTime.UtcNow.AddDays(-7));
+        AddCalendarEvent(w, "Two months ago", DateTime.UtcNow.AddDays(-60));
+        AddInvestigation(w, "Done last week", DateTime.UtcNow.AddDays(-6), RsvpStatus.Accepted, InvestigationStatus.Completed);
+        AddCalendarEvent(w, "Next week", DateTime.UtcNow.AddDays(7));
+        await w.Db.SaveChangesAsync();
+
+        Assert.Equal(["Next week"], (await GetAsync(w.Factory)).Items.Select(i => i.Title));
+        Assert.Equal(["Last week", "Done last week", "Next week"],
+            (await GetAsync(w.Factory, take: 200, pastDays: 365)).Items.Select(i => i.Title));
+    }
+
+    /// <summary>A completed investigation is never "coming up", even with a date still ahead.</summary>
+    [Fact]
+    public async Task A_completed_investigation_is_not_counted_as_coming()
+    {
+        var w = await SeedAsync();
+        AddInvestigation(w, "Marked done early", DateTime.UtcNow.AddDays(2), RsvpStatus.Accepted, InvestigationStatus.Completed);
+        await w.Db.SaveChangesAsync();
+
+        Assert.Empty((await GetAsync(w.Factory, take: 200, pastDays: 30)).Items);
     }
 }

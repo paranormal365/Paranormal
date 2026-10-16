@@ -152,7 +152,7 @@ in the event's own time zone. That's an event you booked, one you said you'd com
 or an investigation you're on the team of. Bookings the venue hasn't confirmed yet say **Asked for**
 or **Held for you**. The card reads **Tonight** on the day and **Happening now** while it's on, then
 moves on to the next one. If you have more coming up, **and 2 more** takes you to *What I'm going
-to*. Tap the card to open your pass, or the event's page. With nothing coming up, there's no card.
+to*, which lists them all. Tap the card to open your pass, or the event's page. With nothing coming up, there's no card.
 
 Every event in **What's near you** counts down to its start too, with a thin bar that fills from
 the day it was listed to the moment it begins. When you're signed in, the list also shows your own

@@ -192,3 +192,29 @@ one line to change: `CountdownMath.Baseline` (with `UnlistedWindow` and `Shortes
 
 Before being relied on, the visibility, DST, other-zone, double-counting and canceled-event tests were
 each run against code with that rule taken out, and each failed.
+
+## Second commit: "What I'm going to" lists everything (10/16/2026)
+
+Ben asked that the "and 2 more" gap be fixed: /my-events listed hosted bookings only, and Home's
+card counts four kinds of thing.
+
+- **The hosted bookings stay as they were.** Same rows, passes, party panels ("Change names and
+  dietary needs") and ids. Each still-counted booking also gets the compact countdown, on the
+  window of the nights it is for.
+- **Below them, everything else Home counts**, in `Organization/Public/MyOtherEvents.razor`:
+  calendar RSVPs, tour seats and team investigations. Soonest first, each with the compact
+  countdown and the same standing words as Home ("You're coming", "Asked for", "You're invited").
+- **Past items.** The page already keeps past bookings (a confirmed booking stays, for its review
+  link), so the rest match that within limits: whatever ended in the last 30 days follows under
+  **Recently**, most recent first. That is the same 30 days `api/public/events/mine` keeps.
+- **The endpoint takes `take` and `pastDays`.** `api/me/next-events?take=200&pastDays=30` returns
+  up to 200 items and up to 30 days back. Home still gets the defaults: the next 10, nothing past. A
+  completed investigation is never counted as coming up, but is kept among the recent past.
+- **The intro is true now:** "Events you've booked or asked to come to, the events and tours you
+  said you'd come to, and the investigations you're on the team of. Nothing here is paid through
+  this site."
+- **"Nothing yet" only when there is nothing.** The empty and "Nothing coming up" alerts appear only
+  when the section below is empty too. A failure loading that section is its own sentence with Try
+  again.
+- **Tests:** `MyEventsPageTests` (render) and three more `MyNextEventsControllerTests`. They were run
+  against the old page and an endpoint that ignored `take`/`pastDays`, and failed.

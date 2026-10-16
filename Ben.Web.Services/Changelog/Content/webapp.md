@@ -41,6 +41,8 @@ day-by-day account of building it would say nothing to anyone using it now.
   to their next walk.
 - Signed in, What's On and What's Near You also show your own groups' events that aren't public,
   marked "Your group", and mark public events you've been invited to or said you're going to.
+- What I'm going to now lists everything you're going to, not only bookings: events and tours you
+  said you'd come to and investigations you're on the team of, each counting down to its start.
 - The site's icon is now the app's icon, the violet ghost, and the ghost has its face again: in the
   browser tab, on a phone's home screen, at the top of every email, beside the site's name, on the
   sign-in page and in the app section of the home page. The App Store QR codes and the guides and
