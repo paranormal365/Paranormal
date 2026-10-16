@@ -87,8 +87,28 @@ case, so it's changed from the case's Investigations tab." (that door also mails
     rows, written accounts, guest passes, join codes, schedule proposals and the visits themselves.
     The case's calendar entries are unlinked from the case, not deleted. `CasePurge*` and
     `AdminCasePurge*` tests (35) pass.
-- The case page's Delete still does not ask first. Adding a question there would change what the
-  case-management e2e tests click, so it is left for the branch that owns them.
+- **The case page's Delete asks first (third commit).** `InvestigationPanel.razor`: the dialog's
+  **Delete** (`#investigation-dialog-delete`) now shows "Delete this visit? This can't be undone."
+  inline (`#investigation-dialog-confirm`) with **Keep** (`-confirm-no`) and **Delete**
+  (`-confirm-yes`); only the second Delete deletes. No TelerikDialog. The visit's Edit button has
+  `id="case-inv-edit-{id}"`. `InvestigationPanel.razor.css` gives the question's and the footer's
+  buttons 44px below 992px and on touch screens. No existing e2e test presses this button.
+  `Oct16GapsTests.The_case_pages_delete_asks_first_inline` holds the markup to it (fails on the old
+  one-click button).
+- **e2e (third commit),** after merging `integrate/oct16-fixes` (a881391a, clean, no conflicts):
+  `Ben.Web.Playwright/Tests/Oct16/Oct16CaseVisitDeleteTests.cs`, `[Category("Oct16")]`:
+  1. a case visit with a recording: the question, then the refusal in `#investigation-dialog-error`,
+     and the visit stays on the page and the server;
+  2. an empty case visit: the first Delete asks, Keep changes nothing, Delete removes it from the
+     page and the server;
+  3. the question and its two buttons pass `LookAtAsync` and `TouchTargetAsync` across `Widths`,
+     dark and light.
+
+  Each test makes its own unplaced case with no client in Paranormal365 as Sarah, and a visit on it.
+  The recording is a one-reading session document filed to the visit. A recording filed to a visit
+  can't be deleted by its owner, so teardown purges each case as the SuperAdmin (which hands the
+  recording back to Sarah as a personal session) and then deletes that session as Sarah. Built, not
+  run: an e2e run was going in the main checkout.
 
 ## Screens (gaps 13, 14, 16)
 

@@ -116,6 +116,7 @@ day-by-day account of building it would say nothing to anyone using it now.
 - A visit that has recordings, written-up accounts or anybody marked as there can't be deleted, with
   a case or without; the page says so and suggests canceling it instead, which keeps them on record.
   Before, deleting a case's visit deleted its recordings too.
+- On a case's Investigations tab, **Delete** on a visit asks first instead of deleting at once.
 - Editing a visit on a case's Investigations tab keeps it on the group's calendar at its new time.
   A canceled visit's calendar entry says it's canceled.
 - Scheduling a visit with no case starts at 7:00 PM tomorrow, and the time zone it names is the one
