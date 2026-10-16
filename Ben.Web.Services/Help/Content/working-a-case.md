@@ -663,7 +663,9 @@ Only people on the team can check in, so put them on it first. On the group's In
 whoever manages the visit opens **Team**, picks a member under **Add to the team** and presses
 **Add**; the **✕** at the end of their row takes them off again. Somebody who has been recorded as
 there, or has written up what they saw, stays on the team. On a case's Investigations tab, add
-people with **Add member** under the visit's attendees.
+people with **Add member** under the visit's attendees; the same rules apply there. Only active
+members can be put on a team, not viewers, and each person only once. When something can't be
+done, the page says why.
 
 Press **I've arrived** to check yourself in. You can edit the time, and that's intentional: most
 sites have no signal, so it's normal to check in the next morning and set the time to when you

@@ -33,10 +33,34 @@ first. Check-in returns Forbid with no row, so nobody could ever arrive at a cas
 - Kept away from the roster's time-conversion lines (~360, ~528) that
   `fix/viewer-time-zone-saves` edits.
 
-**Checked: what the case-bound add does.** It checks the caller manages the visit and the case is
-the group's, but not that the person added is a member, not duplicates (a second add is a 500 from
-the unique index), and it writes no audit row. Its remove doesn't clear duty assignments, so removing
-somebody with a duty would fail in SQL Server. Not changed here; worth a follow-up.
+**Checked: what the case-bound add did.** It checked the caller manages the visit and the case is
+the group's, but not that the person added is a member, not duplicates (a second add was a 500 from
+the unique index), and it wrote no audit row. Its remove didn't clear duty assignments, so removing
+somebody with a duty failed in SQL Server. Fixed in the second commit (below).
+
+## Second commit: the case page's door, held to the same rules
+
+Ben asked that everything found along the way be fixed.
+
+- `Services/Investigations/InvestigationTeam.cs` holds the rules once: `WhyCannotJoinAsync`
+  (active member, open account, not a Viewer, not already on the team), `WhyCannotLeaveAsync`
+  (not recorded as attended, no filed account), and `RemoveAsync` (duty assignments first, then
+  the row; doesn't save). A refusal carries its kind (400 or 409) and its sentence. Both
+  `OrgInvestigationsController` and `InvestigationController` call it. The gate on the caller stays
+  in each controller, because the two prove the visit belongs to the group differently.
+- `InvestigationController.AddAttendee` / `RemoveAttendee` apply those rules and now write
+  `LogCreateAsync` / `LogDeleteAsync`. The constructor takes `IAuditLogService` (already registered
+  for DI); five test builders were updated.
+- **Was the old remove's behavior deliberate?** No. Since 20668270 (07/24/2026, the original
+  investigation workflow), every change to it has been a permission or scoping gate (5b9dfa48,
+  056647eb, 2f5876ad, 9899f875, f1106706). None of them says anything about removing somebody who
+  attended or filed an account. So the "recorded as there or wrote it up" rule now applies
+  on the case page too.
+- **The case page now shows the refusal.** `AddInvestigationAttendeeAsync` returns
+  `(Attendee, Error)` and `RemoveInvestigationAttendeeAsync` returns `(Removed, Error)`. Before,
+  `InvestigationPanel.razor` ignored both results, so a refused add cleared the picker and looked like
+  it had worked. The sentence shows under the attendee table, and the **Add member** picker no longer
+  offers inactive members or Viewers.
 
 **Checked: the Guest code.** Redeeming one (`PublicInvestigationCodeController.Redeem` →
 `GuestCodes.RedeemAsync`, and the Field Kit launch path in `FieldLaunchService`) creates an
@@ -86,8 +110,17 @@ separate from the invite boxes and shows on public events too.
 - `Phase4AdapterTests`: the RSVP adapter's new shape, and that it keeps the refusal.
 - Each guard was checked to discriminate: with the guards disabled, 10 of the 16 team tests fail;
   with `develop`'s `OrgCalendarController`, the 2 cross-group tests fail.
+- Second commit: `CaseInvestigationTeamTests` (12) covers the same refusals through the case route:
+  - outsider, former member, closed account, unknown id, Viewer, duplicate;
+  - attended and wrote-it-up stay;
+  - duties go with the row;
+  - both add and remove are audited;
+  - non-managers are refused.
+
+  With the case controller's old add/remove logic put back, 10 of the 12 fail. The 2 that pass are
+  the non-manager refusals, which were already enforced. `InvestigationTeamTests` gained a
+  closed-account case (17), and `Phase5AdapterTests` checks that both case adapters keep the refusal.
 
 ## Not done
 
 - Help screenshots and the product PDF were not refreshed (this branch starts no hosts).
-- The case-bound add/remove gaps above.

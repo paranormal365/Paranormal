@@ -33,6 +33,7 @@ public class InvestigationTeamTests
     private static readonly Guid NewcomerId = Guid.NewGuid();
     private static readonly Guid LapsedMemberId = Guid.NewGuid();
     private static readonly Guid ViewerId = Guid.NewGuid();
+    private static readonly Guid ClosedAccountId = Guid.NewGuid();
     private static readonly Guid OutsiderId = Guid.NewGuid();
 
     private sealed record World(
@@ -98,6 +99,13 @@ public class InvestigationTeamTests
         Member(NewcomerId, OrgId, OrganizationMemberRole.Member);
         Member(LapsedMemberId, OrgId, OrganizationMemberRole.Member, active: false);
         Member(ViewerId, OrgId, OrganizationMemberRole.Viewer);
+        // A closed account keeps an active membership row, so its work stays attributed.
+        db.Users.Add(new AppUser
+        {
+            Id = ClosedAccountId, UserName = $"{ClosedAccountId:N}@t", Email = $"{ClosedAccountId:N}@t",
+            DisplayName = "A former member", DateClosed = DateTime.UtcNow.AddDays(-1),
+        });
+        Member(ClosedAccountId, OrgId, OrganizationMemberRole.Member);
         // The outsider belongs to a different group entirely.
         Member(OutsiderId, OtherOrgId, OrganizationMemberRole.Member);
 
@@ -235,6 +243,17 @@ public class InvestigationTeamTests
 
         Assert.IsType<BadRequestObjectResult>(result.Result);
         Assert.DoesNotContain(await TeamAsync(w), a => a.AppUserId == LapsedMemberId);
+    }
+
+    [Fact]
+    public async Task A_closed_account_cannot_be_put_on_the_team()
+    {
+        var w = await SeedAsync();
+
+        var result = await AddAsync(w, CreatorId, ClosedAccountId);
+
+        Assert.IsType<BadRequestObjectResult>(result.Result);
+        Assert.DoesNotContain(await TeamAsync(w), a => a.AppUserId == ClosedAccountId);
     }
 
     [Fact]

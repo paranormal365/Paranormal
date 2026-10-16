@@ -524,28 +524,10 @@ public sealed class OrgInvestigationsController : BenControllerBase
                 db, id, userId, User.IsInRole(RoleNames.SuperAdmin), ct))
             return Forbid();
 
-        // A closed account keeps its membership row so its work stays attributed (see the group
-        // roster), so "active member" here also means the account is still open.
-        var role = await db.OrganizationUserMemberships.AsNoTracking()
-            .Where(m => m.OrganizationId == orgId && m.AppUserId == request.AppUserId && m.IsActive)
-            .Join(db.AppUsers.AsNoTracking().Where(u => u.DateClosed == null),
-                m => m.AppUserId, u => u.Id, (m, u) => (OrganizationMemberRole?)m.Role)
-            .FirstOrDefaultAsync(ct);
-        if (role is null)
-            return BadRequest("That person isn't an active member of this group, so they can't be put on its team.");
-        if (role == OrganizationMemberRole.Viewer)
-            return BadRequest("That person is a viewer in this group. Viewers can look but can't take part, "
-                            + "so they can't be put on a team. Change their role first if they're coming.");
-
-        if (await db.InvestigationAttendees.AsNoTracking()
-                .AnyAsync(a => a.InvestigationId == id && a.AppUserId == request.AppUserId, ct))
-        {
-            var name = await db.AppUsers.AsNoTracking()
-                .Where(u => u.Id == request.AppUserId)
-                .Select(u => u.DisplayName)
-                .FirstOrDefaultAsync(ct);
-            return Conflict($"{name ?? "That person"} is already on this team.");
-        }
+        // The same rules the case page's door applies — see InvestigationTeam.
+        if (await Services.Investigations.InvestigationTeam.WhyCannotJoinAsync(
+                db, orgId, id, request.AppUserId, ct) is { } refusal)
+            return refusal.ToResult();
 
         var attendee = new InvestigationAttendee
         {
@@ -595,22 +577,10 @@ public sealed class OrgInvestigationsController : BenControllerBase
                 db, id, userId, User.IsInRole(RoleNames.SuperAdmin), ct))
             return Forbid();
 
-        var name = await db.AppUsers.AsNoTracking()
-            .Where(u => u.Id == attendee.AppUserId)
-            .Select(u => u.DisplayName)
-            .FirstOrDefaultAsync(ct) ?? "That person";
-        if (attendee.DidAttend == true)
-            return Conflict($"{name} is recorded as having been there, so they stay on the team. "
-                          + "Untick Attended first if that was a mistake.");
-        if (await db.InvestigationFindings.AsNoTracking()
-                .AnyAsync(f => f.InvestigationId == id && f.AppUserId == attendee.AppUserId, ct))
-            return Conflict($"{name} has written up what they saw, so they stay on the team.");
+        if (await Services.Investigations.InvestigationTeam.WhyCannotLeaveAsync(db, attendee, ct) is { } refusal)
+            return refusal.ToResult();
 
-        var duties = await db.InvestigationDutyAssignments
-            .Where(x => x.InvestigationAttendeeId == attendee.Id)
-            .ToListAsync(ct);
-        db.InvestigationDutyAssignments.RemoveRange(duties);
-        db.InvestigationAttendees.Remove(attendee);
+        await Services.Investigations.InvestigationTeam.RemoveAsync(db, attendee, ct);
         await db.SaveChangesAsync(ct);
 
         _ = TryAuditAsync(_auditLog.LogDeleteAsync(

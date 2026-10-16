@@ -36,6 +36,10 @@ day-by-day account of building it would say nothing to anyone using it now.
 - A visit with no case can have a team: on the group's Investigations list, whoever runs the visit
   opens **Team** and adds members under **Add to the team**, or takes them off with **✕**. Before,
   nobody could be added, so nobody could check in, lead the visit or take a duty.
+- On a case's Investigations tab, the attendee list follows the same rules: only active members can
+  be added, each person once, and somebody recorded as there or who has written up what they saw
+  stays on the team. When an add or a removal can't be done, the page says why instead of looking as
+  if it worked. Taking off somebody who had a duty for the visit works now.
 - On a group's calendar, the event editor lists who is invited and their answer, and whoever runs the
   calendar can mark somebody as coming when they say so in person.
 - The site's icon is now the app's icon, the violet ghost, and the ghost has its face again: in the
