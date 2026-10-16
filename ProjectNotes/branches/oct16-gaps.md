@@ -63,9 +63,52 @@ case, so it's changed from the case's Investigations tab." (that door also mails
   entry**, which then sat at the old time. Null now leaves the link alone, and the entry is synced.
 - Cancel there now marks the calendar entry canceled; Delete uses `PrepareDeleteAsync`, so it no
   longer fails in SQL Server when somebody held a duty, and takes the visit's own calendar entry.
-- Not changed: the case-bound delete still allows deleting a visit with recordings (they cascade)
-  unless a report cites them. Making it refuse like the case-less door would change a long-standing
-  behavior and e2e tests this branch cannot run; Ben's call.
+- **Same rule for both (second commit, Ben's decision).** The case-bound delete used to allow
+  deleting a visit with recordings (they cascaded away) unless a case report cited one. It now asks
+  `InvestigationLifecycle.WhyCannotDeleteAsync` like the case-less door and refuses with the same
+  sentence; the old "A case report cites N field sessions…" check could no longer be reached and was
+  removed. The case page already showed the delete's reason in its dialog
+  (`DeleteInvestigationExpectingReasonAsync` → `_dialogError`); the alert now has `role="alert"` and
+  `id="investigation-dialog-error"`. The delete is now audited there too.
+  - Tests: `InvestigationDeleteWithCitedSessionTests` (CaseReportFieldSessionTests.cs) asserted the
+    old "cites" sentence and that an uncited visit with a recording deleted; replaced by the new
+    sentence for a cited and an uncited recording, and "once its recording is gone it deletes".
+    `CaselessInvestigationChangeTests` gained the case-bound refusal for a recording only, a written
+    account only and attendance only, an empty case visit still deleting (and audited), and a check
+    that the case page shows the refusal. Removing the new check fails 5 of them; removing the audit
+    fails 1.
+  - e2e: no test in Ben.Web.Playwright deletes a case-bound visit (by button or API).
+    `AdminDeleteCaseTests` never presses the button, `CaseManagementTests` and
+    `CaseReportFieldSessionTests` delete no visits. Nothing there needs changing.
+  - **SuperAdmin /admin/delete-case is unaffected.** It runs `Services/Admin/CasePurge`, which never
+    calls either controller or this rule. For the case's visits it detaches their field sessions
+    (they go back to their owners as personal sessions), detaches equipment checkouts and other
+    cases' timeline entries, deletes shares to them, then deletes the visits' duty assignments, team
+    rows, written accounts, guest passes, join codes, schedule proposals and the visits themselves.
+    The case's calendar entries are unlinked from the case, not deleted. `CasePurge*` and
+    `AdminCasePurge*` tests (35) pass.
+- **The case page's Delete asks first (third commit).** `InvestigationPanel.razor`: the dialog's
+  **Delete** (`#investigation-dialog-delete`) now shows "Delete this visit? This can't be undone."
+  inline (`#investigation-dialog-confirm`) with **Keep** (`-confirm-no`) and **Delete**
+  (`-confirm-yes`); only the second Delete deletes. No TelerikDialog. The visit's Edit button has
+  `id="case-inv-edit-{id}"`. `InvestigationPanel.razor.css` gives the question's and the footer's
+  buttons 44px below 992px and on touch screens. No existing e2e test presses this button.
+  `Oct16GapsTests.The_case_pages_delete_asks_first_inline` holds the markup to it (fails on the old
+  one-click button).
+- **e2e (third commit),** after merging `integrate/oct16-fixes` (a881391a, clean, no conflicts):
+  `Ben.Web.Playwright/Tests/Oct16/Oct16CaseVisitDeleteTests.cs`, `[Category("Oct16")]`:
+  1. a case visit with a recording: the question, then the refusal in `#investigation-dialog-error`,
+     and the visit stays on the page and the server;
+  2. an empty case visit: the first Delete asks, Keep changes nothing, Delete removes it from the
+     page and the server;
+  3. the question and its two buttons pass `LookAtAsync` and `TouchTargetAsync` across `Widths`,
+     dark and light.
+
+  Each test makes its own unplaced case with no client in Paranormal365 as Sarah, and a visit on it.
+  The recording is a one-reading session document filed to the visit. A recording filed to a visit
+  can't be deleted by its owner, so teardown purges each case as the SuperAdmin (which hands the
+  recording back to Sarah as a personal session) and then deletes that session as Sarah. Built, not
+  run: an e2e run was going in the main checkout.
 
 ## Screens (gaps 13, 14, 16)
 
@@ -127,7 +170,7 @@ them and a desktop mouse at 1280+ does not.
   delete, the calendar sync, the guest answers, unticking, the zone letters, the default start, the
   removal question, and the two case-bound refusals each failed. The source tests fail on the files as
   they were (they look for the strings that were there).
-- `Ben.Web.Tests`: 8388 passed, 1 failed (the known `CanvasDeployScriptGuardTests`, an untracked
+- `Ben.Web.Tests` (after the second commit): 8394 passed, 1 failed (the known `CanvasDeployScriptGuardTests`, an untracked
   appsettings file a worktree lacks), 6 skipped.
 
 ## Not done

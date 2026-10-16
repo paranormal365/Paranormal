@@ -644,7 +644,9 @@ findings. **Save changes** saves it, and the visit's entry on the group's calend
 A visit that has recordings, written-up accounts, or anybody marked as there can't be deleted,
 because deleting it would lose them. The window says what it has and suggests canceling instead.
 
-A visit that belongs to a case is changed from the case's Investigations tab.
+A visit that belongs to a case is changed from the case's Investigations tab. The same rule applies
+there: **Delete** asks first, a visit with recordings, written-up accounts or anybody marked as there
+can't be deleted, and the dialog says why. Cancel it instead.
 
 ## Duties — who's doing what tonight
 

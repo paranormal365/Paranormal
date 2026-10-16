@@ -495,6 +495,83 @@ public class CaselessInvestigationChangeTests
         Assert.Equal(RightStartUtc.AddDays(1), entry.StartDateTime);
     }
 
+    // ── The case page's delete follows the same rule (Ben, 10/16/2026: "Same rule for both") ──
+
+    public enum Kept { Recording, Account, Attendance }
+
+    [Theory]
+    [InlineData(Kept.Recording, "This visit has 1 recording, and deleting it would lose them.")]
+    [InlineData(Kept.Account, "This visit has 1 written account, and deleting it would lose them.")]
+    [InlineData(Kept.Attendance, "This visit has 1 person marked as there, and deleting it would lose them.")]
+    public async Task A_case_visit_with_something_recorded_is_kept_and_the_refusal_says_to_cancel(Kept what, string opening)
+    {
+        var w = await SeedAsync();
+        await using (var db = await w.Factory.CreateDbContextAsync())
+        {
+            switch (what)
+            {
+                case Kept.Recording:
+                    db.FieldSessionUploads.Add(new FieldSessionUpload
+                    {
+                        Id = Guid.NewGuid(), InvestigationId = w.CaseVisitId,
+                        SubmittedByAppUserId = CreatorId, CreatedByAppUserId = CreatorId,
+                        DeviceSessionId = Guid.NewGuid(), DocumentUploadFileId = Guid.NewGuid(), DeviceModel = "iPhone",
+                        StartedAt = DateTime.UtcNow, DateCreated = DateTime.UtcNow,
+                    });
+                    break;
+                case Kept.Account:
+                    db.InvestigationFindings.Add(new InvestigationFinding
+                    {
+                        Id = Guid.NewGuid(), InvestigationId = w.CaseVisitId, AppUserId = CreatorId,
+                        Narrative = "A cold spot in the hall.", DateCreated = DateTime.UtcNow, CreatedByAppUserId = CreatorId,
+                    });
+                    break;
+                case Kept.Attendance:
+                    db.InvestigationAttendees.Add(new InvestigationAttendee
+                    {
+                        Id = Guid.NewGuid(), InvestigationId = w.CaseVisitId, AppUserId = PlainMemberId, DidAttend = true,
+                        DateCreated = DateTime.UtcNow, CreatedByAppUserId = CreatorId,
+                    });
+                    break;
+            }
+            await db.SaveChangesAsync();
+        }
+
+        var result = await BuildCaseDoor(w, CreatorId).Delete(OrgId, CaseId, w.CaseVisitId, default);
+
+        Assert.IsType<ConflictObjectResult>(result);
+        Assert.Equal($"{opening} Cancel it instead. A canceled visit keeps them on record.", Sentence(result));
+        Assert.NotNull(await VisitAsync(w, w.CaseVisitId));
+        w.Audit.Verify(a => a.LogDeleteAsync(
+            It.IsAny<string>(), It.IsAny<Guid>(), It.IsAny<object>(), It.IsAny<Guid>(), It.IsAny<string>()), Times.Never);
+    }
+
+    [Fact]
+    public async Task An_empty_case_visit_still_deletes_and_is_audited()
+    {
+        var w = await SeedAsync();
+
+        var result = await BuildCaseDoor(w, CreatorId).Delete(OrgId, CaseId, w.CaseVisitId, default);
+
+        Assert.IsType<NoContentResult>(result);
+        Assert.Null(await VisitAsync(w, w.CaseVisitId));
+        w.Audit.Verify(a => a.LogDeleteAsync(
+            nameof(Investigation), w.CaseVisitId, It.IsAny<Investigation>(), CreatorId, It.IsAny<string>()), Times.Once);
+    }
+
+    [Fact]
+    public void The_case_page_shows_the_refusal()
+    {
+        var root = new DirectoryInfo(AppContext.BaseDirectory);
+        while (!File.Exists(Path.Combine(root.FullName, "Ben.slnx"))) root = root.Parent!;
+        var panel = File.ReadAllText(Path.Combine(root.FullName,
+            "Ben.Web.Website.Library", "Organization", "Cases", "InvestigationPanel.razor"));
+
+        Assert.Contains("DeleteInvestigationExpectingReasonAsync(OrgId, CaseId, _editInv.Id)", panel);
+        Assert.Contains("_dialogError = reason ??", panel);
+        Assert.Contains("id=\"investigation-dialog-error\">@_dialogError", panel);
+    }
+
     [Fact]
     public async Task Deleting_on_the_case_page_clears_duties_first()
     {

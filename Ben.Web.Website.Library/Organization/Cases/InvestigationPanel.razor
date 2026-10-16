@@ -279,7 +279,7 @@
                            than not offering it. *@
                         @if (i.CanEditRecord)
                         {
-                            <button type="button" class="btn btn-secondary btn-sm" @onclick="@(() => OpenEdit(i))"><BenIcon Name="edit-2" Class="me-1" />Edit</button>
+                            <button type="button" class="btn btn-secondary btn-sm" id="@($"case-inv-edit-{i.Id}")" @onclick="@(() => OpenEdit(i))"><BenIcon Name="edit-2" Class="me-1" />Edit</button>
                         }
                     </div>
                 </div>
@@ -427,7 +427,22 @@
         </div>
         @if (_dialogError is not null)
         {
-            <div class="alert alert-danger mt-3 mb-0">@_dialogError</div>
+            @* The server's sentence, such as why a visit with recordings can't be deleted (10/16/2026). *@
+            <div class="alert alert-danger mt-3 mb-0" role="alert" id="investigation-dialog-error">@_dialogError</div>
+        }
+
+        @* Delete asks first (10/16/2026), inline like the group page's window: never a
+           TelerikDialog, which breaks binding. It used to delete on the first click. *@
+        @if (_confirmDelete && _editInv is not null)
+        {
+            <div class="alert alert-warning py-2 small mt-3 mb-0 d-flex flex-wrap align-items-center gap-2 investigation-confirm"
+                 role="alert" id="investigation-dialog-confirm">
+                <span class="flex-grow-1">Delete this visit? This can't be undone.</span>
+                <button type="button" class="btn btn-outline-secondary btn-sm" id="investigation-dialog-confirm-no"
+                        disabled="@_isBusy" @onclick="@(() => _confirmDelete = false)">Keep</button>
+                <button type="button" class="btn btn-danger btn-sm" id="investigation-dialog-confirm-yes"
+                        disabled="@_isBusy" @onclick="DeleteInvestigation">@(_isBusy ? "Deleting…" : "Delete")</button>
+            </div>
         }
             <div class="dialog-footer-actions">
             <span class="dialog-footer-spacer"></span>
@@ -438,7 +453,8 @@
                 {
                     <button type="button" class="btn btn-warning" @onclick="CancelInvestigation" disabled="@(!(!_isBusy))"><BenIcon Name="x" Class="me-1" />Cancel Visit</button>
                 }
-                <button type="button" class="btn btn-danger" @onclick="DeleteInvestigation" disabled="@(!(!_isBusy))"><BenIcon Name="trash-2" Class="me-1" />Delete</button>
+                <button type="button" class="btn btn-danger" id="investigation-dialog-delete"
+                        @onclick="@(() => { _dialogError = null; _confirmDelete = true; })" disabled="@(!(!_isBusy))"><BenIcon Name="trash-2" Class="me-1" />Delete</button>
             }
             <button type="button" class="btn btn-secondary" @onclick="@(() => _showDialog = false)">Cancel</button>
             <button type="button" class="btn btn-primary" @onclick="Save" disabled="@(!(!_isBusy && !string.IsNullOrWhiteSpace(_form.Title)))"><BenIcon Name="save" Class="me-1" />
@@ -465,6 +481,9 @@
     private bool _showDialog;
     private InvestigationRecord? _editInv;
     private string? _dialogError;
+
+    /// <summary>Delete was pressed and is waiting for a yes, asked inline (10/16/2026).</summary>
+    private bool _confirmDelete;
     private InvForm _form = new();
 
     // ── Attendee state ────────────────────────────────────────────────────────
@@ -783,6 +802,7 @@
             TimeZoneId        = inv.TimeZoneId,
         };
         _dialogError = null;
+        _confirmDelete = false;
         _showDialog = true;
     }
 
@@ -883,6 +903,7 @@
         _isBusy = true;
         try
         {
+            _confirmDelete = false;
             // The result is READ. Discarding it closed the dialog and reloaded as though the
             // delete had happened, so a server refusal looked exactly like success.
             var (deleted, reason) = await AdminClient

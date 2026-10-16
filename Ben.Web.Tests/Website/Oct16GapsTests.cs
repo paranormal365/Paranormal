@@ -249,6 +249,20 @@ public class Oct16GapsTests
         Assert.Contains("<BenSelect Id=\"@($\"investigationpanel-add-member-{i.Id}\")\"", panel);
     }
 
+    [Fact]
+    public void The_case_pages_delete_asks_first_inline()
+    {
+        var panel = Source("Ben.Web.Website.Library", "Organization", "Cases", "InvestigationPanel.razor");
+
+        // The footer's Delete only asks; the question's own Delete is what deletes.
+        Assert.DoesNotContain("@onclick=\"DeleteInvestigation\" disabled=\"@(!(!_isBusy))\"><BenIcon Name=\"trash-2\"", panel);
+        Assert.Contains("_confirmDelete = true;", panel);
+        Assert.Contains("Delete this visit? This can't be undone.", panel);
+        Assert.Contains("id=\"investigation-dialog-confirm-yes\"", panel);
+        Assert.Contains("id=\"investigation-dialog-confirm-no\"", panel);
+        Assert.DoesNotContain("<TelerikDialog", panel);
+    }
+
     // ── Gap 11: no unreachable residence warnings ────────────────────────────
 
     [Theory]
