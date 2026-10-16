@@ -54,4 +54,34 @@ public static class InvestigationWindow
     public static (DateTime StartUtc, DateTime? EndUtc) ToUtc(
         DateTime localStart, DateTime? localEnd, IBenUserState viewer)
         => (localStart.ToUtcFromViewerLocal(viewer), localEnd?.ToUtcFromViewerLocal(viewer));
+
+    /// <summary>When a new visit starts unless somebody says otherwise: 7:00 PM tomorrow.</summary>
+    /// <remarks>
+    /// Investigations are evening work, and 7:00 PM is the site's usual start (a hosted event's
+    /// doors open then unless a night says otherwise). Until 10/16/2026 the Schedule window
+    /// suggested this moment tomorrow, to the minute, which read as "6:32 AM". No group keeps a
+    /// usual start time of its own yet; this is where one would be read.
+    /// </remarks>
+    public static readonly TimeSpan UsualStart = new(19, 0, 0);
+
+    /// <summary>
+    /// The start a new visit is offered, on the viewer's own clock.
+    /// </summary>
+    /// <param name="viewerNow">Now, on the viewer's clock (<c>NowInViewerTimeZone()</c>).</param>
+    public static DateTime DefaultStart(DateTime viewerNow)
+        => DateTime.SpecifyKind(viewerNow.Date.AddDays(1) + UsualStart, DateTimeKind.Unspecified);
+
+    /// <summary>
+    /// The letters of the viewer's zone as it will be AT the typed start: "CST" for a November
+    /// visit typed in October, not today's "CDT" (10/16/2026).
+    /// </summary>
+    /// <param name="localStart">The start as typed, on the viewer's clock; null when nothing is typed.</param>
+    /// <param name="viewer">Whose clock.</param>
+    /// <param name="utcNow">Used only when nothing has been typed yet.</param>
+    public static string ViewerLetters(DateTime? localStart, IBenUserState viewer, DateTime utcNow)
+    {
+        var zone = viewer.ViewerTimeZone ?? viewer.BrowserTimeZone ?? TimeZoneInfo.Utc;
+        var at = localStart is { } start ? start.ToUtcFromViewerLocal(viewer) : utcNow;
+        return Ben.Data.Common.Helpers.Zones.Abbreviation(zone, at);
+    }
 }

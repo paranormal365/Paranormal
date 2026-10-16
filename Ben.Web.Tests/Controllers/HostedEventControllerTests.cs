@@ -572,6 +572,25 @@ public sealed class HostedEventControllerTests
     }
 
     [Fact]
+    public async Task A_typed_venue_that_turns_out_to_be_a_home_on_file_is_refused_in_words()
+    {
+        // 10/16/2026: the venue search lists public places only, so the screens' "That is a
+        // private residence" warnings could never show and were taken out. A residence can still
+        // arrive this way: typed in as a new venue, matched on save to a home already on file.
+        // The server's sentence is what reaches the page then.
+        var f = await SeedAsync();
+        var request = Weekend(place: Guid.Empty) with
+        {
+            NewVenue = new NewVenueRequest("A family home", null, null, "Nashville", "TN"),
+        };
+
+        var refusal = Assert.IsType<BadRequestObjectResult>(
+            (await Build(f).Create(OrgId, request, default)).Result);
+
+        Assert.Contains("private residence", Assert.IsType<string>(refusal.Value));
+    }
+
+    [Fact]
     public async Task An_event_with_neither_a_venue_nor_a_new_one_is_refused_in_words()
     {
         var f = await SeedAsync();

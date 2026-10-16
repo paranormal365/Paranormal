@@ -49,6 +49,15 @@
                             OnClosed="@(() => _creating = false)" />
 }
 
+@* The same window edits a visit with no case (10/16/2026). Before, a case-less visit had no Edit
+   at all, so one saved at the wrong time stayed at the wrong time. *@
+@if (_editingId is { } editingId)
+{
+    <NewInvestigationWindow OrgId="@OrgId" EditInvestigationId="@editingId"
+                            OnCreated="@LoadAsync"
+                            OnClosed="@(() => _editingId = null)" />
+}
+
 @if (_error is not null)
 {
     <div class="alert alert-danger py-2 small">@_error</div>
@@ -176,6 +185,19 @@ else
 
     private LoadResult<OrgInvestigationRow> _rowsResult;
     private bool _creating;
+
+    /// <summary>The case-less visit open in the editor, if any.</summary>
+    private Guid? _editingId;
+
+    /// <summary>
+    /// Where a row's Edit goes: a case-bound visit to its case's tab, where its editor lives; a
+    /// case-less one to the editor here.
+    /// </summary>
+    private void Edit(OrgInvestigationRow row)
+    {
+        if (row.CaseId is not null) { GoToInvestigation(row.Id); return; }
+        _editingId = row.Id;
+    }
 
     /// <summary>Which row has its team open, if any. One at a time — each roster polls.</summary>
     private Guid? _openTeam;
@@ -359,8 +381,11 @@ else
         _ => "bg-info",
     };
 
-    private RenderFragment Grid(List<OrgInvestigationRow> rows) =>@<div class="table-responsive">
-        <table class="table table-sm align-middle mb-0">
+    @* Below 992px each row is a card (10/16/2026), the site's established phone reflow
+       (PlaceRoomsManager): the heading row is hidden and every cell names its column through
+       data-label. OrgInvestigations.razor.css has the widths and why. *@
+    private RenderFragment Grid(List<OrgInvestigationRow> rows) =>@<div class="table-responsive inv-list">
+        <table class="table table-sm align-middle mb-0 inv-table">
             <thead>
                 <tr>
                     <th>When</th>
@@ -370,22 +395,22 @@ else
                     @* "People" rather than "Team", so the count is not confused with the Team
                        button beside it, which opens the roster. *@
                     <th class="text-center">People</th>
-                    <th></th>
+                    <th><span class="visually-hidden">Actions</span></th>
                 </tr>
             </thead>
             <tbody>
                 @foreach (var row in rows)
                 {
-                    <tr id="inv-row-@row.Id" class="@(row.Id == _focused ? "table-active" : null)">
-                        <td class="text-nowrap">
+                    <tr id="inv-row-@row.Id" class="inv-row @(row.Id == _focused ? "table-active" : null)">
+                        <td class="text-nowrap inv-when" data-label="When">
                             <BenTime Utc="@row.ScheduledDateTime" EndUtc="@row.EndDateTime" ZoneId="@row.TimeZoneId"
                                      Format="BenTime.Shape.Span" TestId="investigation-when" />
                         </td>
-                        <td>
+                        <td class="inv-title" data-label="Investigation">
                             @row.Title
                             <span class="badge @StatusBadge(row.Status) ms-1">@Ben.Web.Website.Library.Organization.Cases.InvestigationPanel.StatusLabel(row.Status)</span>
                         </td>
-                        <td>
+                        <td data-label="Where">
                             @if (row.PlaceId is { } placeId)
                             {
                                 @* The place page is where this visit sits alongside everyone
@@ -397,7 +422,7 @@ else
                                 @WhereText(row)
                             }
                         </td>
-                        <td>
+                        <td data-label="Case">
                             @if (row.CaseReference is not null)
                             {
                                 <a href="/organizations/@OrgId/cases/@row.CaseId">@row.CaseReference</a>
@@ -408,8 +433,8 @@ else
                                 <span class="text-secondary small fst-italic">No case</span>
                             }
                         </td>
-                        <td class="text-center">@(_teamCounts.TryGetValue(row.Id, out var teamCount) ? teamCount : row.AttendeeCount)</td>
-                        <td class="text-end text-nowrap">
+                        <td class="text-center inv-people" data-label="People">@(_teamCounts.TryGetValue(row.Id, out var teamCount) ? teamCount : row.AttendeeCount)</td>
+                        <td class="text-end text-nowrap inv-actions" data-label="Actions">
                             @* The team is here rather than only on a case's tab, because a visit
                                with no case had nowhere at all to check in from — the endpoints were
                                always case-agnostic, the screen simply never existed. *@
@@ -442,24 +467,34 @@ else
                             @* Shown on the server's verdict alone. Working it out here would mean
                                two answers to one question, and the button would eventually offer
                                something the endpoint then refuses. *@
-                            @if (row.CanEditRecord && row.CaseId is not null)
+                            @* Every visit the server says this person may change, with a case or
+                               without (10/16/2026: a case-less visit had no Edit at all). *@
+                            @if (row.CanEditRecord)
                             {
-                                <button type="button" class="btn @(ThemeConstants.Button.FillMode.Outline == ThemeConstants.Button.FillMode.Solid ? "btn-secondary" : "btn-outline-secondary") btn-sm" @onclick="@(() => GoToInvestigation(row.Id))"><BenIcon Name="edit-2" Class="me-1" />Edit</button>
+                                <button type="button" class="btn @(ThemeConstants.Button.FillMode.Outline == ThemeConstants.Button.FillMode.Solid ? "btn-secondary" : "btn-outline-secondary") btn-sm"
+                                        id="@($"inv-edit-{row.Id}")"
+                                        title="@(row.CaseId is null ? "Change, cancel or delete this visit" : "Open this visit on its case")"
+                                        @onclick="@(() => Edit(row))"><BenIcon Name="edit-2" Class="me-1" />Edit</button>
                             }
                         </td>
                     </tr>
 
                     @if (_openTeam == row.Id)
                     {
-                        <tr>
+                        <tr class="inv-team-row">
                             <td colspan="6" class="bg-body-tertiary">
                                 @* CanEditRecord, not true: the same verdict the Edit button uses,
                                    so the attendance and lead controls appear for exactly the
-                                   people the endpoints will accept. *@
-                                <InvestigationRoster OrgId="@OrgId" InvestigationId="@row.Id"
-                                                     CanManage="@row.CanEditRecord"
-                                                     CanChangeTeam="true"
-                                                     OnTeamChanged="@(count => _teamCounts[row.Id] = count)" />
+                                   people the endpoints will accept.
+                                   The wrapper keeps the panel inside the list's visible width
+                                   whatever the table does (10/16/2026): on a phone it inherited
+                                   the scrolled table's width and half of it was off screen. *@
+                                <div class="inv-team-panel">
+                                    <InvestigationRoster OrgId="@OrgId" InvestigationId="@row.Id"
+                                                         CanManage="@row.CanEditRecord"
+                                                         CanChangeTeam="true"
+                                                         OnTeamChanged="@(count => _teamCounts[row.Id] = count)" />
+                                </div>
                             </td>
                         </tr>
                     }

@@ -237,18 +237,61 @@ public sealed partial class BenAdminClientAdapter
         return (result, null);
     }
 
-    public Task<InvestigationRosterEntry?> CheckInToInvestigationAsync(
+    // Both keep the server's sentence (10/16/2026). The roster used to show "Check the arrival time
+    // is not in the future." for every check-in failure, and "That could not be saved." for every
+    // Attended one, whatever the server had said.
+    public async Task<(InvestigationRosterEntry? Entry, string? Error)> CheckInToInvestigationAsync(
         Guid orgId, Guid investigationId, DateTime? statedArrivalTime = null, CancellationToken token = default)
-        => _api.PostAsync<object, InvestigationRosterEntry>(
+    {
+        var (result, error) = await _api.SendExpectingReasonAsync<object, InvestigationRosterEntry>(
+            HttpMethod.Post,
             $"/api/organizations/{orgId}/investigations/{investigationId}/check-in",
             new { StatedArrivalTime = statedArrivalTime }, token);
+        return result is null ? (null, error ?? "Your arrival couldn't be saved just now.") : (result, null);
+    }
 
-    public Task<InvestigationRosterEntry?> OverrideInvestigationAttendanceAsync(
+    public async Task<(InvestigationRosterEntry? Entry, string? Error)> OverrideInvestigationAttendanceAsync(
         Guid orgId, Guid investigationId, Guid attendeeId, bool? didAttend,
         DateTime? statedArrivalTime = null, CancellationToken token = default)
-        => _api.PutAsync<object, InvestigationRosterEntry>(
+    {
+        var (result, error) = await _api.SendExpectingReasonAsync<object, InvestigationRosterEntry>(
+            HttpMethod.Put,
             $"/api/organizations/{orgId}/investigations/{investigationId}/attendees/{attendeeId}/attendance",
             new { DidAttend = didAttend, StatedArrivalTime = statedArrivalTime }, token);
+        return result is null ? (null, error ?? "That attendance couldn't be saved just now.") : (result, null);
+    }
+
+    // ── Changing a visit with no case (10/16/2026) ────────────────────────────
+
+    public Task<ItemResult<InvestigationRecord>> GetOrgInvestigationAsync(
+        Guid orgId, Guid investigationId, CancellationToken token = default)
+        => _api.GetItemAsync<InvestigationRecord>($"/api/organizations/{orgId}/investigations/{investigationId}", token);
+
+    // Through SendWithStatusAsync: these answer 204, and SendExpectingReasonAsync returns the same
+    // (default, null) for a 204 and for a refusal with no sentence. The status tells them apart.
+    public async Task<(bool Saved, string? Error)> UpdateOrgInvestigationAsync(
+        Guid orgId, Guid investigationId, UpdateOrgInvestigationRequest request, CancellationToken token = default)
+    {
+        var (_, error, status) = await _api.SendWithStatusAsync<UpdateOrgInvestigationRequest, object>(
+            HttpMethod.Put, $"/api/organizations/{orgId}/investigations/{investigationId}", request, token);
+        return status is >= 200 and < 300 ? (true, null) : (false, error ?? "That visit couldn't be saved just now.");
+    }
+
+    public async Task<(bool Canceled, string? Error)> CancelOrgInvestigationAsync(
+        Guid orgId, Guid investigationId, CancellationToken token = default)
+    {
+        var (_, error, status) = await _api.SendWithStatusAsync<object, object>(
+            HttpMethod.Post, $"/api/organizations/{orgId}/investigations/{investigationId}/cancel", new { }, token);
+        return status is >= 200 and < 300 ? (true, null) : (false, error ?? "That visit couldn't be canceled just now, so it's still scheduled.");
+    }
+
+    public async Task<(bool Deleted, string? Error)> DeleteOrgInvestigationAsync(
+        Guid orgId, Guid investigationId, CancellationToken token = default)
+    {
+        var (_, error, status) = await _api.SendWithStatusAsync<object, object>(
+            HttpMethod.Delete, $"/api/organizations/{orgId}/investigations/{investigationId}", null, token);
+        return status is >= 200 and < 300 ? (true, null) : (false, error ?? "That visit couldn't be deleted just now.");
+    }
 
 
     /// <inheritdoc />

@@ -332,7 +332,7 @@
                                rather than a dropdown somebody brushes past. The same search and
                                the same "enter one we haven't listed" as when the event was made. *@
                             <div class="col-12">
-                                <label class="form-label">Venue</label>
+                                <div class="form-label">Venue</div>
                                 @if (!_changingVenue)
                                 {
                                     <div class="d-flex align-items-center gap-2 flex-wrap">
@@ -362,20 +362,15 @@
                                                 <span>Moving it to</span>
                                                 <span class="fw-semibold">@PlaceLabel(picked)</span>
                                             </div>
-                                            @if (picked.Kind == Ben.Data.Common.Enums.PlaceKind.PrivateResidence)
-                                            {
-                                                <div class="form-text text-danger">
-                                                    That is a private residence, so an event cannot
-                                                    be held there publicly.
-                                                </div>
-                                            }
                                         }
                                         else
                                         {
+                                            <label class="form-label small mb-1" for="venue-search">Search for the new venue</label>
                                             <div class="input-group" style="max-width:32rem;">
-                                                <input class="form-control" placeholder="Search by venue name or town"
+                                                <input id="venue-search" class="form-control" placeholder="@PlaceSearch.Placeholder"
                                                        value="@_venueSearch"
-                                                       @oninput="e => _venueSearch = e.Value?.ToString() ?? string.Empty" />
+                                                       @oninput="e => _venueSearch = e.Value?.ToString() ?? string.Empty"
+                                                       @onkeydown="@(e => PlaceSearch.IsSearchKey(e.Key, _venueSearch) ? SearchVenuesAsync() : Task.CompletedTask)" />
                                                 <button type="button" class="btn btn-outline-secondary"
                                                         id="search-venue"
                                                         disabled="@string.IsNullOrWhiteSpace(_venueSearch)"

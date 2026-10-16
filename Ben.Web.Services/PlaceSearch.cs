@@ -74,6 +74,22 @@ public sealed class PlaceSearch
         FoundNothing = !found.Failed && found.Items.Count == 0;
     }
 
+    /// <summary>
+    /// What every search box says before anything is typed (10/16/2026). One sentence for all of
+    /// them, and a true one: every typed word has to appear in the place's name or its town.
+    /// </summary>
+    public const string Placeholder = "Part of the name, or the town";
+
+    /// <summary>
+    /// Whether this key, pressed in a search box, should run the search (10/16/2026).
+    /// </summary>
+    /// <remarks>
+    /// Until then only the Search button searched, and Enter did nothing. The boxes call this from
+    /// <c>@onkeydown</c> and are not inside a form, so Enter cannot submit anything else as well.
+    /// </remarks>
+    public static bool IsSearchKey(string? key, string? text)
+        => key is "Enter" or "NumpadEnter" && !string.IsNullOrWhiteSpace(text);
+
     /// <summary>Back to an empty box, and any search still waiting is ignored when it answers.</summary>
     public void Clear()
     {

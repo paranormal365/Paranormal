@@ -49,8 +49,11 @@ a.ben-fact:focus-visible {
     font-size: 1.15rem;
     font-weight: 650;
     line-height: 1.15;
-    /* A date or a case number stays inside its tile on a phone rather than running out of it. */
-    overflow-wrap: anywhere;
+    /* A date or a case number stays inside its tile on a phone rather than running out of it.
+       break-word, not anywhere (10/16/2026): "anywhere" also lets a tile shrink below the word,
+       so "Sun 10/25" in a 7rem tile split into "Sun 10/2" and "5". This breaks a word only when it
+       cannot fit on a line of its own. */
+    overflow-wrap: break-word;
 }
 
 .ben-fact { min-width: 0; }

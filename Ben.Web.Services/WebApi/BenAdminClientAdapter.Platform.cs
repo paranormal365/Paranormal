@@ -346,8 +346,8 @@ public sealed partial class BenAdminClientAdapter
                $"/api/organizations/{orgId}/calendar/{eventId}/attendees/{attendeeId}/rsvp",
                new { RsvpStatus = status }, token);
 
-    public Task<bool> RemoveCalendarAttendeeAsync(Guid orgId, Guid eventId, Guid attendeeId, CancellationToken token = default)
-        => _api.DeleteAsync($"/api/organizations/{orgId}/calendar/{eventId}/attendees/{attendeeId}", token);
+    public Task<(bool Removed, string? Error)> RemoveCalendarAttendeeAsync(Guid orgId, Guid eventId, Guid attendeeId, CancellationToken token = default)
+        => _api.DeleteExpectingReasonAsync($"/api/organizations/{orgId}/calendar/{eventId}/attendees/{attendeeId}", token);
 
     // ── Experience Taxonomy ───────────────────────────────────────────────────
 

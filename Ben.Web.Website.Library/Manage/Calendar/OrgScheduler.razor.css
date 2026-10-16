@@ -1,0 +1,72 @@
+/*
+    Who's coming, at every width (10/16/2026).
+
+    Each guest is a row of three: name, answer, and what the host can do (Mark as coming / not
+    coming / not answered, and Remove). The rows share their columns through subgrid, so the
+    answers line up down the list the way they did when this was a table.
+
+    Widths:
+      576px and up (large phone landscape, iPad, an open folding phone, laptops, desktops): one
+            line per guest, as before: name | answer | buttons. The dialog is at most Bootstrap's
+            lg modal (800px), so a 1920px screen does not stretch the rows.
+      320 to 575px (small phone to Pro Max, a folded Duo): name and answer on the first line, the
+            buttons on a line of their own, right-aligned. Seen in the e2e screenshots at 375px:
+            "James Thornton" wrapped into two cramped lines beside "Mark as coming".
+
+    Buttons are at least 44px to touch on phones and tablets, and anywhere the pointer is a finger.
+    Colors are --bs-* variables only, so both themes follow data-bs-theme.
+*/
+
+.guest-list ul {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) max-content max-content;
+}
+
+.guest-row {
+    display: grid;
+    grid-column: 1 / -1;
+    grid-template-columns: subgrid;
+    align-items: center;
+    column-gap: .75rem;
+    row-gap: .35rem;
+    padding: .4rem .6rem;
+    border-bottom: 1px solid var(--bs-border-color-translucent);
+}
+
+.guest-row:last-child {
+    border-bottom: 0;
+}
+
+/* Name and answer are grid cells of the row itself. */
+.guest-row__who {
+    display: contents;
+}
+
+.guest-row__who > :first-child {
+    min-width: 0;
+    overflow-wrap: anywhere;
+}
+
+.guest-row__actions {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: flex-end;
+    gap: .35rem;
+}
+
+@media (max-width: 575.98px) {
+    .guest-list ul {
+        grid-template-columns: minmax(0, 1fr) max-content;
+    }
+
+    .guest-row__actions {
+        grid-column: 1 / -1;
+    }
+}
+
+@media (max-width: 991.98px), (pointer: coarse) {
+    .guest-row__actions .btn {
+        min-height: 44px;
+    }
+}

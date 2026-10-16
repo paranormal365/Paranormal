@@ -626,15 +626,20 @@ else
                     }
                     else
                     {
-                    <div class="row g-2">
+                    @* Labeled, with ids of their own (10/16/2026): a placeholder is not a label,
+                       and it vanishes the moment somebody starts typing. *@
+                    <div class="row g-2 align-items-end">
                         <div class="col-md-5">
-                            <input class="form-control" type="email" maxlength="320"
+                            <label class="form-label small mb-1" for="attend-email">Email address <span class="text-secondary">(required)</span></label>
+                            <input id="attend-email" class="form-control" type="email" maxlength="320"
+                                   autocomplete="email" aria-required="true"
                                    placeholder="you@example.com" value="@_attendEmail"
                                    @oninput="@(e => _attendEmail = e.Value?.ToString() ?? "")" />
                         </div>
                         <div class="col-md-4">
-                            <input class="form-control" maxlength="200"
-                                   placeholder="Your name (optional)" value="@_attendName"
+                            <label class="form-label small mb-1" for="attend-name">Your name <span class="text-secondary">(optional)</span></label>
+                            <input id="attend-name" class="form-control" maxlength="200" autocomplete="name"
+                                   value="@_attendName"
                                    @oninput="@(e => _attendName = e.Value?.ToString() ?? "")" />
                         </div>
                         <div class="col-md-3">

@@ -315,6 +315,175 @@ public sealed class OrgInvestigationsController : BenControllerBase
             await ZoneChain.FillAsync(db, _mapper.Map<InvestigationRecord>(loaded), ct));
     }
 
+    // ── Changing a visit with no case (10/16/2026) ───────────────────────────
+    //
+    // Until 10/16/2026 the only edit, cancel and delete were nested under a case
+    // (InvestigationController), so a visit booked from the group's Investigations page could
+    // never be changed after it was saved. The visits saved an hour late before that day's
+    // time-zone fix were stuck at the wrong time. The rules are the case-bound ones: the same
+    // manage gate, the same window and sharing checks, the same audit; the calendar entry follows.
+
+    /// <summary>The sentence for a case-bound visit sent to one of the case-less doors.</summary>
+    internal const string BelongsToACase =
+        "This visit belongs to a case, so it's changed from the case's Investigations tab.";
+
+    /// <summary>
+    /// Changes a case-less visit: its title, times, description, place and who sees the findings.
+    /// </summary>
+    /// <remarks>
+    /// A case-bound visit is refused with a sentence pointing at its case: that door also mails the
+    /// client when the time moves, and two doors that disagree about mailing are worse than one.
+    /// Leaving out both <c>PlaceId</c> and <c>NewPlace</c> keeps the place it has.
+    /// </remarks>
+    [HttpPut("{id:guid}")]
+    public async Task<IActionResult> Update(
+        Guid orgId, Guid id, [FromBody] UpdateOrgInvestigationRequest request, CancellationToken ct)
+    {
+        if (!await IsMemberAsync(orgId, ct)) return Forbid();
+        if (await IsViewerAsync(orgId, ct)) return ViewerReadOnly();
+
+        var userId = GetCurrentUserId();
+        await using var db = await _db.CreateDbContextAsync(ct);
+
+        var entity = await db.Investigations
+            .FirstOrDefaultAsync(i => i.Id == id && i.OrganizationId == orgId, ct);
+        if (entity is null) return NotFound();
+        if (!await InvestigationAccess.CanManageAsync(
+                db, id, userId, User.IsInRole(RoleNames.SuperAdmin), ct))
+            return Forbid();
+        if (entity.CaseId is not null) return Conflict(BelongsToACase);
+
+        if (string.IsNullOrWhiteSpace(request.Title)) return BadRequest("A title is required.");
+        if (request.EndDateTime is { } end && end <= request.ScheduledDateTime)
+            return BadRequest("The end has to come after the start.");
+
+        var before = Snapshot(entity);
+
+        entity.Title = request.Title.Trim();
+        entity.Description = string.IsNullOrWhiteSpace(request.Description) ? null : request.Description.Trim();
+        entity.ScheduledDateTime = request.ScheduledDateTime;
+        entity.EndDateTime = request.EndDateTime;
+        entity.DateUpdated = DateTime.UtcNow;
+        entity.UpdatedByAppUserId = userId == Guid.Empty ? null : userId;
+
+        var newPlace = request.NewPlace is { HasAnything: true } described ? described : null;
+        var placeId = request.PlaceId ?? (newPlace is null ? entity.PlaceId : null);
+        if (placeId is null && newPlace is null)
+            return BadRequest("An investigation with no case must say where it happened. Choose a place or describe one.");
+
+        var placement = await InvestigationPlacement.ApplyAsync(db, entity, placeId, newPlace, userId, ct);
+        if (placement.Error is not null) return BadRequest(placement.Error);
+
+        if (request.Visibility is { } requested) entity.Visibility = requested;
+        var publicByDefault = await Services.Billing.PaidPlan.PublicByDefaultAsync(db, orgId, ct);
+        var whyNotNarrower = await Services.Billing.PaidPlan.WhyCannotNarrowInvestigationAsync(db, orgId, ct);
+        if (InvestigationVisibilityFilter.Reject(
+                entity.Visibility, placement.Place, publicByDefault, whyNotNarrower) is { } scopeError)
+            return BadRequest(scopeError);
+
+        if (await InvestigationController.EnsurePublicSlugAsync(db, entity, ct) is string slugRefusal)
+            return BadRequest(slugRefusal);
+
+        await Services.Investigations.InvestigationLifecycle.SyncCalendarAsync(db, entity, ct);
+        await db.SaveChangesAsync(ct);
+
+        _ = TryAuditAsync(_auditLog.LogUpdateAsync(
+            nameof(Investigation), entity.Id, before, Snapshot(entity), userId, AppSources.WebApi));
+
+        return NoContent();
+    }
+
+    /// <summary>Cancels a case-less visit that has not happened yet. Its calendar entry says so.</summary>
+    [HttpPost("{id:guid}/cancel")]
+    public async Task<IActionResult> Cancel(Guid orgId, Guid id, CancellationToken ct)
+    {
+        if (!await IsMemberAsync(orgId, ct)) return Forbid();
+        if (await IsViewerAsync(orgId, ct)) return ViewerReadOnly();
+
+        var userId = GetCurrentUserId();
+        await using var db = await _db.CreateDbContextAsync(ct);
+
+        var entity = await db.Investigations
+            .FirstOrDefaultAsync(i => i.Id == id && i.OrganizationId == orgId, ct);
+        if (entity is null) return NotFound();
+        if (!await InvestigationAccess.CanManageAsync(
+                db, id, userId, User.IsInRole(RoleNames.SuperAdmin), ct))
+            return Forbid();
+        if (entity.CaseId is not null) return Conflict(BelongsToACase);
+
+        // The case-bound door's rule: only a visit still to come can be called off.
+        if (entity.Status != InvestigationStatus.Scheduled)
+            return Conflict(entity.Status switch
+            {
+                InvestigationStatus.Cancelled => "This visit is already canceled.",
+                InvestigationStatus.InProgress => "This visit is under way, so it can't be canceled.",
+                _ => "This visit has already happened, so it can't be canceled.",
+            });
+
+        var before = Snapshot(entity);
+        entity.Status = InvestigationStatus.Cancelled;
+        entity.DateUpdated = DateTime.UtcNow;
+        entity.UpdatedByAppUserId = userId == Guid.Empty ? null : userId;
+
+        await Services.Investigations.InvestigationLifecycle.SyncCalendarAsync(db, entity, ct);
+        await db.SaveChangesAsync(ct);
+
+        _ = TryAuditAsync(_auditLog.LogUpdateAsync(
+            nameof(Investigation), entity.Id, before, Snapshot(entity), userId, AppSources.WebApi));
+
+        return NoContent();
+    }
+
+    /// <summary>
+    /// Deletes a case-less visit, unless deleting it would lose what was recorded there.
+    /// </summary>
+    /// <remarks>
+    /// Refused, with a sentence that says to cancel instead, when it has recordings, written
+    /// accounts, or anybody marked as there. See <c>InvestigationLifecycle.WhyCannotDeleteAsync</c>.
+    /// </remarks>
+    [HttpDelete("{id:guid}")]
+    public async Task<IActionResult> Delete(Guid orgId, Guid id, CancellationToken ct)
+    {
+        if (!await IsMemberAsync(orgId, ct)) return Forbid();
+        if (await IsViewerAsync(orgId, ct)) return ViewerReadOnly();
+
+        var userId = GetCurrentUserId();
+        await using var db = await _db.CreateDbContextAsync(ct);
+
+        var entity = await db.Investigations
+            .FirstOrDefaultAsync(i => i.Id == id && i.OrganizationId == orgId, ct);
+        if (entity is null) return NotFound();
+        if (!await InvestigationAccess.CanManageAsync(
+                db, id, userId, User.IsInRole(RoleNames.SuperAdmin), ct))
+            return Forbid();
+        if (entity.CaseId is not null) return Conflict(BelongsToACase);
+
+        if (await Services.Investigations.InvestigationLifecycle.WhyCannotDeleteAsync(db, entity, ct) is { } kept)
+            return Conflict(kept);
+
+        var before = Snapshot(entity);
+        await Services.Investigations.InvestigationLifecycle.PrepareDeleteAsync(db, entity, ct);
+        db.Investigations.Remove(entity);
+        await db.SaveChangesAsync(ct);
+
+        _ = TryAuditAsync(_auditLog.LogDeleteAsync(
+            nameof(Investigation), entity.Id, before, userId, AppSources.WebApi));
+
+        return NoContent();
+    }
+
+    /// <summary>The visit's own fields, for the audit row, without the graph hanging off it.</summary>
+    private static Investigation Snapshot(Investigation i) => new()
+    {
+        Id = i.Id, OrganizationId = i.OrganizationId, CaseId = i.CaseId, Title = i.Title,
+        Description = i.Description, Location = i.Location,
+        ScheduledDateTime = i.ScheduledDateTime, EndDateTime = i.EndDateTime,
+        Status = i.Status, Visibility = i.Visibility, PlaceId = i.PlaceId, TimeZoneId = i.TimeZoneId,
+        OrgCalendarEventId = i.OrgCalendarEventId, DateCreated = i.DateCreated,
+        CreatedByAppUserId = i.CreatedByAppUserId, DateUpdated = i.DateUpdated,
+        UpdatedByAppUserId = i.UpdatedByAppUserId,
+    };
+
     // ── Arrival ───────────────────────────────────────────────────────────────
 
     /// <summary>Who is on the team and who has turned up. Readable by any member.</summary>
@@ -1106,6 +1275,19 @@ public sealed record InvestigationFindingRecord(
 
 /// <summary>An account being filed or revised. Empty is refused — delete instead.</summary>
 public sealed record UpsertFindingRequest(string? Narrative);
+
+/// <summary>
+/// Changes a visit with no case (10/16/2026). Times are UTC. Neither <c>PlaceId</c> nor
+/// <c>NewPlace</c> keeps the place it has; <c>Visibility</c> null leaves the sharing alone.
+/// </summary>
+public sealed record UpdateOrgInvestigationRequest(
+    string Title,
+    DateTime ScheduledDateTime,
+    DateTime? EndDateTime = null,
+    string? Description = null,
+    Guid? PlaceId = null,
+    NewPlaceRequest? NewPlace = null,
+    InvestigationVisibility? Visibility = null);
 
 /// <summary>
 /// Schedules an investigation against an organization, with a case or without one.
