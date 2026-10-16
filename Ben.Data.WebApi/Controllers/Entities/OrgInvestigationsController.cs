@@ -473,7 +473,7 @@ public sealed class OrgInvestigationsController : BenControllerBase
     }
 
     /// <summary>The visit's own fields, for the audit row, without the graph hanging off it.</summary>
-    private static Investigation Snapshot(Investigation i) => new()
+    internal static Investigation Snapshot(Investigation i) => new()
     {
         Id = i.Id, OrganizationId = i.OrganizationId, CaseId = i.CaseId, Title = i.Title,
         Description = i.Description, Location = i.Location,

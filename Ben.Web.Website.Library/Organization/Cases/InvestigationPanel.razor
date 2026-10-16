@@ -427,7 +427,8 @@
         </div>
         @if (_dialogError is not null)
         {
-            <div class="alert alert-danger mt-3 mb-0">@_dialogError</div>
+            @* The server's sentence, such as why a visit with recordings can't be deleted (10/16/2026). *@
+            <div class="alert alert-danger mt-3 mb-0" role="alert" id="investigation-dialog-error">@_dialogError</div>
         }
             <div class="dialog-footer-actions">
             <span class="dialog-footer-spacer"></span>

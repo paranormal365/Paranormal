@@ -409,13 +409,21 @@ public class CaseReportFieldSessionTests
 /// Deleting the investigation a cited session was recorded during.
 /// </summary>
 /// <remarks>
-/// The session cascades away with its investigation, so without a check the citation's foreign key
-/// turns an ordinary delete into a 500 — and the panel that ignored the delete's result showed
-/// that as success. The report must not quietly lose its evidence, so the delete is refused with a
-/// sentence somebody can act on, and the panel now reads it.
+/// <para>The session cascades away with its investigation, so without a check the citation's
+/// foreign key turns an ordinary delete into a 500 — and the panel that ignored the delete's result
+/// showed that as success. The report must not quietly lose its evidence.</para>
+///
+/// <para>Since 10/16/2026 (Ben: "Same rule for both") the rule is wider and the same as a visit with
+/// no case: any recording keeps the visit, cited or not, and the sentence says to cancel instead.
+/// These used to assert "cites" and that an uncited visit deleted, which took its recording with
+/// it.</para>
 /// </remarks>
 public class InvestigationDeleteWithCitedSessionTests
 {
+    private const string Kept =
+        "This visit has 1 recording, and deleting it would lose them. Cancel it instead. "
+      + "A canceled visit keeps them on record.";
+
     [Fact]
     public async Task Deleting_an_investigation_whose_session_is_cited_is_refused_with_a_reason()
     {
@@ -425,23 +433,42 @@ public class InvestigationDeleteWithCitedSessionTests
         var result = await ctrl.Delete(world.OrgId, world.CaseId, world.InvestigationId, default);
 
         var conflict = Assert.IsType<ConflictObjectResult>(result);
-        Assert.Contains("cites", conflict.Value!.ToString()!);
-        Assert.Contains("Remove the citation", conflict.Value!.ToString()!);
+        Assert.Equal(Kept, conflict.Value);
 
         // And nothing was removed on the way to refusing.
         await using var db = await world.Factory.CreateDbContextAsync();
         Assert.NotNull(await db.Investigations.FindAsync(world.InvestigationId));
         Assert.NotNull(await db.FieldSessionUploads.FindAsync(world.SessionId));
+        Assert.True(await db.CaseReportSectionFieldSessions.AnyAsync(f => f.FieldSessionUploadId == world.SessionId));
     }
 
-    /// <summary>The same visit, with nothing citing it, still deletes.</summary>
+    /// <summary>An uncited recording keeps the visit too: it was lost with it before.</summary>
     [Fact]
-    public async Task An_uncited_investigation_still_deletes()
+    public async Task An_uncited_recording_also_keeps_the_visit()
     {
         var world = await SeedAsync(citeTheSession: false);
         var ctrl = BuildController(world.Factory, world.UserId);
 
         var result = await ctrl.Delete(world.OrgId, world.CaseId, world.InvestigationId, default);
+
+        Assert.Equal(Kept, Assert.IsType<ConflictObjectResult>(result).Value);
+        await using var db = await world.Factory.CreateDbContextAsync();
+        Assert.NotNull(await db.FieldSessionUploads.FindAsync(world.SessionId));
+    }
+
+    /// <summary>With the recording gone, the same visit deletes.</summary>
+    [Fact]
+    public async Task Once_its_recording_is_gone_the_visit_deletes()
+    {
+        var world = await SeedAsync(citeTheSession: false);
+        await using (var db = await world.Factory.CreateDbContextAsync())
+        {
+            db.FieldSessionUploads.Remove(await db.FieldSessionUploads.FirstAsync(s => s.Id == world.SessionId));
+            await db.SaveChangesAsync();
+        }
+
+        var result = await BuildController(world.Factory, world.UserId)
+            .Delete(world.OrgId, world.CaseId, world.InvestigationId, default);
 
         Assert.IsType<NoContentResult>(result);
     }

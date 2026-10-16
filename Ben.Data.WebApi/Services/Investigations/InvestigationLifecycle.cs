@@ -75,7 +75,9 @@ public static class InvestigationLifecycle
     /// <remarks>
     /// Recordings, written accounts and who was there are what a visit is for. Deleting the visit
     /// takes all three with it (they hang off it), so a visit that has any of them is refused,
-    /// and the sentence says what to do instead: cancel it, which keeps the record.
+    /// and the sentence says what to do instead: cancel it, which keeps the record. Both doors ask,
+    /// with a case or without (Ben, 10/16/2026: "Same rule for both"). Deleting a whole case is a
+    /// different act and does not come through here.
     /// </remarks>
     public static async Task<string?> WhyCannotDeleteAsync(
         BenDataContext db, Investigation visit, CancellationToken ct)

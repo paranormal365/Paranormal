@@ -318,21 +318,16 @@ public sealed class InvestigationController : BenControllerBase
         if (entity is null) return NotFound();
         if (!await CanManageAsync(id, ct)) return Forbid();
 
+        // The same rule as a visit with no case (Ben, 10/16/2026: "Same rule for both"). Field
+        // sessions, written accounts and the team's attendance hang off the visit and went with
+        // it; a visit that has any of them is refused, and the sentence says to cancel instead.
+        // This replaces the narrower check that refused only when a case report cited one of the
+        // visit's sessions: every recording now keeps the visit, cited or not, so that check
+        // could no longer be reached.
+        if (await Services.Investigations.InvestigationLifecycle.WhyCannotDeleteAsync(db, entity, ct) is { } kept)
+            return Conflict(kept);
 
-        // Field sessions recorded on this visit cascade away with it — but a case report may be
-        // CITING one, and a report quietly losing its evidence is worse than a delete that does
-        // not happen. (The database would refuse this anyway; without the check it arrives as a
-        // 500 the person deleting cannot act on.)
-        var citedSessions = await db.CaseReportSectionFieldSessions
-            .CountAsync(f => f.FieldSessionUpload.InvestigationId == id, ct);
-        if (citedSessions > 0)
-        {
-            return Conflict(
-                $"A case report cites {citedSessions} field session"
-                + (citedSessions == 1 ? "" : "s")
-                + " recorded during this investigation. Remove the citation from the report first, "
-                + "then delete the investigation.");
-        }
+        var before = OrgInvestigationsController.Snapshot(entity);
 
         // Detaches the binder entries (their key is NoAction; the notes survive on the case
         // timeline), and since 10/16/2026 also clears duty assignments, which made SQL Server
@@ -341,6 +336,10 @@ public sealed class InvestigationController : BenControllerBase
         await Services.Investigations.InvestigationLifecycle.PrepareDeleteAsync(db, entity, ct);
         db.Investigations.Remove(entity);
         await db.SaveChangesAsync(ct);
+
+        // Audited like the group page's delete (10/16/2026); this door wrote no record before.
+        _ = TryAuditAsync(_auditLog.LogDeleteAsync(
+            nameof(Investigation), entity.Id, before, GetCurrentUserId(), AppSources.WebApi));
         return NoContent();
     }
 
