@@ -133,7 +133,7 @@ public class Oct16PlaceSearchTests : Oct16TestBase
 
         await ClickUntilAsync(Page.Locator("#change-venue"), Page.Locator("#venue-picker"));
         var picker = Page.Locator("#venue-picker");
-        var box = picker.Locator(".input-group input").First;
+        var box = Page.Locator("#venue-search");   // an id since fix/oct16-gaps (gap 8)
         var results = picker.Locator(".list-group .list-group-item");
         var nothing = picker.GetByText("No listed venues match that", new() { Exact = false });
 
@@ -181,8 +181,8 @@ public class Oct16PlaceSearchTests : Oct16TestBase
 
     /// <summary>Calendar → New event → Public, and the "Where (a place)" box's parts.</summary>
     /// <remarks>
-    /// The box has no id (see the report), so it is found from its label, inside the open editor.
-    /// Its placeholder is shared in spirit with two other boxes and is not used.
+    /// The box has had an id and a label tied to it since fix/oct16-gaps (gap 8): the label is
+    /// found by its text and the box by its id, so each proves the other.
     /// </remarks>
     private async Task<(ILocator Box, ILocator Search, ILocator Results, ILocator Nothing)> OpenTheCalendarBoxAsync()
     {
@@ -200,7 +200,8 @@ public class Oct16PlaceSearchTests : Oct16TestBase
         var label = dialog.Locator("label", new() { HasTextRegex = new System.Text.RegularExpressions.Regex(@"^\s*Where \(a place\)\s*$") });
         await Expect(label).ToBeVisibleAsync(new() { Timeout = 10_000 });
         var field = label.Locator("..");
-        return (field.Locator("input.form-control").First,
+        await Expect(label).ToHaveAttributeAsync("for", "calendar-place-search");
+        return (Page.Locator("#calendar-place-search"),
                 field.GetByRole(AriaRole.Button, new() { Name = "Search", Exact = true }),
                 field.Locator(".list-group .list-group-item"),
                 field.GetByText("No public places match that", new() { Exact = false }));

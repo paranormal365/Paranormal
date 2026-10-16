@@ -65,7 +65,8 @@ public class Oct16WhosComingTests : Oct16TestBase
     private ILocator TheEvent => Page.Locator(".k-event", new() { HasTextString = _title });
     private ILocator Dialog => Page.Locator(".modal.show").First;
     private ILocator GuestList => Page.Locator("#calendar-guest-list");
-    private ILocator JamesGuestRow => GuestList.Locator("tr", new() { HasTextString = _jamesName });
+    /// <summary>James's row in Who's coming: a list item since fix/oct16-gaps (gap 14), a table row before.</summary>
+    private ILocator JamesGuestRow => GuestList.Locator("li.guest-row", new() { HasTextString = _jamesName });
 
     private async Task OpenTheEditorAsync()
     {
@@ -183,7 +184,7 @@ public class Oct16WhosComingTests : Oct16TestBase
             problems.AddRange(await LookAtAsync(GuestList, "whos-coming-list", theme));
             var markComing = JamesGuestRow.GetByRole(AriaRole.Button, new() { Name = "Mark as coming" });
             problems.AddRange(await LookAtAsync(markComing, "whos-coming-button", theme,
-                JamesGuestRow.Locator(".badge"), JamesGuestRow.Locator("td").First));
+                JamesGuestRow.Locator(".badge"), JamesGuestRow.Locator(".guest-row__who > :first-child")));
             problems.AddRange(await TouchTargetAsync(markComing, "whos-coming-button", theme));
 
             await Dialog.GetByRole(AriaRole.Button, new() { Name = "Cancel", Exact = true }).ClickAsync();
