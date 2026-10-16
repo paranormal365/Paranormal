@@ -1,0 +1,105 @@
+/*
+    The Team panel at every width (10/16/2026).
+
+    The manage table (Who, Arrived, Attended, Lead, and the ✕) reads as one card per person below
+    768px (Bootstrap's md edge), the same reflow as PlaceRoomsManager.razor.css: the heading row
+    is hidden and each cell names its column from data-label. At 768px and up there is room for
+    the five columns, so it stays a table, as before.
+
+    Widths:
+      320 to 767px (small phone to Pro Max, a folded Duo, large phone landscape): cards, label
+                                                                   left, value right.
+      768px and up (iPad portrait and wider):                      the table.
+
+    The controls a finger presses here (Add, the ✕, "Take them off", "Keep them") are at least
+    44px on phones and tablets, and anywhere the pointer is coarse.
+
+    Colors are --bs-* variables only, so both themes follow data-bs-theme.
+*/
+
+/* The picker never pushes past the panel, whatever width the site's select is given. */
+.roster-add ::deep select {
+    max-width: 100%;
+}
+
+@media (max-width: 767.98px) {
+    .roster-manage {
+        display: block;
+    }
+
+    .roster-manage thead {
+        display: none;
+    }
+
+    .roster-manage tbody {
+        display: flex;
+        flex-direction: column;
+        gap: .5rem;
+    }
+
+    .roster-manage tr {
+        display: block;
+        padding: .25rem .75rem;
+        border: 1px solid var(--bs-border-color);
+        border-radius: .6rem;
+        background: var(--bs-body-bg);
+    }
+
+    .roster-manage tr > td {
+        display: flex;
+        align-items: center;
+        gap: .75rem;
+        min-height: 44px;
+        padding: .25rem 0;
+        border: 0;
+        border-bottom: 1px solid var(--bs-border-color-translucent);
+        background: transparent;
+        text-align: start !important;    /* over .text-center and .text-end */
+        white-space: normal !important;  /* over .text-nowrap */
+    }
+
+    .roster-manage tr > td:last-child {
+        border-bottom: 0;
+    }
+
+    .roster-manage tr > td::before {
+        content: attr(data-label);
+        flex: 0 0 5.5rem;
+        font-size: .72rem;
+        font-weight: 650;
+        letter-spacing: .04em;
+        text-transform: uppercase;
+        color: var(--bs-secondary-color);
+    }
+
+    /* The person's name heads the card. */
+    .roster-manage tr > td.roster-manage__who {
+        font-weight: 600;
+    }
+
+    .roster-manage tr > td.roster-manage__who::before {
+        display: none;
+    }
+
+    /* A box or a radio is small; the cell around it is what a thumb finds. */
+    .roster-manage .form-check-input {
+        width: 1.4rem;
+        height: 1.4rem;
+        margin: 0;
+    }
+}
+
+@media (max-width: 991.98px), (pointer: coarse) {
+    .roster-touch,
+    .roster-manage .btn {
+        min-height: 44px;
+        min-width: 44px;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+    }
+
+    .roster-add ::deep select {
+        min-height: 44px;
+    }
+}

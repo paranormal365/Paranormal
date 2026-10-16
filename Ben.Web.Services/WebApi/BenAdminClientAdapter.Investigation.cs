@@ -51,16 +51,17 @@ public sealed partial class BenAdminClientAdapter
     public Task<LoadResult<InvestigationAttendeeRecord>> GetInvestigationAttendeesAsync(Guid orgId, Guid caseId, Guid id, CancellationToken token = default)
         => _api.GetListAsync<InvestigationAttendeeRecord>($"{InvBase(orgId, caseId)}/{id}/attendees", token);
 
-    public Task<InvestigationAttendeeRecord?> AddInvestigationAttendeeAsync(Guid orgId, Guid caseId, Guid id, AddInvestigationAttendeeRequest request, CancellationToken token = default)
-        => _api.PostAsync<AddInvestigationAttendeeRequest, InvestigationAttendeeRecord>($"{InvBase(orgId, caseId)}/{id}/attendees", request, token);
+    public Task<(InvestigationAttendeeRecord? Attendee, string? Error)> AddInvestigationAttendeeAsync(Guid orgId, Guid caseId, Guid id, AddInvestigationAttendeeRequest request, CancellationToken token = default)
+        => _api.SendExpectingReasonAsync<AddInvestigationAttendeeRequest, InvestigationAttendeeRecord>(
+               HttpMethod.Post, $"{InvBase(orgId, caseId)}/{id}/attendees", request, token);
 
     public Task<InvestigationAttendeeRecord?> UpdateInvestigationAttendanceAsync(Guid orgId, Guid caseId, Guid id, Guid attendeeId, bool? didAttend, string? assignedRole, Ben.Data.Common.Enums.RsvpStatus? rsvp = null, CancellationToken token = default)
         => _api.PutAsync<object, InvestigationAttendeeRecord>(
                $"{InvBase(orgId, caseId)}/{id}/attendees/{attendeeId}/attendance",
                new { DidAttend = didAttend, AssignedRole = assignedRole, Rsvp = rsvp }, token);
 
-    public Task<bool> RemoveInvestigationAttendeeAsync(Guid orgId, Guid caseId, Guid id, Guid attendeeId, CancellationToken token = default)
-        => _api.DeleteAsync($"{InvBase(orgId, caseId)}/{id}/attendees/{attendeeId}", token);
+    public Task<(bool Removed, string? Error)> RemoveInvestigationAttendeeAsync(Guid orgId, Guid caseId, Guid id, Guid attendeeId, CancellationToken token = default)
+        => _api.DeleteExpectingReasonAsync($"{InvBase(orgId, caseId)}/{id}/attendees/{attendeeId}", token);
 
     // ── Evidence Voting ───────────────────────────────────────────────────────
 

@@ -209,14 +209,14 @@
         <div class="row g-3">
             <div class="col-12 col-lg-3">
                 <div class="list-group sticky-lg-top" style="top:1rem;" id="event-index">
-                    <a class="list-group-item list-group-item-action" href="#event-details">Details</a>
-                    <a class="list-group-item list-group-item-action" href="#event-dates">
+                    <a class="list-group-item list-group-item-action" href="@JumpLink.To(NavManager, "event-details")">Details</a>
+                    <a class="list-group-item list-group-item-action" href="@JumpLink.To(NavManager, "event-dates")">
                         @Capitalise(Plural(2, ev.DateNoun))
                     </a>
-                    <a class="list-group-item list-group-item-action" href="#event-venue">The venue's say-so</a>
-                    <a class="list-group-item list-group-item-action" href="#event-guests">Your guests</a>
-                    <a class="list-group-item list-group-item-action" href="#group-field-sessions">Field sessions</a>
-                    <a class="list-group-item list-group-item-action" href="#event-state">Ending it</a>
+                    <a class="list-group-item list-group-item-action" href="@JumpLink.To(NavManager, "event-venue")">The venue's say-so</a>
+                    <a class="list-group-item list-group-item-action" href="@JumpLink.To(NavManager, "event-guests")">Your guests</a>
+                    <a class="list-group-item list-group-item-action" href="@JumpLink.To(NavManager, "group-field-sessions")">Field sessions</a>
+                    <a class="list-group-item list-group-item-action" href="@JumpLink.To(NavManager, "event-state")">Ending it</a>
                     @* The screens of their own that hang off this page. *@
                     @IndexEntry("Plan", $"/organizations/{OrgId}/events/{EventId}/layout")
                     @IndexEntry("Bookings", $"/organizations/{OrgId}/events/{EventId}/bookings")
@@ -332,7 +332,7 @@
                                rather than a dropdown somebody brushes past. The same search and
                                the same "enter one we haven't listed" as when the event was made. *@
                             <div class="col-12">
-                                <label class="form-label">Venue</label>
+                                <div class="form-label">Venue</div>
                                 @if (!_changingVenue)
                                 {
                                     <div class="d-flex align-items-center gap-2 flex-wrap">
@@ -362,29 +362,32 @@
                                                 <span>Moving it to</span>
                                                 <span class="fw-semibold">@PlaceLabel(picked)</span>
                                             </div>
-                                            @if (picked.Kind == Ben.Data.Common.Enums.PlaceKind.PrivateResidence)
-                                            {
-                                                <div class="form-text text-danger">
-                                                    That is a private residence, so an event cannot
-                                                    be held there publicly.
-                                                </div>
-                                            }
                                         }
                                         else
                                         {
+                                            <label class="form-label small mb-1" for="venue-search">Search for the new venue</label>
                                             <div class="input-group" style="max-width:32rem;">
-                                                <input class="form-control" placeholder="Search venues by name"
+                                                <input id="venue-search" class="form-control" placeholder="@PlaceSearch.Placeholder"
                                                        value="@_venueSearch"
-                                                       @oninput="e => _venueSearch = e.Value?.ToString() ?? string.Empty" />
+                                                       @oninput="e => _venueSearch = e.Value?.ToString() ?? string.Empty"
+                                                       @onkeydown="@(e => PlaceSearch.IsSearchKey(e.Key, _venueSearch) ? SearchVenuesAsync() : Task.CompletedTask)" />
                                                 <button type="button" class="btn btn-outline-secondary"
                                                         id="search-venue"
                                                         disabled="@string.IsNullOrWhiteSpace(_venueSearch)"
                                                         @onclick="SearchVenuesAsync">Search</button>
                                             </div>
-                                            @if (_venueCandidates.Count > 0)
+                                            @if (_venueFinder.IsSearching)
+                                            {
+                                                <div class="form-text" role="status">Searching…</div>
+                                            }
+                                            else if (_venueFinder.Error is { } searchError)
+                                            {
+                                                <div class="form-text text-danger" role="alert" id="venue-search-error">@searchError</div>
+                                            }
+                                            else if (_venueFinder.Results.Count > 0)
                                             {
                                                 <div class="list-group mt-2" style="max-width:32rem; max-height:12rem; overflow-y:auto;">
-                                                    @foreach (var candidate in _venueCandidates)
+                                                    @foreach (var candidate in _venueFinder.Results)
                                                     {
                                                         var pick = candidate;
                                                         <button type="button" class="list-group-item list-group-item-action py-1"
@@ -394,9 +397,12 @@
                                                     }
                                                 </div>
                                             }
-                                            else if (_venueSearched)
+                                            else if (_venueFinder.FoundNothing)
                                             {
-                                                <div class="form-text">No venues found by that name.</div>
+                                                <div class="form-text">
+                                                    No listed venues match that. If it's new, enter it
+                                                    below. A private home can't be used.
+                                                </div>
                                             }
 
                                             <div class="row g-2 mt-2" style="max-width:40rem;">
@@ -852,7 +858,7 @@
                         {
                             <div class="alert alert-dark mb-0">
                                 <strong>IsHaunted removed this event.</strong> Everybody who had a place has been told
-                                it is not going ahead. <a href="#event-removed">See the removal and appeal</a>.
+                                it is not going ahead. <a href="@JumpLink.To(NavManager, "event-removed")">See the removal and appeal</a>.
                             </div>
                         }
                         else if (ev.LifecycleState is HostedEventLifecycleState.VenueWithdrawn)
@@ -979,8 +985,7 @@
 
     private bool _changingVenue;
     private string _venueSearch = "";
-    private bool _venueSearched;
-    private List<PlaceCandidate> _venueCandidates = [];
+    private readonly PlaceSearch _venueFinder = new();
     private PlaceCandidate? _pickedVenue;
     private readonly NewVenueForm _newVenue = new();
 
@@ -1011,8 +1016,8 @@
         public string? Tagline { get; set; }
         public string? Description { get; set; }
         public string TimeZoneId { get; set; } = "America/Chicago";
-        public DateTime StartsOn { get; set; } = DateTime.Today;
-        public DateTime EndsOn { get; set; } = DateTime.Today;
+        public DateTime StartsOn { get; set; } = DateTime.UtcNow.Date; // placeholder; replaced by the loaded event
+        public DateTime EndsOn { get; set; } = DateTime.UtcNow.Date;
         public TimeSpan? DefaultStartLocal { get; set; }
         public TimeSpan? DefaultEndLocal { get; set; }
         public bool HideExactLocation { get; set; }
@@ -1417,8 +1422,7 @@
     {
         _changingVenue = true;
         _venueSearch = "";
-        _venueSearched = false;
-        _venueCandidates = [];
+        _venueFinder.Clear();
         _pickedVenue = null;
         _newVenue.Clear();
     }
@@ -1427,27 +1431,21 @@
     {
         _changingVenue = false;
         _pickedVenue = null;
-        _venueCandidates = [];
-        _venueSearched = false;
+        _venueFinder.Clear();
         _newVenue.Clear();
     }
 
-    private async Task SearchVenuesAsync()
-    {
-        _venueSearched = true;
-
-        // The refusal is shown rather than swallowed. A search that was refused and a search that
-        // found nothing look identical to a person, and telling them "no venues found" when the
-        // truth is "we couldn't ask" sends them off to invent a venue that already exists.
-        var found = await AdminClient.FindPlaceCandidatesAsync(
-            street: null, city: null, state: null, zip: null,
-            name: _venueSearch.Trim(), latitude: null, longitude: null);
-
-        if (found.Failed) { _error = found.Reason ?? "Venues couldn't be searched just now."; _venueCandidates = []; return; }
-
-        _error = null;
-        _venueCandidates = [.. found.Items];
-    }
+    /// <remarks>
+    /// <para>A search, not the duplicate-place matcher this used to ask: the matcher wants the
+    /// exact name, so part of one found nothing (10/16/2026). The search returns public locations
+    /// only, which is exactly what <c>HostedEventController</c> accepts as a venue.</para>
+    ///
+    /// <para><see cref="PlaceSearch"/> says "Searching…" while it waits and shows a refusal next to
+    /// the box rather than "no venues found". A search that was refused and one that found nothing
+    /// must not look alike: the second sends somebody off to enter a venue that already exists.</para>
+    /// </remarks>
+    private Task SearchVenuesAsync()
+        => _venueFinder.SearchAsync(_venueSearch, text => AdminClient.SearchPublicPlacesAsync(text), "venues");
 
     private static string PlaceLabel(PlaceCandidate place)
         => string.Join(", ", new[] { place.Name, place.StreetAddress1, place.City, place.State }

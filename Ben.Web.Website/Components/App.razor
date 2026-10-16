@@ -144,6 +144,15 @@
     <Routes @rendermode="@InteractiveServer" />
     <script src="/_framework/blazor.web.js" autostart="false"></script>
     <script>
+        // A do-nothing link (href="#" with a click handler) never leaves the page. With <base href="/">
+        // a bare "#" means the HOME page; once the page is live Blazor honors the handler's
+        // preventDefault, but a click in the second or two before it connects went home. Capture
+        // phase, so this runs first; Blazor still delivers the click to the component.
+        document.addEventListener("click", function (e) {
+            var a = e.target && e.target.closest ? e.target.closest("a[href]") : null;
+            if (a && a.getAttribute("href") === "#") e.preventDefault();
+        }, true);
+
         document.addEventListener("DOMContentLoaded", function() {
             // Start Blazor FIRST, and never let anything before it throw. An earlier version
             // called Blazor.addEventListener here, which does not exist — the exception stopped

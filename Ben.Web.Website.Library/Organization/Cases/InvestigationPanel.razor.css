@@ -1,0 +1,18 @@
+/*
+    The case page's investigation dialog (10/16/2026).
+
+    Delete asks first, inline ("Delete this visit? This can't be undone." / Keep / Delete). The
+    question wraps (flex-wrap in the markup), so on a 320px phone the sentence takes its own line
+    and the two buttons the next; from about 576px they share one line.
+
+    At least 44px to touch on phones and tablets (up to 991px, which covers an iPad portrait and an
+    open folding phone), and anywhere the pointer is a finger. A desktop with a mouse is unchanged.
+*/
+
+@media (max-width: 991.98px), (pointer: coarse) {
+    .investigation-confirm .btn,
+    .dialog-footer-actions .btn {
+        min-height: 44px;
+        min-width: 44px;
+    }
+}

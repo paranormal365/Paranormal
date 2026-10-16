@@ -12,7 +12,7 @@ namespace Ben.Data.WebApi.Controllers.Public;
 [AllowAnonymous]
 [Route("api/public/search")]
 [Ben.Data.WebApi.Services.FeatureGated(Ben.Data.WebApi.Services.SiteSettingKeys.FeatureDiscovery)]
-public sealed class SearchController : ControllerBase
+public sealed class SearchController : BenControllerBase
 {
     private readonly IDbContextFactory<BenDataContext> _db;
     public SearchController(IDbContextFactory<BenDataContext> db) => _db = db;
@@ -36,6 +36,11 @@ public sealed class SearchController : ControllerBase
     /// caller could query from three points and trilaterate. Everything reported here derives from
     /// the grid cell, so there is nothing to solve for. The cost is that an event within a mile or
     /// two of the radius edge may fall on the wrong side of it, which does not matter for browsing.</para>
+    ///
+    /// <para><b><paramref name="includeMine"/></b> (10/16/2026): a signed-in reader who asks also
+    /// finds their own groups' events, marked, under exactly the same pin rules — see
+    /// <see cref="PublicEventController.VisibleToReader"/>. Signed out, or not asked, nothing
+    /// changes.</para>
     /// </remarks>
     [HttpGet("nearby")]
     public async Task<ActionResult<NearbyResults>> Nearby(
@@ -43,7 +48,8 @@ public sealed class SearchController : ControllerBase
         [FromQuery] double lon,
         [FromQuery] double radiusMiles = 25,
         [FromQuery] string? query = null,
-        CancellationToken ct = default)
+        CancellationToken ct = default,
+        [FromQuery] bool includeMine = false)
     {
         // A position off the map is refused rather than cast to decimal, which threw for NaN or 1e30 and
         // answered 500 (site audit, 10/09/2026).
@@ -119,7 +125,8 @@ public sealed class SearchController : ControllerBase
                                        ? addr.State : null));
         }
 
-        var events = await NearbyEventsAsync(db, lat, lon, clampedRadius, query, ct);
+        var reader = includeMine ? await GetCurrentUserIdOrNullAcrossSchemesAsync() : null;
+        var events = await NearbyEventsAsync(db, lat, lon, clampedRadius, query, reader, ct);
         var places = await NearbyPlacesAsync(
             db, lat, lon, clampedRadius, latMin, latMax, lonMin, lonMax, query, ct);
 
@@ -227,24 +234,42 @@ public sealed class SearchController : ControllerBase
     /// Upcoming public events whose approximate location falls within the radius.
     /// </summary>
     /// <remarks>
-    /// Visibility comes from <see cref="PublicEventController.VisibleEvents"/> — the same predicate
-    /// the events pages use, so an event hidden there cannot surface here. Only future events: a
-    /// discovery map exists to answer "what could I go to", and last year's walk is not that.
+    /// Visibility comes from <see cref="PublicEventController.VisibleToReader"/> — the same predicate
+    /// the events pages use, so an event hidden there cannot surface here. Only events that have not
+    /// ended: a discovery map exists to answer "what could I go to", and last year's walk is not
+    /// that. One already under way is (10/16/2026): its card says "Happening now", which is the most
+    /// useful thing a map of tonight can tell somebody.
     /// </remarks>
     private static async Task<IReadOnlyList<NearbyEventResult>> NearbyEventsAsync(
-        BenDataContext db, double lat, double lon, double radiusMiles, string? query, CancellationToken ct)
+        BenDataContext db, double lat, double lon, double radiusMiles, string? query, Guid? reader,
+        CancellationToken ct)
     {
         var now = DateTime.UtcNow;
+        var readerOrgs = await PublicEventController.ReaderOrganizationIdsAsync(db, reader, ct);
+        var me = reader ?? Guid.Empty;
 
-        var candidates = await PublicEventController.VisibleEvents(db)
+        var candidates = await PublicEventController.VisibleToReader(db, readerOrgs)
             .Include(e => e.Organization)
             .Include(e => e.Place)
             .Include(e => e.OrganizationAddress)
             // For its zone: a walk's time is the walk's, not the reader's. Without this the
             // navigation is simply null and every card would have quietly fallen back to UTC.
             .Include(e => e.Tour)
-            .Where(e => e.StartDateTime >= now)
+            // For when it was listed: a hosted event's first publication starts its countdown bar.
+            .Include(e => e.HostedEvent)
+            .Where(e => e.EndDateTime >= now)
             .ToListAsync(ct);
+
+        // The reader's own answers, in one query rather than one per row.
+        var candidateIds = candidates.Select(c => c.Id).ToList();
+        var mine = reader is null
+            ? new Dictionary<Guid, RsvpStatus>()
+            : (await db.OrgCalendarEventAttendees.AsNoTracking()
+                    .Where(a => a.AppUserId == me && candidateIds.Contains(a.OrgCalendarEventId))
+                    .Select(a => new { a.OrgCalendarEventId, a.RsvpStatus })
+                    .ToListAsync(ct))
+                .GroupBy(a => a.OrgCalendarEventId)
+                .ToDictionary(g => g.Key, g => g.First().RsvpStatus);
 
         var results = new List<NearbyEventResult>();
 
@@ -281,7 +306,14 @@ public sealed class SearchController : ControllerBase
                 // The night's own clock, so a card says the time it actually starts rather than
                 // the time where the reader is sitting (Ben, 2026-09-10). The event's own zone
                 // first, then its tour's for the dates scheduled before events had one.
-                TimeZoneId:    ev.TimeZoneId ?? ev.Tour?.TimeZoneId));
+                TimeZoneId:    ev.TimeZoneId ?? ev.Tour?.TimeZoneId,
+                EndDateTime:   ev.EndDateTime,
+                ListedUtc:     ev.HostedEvent?.FirstPublishedUtc ?? ev.DateCreated,
+                ReaderTie:     reader is null
+                                   ? EventReaderTie.None
+                                   : PublicEventController.TieOf(ev.IsPublic,
+                                       mine.TryGetValue(ev.Id, out var rsvp) ? rsvp : (RsvpStatus?)null),
+                OrganizationId: ev.OrganizationId));
         }
 
         return [.. results.OrderBy(r => r.StartDateTime)];

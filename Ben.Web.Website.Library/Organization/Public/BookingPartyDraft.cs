@@ -66,6 +66,9 @@ public sealed class BookingPartyDraft
     public bool HasANoteWithoutAName
         => _people.Any(p => p.Name.Trim().Length == 0 && p.Notes.Trim().Length > 0);
 
+    /// <summary>What the form says beside its button while a note has nobody's name on it; null otherwise.</summary>
+    public string? WhatIsMissing => HasANoteWithoutAName ? "Give each dietary note a name." : null;
+
     /// <summary>
     /// The named rows, in order, as the requests want them. Empty when nobody is named, which on a
     /// change clears the names rather than leaving the old ones.

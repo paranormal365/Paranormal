@@ -58,7 +58,7 @@
         <div class="card mb-3">
             <div class="card-body p-lg-4">
                 <h2 class="h4 mb-1" data-testid="order-number">Order no. @order.OrderNumber</h2>
-                <div class="text-secondary small mb-2">Date: @order.PlacedUtc.ToViewerLocalTime(User).ToString("MM/dd/yyyy h:mm tt")</div>
+                <div class="text-secondary small mb-2">Date: @order.PlacedUtc.ToViewerLocalTime(User).ToDisplayDateTime()</div>
                 <span class="badge rounded-pill bg-@StoreOrderStatusText.Tone(order.Status)-subtle text-@StoreOrderStatusText.Tone(order.Status)-emphasis d-inline-flex align-items-center gap-2 py-2 px-3" data-testid="order-status">
                     <span class="ben-bull bg-@StoreOrderStatusText.Tone(order.Status)" aria-hidden="true"></span>@StoreOrderStatusText.Label(order.Status)
                 </span>

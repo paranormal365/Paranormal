@@ -16,7 +16,7 @@ else
 {
     <div class="d-flex align-items-center justify-content-between mb-2">
         <span class="text-secondary small">@_proposals.Count proposal@(_proposals.Count == 1 ? "" : "s") sent</span>
-        <button type="button" class="btn btn-primary btn-sm" @onclick="@(() => _showProposeDialog = true)"><BenIcon Name="calendar" Class="me-1" />Propose Dates</button>
+        <button type="button" class="btn btn-primary btn-sm" @onclick="@OpenPropose"><BenIcon Name="calendar" Class="me-1" />Propose Dates</button>
     </div>
 
     @if (_error is not null) { <div class="alert alert-danger py-2 small mb-2">@_error</div> }
@@ -78,6 +78,7 @@ else
                 <textarea id="schedulingproposalpanel-message-to-client-optional-66d6" class="form-control" rows="2" placeholder="e.g. We have three dates available. Please choose one or suggest another." @bind="@_proposeNotes"></textarea>
             </div>
             <div class="col-12 fw-semibold small">Proposed Date/Time Options</div>
+            <div class="col-12 form-text mt-0" data-testid="schedulingproposalpanel-zone">Times are in your time zone (@MyLetters).</div>
             @* Same rule as the schedule dialog: one arrival and one departure, allowed to cross
                midnight, is a single day. A proposal for a weekend or a week ticks the box. *@
             <div class="col-12">
@@ -142,7 +143,19 @@ else
     private bool _showProposeDialog;
     private bool _multiDay;
     private string _proposeNotes = "";
-    private List<SlotForm> _slots = [new() { Start = DefaultSlotStart() }];
+    // Seeded when the dialog opens, on the reader's clock — see OpenPropose.
+    private List<SlotForm> _slots = [];
+
+    /// <summary>The letters of the clock the times are typed on: "CDT".</summary>
+    private string MyLetters => Ben.Data.Common.Helpers.Zones.Abbreviation(UserState.ViewerTimeZone, DateTime.UtcNow);
+
+    private void OpenPropose()
+    {
+        if (_slots.Count == 0) _slots = [NewSlot(DefaultSlotStart())];
+        _showProposeDialog = true;
+    }
+
+    private static SlotForm NewSlot(DateTime start) => new() { Start = start, Seed = start };
 
     protected override async Task OnInitializedAsync()
     {
@@ -154,9 +167,12 @@ else
     private async Task SendProposal()
     {
         _saving = true;
+        // Typed on the reader's own clock and stored as UTC. These went to the server unconverted
+        // until 10/16/2026, so a 7 PM option was stored as 7 PM UTC and read back hours early.
         var slots = _slots
             .Where(s => s.Start.HasValue)
-            .Select((s, i) => new SlotInput(s.Start!.Value, EffectiveEnd(s)))
+            .Select(s => InvestigationWindow.ToUtc(s.Start!.Value, EffectiveEnd(s), UserState))
+            .Select(w => new SlotInput(w.StartUtc, w.EndUtc))
             .ToList();
         try
         {
@@ -167,7 +183,7 @@ else
                 _proposals.Insert(0, result);
                 _showProposeDialog = false;
                 _proposeNotes = "";
-                _slots = [new SlotForm { Start = DefaultSlotStart() }];
+                _slots = [NewSlot(DefaultSlotStart())];
             }
         }
         catch { _error = "Failed to send proposal."; }
@@ -226,13 +242,13 @@ else
     /// Where a proposed window starts before anybody touches it: a week out, at 7pm — the hour a
     /// visit usually begins, and far enough ahead that a client has time to answer.
     /// </summary>
-    private static DateTime DefaultSlotStart() => DateTime.Today.AddDays(7).AddHours(19);
+    private DateTime DefaultSlotStart() => UserState.NowInViewerTimeZone().Date.AddDays(7).AddHours(19);
 
     /// <summary>Each further option is the next evening, which is how three dates get offered.</summary>
     private void AddSlot()
     {
         var last = _slots.LastOrDefault()?.Start ?? DefaultSlotStart().AddDays(-1);
-        _slots.Add(new SlotForm { Start = last.AddDays(1) });
+        _slots.Add(NewSlot(last.AddDays(1)));
     }
 
     private DateTime? EffectiveEnd(SlotForm slot)
@@ -280,17 +296,20 @@ else
         /// </remarks>
         public DateTime? Start   { get; set; }
 
+        /// <summary>The start this option was seeded with, on the reader's clock; the fallback when the field is cleared.</summary>
+        public DateTime Seed { get; init; }
+
         /// <summary>The two halves of the start, over one field.</summary>
         public DateTime StartDate
         {
-            get => Start?.Date ?? DefaultSlotStart().Date;
-            set => Start = value.Date + (Start?.TimeOfDay ?? DefaultSlotStart().TimeOfDay);
+            get => Start?.Date ?? Seed.Date;
+            set => Start = value.Date + (Start?.TimeOfDay ?? Seed.TimeOfDay);
         }
 
         public DateTime StartTime
         {
-            get => Start ?? DefaultSlotStart();
-            set => Start = (Start?.Date ?? DefaultSlotStart().Date) + value.TimeOfDay;
+            get => Start ?? Seed;
+            set => Start = (Start?.Date ?? Seed.Date) + value.TimeOfDay;
         }
 
         /// <summary>The end when the dialog is in multi-day mode.</summary>

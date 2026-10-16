@@ -66,6 +66,15 @@
                 <span class="ben-tourcard__none">No dates up yet</span>
             }
         </span>
+        @if (ShowCountdown && Tour.NextDateStartUtc is { } countFrom)
+        {
+            @* The next walk, counting down (10/16/2026). Its end is the date's own, or the tour's
+               length when an older record has none. *@
+            <EventCountdown StartUtc="@countFrom"
+                            EndUtc="@(Tour.NextDateEndUtc ?? countFrom.AddMinutes(Tour.DurationMinutes ?? 120))"
+                            ZoneId="@Tour.TimeZoneId" ListedUtc="@Tour.NextDateListedUtc"
+                            Name="@Tour.Name" Class="ben-tourcard__countdown" TestId="tour-countdown" />
+        }
         @if (ShowOrganization)
         {
             <span class="ben-tourcard__by">Run by @Tour.OrganizationName</span>
@@ -84,6 +93,12 @@
 
     /// <summary>How far away it is — only meaningful in a result list that searched from a point.</summary>
     [Parameter] public bool ShowDistance { get; set; }
+
+    /// <summary>
+    /// Whether to count down to the next date. On where people look for something to go to by
+    /// location (the nearby search); off on a business's own page of walks.
+    /// </summary>
+    [Parameter] public bool ShowCountdown { get; set; }
 
     [Parameter] public string? Class { get; set; }
 }

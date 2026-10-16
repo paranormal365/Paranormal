@@ -47,7 +47,7 @@
             }
             else if (poll.ClosesAtUtc is { } closes)
             {
-                <span>· closes @closes.ToViewerLocalTime(UserState).ToString("MM/dd/yyyy h:mm tt")</span>
+                <span>· closes @closes.ToViewerLocalTime(UserState).ToDisplayDateTime()</span>
             }
             @if (poll.AllowMultiple)
             {

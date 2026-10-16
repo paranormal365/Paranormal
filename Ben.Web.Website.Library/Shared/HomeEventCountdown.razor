@@ -1,0 +1,55 @@
+@namespace Ben.Web.Website.Library.Shared
+@using Ben.Web.Services
+@using Ben.Service.Models.Entities
+@inject IBenAdminClient AdminClient
+@inject IBenUserState UserState
+
+@*
+    What you're going to next, counting down, at the top of Home once you are signed in
+    (10/16/2026). Ben: "When a person signs up for an event, maybe we show how long until the event
+    starts with a tiny card on the home page after they log in." Then: "Make it cool."
+
+    This half asks; NextUpCard draws. WHAT COUNTS is decided by the server (MyNextEventsController):
+    a hosted-event booking that is confirmed, held or asked for; a calendar event or tour date they
+    said yes to, or a tour seat they asked for; an investigation they are on the team of.
+
+    Nothing at all for a visitor. Auth resolves after the circuit attaches, and asking before it
+    would ask as nobody and draw "nothing coming up" for somebody who has plenty.
+*@
+
+@if (_loaded)
+{
+    <NextUpCard Next="_next" Refusal="_refusal" OnRetry="LoadAsync" />
+}
+
+@code {
+    private MyNextEventsResponse? _next;
+    private string? _refusal;
+    private bool _loaded;
+
+    protected override async Task OnInitializedAsync()
+    {
+        if (!await UserState.WaitUntilAuthReadyAsync(RendererInfo.IsInteractive)) return;
+        if (!UserState.IsAuthenticated) return;
+        await LoadAsync();
+    }
+
+    private async Task LoadAsync()
+    {
+        _refusal = null;
+        var result = await AdminClient.GetMyNextEventsAsync();
+        if (result.Failed)
+        {
+            // A refusal is a sentence, never a missing card that reads as "nothing coming up".
+            _next = null;
+            _refusal = result.SessionExpired
+                ? "You have been signed out, so your next event can't be shown. Sign in again to see it."
+                : "Couldn't check what you're going to next.";
+        }
+        else
+        {
+            _next = result.Item;
+        }
+        _loaded = true;
+    }
+}

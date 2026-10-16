@@ -117,6 +117,12 @@
     margin-top: .15rem;
 }
 
+.ben-tourcard__body ::deep .ben-tourcard__countdown {
+    display: flex;
+    width: 100%;
+    margin-top: .4rem;
+}
+
 @media (prefers-reduced-motion: reduce) {
     .ben-tourcard,
     .ben-tourcard__image {

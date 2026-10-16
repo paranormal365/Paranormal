@@ -71,7 +71,7 @@ else
             </div>
             @if (_tour.UpcomingDates.Count > 0 && _tour.IsBookable)
             {
-                <div><a class="btn btn-primary" href="#tour-dates">Pick a night</a></div>
+                <div><a class="btn btn-primary" href="@JumpLink.To(NavManager, "tour-dates")">Pick a night</a></div>
             }
         </PageHero>
 
@@ -367,7 +367,7 @@ else
                             <span class="tour-date__mon">@when.ToString("MMM")</span>
                         </span>
                         <span class="tour-date__body">
-                            <span class="tour-date__time">@when.ToString("h:mm tt") <span class="tour-date__zone">@zone</span></span>
+                            <span class="tour-date__time">@when.ToDisplayTime() <span class="tour-date__zone">@zone</span></span>
                             <span class="tour-date__seats">
                                 @if (cap is { } capacity)
                                 {
@@ -459,11 +459,11 @@ else
             {
                 var (soonest, zone) = Clock(_tour.UpcomingDates[0].StartDateTime);
                 facts.Add(new BenFactItem("Next walk", soonest.ToString("ddd MM/dd"),
-                    $"{soonest:h:mm tt} {zone}", Href: "#tour-dates", Emphasis: true));
+                    $"{soonest:h:mm tt} {zone}", Href: JumpLink.To(NavManager, "tour-dates"), Emphasis: true));
             }
 
             if (_tour.DurationMinutes is { } minutes)
-                facts.Add(new BenFactItem("How long", Duration(minutes), "on your feet"));
+                facts.Add(new BenFactItem("How long", EventLength.Hours(minutes), "on your feet"));
 
             if (_tour.DefaultCapacity is { } capacity)
                 facts.Add(new BenFactItem("Group size", $"Up to {capacity}", "people per walk"));
@@ -475,7 +475,7 @@ else
             var pictures = _gallery.Count + _guestPhotos.Count;
             if (pictures > 0)
                 facts.Add(new BenFactItem("Pictures", pictures.ToString(), "from the walk",
-                    Href: "#tour-slideshow"));
+                    Href: JumpLink.To(NavManager, "tour-slideshow")));
 
             return facts;
         }
@@ -504,9 +504,9 @@ else
     }
 
     /// <summary>The day the calendar is showing. Starts on the next date this tour runs.</summary>
-    private DateTime _selectedDate = DateTime.Today;
-    private DateTime _calendarMin = DateTime.Today.AddYears(-1);
-    private DateTime _calendarMax = DateTime.Today.AddYears(1);
+    private DateTime _selectedDate = DateTime.UtcNow.Date;
+    private DateTime _calendarMin = DateTime.UtcNow.Date.AddYears(-1);
+    private DateTime _calendarMax = DateTime.UtcNow.Date.AddYears(1);
     private HashSet<DateTime> _dateDays = [];
 
     /// <summary>Whether this tour runs on that day, in the reader's own zone.</summary>
@@ -638,20 +638,5 @@ else
 
     private static string Stars(int count) => new('★', Math.Clamp(count, 0, 5));
 
-    /// <summary>
-    /// The same length, short enough for a figure in the facts rail. "about 1 hour 30 minutes" is
-    /// a sentence; a rail wants a number.
-    /// </summary>
-    private static string Duration(int minutes)
-    {
-        var hours = minutes / 60;
-        var rest = minutes % 60;
-        return hours switch
-        {
-            0 => $"{rest} min",
-            _ when rest == 0 => $"{hours} hr",
-            _ => $"{hours} hr {rest} min",
-        };
-    }
 
 }

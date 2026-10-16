@@ -67,12 +67,24 @@ public sealed class PublicEventController : BenControllerBase
     // ── Reading ──────────────────────────────────────────────────────────────
 
     /// <summary>Upcoming public events, optionally narrowed to one organization.</summary>
+    /// <remarks>
+    /// <para><b><paramref name="includeMine"/></b> (10/16/2026, Ben: "Or events available for the person
+    /// logged in"): a signed-in reader who asks also gets their own groups' events that are not
+    /// public, each marked with why (<see cref="EventReaderTie"/>). Asked for, never assumed, so the
+    /// phone app already in people's pockets, which sends its token here, keeps the list it was built
+    /// for. Signed out, the flag changes nothing.</para>
+    /// </remarks>
     [HttpGet]
     [AllowAnonymous]
     public async Task<ActionResult<IReadOnlyList<PublicEventListItem>>> GetUpcoming(
-        [FromQuery] string? orgUrlName, [FromQuery] int maxResults = 50, CancellationToken ct = default)
+        [FromQuery] string? orgUrlName, [FromQuery] int maxResults = 50, CancellationToken ct = default,
+        [FromQuery] bool includeMine = false)
     {
         await using var db = await _db.CreateDbContextAsync(ct);
+
+        var reader = includeMine ? await GetCurrentUserIdOrNullAcrossSchemesAsync() : null;
+        var readerOrgs = await ReaderOrganizationIdsAsync(db, reader, ct);
+        var me = reader ?? Guid.Empty;   // matches nobody's attendee row
 
         // Events that have ENDED are not upcoming. VisibleEvents deliberately carries no date
         // filter — a past event's own page must still resolve, or every link ever shared to one
@@ -90,9 +102,10 @@ public sealed class PublicEventController : BenControllerBase
         // (OrgCalendarController.EnsurePublicSlugAsync) and backfilled for anything older, so this
         // filter should never exclude anything; it is here so that "should never" is not the only
         // thing standing between a visitor and a line they cannot click.
-        var query = VisibleEvents(db)
+        // A group-only row needs no slug: it opens on the group's own calendar, not a public page.
+        var query = VisibleToReader(db, readerOrgs)
             .Where(e => e.EndDateTime >= now)
-            .Where(e => e.UrlName != null);
+            .Where(e => e.UrlName != null || !e.IsPublic);
 
         if (!string.IsNullOrWhiteSpace(orgUrlName))
         {
@@ -130,6 +143,13 @@ public sealed class PublicEventController : BenControllerBase
                 PlaceLat = e.Place != null ? e.Place.Latitude : null,
                 PlaceLon = e.Place != null ? e.Place.Longitude : null,
                 Attending = e.Attendees.Count(a => a.RsvpStatus == RsvpStatus.Accepted),
+                e.IsPublic,
+                // When it was listed: a hosted event's first publication, else the row's creation.
+                Listed = e.HostedEvent != null && e.HostedEvent.FirstPublishedUtc != null
+                    ? e.HostedEvent.FirstPublishedUtc
+                    : (DateTime?)e.DateCreated,
+                MyRsvp = e.Attendees.Where(a => a.AppUserId == me)
+                                    .Select(a => (RsvpStatus?)a.RsvpStatus).FirstOrDefault(),
             })
             .ToListAsync(ct);
 
@@ -152,7 +172,10 @@ public sealed class PublicEventController : BenControllerBase
                 e.PlaceCity ?? e.TourCity, e.PlaceState ?? e.TourState, lat, lon,
                 e.Attending, e.AttendeeCapacity,
                 IsOnline: !string.IsNullOrWhiteSpace(e.MeetingUrl),
-                TourName: e.TourName, TourUrlName: e.TourUrl, TimeZoneId: e.TourZone);
+                TourName: e.TourName, TourUrlName: e.TourUrl, TimeZoneId: e.TourZone,
+                ListedUtc: e.Listed,
+                // Only a reader who asked for their own events is told why; a visitor never is.
+                ReaderTie: reader is null ? EventReaderTie.None : TieOf(e.IsPublic, e.MyRsvp));
         }).ToList());
     }
 
@@ -571,6 +594,54 @@ public sealed class PublicEventController : BenControllerBase
             .Where(e => e.IsPublic
                      && e.CaseId == null
                      && (e.Place == null || e.Place.Kind == PlaceKind.PublicLocation));
+
+    /// <summary>
+    /// The events a reader may find on a list or a map: every public one, and, for a reader who is
+    /// an active member of a group, that group's own events as well (10/16/2026).
+    /// </summary>
+    /// <remarks>
+    /// <para><b>No wider than the calendar already is.</b> A group's own calendar
+    /// (<c>OrgCalendarEventController.GetAll</c>) is open to every active member, so this shows a
+    /// member nothing they could not already read there, and shows anybody else nothing beyond
+    /// <see cref="VisibleEvents"/>.</para>
+    ///
+    /// <para><b>The two exclusions stay for everybody.</b> A case-bound event and one at a private
+    /// residence never reach a list or a map, member or not: these lists carry a pin, and a pin at
+    /// somebody's house is what <see cref="VisibleEvents"/> exists to prevent. A member still sees
+    /// those on the group's calendar, which has no map.</para>
+    ///
+    /// <para><b>An invitation alone does not open a group-only event.</b> Somebody asked along to a
+    /// group's private night who is not in the group has no page for it — the public page answers
+    /// 404 — so listing it would be a row that goes nowhere. Their invitations to PUBLIC events are
+    /// marked instead (<see cref="EventReaderTie.Invited"/>).</para>
+    /// </remarks>
+    /// <param name="readerOrganizationIds">The reader's active memberships; empty for a visitor.</param>
+    internal static IQueryable<OrgCalendarEvent> VisibleToReader(
+        BenDataContext db, IReadOnlyCollection<Guid> readerOrganizationIds)
+        => readerOrganizationIds.Count == 0
+            ? VisibleEvents(db)
+            : db.OrgCalendarEvents.AsNoTracking()
+                .Where(e => (e.IsPublic || readerOrganizationIds.Contains(e.OrganizationId))
+                         && e.CaseId == null
+                         && (e.Place == null || e.Place.Kind == PlaceKind.PublicLocation));
+
+    /// <summary>The groups a reader is an active member of; empty for a visitor.</summary>
+    internal static async Task<IReadOnlyCollection<Guid>> ReaderOrganizationIdsAsync(
+        BenDataContext db, Guid? reader, CancellationToken ct)
+        => reader is not Guid id || id == Guid.Empty
+            ? []
+            : await db.OrganizationUserMemberships.AsNoTracking()
+                .Where(m => m.AppUserId == id && m.IsActive)
+                .Select(m => m.OrganizationId)
+                .Distinct()
+                .ToListAsync(ct);
+
+    /// <summary>Why a signed-in reader is shown a row. See <see cref="EventReaderTie"/>.</summary>
+    internal static EventReaderTie TieOf(bool isPublic, RsvpStatus? myRsvp)
+        => !isPublic ? EventReaderTie.YourGroup
+         : myRsvp == RsvpStatus.Accepted ? EventReaderTie.Going
+         : myRsvp is RsvpStatus.Invited or RsvpStatus.Tentative ? EventReaderTie.Invited
+         : EventReaderTie.None;
 
     private static PublicEventLocationRecord BuildLocation(OrgCalendarEvent ev, bool mayHaveExact)
     {

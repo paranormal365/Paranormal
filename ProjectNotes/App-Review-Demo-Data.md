@@ -109,6 +109,26 @@ holding the old end time, changed. **To undo:** set `EndDateTime` back to `2026-
 read, still opens *"Ten-day window so the team can cover several nights"*. The window is seventeen
 days. Left as it is; nobody asked to change reviewer-facing text.
 
+### Added on 2026-10-16, for 1.1.4's review
+
+The 1.1.4 review notes promise "a hosted event under Profile → What I'm going to", and the Photos
+share sheet lists only hosted events. The live API had **no** upcoming events at all, so the promise
+was false. Everything below is in the **Apple-Beta** group (the reviewer's real group; the notes had
+said Paranormal365, now corrected).
+
+| What | Id | Note |
+|---|---|---|
+| Hosted event *App Review night* | `ad40b89f-dd44-435c-9394-3f65341b134b` | **Published**, 15 nights 10/16–10/30/2026, 6:00–11:00 PM Central, at the group's own address (123 Main St, Franklin TN, exact address hidden from non-members), free. Public at `/o/apple-beta/events/app-review-night`. Its umbrella calendar row is `1e2de45a-2228-44cd-8be4-a884f9ac6dd1`. |
+| Booking | (on the event above) | Apple Test, "just for the day", all 15 nights, **confirmed** by Ben 10/16 (a pass email went to apple@apple.com, with Ben's OK). Phone on it is the fictional 615-555-0100. |
+| Calendar event *App Review night* | `5b610ff7-9075-45b9-96a2-2d7ca3e8b406` | Made first, before learning the app lists only hosted events. Was public at Bell Witch Cave; **made not public** the same day (Bell Witch Cave never agreed to it). Apple Test RSVP'd. Delete when convenient. |
+| Investigation *App Review night* | (Apple-Beta → Investigations) | No case, Bell Witch Cave, group-only, 10/16–10/30. **Empty team**: no screen could add anyone to a case-less investigation (fixed on `fix/investigation-team-and-rsvp`). Saved an hour late by the time zone bug (fixed on `fix/viewer-time-zone-saves`). Delete, or add Apple Test as Lead once that fix is deployed. |
+
+Review notes edited the same day: group name, "Field Kit" → "Paranormal" in the tab lists, and the
+demo-account sentence now names the confirmed place at App Review night.
+
+**After approval:** archive or call off the hosted event (Events → App Review night → Ending it), and
+delete the calendar event and the investigation. Keep the account and the group.
+
 ## Also on the live site, unrelated to review
 
 **The duplicate Bell Witch Cave was merged on 2026-09-09.** Two places carried that name.

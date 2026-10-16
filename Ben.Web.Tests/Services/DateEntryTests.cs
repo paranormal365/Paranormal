@@ -66,6 +66,7 @@ public sealed class DateEntryTests
 
     [Theory]
     [InlineData("08:00 PM", 20, 0)]
+    [InlineData("8:00 PM", 20, 0)]
     [InlineData("8pm", 20, 0)]
     [InlineData("8:30 p.m.", 20, 30)]
     [InlineData("830pm", 20, 30)]
@@ -95,7 +96,7 @@ public sealed class DateEntryTests
     public void A_date_alone_in_a_date_and_time_field_keeps_the_time_there_or_asks_for_one()
     {
         Assert.Equal(new DateTime(2026, 10, 1, 20, 30, 0), DateEntry.Parse("10/01/2026", DateEntryMode.DateTime, Seeded).Value);
-        Assert.Equal("Add a time after the date, like 10/01/2026 08:00 PM.", DateEntry.Parse("10/01/2026", DateEntryMode.DateTime, null).Error);
+        Assert.Equal("Add a time after the date, like 10/01/2026 8:00 PM.", DateEntry.Parse("10/01/2026", DateEntryMode.DateTime, null).Error);
     }
 
     [Fact]
@@ -104,8 +105,8 @@ public sealed class DateEntryTests
 
     [Theory]
     [InlineData(DateEntryMode.Date, "09/15/2026")]
-    [InlineData(DateEntryMode.DateTime, "09/15/2026 08:30 PM")]
-    [InlineData(DateEntryMode.Time, "08:30 PM")]
+    [InlineData(DateEntryMode.DateTime, "09/15/2026 8:30 PM")]
+    [InlineData(DateEntryMode.Time, "8:30 PM")]
     public void What_a_field_shows_reads_back_as_the_same_value(DateEntryMode mode, string shown)
     {
         Assert.Equal(shown, DateEntry.Format(Seeded, mode));

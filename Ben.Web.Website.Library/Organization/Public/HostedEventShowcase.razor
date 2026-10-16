@@ -2,11 +2,16 @@
 @using Ben.Service.Models.Entities
 @using Ben.Web.Services
 @using Ben.Web.Website.Library.Kit
+@using Microsoft.JSInterop
 @inject IMediaUrlBuilder MediaUrls
+@inject NavigationManager Nav
+@inject IJSRuntime JS
+@implements IAsyncDisposable
 
 @* The top of an event's public page, dressed (item 235 phase 11): the host's pictures as a slideshow,
    how long until the first night, and — on a phone — an "Ask for a place" that stays at the bottom
-   of the screen while somebody scrolls through the program deciding.
+   of the screen while somebody scrolls through the program deciding, and steps aside while the
+   request form itself is on screen.
 
    Nothing here is shown when there is nothing to show: no pictures means no slideshow, and an event
    that has started or is called off has no countdown and no ask button. *@
@@ -37,7 +42,10 @@
 
 @if (ShowAsk)
 {
-    <a class="btn btn-primary btn-lg d-md-none hosted-sticky-ask" href="#event-act" id="hosted-sticky-ask">
+    @* Steps aside while the request form is on screen, where it only covered the form's last
+       lines and its send button (10/16/2026); HostedEventShowcase.razor.js watches for that. *@
+    <a class="btn btn-primary btn-lg d-md-none hosted-sticky-ask" href="@JumpLink.To(Nav, "event-act")" id="hosted-sticky-ask"
+       @ref="_ask">
         Ask for a place
     </a>
 }
@@ -57,6 +65,54 @@
     }
 
     private bool ShowAsk => Hosted.IsTakingBookings && !Hosted.IsCancelled;
+
+    private ElementReference _ask;
+    private IJSObjectReference? _module;
+    private bool _watching;
+
+    /// <summary>
+    /// Starts the watch that hides the phone's ask button while the request form is on screen.
+    /// </summary>
+    /// <remarks>
+    /// On any render rather than only the first, because the button is drawn only while the event
+    /// takes bookings and that can change under a page that stays open. Every failure is
+    /// swallowed: the element can be gone by the time the call lands, and a refusal here would
+    /// end the whole circuit for a button that simply keeps showing without it.
+    /// </remarks>
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        // A button drawn again later is a new element, and is watched again.
+        if (!ShowAsk) { _watching = false; return; }
+        if (_watching) return;
+        _watching = true;
+
+        try
+        {
+            _module ??= await JS.InvokeAsync<IJSObjectReference>(
+                "import", "/_content/Ben.Web.Website.Library/Organization/Public/HostedEventShowcase.razor.js");
+            await _module.InvokeVoidAsync("watch", _ask, "event-act");
+        }
+        catch (Exception e) when (e is JSException or JSDisconnectedException or TaskCanceledException
+                                     or ObjectDisposedException or InvalidOperationException)
+        {
+            // No watch, and the button stays on screen as it always did.
+        }
+    }
+
+    public async ValueTask DisposeAsync()
+    {
+        if (_module is null) return;
+        try
+        {
+            await _module.InvokeVoidAsync("stop", _ask);
+            await _module.DisposeAsync();
+        }
+        catch (Exception e) when (e is JSException or JSDisconnectedException or TaskCanceledException
+                                     or ObjectDisposedException or InvalidOperationException)
+        {
+            // The page is already gone; there is nothing left to stop.
+        }
+    }
 
     private IReadOnlyList<BenSlide> Slides(IReadOnlyList<PublicEventImageRecord> gallery)
         => [.. gallery.Select(g => new BenSlide(MediaUrls.EventPhoto(g.UploadFileId), g.Caption,

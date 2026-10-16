@@ -71,18 +71,23 @@
     }
     else if (!IsAuthenticated)
     {
-        <div class="event-act__ask mb-1">Coming along?</div>
-
+        @* ONE HEADING PER PATH (10/16/2026). This branch printed "Coming along?" and then the
+           email form printed it again underneath, so a signed-out visitor read the question twice.
+           Where the plan is drawn, the heading belongs above the plan and the form under it goes
+           without one; where only the form is shown, the form brings its own. *@
         @* The server worked out WHY nothing can be booked and said so in a sentence; nothing
            rendered it (2026-09-17 audit), so a visitor met a form or a gray grid and had to
            guess. The record's own doc predicted it: "'The event has been called off' and
            'bookings closed on Friday' are different facts and a grayed-out grid says neither." *@
         @if (!string.IsNullOrWhiteSpace(_plan?.ClosedSentence))
         {
+            <div class="event-act__ask mb-1">Coming along?</div>
             <p class="text-secondary" data-testid="event-closed-sentence">@_plan!.ClosedSentence</p>
         }
         else if (_plan is { IsPicking: true, Units.Count: > 0 } anyone)
         {
+            <div class="event-act__ask mb-1">Coming along?</div>
+
             @* Signed out, the plan can be chosen from too (slice 11d): the places wait fifteen minutes
                for the emailed link, which is what stands behind them instead of an account. *@
             <p class="text-secondary small">
@@ -95,13 +100,13 @@
             {
                 <div class="mt-4" id="hosted-day-by-email">
                     <div class="fw-semibold small mb-1">Just for the day?</div>
-                    @SignedOut
+                    @(SignedOut?.Invoke(false))
                 </div>
             }
         }
         else
         {
-            @SignedOut
+            @(SignedOut?.Invoke(true))
         }
     }
     else if (_plan is { IsPicking: true, Units.Count: > 0 } picking)
@@ -130,8 +135,11 @@
     /// Passed in rather than rebuilt here: it is the umbrella's flow, it works, and a second copy
     /// of it that drifted would be a second way to reach the same token. This component only
     /// decides <i>where</i> it goes — under the plan, once somebody has seen the house.
+    /// <para>The <c>bool</c> says whether the form draws its own heading. It is <c>false</c> under
+    /// the plan, which already has "Coming along?" above it and "Just for the day?" over the form,
+    /// and <c>true</c> where the form is all there is.</para>
     /// </remarks>
-    [Parameter] public RenderFragment? SignedOut { get; set; }
+    [Parameter] public RenderFragment<bool>? SignedOut { get; set; }
 
     private MyHostedEventBookingRecord? _booking;
     private string? _note;

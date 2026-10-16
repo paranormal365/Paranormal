@@ -129,7 +129,7 @@
                             @foreach (var tour in _tours)
                             {
                                 <div class="col-12 col-md-6 col-lg-4">
-                                    <BenTourCard Tour="@tour" ShowDistance="true" />
+                                    <BenTourCard Tour="@tour" ShowDistance="true" ShowCountdown="true" />
                                 </div>
                             }
                         </div>
@@ -229,7 +229,16 @@
                                                     <BenTime Utc="@ev.StartDateTime" ZoneId="@ev.TimeZoneId" Format="BenTime.Shape.Time" />
                                                 </span>
                                             </span>
-                                            <span class="nearby-card__title">@ev.Title</span>
+                                            <span class="nearby-card__title">
+                                                @ev.Title
+                                                <EventTieBadge Tie="@ev.ReaderTie" />
+                                            </span>
+                                            @* How long until it starts, ticking, and a bar that fills
+                                               toward it (10/16/2026). *@
+                                            <EventCountdown StartUtc="@ev.StartDateTime" EndUtc="@ev.EndDateTime"
+                                                            ZoneId="@ev.TimeZoneId" ListedUtc="@ev.ListedUtc"
+                                                            Name="@ev.Title" Class="nearby-card__countdown"
+                                                            TestId="nearby-event-countdown" />
                                             <span class="nearby-card__meta">
                                                 @if (!string.IsNullOrWhiteSpace(ev.City))
                                                 {
@@ -241,7 +250,14 @@
                                             <span class="nearby-card__by">Hosted by @ev.OrgName</span>
                                         </span>
                                         <span class="nearby-card__actions">
-                                            @if (!string.IsNullOrWhiteSpace(ev.UrlName) && !string.IsNullOrWhiteSpace(ev.OrgUrlName))
+                                            @if (ev.ReaderTie == Ben.Data.Common.Enums.EventReaderTie.YourGroup && ev.OrganizationId is { } groupId)
+                                            {
+                                                @* Not public, so it has no public page: it opens on the
+                                                   group's own calendar, where members read it. *@
+                                                <a href="@($"/organizations/{groupId}/calendar")"
+                                                   class="btn btn-sm btn-outline-primary">Open the calendar</a>
+                                            }
+                                            else if (!string.IsNullOrWhiteSpace(ev.UrlName) && !string.IsNullOrWhiteSpace(ev.OrgUrlName))
                                             {
                                                 @* Carries where it came from, so the event page can
                                                    offer a way BACK here rather than only onward to
@@ -392,7 +408,10 @@
         _searching = true;
         StateHasChanged();
 
-        var results = await AdminClient.GetNearbyAsync(_lat.Value, _lon.Value, _radiusMiles);
+        // Signed in, the search also finds the reader's own groups' events, marked (10/16/2026).
+        var results = UserState.IsAuthenticated
+            ? await AdminClient.GetNearbyForMeAsync(_lat.Value, _lon.Value, _radiusMiles)
+            : await AdminClient.GetNearbyAsync(_lat.Value, _lon.Value, _radiusMiles);
 
         _events = results?.Events ?? [];
         _groups = results?.Organizations ?? [];

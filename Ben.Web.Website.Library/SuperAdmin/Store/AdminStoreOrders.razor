@@ -118,7 +118,7 @@
                                 }
                                 <div class="small text-secondary">@o.ItemCount @(o.ItemCount == 1 ? "item" : "items")@(o.CouponCode is { } c ? $" · {c}" : null)</div>
                             </td>
-                            <td class="text-nowrap small">@o.PlacedUtc.ToViewerLocalTime(UserState).ToString("MM/dd/yyyy h:mm tt")</td>
+                            <td class="text-nowrap small">@o.PlacedUtc.ToViewerLocalTime(UserState).ToDisplayDateTime()</td>
                             <td>
                                 <div>@o.BuyerName</div>
                                 <div class="small text-secondary">@o.BuyerEmail@(o.IsGuest ? " · guest" : null) · @o.ShipState</div>

@@ -91,6 +91,17 @@ public interface IBenPlacesClient
         decimal? latitude, decimal? longitude, CancellationToken token = default);
 
     /// <summary>
+    /// Public locations whose name or town contains every word typed — the place box on a public
+    /// calendar event.
+    /// </summary>
+    /// <remarks>
+    /// A search, unlike <see cref="FindPlaceCandidatesAsync"/>, which only answers "is this one
+    /// already here?" and so needs the exact name. Never returns a private residence. At most
+    /// twenty places come back.
+    /// </remarks>
+    Task<LoadResult<PlaceCandidate>> SearchPublicPlacesAsync(string text, CancellationToken token = default);
+
+    /// <summary>
     /// The visitor's view: the place plus only what has been published about it.
     /// </summary>
     /// <remarks>
@@ -109,6 +120,22 @@ public interface IBenPlacesClient
     /// </remarks>
     Task<(IReadOnlyList<InvestigationRosterEntry> Roster, string? Error)> SetInvestigationLeadAsync(
         Guid orgId, Guid investigationId, Guid attendeeId, bool isLead, CancellationToken token = default);
+
+    /// <summary>
+    /// Puts one of the group's members on a visit's team, with or without a case. Returns the
+    /// whole roster, or the server's sentence when it refuses (10/16/2026).
+    /// </summary>
+    /// <remarks>
+    /// On a refusal the roster is empty and must not be applied — see
+    /// <see cref="SetInvestigationLeadAsync"/> for why an empty list here would read as "everybody
+    /// was taken off".
+    /// </remarks>
+    Task<(IReadOnlyList<InvestigationRosterEntry> Roster, string? Error)> AddInvestigationTeamMemberAsync(
+        Guid orgId, Guid investigationId, Guid appUserId, CancellationToken token = default);
+
+    /// <summary>Takes somebody off a visit's team. Same shape as adding.</summary>
+    Task<(IReadOnlyList<InvestigationRosterEntry> Roster, string? Error)> RemoveInvestigationTeamMemberAsync(
+        Guid orgId, Guid investigationId, Guid attendeeId, CancellationToken token = default);
 
     /// <summary>Every account filed for an investigation. Any member of the group may read them.</summary>
     Task<LoadResult<InvestigationFindingRecord>> GetInvestigationFindingsAsync(
@@ -164,15 +191,38 @@ public interface IBenPlacesClient
     /// </summary>
     /// <remarks>
     /// Distinct from <see cref="OverrideInvestigationAttendanceAsync"/> on purpose: this leaves the
-    /// record self-reported, which is the provenance the roster shows.
+    /// record self-reported, which is the provenance the roster shows. Keeps the server's sentence
+    /// (10/16/2026), so a refusal says what was wrong rather than a guess about the arrival time.
     /// </remarks>
-    Task<InvestigationRosterEntry?> CheckInToInvestigationAsync(
+    Task<(InvestigationRosterEntry? Entry, string? Error)> CheckInToInvestigationAsync(
         Guid orgId, Guid investigationId, DateTime? statedArrivalTime = null, CancellationToken token = default);
 
     /// <summary>Records or corrects somebody else's attendance. Needs the right to manage the visit.</summary>
-    Task<InvestigationRosterEntry?> OverrideInvestigationAttendanceAsync(
+    /// <remarks>Keeps the server's sentence (10/16/2026).</remarks>
+    Task<(InvestigationRosterEntry? Entry, string? Error)> OverrideInvestigationAttendanceAsync(
         Guid orgId, Guid investigationId, Guid attendeeId, bool? didAttend,
         DateTime? statedArrivalTime = null, CancellationToken token = default);
+
+    /// <summary>One visit, case or not, as the group's Investigations page edits it (10/16/2026).</summary>
+    Task<ItemResult<InvestigationRecord>> GetOrgInvestigationAsync(
+        Guid orgId, Guid investigationId, CancellationToken token = default);
+
+    /// <summary>
+    /// Changes a visit with no case (10/16/2026). The server's sentence comes back on a refusal.
+    /// </summary>
+    Task<(bool Saved, string? Error)> UpdateOrgInvestigationAsync(
+        Guid orgId, Guid investigationId, UpdateOrgInvestigationRequest request, CancellationToken token = default);
+
+    /// <summary>Cancels a visit with no case (10/16/2026), keeping the server's sentence.</summary>
+    Task<(bool Canceled, string? Error)> CancelOrgInvestigationAsync(
+        Guid orgId, Guid investigationId, CancellationToken token = default);
+
+    /// <summary>
+    /// Deletes a visit with no case (10/16/2026). Refused, in words, when it has recordings,
+    /// written accounts or anybody marked as there.
+    /// </summary>
+    Task<(bool Deleted, string? Error)> DeleteOrgInvestigationAsync(
+        Guid orgId, Guid investigationId, CancellationToken token = default);
 
     /// <summary>
     /// Schedules an investigation, with a case or without one. Needs a place when there is no case.
@@ -245,8 +295,17 @@ public interface IBenPlacesClient
     /// full house, which is what a late arrival needs.
     /// </remarks>
     Task<bool> InviteEventGuestAsync(Guid orgId, Guid eventId, string email, string? displayName = null, CancellationToken token = default);
-    Task<OrgCalendarEventAttendeeRecord?> RsvpCalendarEventAsync(Guid orgId, Guid eventId, Guid attendeeId, Ben.Data.Common.Enums.RsvpStatus status, CancellationToken token = default);
-    Task<bool> RemoveCalendarAttendeeAsync(Guid orgId, Guid eventId, Guid attendeeId, CancellationToken token = default);
+    /// <summary>
+    /// Sets one guest's answer — their own, or anybody's for whoever runs the calendar.
+    /// </summary>
+    /// <remarks>
+    /// Keeps the server's refusal (10/16/2026), because the first screen to call it is a host's
+    /// "Mark as coming", and a hosted event's guest list is answered from its Bookings page — a
+    /// sentence the host can act on, where a bare null would leave the button looking broken.
+    /// </remarks>
+    Task<(OrgCalendarEventAttendeeRecord? Attendee, string? Error)> RsvpCalendarEventAsync(Guid orgId, Guid eventId, Guid attendeeId, Ben.Data.Common.Enums.RsvpStatus status, CancellationToken token = default);
+    /// <summary>Takes somebody off an event's guest list. Keeps the server's sentence (10/16/2026).</summary>
+    Task<(bool Removed, string? Error)> RemoveCalendarAttendeeAsync(Guid orgId, Guid eventId, Guid attendeeId, CancellationToken token = default);
 
 
     // ── Published investigations (item #89) ─────────────────────────────────

@@ -74,22 +74,22 @@ public class TimeZoneTests : BenTestBase
                 await page.GotoAsync($"{BaseUrl}/organizations/{orgId}/cases/{caseId}?tab=investigations");
 
                 // The case's own time by default.
-                await Expect(when).ToContainTextAsync("08:00 PM EST", new() { Timeout = 30_000 });
+                await Expect(when).ToContainTextAsync(" 8:00 PM EST", new() { Timeout = 30_000 });
 
                 // The reader's own — their browser's, having chosen nothing.
                 await page.Locator("[data-testid='time-zone-mine']").ClickAsync();
-                await Expect(when).ToContainTextAsync("07:00 PM CST");
+                await Expect(when).ToContainTextAsync(" 7:00 PM CST");
 
                 // Choose Pacific on the profile: the whole site now reads in it.
                 await ChooseProfileZoneAsync(page, zone, "America/Los_Angeles");
 
                 await page.GotoAsync($"{BaseUrl}/organizations/{orgId}/cases/{caseId}?tab=investigations");
                 // Remembered: still "My time", and my time is now Pacific.
-                await Expect(when).ToContainTextAsync("05:00 PM PST", new() { Timeout = 30_000 });
+                await Expect(when).ToContainTextAsync(" 5:00 PM PST", new() { Timeout = 30_000 });
 
                 // And back to the place's clock for whoever reads next.
                 await page.Locator("[data-testid='time-zone-local']").ClickAsync();
-                await Expect(when).ToContainTextAsync("08:00 PM EST");
+                await Expect(when).ToContainTextAsync(" 8:00 PM EST");
             }
             finally
             {

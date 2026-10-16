@@ -19,9 +19,9 @@ at the top to take you back.
 ## Group settings
 
 Everything a group can configure is on the **Settings** tab, and there is a lot of it: billing,
-promotion, feed attribution, address display, media privacy, the kind of group you are, walking
-tours, the role new members start with, calendar event types, member titles, investigation duties
-and the duty eligibility matrix.
+hosted events, your venue, promotion, feed attribution, address display, media privacy, the kind of
+group you are, walking tours, the role new members start with, calendar event types, member titles,
+investigation duties and the duty eligibility matrix.
 
 The row of buttons at the top of the tab jumps to each of those sections. They don't hide
 anything — it is still one page you can read from top to bottom — but they let you see at a glance
@@ -403,6 +403,22 @@ person either has no account or hasn't published that address. Ask them for the 
 than guessing at another spelling.
 
 Invites are just invitations. To assign work, use investigations.
+
+To take a member off a private event's list, untick their name and press **Save**.
+
+**Who's coming.** When you open an event that has people on its list, the editor shows each of them
+and their answer. If somebody tells you their answer, record it with the buttons beside their name:
+**Mark as coming**, **Mark as not coming**, or **Mark as not answered**. You're offered the ones
+that change something; a guest who said maybe can be marked as coming or as not coming.
+**Remove** takes somebody off the list, after asking you first; use it for a guest invited by email,
+who has no box to untick. These save straight away. People marked as coming get a reminder before
+the event starts. Anyone who can change the group's calendar can do this; for a tour date, places
+are approved on the date's sign-ups page instead. If something can't be changed, the reason shows
+under the list.
+
+**A place for a public event.** Under **Where (a place)**, type part of the place's name or its town
+and press Enter or **Search**. Only public places are listed, because a public event can't be held at
+somebody's home.
 
 ## Calendar event types
 
@@ -1015,7 +1031,9 @@ and its controls are shown but disabled.
 
 ### A venue we haven't listed
 
-Search for the venue by name, and if it is already listed, use that one. Venues are shared across
+Search for the venue by part of its name or its town (press Enter or **Search**), and if it is
+already listed, use that one.
+Only public places are listed; a private home can't be a venue. Venues are shared across
 the whole site, so a building's map pin, its history and everything anyone has recorded there stay
 together on one record.
 
@@ -1025,7 +1043,8 @@ have a map pin yet. If the venue you enter turns out to be listed already, the e
 instead of creating a duplicate.
 
 A venue must be a public place. A private residence isn't allowed, because an event is always
-public, and publishing somebody's home isn't your decision or ours.
+public, and publishing somebody's home isn't your decision or ours. If a venue you type in turns out
+to be a home that's already on file, the event isn't saved and the page says why.
 
 ### One stay, or a run of dates
 

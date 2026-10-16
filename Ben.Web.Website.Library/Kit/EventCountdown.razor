@@ -1,0 +1,148 @@
+@namespace Ben.Web.Website.Library.Kit
+@using Ben.Web.Services
+@using System.Globalization
+@inject IJSRuntime JS
+
+@*
+    How long until an event starts, ticking, with a thin bar that fills toward the start
+    (10/16/2026). One component for every countdown on the site: Home's card (Look="Hero") and each
+    row of the event lists and the nearby search (the compact default).
+
+    THE SERVER DRAWS IT RIGHT; THE BROWSER KEEPS IT MOVING. Everything below is worked out in C# for
+    the moment the page is drawn, so a prerendered page and a page with scripts off both read
+    correctly. The page's one ticker (wwwroot/js/eventCountdown.js, started through
+    EventCountdownTicker) then updates the numbers, the words and the bar every second for every
+    countdown on the page at once. There is no Blazor timer re-rendering over the circuit.
+
+    THE WORDS CHANGE AT MOMENTS THE SERVER WORKED OUT. "Starts in 2 days", "Tomorrow night",
+    "Tonight", "Happening now" are calendar facts on the event's own clock, so they are written into
+    data-cd-steps as exact UTC moments (CountdownMath.Steps, tested across the 11/01/2026 clock
+    change). The browser never has to know a time zone.
+
+    SCREEN READERS hear the start in words, once (role="img" with an aria-label); the ticking digits
+    are not a live region.
+*@
+
+<span class="ev-cd ev-cd--@(Look == CountdownLook.Hero ? "hero" : "compact") @Class"
+      data-cd
+      data-cd-steps="@_stepsJson"
+      data-cd-start="@Ms(StartUtc)"
+      data-cd-base="@Ms(_baseline)"
+      data-phase="@Code(_step.Phase)"
+      data-soon="@(_soon ? "" : null)"
+      role="img"
+      aria-label="@_spoken"
+      data-testid="@TestId">
+    @if (Look == CountdownLook.Hero)
+    {
+        <span class="ev-cd__words" data-cd-words>@_step.Words</span>
+        <span class="ev-cd__tiles">
+            @foreach (var (unit, label, value) in Tiles)
+            {
+                <span class="ev-cd__tile" data-cd-cell="@unit" hidden="@(!_cells.Contains(unit))">
+                    <b data-cd-unit>@value.ToString("00", CultureInfo.InvariantCulture)</b>
+                    <small>@label</small>
+                </span>
+            }
+        </span>
+    }
+    else
+    {
+        <span class="ev-cd__line">
+            <span class="ev-cd__dot"></span>
+            <span class="ev-cd__lead">Starts in</span>
+            <span class="ev-cd__words" data-cd-words>@_step.Words</span>
+            <span class="ev-cd__digits" data-cd-digits>@_digits</span>
+        </span>
+    }
+    <span class="ev-cd__bar"><span class="ev-cd__fill" data-cd-fill style="width:@_width"></span></span>
+</span>
+
+@code {
+    /// <summary>When it starts, stored UTC.</summary>
+    [Parameter, EditorRequired] public DateTime StartUtc { get; set; }
+
+    /// <summary>When it ends, stored UTC. Without one it is taken to run two hours.</summary>
+    [Parameter] public DateTime? EndUtc { get; set; }
+
+    /// <summary>The event's own IANA zone: "Tonight" is tonight where it happens.</summary>
+    [Parameter] public string? ZoneId { get; set; }
+
+    /// <summary>When it was listed, or when the person signed up: where the bar starts (CountdownMath.Baseline).</summary>
+    [Parameter] public DateTime? ListedUtc { get; set; }
+
+    /// <summary>Compact for a row; Hero for Home's card.</summary>
+    [Parameter] public CountdownLook Look { get; set; } = CountdownLook.Compact;
+
+    /// <summary>The event's name, for the words a screen reader hears.</summary>
+    [Parameter] public string? Name { get; set; }
+
+    [Parameter] public string? Class { get; set; }
+
+    [Parameter] public string TestId { get; set; } = "event-countdown";
+
+    /// <summary>The moment to draw it for. Tests set it; the site never does, and gets the server's UTC clock.</summary>
+    [Parameter] public DateTime? NowUtc { get; set; }
+
+    private CountdownStep _step = new(DateTime.MinValue, CountdownPhase.Later, "");
+    private string _stepsJson = "[]";
+    private DateTime _baseline;
+    private bool _soon;
+    private string _spoken = "";
+    private string _digits = "";
+    private string _width = "0%";
+    private string[] _cells = [];
+    private (int D, int H, int M, int S) _units;
+
+    private IEnumerable<(string Unit, string Label, int Value)> Tiles =>
+    [
+        ("d", "days", _units.D), ("h", "hrs", _units.H), ("m", "min", _units.M), ("s", "sec", _units.S),
+    ];
+
+    protected override void OnParametersSet()
+    {
+        var now = NowUtc ?? DateTime.UtcNow;
+        var end = EndUtc is { } e && e > StartUtc ? e : StartUtc.AddHours(2);
+
+        var steps = CountdownMath.Steps(StartUtc, end, ZoneId, now);
+        _step = CountdownMath.At(steps, now);
+        _stepsJson = System.Text.Json.JsonSerializer.Serialize(
+            steps.Select(s => new object[] { Ms(s.FromUtc), Code(s.Phase), s.Words }));
+
+        _baseline = CountdownMath.Baseline(ListedUtc, StartUtc);
+        _width = (CountdownMath.Progress(_baseline, StartUtc, now) * 100).ToString("0.##", CultureInfo.InvariantCulture) + "%";
+
+        var left = StartUtc - now;
+        _soon = left > TimeSpan.Zero && left < TimeSpan.FromHours(1);
+        _digits = CountdownMath.Remaining(left);
+        _units = CountdownMath.Units(left);
+        _cells = left >= TimeSpan.FromDays(1) ? ["d", "h", "m"]
+               : left >= TimeSpan.FromHours(1) ? ["h", "m"]
+               : ["m", "s"];
+
+        var spoken = CountdownMath.Spoken(StartUtc, end, ZoneId, now);
+        _spoken = string.IsNullOrWhiteSpace(Name) ? spoken : $"{Name}. {spoken}";
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender) await EventCountdownTicker.EnsureRunningAsync(JS);
+    }
+
+    /// <summary>Milliseconds since 1970 UTC, as the browser counts; zero for "from the beginning".</summary>
+    private static long Ms(DateTime utc)
+        => utc == DateTime.MinValue
+            ? 0
+            : (long)(DateTime.SpecifyKind(utc, DateTimeKind.Utc) - DateTime.UnixEpoch).TotalMilliseconds;
+
+    /// <summary>The phase as the CSS and the ticker name it.</summary>
+    internal static string Code(CountdownPhase phase) => phase switch
+    {
+        CountdownPhase.Tomorrow => "tomorrow",
+        CountdownPhase.Today => "today",
+        CountdownPhase.Tonight => "tonight",
+        CountdownPhase.Running => "live",
+        CountdownPhase.Over => "over",
+        _ => "later",
+    };
+}

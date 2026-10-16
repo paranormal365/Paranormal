@@ -1,5 +1,7 @@
 /* The phone's ask button: fixed to the bottom of the screen while the page scrolls. Hidden from
-   medium widths up by d-md-none, where the booking card is already in view beside the facts. */
+   medium widths up by d-md-none, where the booking card is already in view beside the facts.
+   The room it needs under the page's last line is in kit/ben-kit.css, because that rule is on
+   <body> and a scoped stylesheet cannot reach it. */
 .hosted-sticky-ask {
     position: fixed;
     left: 1rem;
@@ -7,4 +9,22 @@
     bottom: 1rem;
     z-index: 1030;
     box-shadow: 0 0.5rem 1.5rem rgba(0, 0, 0, 0.35);
+    transition: opacity 0.2s ease, transform 0.2s ease, visibility 0s linear 0s;
+}
+
+/* Stepped aside while the request form is on screen (HostedEventShowcase.razor.js): the button
+   only jumps there, and once the form is in view it covered the form's last lines. */
+.hosted-sticky-ask--away {
+    opacity: 0;
+    visibility: hidden;
+    transform: translateY(1rem);
+    pointer-events: none;
+    transition: opacity 0.2s ease, transform 0.2s ease, visibility 0s linear 0.2s;
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .hosted-sticky-ask,
+    .hosted-sticky-ask--away {
+        transition: none;
+    }
 }

@@ -118,12 +118,12 @@ public static class DateTimeViewerExtensions
     /// <summary>
     /// Numeric date and time. No seconds — see <see cref="ToDisplayDateTime(DateTime)"/>.
     /// </summary>
-    public const string DateTimePattern = "MM/dd/yyyy hh:mm tt";
+    public const string DateTimePattern = "MM/dd/yyyy h:mm tt";
 
     /// <summary>
     /// The same, with seconds, for the two places a second is evidence rather than noise.
     /// </summary>
-    public const string DateTimeWithSecondsPattern = "MM/dd/yyyy hh:mm:ss tt";
+    public const string DateTimeWithSecondsPattern = "MM/dd/yyyy h:mm:ss tt";
 
     /// <summary>
     /// Kept as the name older call sites use for the no-seconds format, which is now the default.
@@ -133,11 +133,19 @@ public static class DateTimeViewerExtensions
     /// <summary>Written-out date for prose: <c>August 4, 2026</c>.</summary>
     public const string LongDatePattern = "MMMM d, yyyy";
 
-    /// <summary>Time on its own, 12-hour. No seconds, for the same reason as the date.</summary>
-    public const string TimePattern = "hh:mm tt";
+    /// <summary>
+    /// Time on its own, 12-hour: <c>7:00 PM</c>. No seconds, for the same reason as the date.
+    /// </summary>
+    /// <remarks>
+    /// The hour is not padded. These patterns said <c>hh</c> until 10/16/2026, so a hosted
+    /// event's Program read "06:00 PM – 08:00 PM" under tiles that said "7:00 PM", and nobody
+    /// writes a time with a leading zero. <c>ClockHourSourceGuardTests</c> keeps padded hours out
+    /// of display code; the date stays MM/DD/YYYY.
+    /// </remarks>
+    public const string TimePattern = "h:mm tt";
 
     /// <summary>Time on its own, with seconds. For logs.</summary>
-    public const string TimeWithSecondsPattern = "hh:mm:ss tt";
+    public const string TimeWithSecondsPattern = "h:mm:ss tt";
 
     /// <summary>
     /// A date short enough for a chart axis, where thirty of them sit side by side and a slash
@@ -193,7 +201,7 @@ public static class DateTimeViewerExtensions
     public static string ToDisplayDate(this DateTime local) =>
         local.ToString(DatePattern, System.Globalization.CultureInfo.InvariantCulture);
 
-    /// <summary>A date and time: <c>08/04/2026 09:30 PM</c>.</summary>
+    /// <summary>A date and time: <c>08/04/2026 9:30 PM</c>.</summary>
     /// <remarks>
     /// <para><b>No seconds, and that is the default on purpose.</b> Ben reported the seconds three
     /// separate times — a visit at "01:40:33 PM", an event at "03:00:00 PM", a group created at
@@ -211,7 +219,7 @@ public static class DateTimeViewerExtensions
     public static string ToDisplayDateTime(this DateTime local) =>
         local.ToString(DateTimePattern, System.Globalization.CultureInfo.InvariantCulture);
 
-    /// <summary>A date and time to the second: <c>08/04/2026 09:30:05 PM</c>.</summary>
+    /// <summary>A date and time to the second: <c>08/04/2026 9:30:05 PM</c>.</summary>
     /// <remarks>
     /// For logs and audit trails only. Everywhere else, see
     /// <see cref="ToDisplayDateTime(DateTime)"/>.
@@ -227,7 +235,7 @@ public static class DateTimeViewerExtensions
     public static string ToDisplayDateLong(this DateTime local) =>
         local.ToString(LongDatePattern, System.Globalization.CultureInfo.InvariantCulture);
 
-    /// <summary>A time on its own: <c>09:30 PM</c>. No seconds — see ToDisplayDateTime.</summary>
+    /// <summary>A time on its own: <c>9:30 PM</c>. No seconds — see ToDisplayDateTime.</summary>
     public static string ToDisplayTime(this DateTime local) =>
         local.ToString(TimePattern, System.Globalization.CultureInfo.InvariantCulture);
 
@@ -250,7 +258,7 @@ public static class DateTimeViewerExtensions
 
     /// <inheritdoc cref="ToDisplayDateTimeNoSeconds(DateTime)"/>
     public static string ToDisplayTimeNoSeconds(this DateTime local) =>
-        local.ToString("hh:mm tt", System.Globalization.CultureInfo.InvariantCulture);
+        local.ToString(TimePattern, System.Globalization.CultureInfo.InvariantCulture);
 
     /// <summary>
     /// A scheduled window, read the way people say it out loud.
@@ -258,10 +266,10 @@ public static class DateTimeViewerExtensions
     /// <remarks>
     /// <para>Three readings, because an investigation has three shapes:</para>
     /// <list type="bullet">
-    ///   <item><description>finishes the same evening — <c>09/14/2026 07:00 PM – 11:30 PM</c></description></item>
-    ///   <item><description>runs past midnight — <c>09/14/2026 03:00 PM – 08:00 AM next day</c>,
+    ///   <item><description>finishes the same evening — <c>09/14/2026 7:00 PM – 11:30 PM</c></description></item>
+    ///   <item><description>runs past midnight — <c>09/14/2026 3:00 PM – 8:00 AM next day</c>,
     ///   which the site treats as one day: one arrival, one departure</description></item>
-    ///   <item><description>genuinely spans days — <c>09/14/2026 03:00 PM – 09/21/2026 08:00 AM</c></description></item>
+    ///   <item><description>genuinely spans days — <c>09/14/2026 3:00 PM – 09/21/2026 8:00 AM</c></description></item>
     /// </list>
     /// <para>Both arguments are already in the viewer's zone. Six places printed the end as a
     /// bare time, which is right for the first shape and quietly wrong for the other two: a

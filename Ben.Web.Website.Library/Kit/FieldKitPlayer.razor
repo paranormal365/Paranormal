@@ -1045,7 +1045,7 @@
         var points = readings
             .Where(r => r.Microtesla is not null)
             .Select(r => new TracePoint(
-                r.At.ToViewerLocalTime(UserState).ToString("HH:mm:ss"),
+                r.At.ToViewerLocalTime(UserState).ToDisplayTimeWithSeconds(),
                 baseline is double b ? (r.Microtesla!.Value - b) * 10 : r.Microtesla!.Value * 10,
                 r.At))
             .ToList();
@@ -1099,7 +1099,7 @@
     {
         var points = readings
             .Where(r => r.SoundDbfs is not null)
-            .Select(r => new TracePoint(r.At.ToViewerLocalTime(UserState).ToString("HH:mm:ss"), r.SoundDbfs!.Value, r.At))
+            .Select(r => new TracePoint(r.At.ToViewerLocalTime(UserState).ToDisplayTimeWithSeconds(), r.SoundDbfs!.Value, r.At))
             .ToList();
 
         return Thin(points);
@@ -1117,11 +1117,23 @@
            && element.TryGetProperty(name, out var value) && value.ValueKind == JsonValueKind.String
             ? value.GetString() : null;
 
+    /// <summary>A moment the phone wrote, as UTC — without going through the server's zone.</summary>
+    /// <remarks>
+    /// The phone writes ISO 8601 with a <c>Z</c>. A moment with an offset is read as a
+    /// <see cref="DateTimeOffset"/>, which keeps that offset exactly; one with no offset at all is
+    /// taken as UTC, which is what the phone means. <c>ToUniversalTime()</c> would have read an
+    /// offset-less moment on the server's clock.
+    /// </remarks>
     private static DateTime? Moment(JsonElement element, string name)
-        => element.ValueKind == JsonValueKind.Object
-           && element.TryGetProperty(name, out var value) && value.ValueKind == JsonValueKind.String
-           && value.TryGetDateTime(out var moment)
-            ? moment.ToUniversalTime() : null;
+    {
+        if (element.ValueKind != JsonValueKind.Object
+            || !element.TryGetProperty(name, out var value) || value.ValueKind != JsonValueKind.String
+            || !value.TryGetDateTime(out var moment))
+            return null;
+
+        if (moment.Kind == DateTimeKind.Unspecified) return DateTime.SpecifyKind(moment, DateTimeKind.Utc);
+        return value.TryGetDateTimeOffset(out var withOffset) ? withOffset.UtcDateTime : null;
+    }
 
     /// <summary>One stretch the app was put away for, and the sentence the phone wrote about it.</summary>
     public sealed record AwayStretch(DateTime From, DateTime To, string? Note);

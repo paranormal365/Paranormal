@@ -131,7 +131,7 @@ public sealed class DateFormatSourceGuardTests
         Assert.StartsWith("MMMM", Ben.Web.Services.DateTimeViewerExtensions.LongDatePattern);
         Assert.StartsWith("MMM", Ben.Web.Services.DateTimeViewerExtensions.ChartDayPattern);
         Assert.Equal("{0:MM/dd/yyyy}", Ben.Web.Services.DateTimeViewerExtensions.GridDateFormat);
-        Assert.Equal("{0:MM/dd/yyyy hh:mm tt}", Ben.Web.Services.DateTimeViewerExtensions.GridDateTimeFormat);
+        Assert.Equal("{0:MM/dd/yyyy h:mm tt}", Ben.Web.Services.DateTimeViewerExtensions.GridDateTimeFormat);
     }
 
     /// <summary>

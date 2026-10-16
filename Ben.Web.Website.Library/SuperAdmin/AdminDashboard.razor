@@ -134,7 +134,7 @@
             <div class="col-sm-6 col-xl-3">
                 <StatCard Label="Signed in this week" Icon="log-in"
                           Value="@_summary.ActivePeopleThisWeek.ToString("N0")"
-                          Href="#sign-ins" LinkLabel="Who, and when"
+                          Href="@JumpLink.To(NavManager, "sign-ins")" LinkLabel="Who, and when"
                           Caption="@ActiveCaption"
                           Sparkline="@RecentSignIns" />
             </div>

@@ -309,6 +309,20 @@
     gap: .25rem;
 }
 
+/* A 320px phone (iPhone SE class): signed in, the bar holds the brand, the menu button and five
+   icons, and at the usual padding and gaps it needed 321.6px. The page grid widens its column to
+   fit the widest row, so every page slid 2px sideways (found by the screen-size e2e checks,
+   10/16/2026). Below 360px the bar's padding, gaps and the brand's spacing tighten instead; the
+   icons keep their full size. */
+@media (max-width: 359.98px) {
+    .app-header {
+        gap: .125rem;
+        padding-left: .75rem !important;
+        padding-right: .75rem !important;
+    }
+    .app-header .ben-brand { margin-right: .5rem !important; }
+}
+
 .app-header .btn-system,
 .app-header .collapse-icon,
 .app-header .mobile-menu-icon,

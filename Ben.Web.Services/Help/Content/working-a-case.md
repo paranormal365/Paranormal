@@ -555,7 +555,12 @@ the address has a typo, and correcting it puts the pin back.
 The **Edit** button appears only on visits you're allowed to change. That's decided for each
 investigation, not by rank: the person who scheduled it, the case manager, whoever is leading that
 particular visit, group owners and administrators, and anyone the group has specifically given the
-investigations permission.
+investigations permission. For a visit with a case, **Edit** opens it on the case's Investigations
+tab. For a visit with no case, it opens the visit right here (see
+[Changing, canceling or deleting a visit with no case](#changing-canceling-or-deleting-a-visit-with-no-case)).
+
+On a phone or a tablet held upright, each visit in the lists is a card of its own, with its team
+opening underneath it.
 
 ## How long a visit runs
 
@@ -605,7 +610,15 @@ Since there's no case, there's no case page either. Wherever you click one of th
 Investigations list, your profile's map, the group's map), you come here, to the group's
 Investigations tab, with that visit highlighted and its team panel open.
 
-When you enter the location, the form tells you if the place is already on file:
+The start is filled in as 7:00 PM tomorrow; change it to whenever you're going. The times you type
+are on your own clock, and the line under **Starts** names your time zone as it will be on that
+date: a visit in November reads CST even if you book it in October.
+
+For a public location, typing part of a name is enough to find a place we already have. Type "Bell
+Witch" and the form lists Bell Witch Cave under **Places we already have**, with **Use this place**.
+A private residence is never listed to anybody.
+
+When you enter the location, the form also tells you if the place is already on file:
 
 > This place may already be on file.
 
@@ -617,6 +630,23 @@ only ever a suggestion; nothing is merged without your say-so.
 A place is suggested only when the address matches **and** it's within about a tenth of a mile.
 Both have to match, because an address alone can't tell two apartments apart, and a map position
 alone would suggest the house next door.
+
+## Changing, canceling or deleting a visit with no case
+
+Press **Edit** on the visit's row in the group's Investigations list. The same window opens, filled
+in, and you can change the title, the times, the description, the place and who can see the
+findings. **Save changes** saves it, and the visit's entry on the group's calendar moves with it.
+
+**Cancel this visit** calls it off. It stays on record as canceled, and its calendar entry says
+"Canceled". It's offered only for a visit that hasn't happened yet.
+
+**Delete** removes the visit for good, with its team and its calendar entry. Both ask you first.
+A visit that has recordings, written-up accounts, or anybody marked as there can't be deleted,
+because deleting it would lose them. The window says what it has and suggests canceling instead.
+
+A visit that belongs to a case is changed from the case's Investigations tab. The same rule applies
+there: **Delete** asks first, a visit with recordings, written-up accounts or anybody marked as there
+can't be deleted, and the dialog says why. Cancel it instead.
 
 ## Duties — who's doing what tonight
 
@@ -659,9 +689,19 @@ Investigations list. For visits with no case, that list is the only way to check
 green once that person's attendance is recorded, and the time next to it is when they say they
 arrived.
 
+Only people on the team can check in, so put them on it first. On the group's Investigations list,
+whoever manages the visit opens **Team**, picks a member under **Add to the team** and presses
+**Add**. The **✕** at the end of their row takes them off again; it asks first, and says what goes
+with them, such as "Take James off the team? Their duty (Lead) goes too." Somebody who has been
+recorded as there, or has written up what they saw, stays on the team. On a case's Investigations tab, add
+people with **Add member** under the visit's attendees; the same rules apply there. Only active
+members can be put on a team, not viewers, and each person only once. When something can't be
+done, the page says why.
+
 Press **I've arrived** to check yourself in. You can edit the time, and that's intentional: most
 sites have no signal, so it's normal to check in the next morning and set the time to when you
-actually arrived. Times in the future aren't accepted, since they can only be a typo.
+actually arrived. Times in the future aren't accepted, since they can only be a typo. If a check-in
+or an **Attended** box can't be saved, the panel says why.
 
 Whoever manages the investigation can also record attendance for someone who forgot. The two are
 kept separate: the panel marks a row **Recorded** when someone else entered it, so "checked in on

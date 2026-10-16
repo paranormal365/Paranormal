@@ -40,10 +40,17 @@ public sealed class InvestigationController : BenControllerBase
         Services.Billing.SubscriptionLimitGuard limits,
         Ben.Service.RepositoryService.GenericInterfaces.IOrganizationSecurityService security,
         Services.ClientStatusMailer clientMail,
-        Services.ICmsMarkupSanitizer sanitizer)
+        Services.ICmsMarkupSanitizer sanitizer,
+        Ben.Service.RepositoryService.GenericInterfaces.IAuditLogService auditLog)
     {
         _clientMail = clientMail; _db = db; _mapper = mapper; _limits = limits; _security = security;
-        _sanitizer = sanitizer; }
+        _sanitizer = sanitizer; _auditLog = auditLog; }
+
+    /// <summary>
+    /// Who was put on a team and taken off it, by whom (10/16/2026) — the same record the group's
+    /// Investigations page writes for its own door onto the same table.
+    /// </summary>
+    private readonly Ben.Service.RepositoryService.GenericInterfaces.IAuditLogService _auditLog;
 
     /// <summary>
     /// An investigation's notes are drawn as markup on the group's case screen
@@ -236,7 +243,9 @@ public sealed class InvestigationController : BenControllerBase
         // "you may not edit the thing that does not exist".
         if (!await CanManageAsync(id, ct)) return Forbid();
 
-        entity.OrgCalendarEventId  = request.OrgCalendarEventId;
+        // Null leaves the link alone (10/16/2026). The case page always sends null, so every edit
+        // there used to unlink the visit from its calendar entry, which then sat at the old time.
+        entity.OrgCalendarEventId  = request.OrgCalendarEventId ?? entity.OrgCalendarEventId;
         entity.Title               = request.Title.Trim();
         entity.Description         = request.Description?.Trim();
         entity.Location            = request.Location?.Trim();
@@ -283,6 +292,8 @@ public sealed class InvestigationController : BenControllerBase
         if (await EnsurePublicSlugAsync(db, entity, ct) is string slugRefusal)
             return BadRequest(slugRefusal);
 
+        // The calendar entry made for the visit moves with it (10/16/2026).
+        await Services.Investigations.InvestigationLifecycle.SyncCalendarAsync(db, entity, ct);
         await db.SaveChangesAsync(ct);
         if (previouslyAt != entity.ScheduledDateTime
             && await db.Cases.AsNoTracking().FirstOrDefaultAsync(x => x.Id == caseId, ct) is { } caseForMail)
@@ -307,33 +318,28 @@ public sealed class InvestigationController : BenControllerBase
         if (entity is null) return NotFound();
         if (!await CanManageAsync(id, ct)) return Forbid();
 
+        // The same rule as a visit with no case (Ben, 10/16/2026: "Same rule for both"). Field
+        // sessions, written accounts and the team's attendance hang off the visit and went with
+        // it; a visit that has any of them is refused, and the sentence says to cancel instead.
+        // This replaces the narrower check that refused only when a case report cited one of the
+        // visit's sessions: every recording now keeps the visit, cited or not, so that check
+        // could no longer be reached.
+        if (await Services.Investigations.InvestigationLifecycle.WhyCannotDeleteAsync(db, entity, ct) is { } kept)
+            return Conflict(kept);
 
-        // Detach the binder entries first. The FK is NoAction (SQL Server won't allow SetNull —
-        // see BenDataContext), so without this the delete fails on a referential constraint. The
-        // notes and readings survive on the case timeline; the visit they were taken during is what
-        // is being removed, not the findings.
-        var binderEntries = await db.CaseTimelineEntries
-            .Where(e => e.InvestigationId == id)
-            .ToListAsync(ct);
-        foreach (var e in binderEntries) e.InvestigationId = null;
+        var before = OrgInvestigationsController.Snapshot(entity);
 
-        // Field sessions recorded on this visit cascade away with it — but a case report may be
-        // CITING one, and a report quietly losing its evidence is worse than a delete that does
-        // not happen. (The database would refuse this anyway; without the check it arrives as a
-        // 500 the person deleting cannot act on.)
-        var citedSessions = await db.CaseReportSectionFieldSessions
-            .CountAsync(f => f.FieldSessionUpload.InvestigationId == id, ct);
-        if (citedSessions > 0)
-        {
-            return Conflict(
-                $"A case report cites {citedSessions} field session"
-                + (citedSessions == 1 ? "" : "s")
-                + " recorded during this investigation. Remove the citation from the report first, "
-                + "then delete the investigation.");
-        }
-
+        // Detaches the binder entries (their key is NoAction; the notes survive on the case
+        // timeline), and since 10/16/2026 also clears duty assignments, which made SQL Server
+        // refuse the delete for any visit where somebody held a duty, and takes the visit's own
+        // calendar entry with it. Shared with the group's Investigations page.
+        await Services.Investigations.InvestigationLifecycle.PrepareDeleteAsync(db, entity, ct);
         db.Investigations.Remove(entity);
         await db.SaveChangesAsync(ct);
+
+        // Audited like the group page's delete (10/16/2026); this door wrote no record before.
+        _ = TryAuditAsync(_auditLog.LogDeleteAsync(
+            nameof(Investigation), entity.Id, before, GetCurrentUserId(), AppSources.WebApi));
         return NoContent();
     }
 
@@ -371,6 +377,8 @@ public sealed class InvestigationController : BenControllerBase
             IsReadByClient = false, IsReadByOrg = true,
             DateCreated = DateTime.UtcNow, CreatedByAppUserId = userId,
         });
+        // The calendar entry says it is canceled rather than still showing the night (10/16/2026).
+        await Services.Investigations.InvestigationLifecycle.SyncCalendarAsync(db, investigation, ct);
         await db.SaveChangesAsync(ct);
         if (await db.Cases.AsNoTracking().FirstOrDefaultAsync(x => x.Id == caseId, ct) is { } caseForMail)
             await _clientMail.VisitCancelledAsync(db, caseForMail, investigation, ct);   // item 206
@@ -408,6 +416,13 @@ public sealed class InvestigationController : BenControllerBase
             return NotFound();
         if (!await CanManageAsync(id, ct)) return Forbid();
 
+        // Until 10/16/2026 this door checked nothing about the person: a stranger or a Viewer could
+        // be put on a case's team, and a second add of the same person was a 500 from the unique
+        // index. The rules now live in one place, shared with the group's Investigations page.
+        if (await Services.Investigations.InvestigationTeam.WhyCannotJoinAsync(
+                db, orgId, id, request.AppUserId, ct) is { } refusal)
+            return refusal.ToResult();
+
         var attendee = new InvestigationAttendee
         {
             Id = Guid.NewGuid(), InvestigationId = id, AppUserId = request.AppUserId,
@@ -416,6 +431,9 @@ public sealed class InvestigationController : BenControllerBase
         };
         db.InvestigationAttendees.Add(attendee);
         await db.SaveChangesAsync(ct);
+
+        _ = TryAuditAsync(_auditLog.LogCreateAsync(
+            nameof(InvestigationAttendee), attendee.Id, attendee, userId, AppSources.WebApi));
         var loaded = await db.InvestigationAttendees.AsNoTracking()
             .Include(a => a.AppUser).FirstAsync(a => a.Id == attendee.Id, ct);
         return CreatedAtAction(nameof(GetAttendees), new { orgId, caseId, id },
@@ -483,8 +501,17 @@ public sealed class InvestigationController : BenControllerBase
         if (attendee is null) return NotFound();
         if (!await CanManageAsync(id, ct)) return Forbid();
 
-        db.InvestigationAttendees.Remove(attendee);
+        // Same rules as the group's Investigations page (10/16/2026): somebody recorded as there,
+        // or who has written it up, stays; their duties go with them, because that key is NoAction
+        // and SQL Server refused the delete outright for anybody holding one.
+        if (await Services.Investigations.InvestigationTeam.WhyCannotLeaveAsync(db, attendee, ct) is { } refusal)
+            return refusal.ToResult();
+
+        await Services.Investigations.InvestigationTeam.RemoveAsync(db, attendee, ct);
         await db.SaveChangesAsync(ct);
+
+        _ = TryAuditAsync(_auditLog.LogDeleteAsync(
+            nameof(InvestigationAttendee), attendee.Id, attendee, GetCurrentUserId(), AppSources.WebApi));
         return NoContent();
     }
 
@@ -521,7 +548,7 @@ public sealed class InvestigationController : BenControllerBase
     ///
     /// <para>Assigned once. Renaming afterwards leaves the address alone.</para>
     /// </remarks>
-    private static async Task<string?> EnsurePublicSlugAsync(
+    internal static async Task<string?> EnsurePublicSlugAsync(
         BenDataContext db, Investigation entity, CancellationToken ct)
     {
         if (entity.Visibility != InvestigationVisibility.Public || entity.UrlName is not null)

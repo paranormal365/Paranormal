@@ -23,11 +23,11 @@ public class DisplayDateFormatTests
     /// </summary>
     [Fact]
     public void DateTime_IsMonthFirstTwelveHourAndCarriesNoSeconds()
-        => Assert.Equal("08/04/2026 09:30 PM", Sample.ToDisplayDateTime());
+        => Assert.Equal("08/04/2026 9:30 PM", Sample.ToDisplayDateTime());
 
     [Fact]
     public void Time_IsTwelveHourAndCarriesNoSeconds()
-        => Assert.Equal("09:30 PM", Sample.ToDisplayTime());
+        => Assert.Equal("9:30 PM", Sample.ToDisplayTime());
 
     /// <summary>
     /// And the exception is still reachable, by a name long enough that nobody picks it by
@@ -37,8 +37,8 @@ public class DisplayDateFormatTests
     [Fact]
     public void SecondsAreStillAvailableUnderALongerName()
     {
-        Assert.Equal("08/04/2026 09:30:05 PM", Sample.ToDisplayDateTimeWithSeconds());
-        Assert.Equal("09:30:05 PM", Sample.ToDisplayTimeWithSeconds());
+        Assert.Equal("08/04/2026 9:30:05 PM", Sample.ToDisplayDateTimeWithSeconds());
+        Assert.Equal("9:30:05 PM", Sample.ToDisplayTimeWithSeconds());
     }
 
     [Fact]
@@ -51,11 +51,27 @@ public class DisplayDateFormatTests
     public void ChartAxisDay_IsMonthFirstForAPlainDay() =>
         Assert.Equal("Aug 4", DateOnly.FromDateTime(Sample).ToChartDay());
 
+    /// <summary>
+    /// The hour is written the way people write it. Until 10/16/2026 this test pinned the leading
+    /// zero, and a hosted event's Program read "06:00 PM" under tiles that said "7:00 PM". The
+    /// minutes keep theirs: "9:05", never "9:5". The date keeps its zeros too — MM/DD/YYYY.
+    /// </summary>
     [Fact]
-    public void MorningTimes_KeepTheLeadingZeroAndReadAM()
+    public void MorningTimes_HaveNoLeadingZeroAndReadAM()
     {
         var morning = new DateTime(2026, 8, 4, 9, 5, 0);
-        Assert.Equal("08/04/2026 09:05 AM", morning.ToDisplayDateTime());
+        Assert.Equal("08/04/2026 9:05 AM", morning.ToDisplayDateTime());
+        Assert.Equal("9:05 AM", morning.ToDisplayTime());
+        Assert.Equal("9:05 AM", morning.ToDisplayTimeNoSeconds());
+        Assert.Equal("9:05:00 AM", morning.ToDisplayTimeWithSeconds());
+    }
+
+    [Fact]
+    public void TwoDigitHours_StayTwoDigits()
+    {
+        var late = new DateTime(2026, 8, 4, 22, 45, 0);
+        Assert.Equal("10:45 PM", late.ToDisplayTime());
+        Assert.Equal("08/04/2026 10:45 PM", late.ToDisplayDateTime());
     }
 
     [Fact]

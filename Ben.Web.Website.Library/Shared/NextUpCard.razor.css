@@ -1,0 +1,143 @@
+/* Home's "what you're going to next" card (10/16/2026). Small on purpose: one strip, the ghost's
+   face, the name, and the clock. The Signal gradient is the card's edge rather than its fill, so
+   the words sit on the ordinary card colour in both themes; dark mode is the design, and light mode
+   is the same tokens. Motion: the ghost drifts, and the edge glows softly and breathes once the
+   event is today. All of it stops for a reader who asked for less motion. */
+
+.next-up-wrap {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: .35rem 1rem;
+}
+
+.next-up {
+    position: relative;
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+    flex: 0 1 46rem;
+    min-width: 0;
+    padding: .85rem 1.1rem;
+    border: 1px solid transparent;
+    border-radius: var(--ben-radius-lg);
+    /* The gradient edge: the card colour inside, Signal's violet-to-cyan as the 1px border. */
+    background:
+        linear-gradient(var(--ben-surface), var(--ben-surface)) padding-box,
+        var(--ben-accent-grad) border-box;
+    box-shadow: var(--ben-shadow-sm), 0 0 1.4rem rgba(var(--ben-accent-rgb), .14);
+    color: var(--ben-ink);
+    text-decoration: none;
+    transition: transform .2s ease, box-shadow .2s ease;
+}
+
+.next-up:hover,
+.next-up:focus-visible {
+    transform: translateY(-1px);
+    box-shadow: var(--ben-shadow), var(--ben-glow);
+    color: var(--ben-ink);
+}
+
+.next-up:focus-visible { outline: 2px solid var(--ben-accent); outline-offset: 3px; }
+
+/* The ghost's face, in a soft violet halo. */
+.next-up__mark {
+    position: relative;
+    flex: none;
+    display: grid;
+    place-items: center;
+    width: 3.25rem;
+    height: 3.25rem;
+    border-radius: 50%;
+    background: radial-gradient(circle at 50% 45%, rgba(var(--ben-accent-rgb), .28), transparent 70%);
+}
+
+.next-up__mark img {
+    width: 2.6rem;
+    height: 2.6rem;
+    filter: drop-shadow(0 0 .45rem rgba(var(--ben-accent-2-rgb), .45));
+    animation: next-up-drift 6s ease-in-out infinite;
+}
+
+.next-up__body {
+    display: flex;
+    flex-direction: column;
+    gap: .1rem;
+    flex: 1 1 auto;
+    min-width: 0;
+}
+
+.next-up__kicker {
+    font-size: .68rem;
+    font-weight: 700;
+    letter-spacing: .12em;
+    text-transform: uppercase;
+    color: var(--ben-ink-faint);
+}
+
+/* Not "coming" yet: said in the kicker's colour, never in the confident violet. */
+.next-up[data-standing="going"] .next-up__kicker { color: var(--ben-link); }
+
+.next-up__title {
+    font-size: 1.05rem;
+    font-weight: 700;
+    line-height: 1.25;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.next-up__meta {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0 .35rem;
+    font-size: .8rem;
+    color: var(--ben-ink-muted);
+}
+
+::deep .next-up__count { flex: none; }
+
+/* The day itself: the edge breathes. */
+.next-up:has([data-phase="today"]),
+.next-up:has([data-phase="tonight"]),
+.next-up:has([data-phase="live"]) {
+    animation: next-up-glow 3.2s ease-in-out infinite;
+}
+
+.next-up:has([data-phase="live"]) {
+    background:
+        linear-gradient(var(--ben-surface), var(--ben-surface)) padding-box,
+        linear-gradient(120deg, var(--ben-accent-2), var(--ben-accent)) border-box;
+}
+
+.next-up__more {
+    font-size: .85rem;
+    font-weight: 600;
+    color: var(--ben-link);
+    white-space: nowrap;
+}
+
+.next-up-note { color: var(--ben-ink-muted); }
+
+/* A phone: the clock under the words, full width. */
+@media (max-width: 575.98px) {
+    .next-up { flex-wrap: wrap; gap: .6rem .85rem; padding: .8rem .9rem; }
+    .next-up__body { flex-basis: calc(100% - 4.25rem); }
+    ::deep .next-up__count { flex-basis: 100%; }
+}
+
+@keyframes next-up-drift {
+    0%, 100% { transform: translateY(0); }
+    50%      { transform: translateY(-3px); }
+}
+
+@keyframes next-up-glow {
+    0%, 100% { box-shadow: var(--ben-shadow-sm), 0 0 1.2rem rgba(var(--ben-accent-rgb), .16); }
+    50%      { box-shadow: var(--ben-shadow-sm), 0 0 2.2rem rgba(var(--ben-accent-2-rgb), .34); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .next-up,
+    .next-up__mark img { animation: none !important; transition: none !important; }
+    .next-up:hover, .next-up:focus-visible { transform: none; }
+}
