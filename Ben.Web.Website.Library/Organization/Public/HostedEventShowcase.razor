@@ -3,6 +3,7 @@
 @using Ben.Web.Services
 @using Ben.Web.Website.Library.Kit
 @inject IMediaUrlBuilder MediaUrls
+@inject NavigationManager Nav
 
 @* The top of an event's public page, dressed (item 235 phase 11): the host's pictures as a slideshow,
    how long until the first night, and — on a phone — an "Ask for a place" that stays at the bottom
@@ -37,7 +38,7 @@
 
 @if (ShowAsk)
 {
-    <a class="btn btn-primary btn-lg d-md-none hosted-sticky-ask" href="#event-act" id="hosted-sticky-ask">
+    <a class="btn btn-primary btn-lg d-md-none hosted-sticky-ask" href="@JumpLink.To(Nav, "event-act")" id="hosted-sticky-ask">
         Ask for a place
     </a>
 }

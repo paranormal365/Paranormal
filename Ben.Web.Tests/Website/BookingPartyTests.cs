@@ -87,6 +87,114 @@ public sealed class BookingPartyTests
     }
 
     [Fact]
+    public void A_note_with_no_name_is_said_in_one_plain_sentence()
+    {
+        var draft = new BookingPartyDraft();
+        draft.Resize(2);
+        Assert.Null(draft.WhatIsMissing);
+
+        draft.People[1].Notes = "nut allergy";
+        Assert.Equal("Give each dietary note a name.", draft.WhatIsMissing);
+    }
+
+    // ── who it is for: the reason beside a grey button (10/16/2026) ──────────
+
+    private static BookingContactDraft AContact(string first = "Ruth", string last = "Okafor",
+        string email = "ruth@example.com", string phone = "(615) 555-0100")
+        => new() { FirstName = first, LastName = last, Email = email, Phone = phone };
+
+    [Theory]
+    [InlineData("", "", "(615) 555-0100", "Add your first and last name.")]
+    [InlineData(" ", "Okafor", "(615) 555-0100", "Add your first name.")]
+    [InlineData("Ruth", "", "(615) 555-0100", "Add your last name.")]
+    [InlineData("Ruth", "Okafor", "", "Add a phone number so Apple-Beta can reach you.")]
+    [InlineData("Ruth", "Okafor", "555-01", "Check your phone number. It needs 7 to 15 digits.")]
+    [InlineData("Ruth", "Okafor", "+1 615 555 0100 0100 99", "Check your phone number. It needs 7 to 15 digits.")]
+    public void What_is_missing_names_the_next_thing_to_do(string first, string last, string phone, string expected)
+    {
+        var contact = AContact(first, last, phone: phone);
+
+        Assert.Equal(expected, contact.WhatIsMissing(withEmail: false, "Apple-Beta"));
+        Assert.False(contact.IsEnough(withEmail: false));
+    }
+
+    [Fact]
+    public void The_production_case_a_name_and_no_phone_asks_for_the_phone()
+    {
+        // A signed-in guest whose account carried a name and no phone: the whole form looked filled in.
+        var contact = new BookingContactDraft();
+        contact.Fill(new BookingContactRecord("Ruth", "Okafor", Phone: null, Email: "ruth@example.com"));
+
+        Assert.Equal("Add a phone number so Apple-Beta can reach you.", contact.WhatIsMissing(false, "Apple-Beta"));
+    }
+
+    [Fact]
+    public void An_email_is_asked_for_only_when_the_form_needs_one()
+    {
+        Assert.Null(AContact(email: "").WhatIsMissing(withEmail: false, "Apple-Beta"));
+        Assert.Equal("Add your email address so we can send you the link.",
+            AContact(email: "").WhatIsMissing(withEmail: true, "Apple-Beta"));
+        Assert.Equal("Check your email address. It needs an @.",
+            AContact(email: "ruth.example.com").WhatIsMissing(withEmail: true, "Apple-Beta"));
+    }
+
+    [Fact]
+    public void Enough_is_nothing_missing()
+    {
+        var contact = AContact();
+        Assert.Null(contact.WhatIsMissing(withEmail: true, "Apple-Beta"));
+        Assert.True(contact.IsEnough(withEmail: true));
+    }
+
+    [Fact]
+    public void Without_a_name_for_the_group_the_sentence_says_the_organizer()
+        => Assert.Equal("Add a phone number so the organizer can reach you.",
+            AContact(phone: "").WhatIsMissing(withEmail: false, null));
+
+    [Fact]
+    public async Task The_ask_form_says_why_its_button_is_grey()
+    {
+        var html = await RenderAskFormAsync();
+
+        // One night, so it is ticked already; nothing typed, so the name is what is missing.
+        Assert.Matches(@"<button[^>]*id=""ask-send""[^>]*disabled", html);
+        Assert.Matches(@"<span[^>]*id=""ask-missing""[^>]*>Add your first and last name\.</span>", html);
+        Assert.Contains(@"aria-describedby=""ask-missing""", html);
+        Assert.Contains("Phone number <span class=\"text-secondary\">(required)</span>", html);
+    }
+
+    private static async Task<string> RenderAskFormAsync()
+    {
+        var services = new ServiceCollection();
+        services.AddSingleton(new Mock<IBenAdminClient>().Object);
+
+        await using var provider = services.BuildServiceProvider();
+        await using var renderer = new HtmlRenderer(provider, NullLoggerFactory.Instance);
+
+        var hosted = new PublicHostedEventRecord(
+            Guid.NewGuid(), Guid.NewGuid(), "Apple-Beta", "apple-beta", "App Review Night", "app-review-night",
+            Tagline: null, Description: null, TimeZoneId: "America/Chicago",
+            StartsOn: new DateTime(2026, 10, 30), EndsOn: new DateTime(2026, 10, 30),
+            DatesAreSeparate: false, DateNoun: "night", VenueName: null, City: null, State: null,
+            ExactAddress: null, IsExactAddressHidden: false, Latitude: null, Longitude: null,
+            DayPassCapacity: null, ContactLine: null, CoverUploadFileId: null,
+            IsCancelled: false, CancelledReason: null, CollectsEvidence: false,
+            Nights: [new HostedEventNightRecord(Guid.NewGuid(), new DateTime(2026, 10, 30), "Friday, October 30",
+                null, new TimeSpan(18, 0, 0), new TimeSpan(23, 0, 0), null, 0)]);
+
+        return await renderer.Dispatcher.InvokeAsync(async () =>
+        {
+            var output = await renderer.RenderComponentAsync<AskForPlaceForm>(
+                ParameterView.FromDictionary(new Dictionary<string, object?>
+                {
+                    [nameof(AskForPlaceForm.Hosted)] = hosted,
+                }));
+
+            return System.Net.WebUtility.HtmlDecode(output.ToHtmlString());
+        });
+    }
+
+    [Fact]
     public void Only_named_rows_are_sent_trimmed_with_empty_notes_as_null()
     {
         var draft = new BookingPartyDraft();

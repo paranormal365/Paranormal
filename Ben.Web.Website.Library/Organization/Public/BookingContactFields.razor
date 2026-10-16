@@ -13,6 +13,8 @@
    THE DISCLOSURE IS ALWAYS SHOWN, folded or not, because it is the promise and it has to be read at the
    moment the thing is given. *@
 
+@* Every field says it is required (10/16/2026): the form's button waits for all of them, and a
+   phone box with no mark on it read as optional until the button refused to press. *@
 <div class="booking-contact" id="@($"{IdPrefix}-contact-fields")">
     @if (_folded && Draft.IsEnough(AskEmail))
     {
@@ -27,27 +29,27 @@
     {
         <div class="row g-2">
             <div class="col-12 col-md-6">
-                <label class="form-label small mb-1" for="@($"{IdPrefix}-first")">First name</label>
-                <input id="@($"{IdPrefix}-first")" class="form-control" maxlength="100" autocomplete="given-name"
+                <label class="form-label small mb-1" for="@($"{IdPrefix}-first")">First name <span class="text-secondary">(required)</span></label>
+                <input id="@($"{IdPrefix}-first")" class="form-control" aria-required="true" maxlength="100" autocomplete="given-name"
                        value="@Draft.FirstName" @oninput="e => Set(() => Draft.FirstName = Text(e))" />
             </div>
             <div class="col-12 col-md-6">
-                <label class="form-label small mb-1" for="@($"{IdPrefix}-last")">Last name</label>
-                <input id="@($"{IdPrefix}-last")" class="form-control" maxlength="100" autocomplete="family-name"
+                <label class="form-label small mb-1" for="@($"{IdPrefix}-last")">Last name <span class="text-secondary">(required)</span></label>
+                <input id="@($"{IdPrefix}-last")" class="form-control" aria-required="true" maxlength="100" autocomplete="family-name"
                        value="@Draft.LastName" @oninput="e => Set(() => Draft.LastName = Text(e))" />
             </div>
             @if (AskEmail)
             {
                 <div class="col-12 col-md-6">
-                    <label class="form-label small mb-1" for="@($"{IdPrefix}-email")">Email address</label>
-                    <input id="@($"{IdPrefix}-email")" class="form-control" type="email" maxlength="320"
+                    <label class="form-label small mb-1" for="@($"{IdPrefix}-email")">Email address <span class="text-secondary">(required)</span></label>
+                    <input id="@($"{IdPrefix}-email")" class="form-control" aria-required="true" type="email" maxlength="320"
                            autocomplete="email" placeholder="you@example.com"
                            value="@Draft.Email" @oninput="e => Set(() => Draft.Email = Text(e))" />
                 </div>
             }
             <div class="col-12 col-md-6">
-                <label class="form-label small mb-1" for="@($"{IdPrefix}-phone")">Phone number</label>
-                <input id="@($"{IdPrefix}-phone")" class="form-control" type="tel" maxlength="40"
+                <label class="form-label small mb-1" for="@($"{IdPrefix}-phone")">Phone number <span class="text-secondary">(required)</span></label>
+                <input id="@($"{IdPrefix}-phone")" class="form-control" aria-required="true" type="tel" maxlength="40"
                        autocomplete="tel" placeholder="(615) 555-0100"
                        value="@Draft.Phone" @oninput="e => Set(() => Draft.Phone = Text(e))" />
             </div>

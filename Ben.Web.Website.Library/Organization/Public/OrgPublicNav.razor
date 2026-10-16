@@ -1,5 +1,7 @@
 @namespace Ben.Web.Website.Library.Organization.Public
 @using Ben.Web.Services
+@using Ben.Web.Website.Library.Kit
+@inject NavigationManager Nav
 
 @*
     A group's own pages, as one track of pills rather than a row of outline buttons — so they read
@@ -12,7 +14,7 @@
     <a href="@($"/o/{OrgUrlName}/events")" class="org-nav__item @(Here("events"))">Events</a>
     @if (ShowTours)
     {
-        <a href="#org-tours" class="org-nav__item">Tours</a>
+        <a href="@JumpLink.To(Nav, "org-tours")" class="org-nav__item">Tours</a>
     }
     @* Named `nav`, not `page`: Razor reads a line beginning "@page" as the page directive and
        refuses to compile the file. *@

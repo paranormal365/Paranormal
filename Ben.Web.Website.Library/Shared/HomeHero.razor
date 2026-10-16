@@ -66,7 +66,7 @@
 
     @* Ben, 10/05/2026: the app's feature sits near the foot of the page, with a link up here that
        scrolls to it. *@
-    <a class="home-hero__app" href="#the-app" data-testid="home-hero-app">
+    <a class="home-hero__app" href="@JumpLink.To(NavManager, "the-app")" data-testid="home-hero-app">
         <span class="home-hero__app-tag"><BenIcon Name="smartphone" /> The app</span>
         The Paranormal Platform for iPhone &amp; iPad — see what it does
         <BenIcon Name="arrow-down" Class="home-hero__app-arrow" />
