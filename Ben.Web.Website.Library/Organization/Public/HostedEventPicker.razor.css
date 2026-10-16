@@ -84,4 +84,12 @@
         flex-direction: column;
         align-items: stretch;
     }
+
+    /* Stacked, the summary is as wide as the bar and no wider: its 12rem floor is for the
+       side-by-side row, and on a 320px phone the reason line ran 11px past the screen
+       (screen-size e2e checks, 10/16/2026). */
+    .picker__what {
+        min-width: 0;
+        overflow-wrap: break-word;
+    }
 }

@@ -133,9 +133,9 @@ public abstract class Oct16TestBase : BenTestBase
     protected static string BoxDate(DateTime day)
         => day.ToString("MM/dd/yyyy", System.Globalization.CultureInfo.InvariantCulture);
 
-    /// <summary>A date and time as the site's date-and-time boxes hold it: 10/16/2026 07:00 PM.</summary>
+    /// <summary>A date and time as the site's date-and-time boxes hold it: 10/16/2026 7:00 PM.</summary>
     protected static string BoxDateTime(DateTime wallClock)
-        => wallClock.ToString("MM/dd/yyyy hh:mm tt", System.Globalization.CultureInfo.InvariantCulture);
+        => wallClock.ToString("MM/dd/yyyy h:mm tt", System.Globalization.CultureInfo.InvariantCulture);
 
     // ── Visits with no case (fix/oct16-gaps) ────────────────────────────────
 
