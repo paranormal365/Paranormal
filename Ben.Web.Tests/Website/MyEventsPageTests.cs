@@ -125,6 +125,36 @@ public sealed class MyEventsPageTests
     }
 
     [Fact]
+    public async Task What_is_over_is_said_in_the_past_tense()
+    {
+        // "Bell Witch Cave — autumn survey · Over · You're coming" read as if it were still ahead
+        // (Ben, 10/16/2026). Each standing says what the record knows, in the past.
+        var html = await OthersAsync(
+        [
+            Item(MyNextEventKind.Investigation, "Old survey", Now.AddDays(-7)),
+            Item(MyNextEventKind.Investigation, "Old invite", Now.AddDays(-8), MyNextEventStanding.Invited),
+            Item(MyNextEventKind.Event, "Old evening", Now.AddDays(-9)),
+            Item(MyNextEventKind.TourDate, "Old walk", Now.AddDays(-10)),
+            Item(MyNextEventKind.TourDate, "Old ask", Now.AddDays(-11), MyNextEventStanding.AskedFor),
+            Item(MyNextEventKind.Event, "Next week", Now.AddDays(7)),
+        ]);
+
+        var recent = html[html.IndexOf("id=\"my-events-recent\"", StringComparison.Ordinal)..];
+        Assert.Contains("You were on the team", recent);
+        Assert.Contains("You were invited", recent);
+        Assert.Contains("You said you'd come", recent);
+        Assert.Contains("You had a place", recent);
+        Assert.Contains("You asked for a place", recent);
+        Assert.DoesNotContain("You're coming", recent);
+        Assert.DoesNotContain("You're invited", recent);
+        Assert.DoesNotContain("Asked for<", recent);
+
+        // What is still ahead keeps the present tense.
+        var coming = html[..html.IndexOf("id=\"my-events-recent\"", StringComparison.Ordinal)];
+        Assert.Contains("You're coming", coming);
+    }
+
+    [Fact]
     public async Task What_ended_lately_is_under_recently()
     {
         var html = await OthersAsync(
