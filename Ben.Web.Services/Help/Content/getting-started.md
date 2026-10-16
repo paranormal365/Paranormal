@@ -146,6 +146,19 @@ Once you belong to a group, your Home page becomes your dashboard: your next inv
 cases in your groups (yours first), how many messages and requests are waiting, and any gear checked
 out to you with its due date. Each tile opens exactly what it counts.
 
+**Counting down to your next event.** When you're signed in and have something coming up, a small
+card at the top of the home page shows the next event you're going to and how long until it starts,
+in the event's own time zone. That's an event you booked, one you said you'd come to, a tour seat,
+or an investigation you're on the team of. Bookings the venue hasn't confirmed yet say **Asked for**
+or **Held for you**. The card reads **Tonight** on the day and **Happening now** while it's on, then
+moves on to the next one. If you have more coming up, **and 2 more** takes you to *What I'm going
+to*. Tap the card to open your pass, or the event's page. With nothing coming up, there's no card.
+
+Every event in **What's near you** counts down to its start too, with a thin bar that fills from
+the day it was listed to the moment it begins. When you're signed in, the list also shows your own
+groups' events that aren't public, marked **Your group**, and marks public events you've been
+**Invited** to or said **You're going** to. An event at a private residence never appears here.
+
 If a group hasn't written its own public page yet, the site builds one from what the group has
 already entered: what kind of group it is, the area it serves, how many members it has, its public
 cases, whether it's taking new cases, and its next public event.
@@ -636,6 +649,10 @@ investigations and open meetings together, soonest first.
 ![What's on, grouped by the night each event happens](/help/media/getting-started/whats-on.png)
 *Grouped by day, so each date is shown once and each event under it only shows what's different
 about it. The bar on the right shows how full it is.*
+
+Each event counts down to its start, with a thin bar that fills as it gets closer and **Happening
+now** while it's on. Signed in, you also see your own groups' events that aren't public, marked
+**Your group**; they open on your group's calendar.
 
 **Times are shown in the event's own time zone — or yours, if you prefer.** A walk that starts at
 eight in Nashville shows as eight wherever in the world you're reading it, with the time zone named

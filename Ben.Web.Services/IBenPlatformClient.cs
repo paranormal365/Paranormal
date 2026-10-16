@@ -28,6 +28,9 @@ public interface IBenPlatformClient
     /// <summary>The member's desk — next investigation, open cases, unread, gear out — in one call (item 204).</summary>
     Task<ItemResult<MemberDeskResponse>> GetMyDeskAsync(CancellationToken token = default);
 
+    /// <summary>The next few things the signed-in person is going to, for Home's countdown (10/16/2026).</summary>
+    Task<ItemResult<MyNextEventsResponse>> GetMyNextEventsAsync(CancellationToken token = default);
+
     /// <summary>The navigation bar's numbers, counted by the database (10/14/2026).</summary>
     Task<ItemResult<NavCountsResponse>> GetMyNavCountsAsync(CancellationToken token = default);
 
@@ -410,6 +413,15 @@ public interface IBenPlatformClient
     /// </remarks>
     /// <param name="query">Optional text filter, matched against organization and event names.</param>
     Task<NearbyResults?> GetNearbyAsync(
+        double latitude, double longitude, double radiusMiles, string? query = null,
+        CancellationToken token = default);
+
+    /// <summary>
+    /// The same search for a signed-in reader, with their own groups' events added and marked
+    /// (10/16/2026). Falls back to the visitor's answer when the signed-in one cannot be had, so a
+    /// lapsed sign-in never turns the search into "nothing found".
+    /// </summary>
+    Task<NearbyResults?> GetNearbyForMeAsync(
         double latitude, double longitude, double radiusMiles, string? query = null,
         CancellationToken token = default);
 

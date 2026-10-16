@@ -1,0 +1,18 @@
+.ev-tie {
+    display: inline-block;
+    margin-left: .35rem;
+    padding: .05rem .45rem;
+    border: 1px solid var(--ben-line-strong);
+    border-radius: var(--ben-radius-pill);
+    font-size: .66rem;
+    font-weight: 600;
+    letter-spacing: .03em;
+    line-height: 1.4;
+    vertical-align: .1em;
+    white-space: nowrap;
+    color: var(--ben-ink-muted);
+}
+
+/* The one a stranger cannot see wears the accent's edge, so it reads as "ours" at a glance. */
+.ev-tie--yourgroup { border-color: rgba(var(--ben-accent-rgb), .45); color: var(--ben-link); }
+.ev-tie--going { border-color: rgba(var(--ben-accent-2-rgb), .5); }

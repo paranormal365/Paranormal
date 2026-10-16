@@ -25,6 +25,9 @@ public sealed partial class BenAdminClientAdapter
     public Task<ItemResult<MemberDeskResponse>> GetMyDeskAsync(CancellationToken token = default)
         => _api.GetItemAsync<MemberDeskResponse>("/api/me/desk", token);
 
+    public Task<ItemResult<MyNextEventsResponse>> GetMyNextEventsAsync(CancellationToken token = default)
+        => _api.GetItemAsync<MyNextEventsResponse>("/api/me/next-events", token);
+
     public Task<ItemResult<NavCountsResponse>> GetMyNavCountsAsync(CancellationToken token = default)
         => _api.GetItemAsync<NavCountsResponse>("/api/me/nav-counts", token);
 
@@ -531,6 +534,22 @@ public sealed partial class BenAdminClientAdapter
             url += $"&query={Uri.EscapeDataString(query)}";
 
         return _api.GetAnonymousAsync<NearbyResults>(url, token);
+    }
+
+    public async Task<NearbyResults?> GetNearbyForMeAsync(
+        double latitude, double longitude, double radiusMiles, string? query = null,
+        CancellationToken token = default)
+    {
+        var url = $"/api/public/search/nearby?lat={latitude.ToString(System.Globalization.CultureInfo.InvariantCulture)}"
+                + $"&lon={longitude.ToString(System.Globalization.CultureInfo.InvariantCulture)}"
+                + $"&radiusMiles={radiusMiles.ToString(System.Globalization.CultureInfo.InvariantCulture)}"
+                + "&includeMine=true";
+
+        if (!string.IsNullOrWhiteSpace(query))
+            url += $"&query={Uri.EscapeDataString(query)}";
+
+        return await _api.GetAsync<NearbyResults>(url, token)
+            ?? await GetNearbyAsync(latitude, longitude, radiusMiles, query, token);
     }
 
     // ── Merging groups (item 110) ─────────────────────────────────────────────

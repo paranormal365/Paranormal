@@ -146,7 +146,17 @@ public sealed record PublicEventListItem(
     /// The IANA zone the event happens in, when it is recorded — today, the tour's. Null means
     /// nobody has said, and the reader is shown UTC and told so; see EventClock.
     /// </summary>
-    string? TimeZoneId = null);
+    string? TimeZoneId = null,
+    /// <summary>
+    /// When it was put on the calendar, or for a hosted event when it was first published
+    /// (10/16/2026). Where the countdown's progress bar starts; see CountdownMath.Baseline.
+    /// </summary>
+    DateTime? ListedUtc = null,
+    /// <summary>
+    /// Why a signed-in reader who asked for their own events is shown this row; None on every row a
+    /// signed-out visitor gets.
+    /// </summary>
+    Ben.Data.Common.Enums.EventReaderTie ReaderTie = Ben.Data.Common.Enums.EventReaderTie.None);
 
 
 // ── Coming along without an account (item #87b) ──────────────────────────────
@@ -332,7 +342,11 @@ public sealed record PublicTourListItem(
     /// The walk's own IANA zone, so a card shows the time it actually starts rather than the time
     /// where the reader is sitting. See EventClock.
     /// </summary>
-    string? TimeZoneId = null);
+    string? TimeZoneId = null,
+    /// <summary>When the next date ends, so its card can say "Happening now" while it runs (10/16/2026).</summary>
+    DateTime? NextDateEndUtc = null,
+    /// <summary>When the next date was put on the calendar: where its countdown bar starts.</summary>
+    DateTime? NextDateListedUtc = null);
 
 /// <summary>
 /// One tour's own page.
