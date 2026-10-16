@@ -19,7 +19,7 @@
 
 @if (_loaded)
 {
-    <NextUpCard Next="_next" Refusal="_refusal" OnRetry="LoadAsync" />
+    <NextUpCard Next="_next" Refusal="@_refusal" OnRetry="LoadAsync" />
 }
 
 @code {

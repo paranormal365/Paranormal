@@ -161,7 +161,7 @@
     @* Everything else they are going to, by date (10/16/2026). Its own load, its own refusal. *@
     @if (!_loading)
     {
-        <MyOtherEvents Items="_others?.Items" Refusal="_othersRefusal" OnRetry="LoadAsync" />
+        <MyOtherEvents Items="_others?.Items" Refusal="@_othersRefusal" OnRetry="LoadAsync" />
     }
 </div>
 
