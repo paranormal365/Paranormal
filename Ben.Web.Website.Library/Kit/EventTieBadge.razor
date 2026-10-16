@@ -1,0 +1,26 @@
+@namespace Ben.Web.Website.Library.Kit
+@using Ben.Data.Common.Enums
+
+@*
+    Why a signed-in reader is seeing an event on a list (10/16/2026): "Your group" for one that is
+    not public, "Invited" or "You're going" for a public one they are tied to. Quiet on purpose: a
+    small outlined pill, so a group-only night is never mistaken for one a stranger can see, without
+    shouting over the event's own name. Nothing at all for an ordinary public row.
+*@
+
+@if (Words is { } words)
+{
+    <span class="ev-tie ev-tie--@Tie.ToString().ToLowerInvariant()" data-testid="event-tie">@words</span>
+}
+
+@code {
+    [Parameter] public EventReaderTie Tie { get; set; }
+
+    private string? Words => Tie switch
+    {
+        EventReaderTie.YourGroup => "Your group",
+        EventReaderTie.Invited => "Invited",
+        EventReaderTie.Going => "You're going",
+        _ => null,
+    };
+}

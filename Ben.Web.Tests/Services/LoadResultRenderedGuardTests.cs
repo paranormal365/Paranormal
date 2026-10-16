@@ -83,6 +83,8 @@ public sealed class LoadResultRenderedGuardTests
         "GetUserNoteTypesAsync", "GetUserPhoneTypesAsync", "GetUsersAsync", "GetVideoAssetsAsync",
         "SearchEquipmentModelsAsync", "SearchOrganizationsAsync", "SearchPublicPlacesAsync",
         "SearchUsersAsync",
+        // Home's countdown and the signed-in event list (10/16/2026).
+        "GetMyNextEventsAsync", "GetPublicEventsForMeAsync",
     ];
 
     /// <summary>

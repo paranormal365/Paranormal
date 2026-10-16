@@ -54,6 +54,16 @@ day-by-day account of building it would say nothing to anyone using it now.
 - An event that runs for days says how long in nights, days or weeks, such as "15 nights" or
   "2 weeks", instead of hundreds of hours. A run of nights that keep the same hours says them too:
   "15 nights, 6:00–11:00 PM".
+- Once you're signed in, the home page shows a small card for the next event you're going to,
+  counting down to when it starts, with "and 2 more" when there are others. Tap it to open your
+  pass or the event.
+- Every upcoming event in What's On and in What's Near You now counts down to its start, with a thin
+  bar that fills as the day gets closer and "Happening now" while it's on. Tours near you count down
+  to their next walk.
+- Signed in, What's On and What's Near You also show your own groups' events that aren't public,
+  marked "Your group", and mark public events you've been invited to or said you're going to.
+- What I'm going to now lists everything you're going to, not only bookings: events and tours you
+  said you'd come to and investigations you're on the team of, each counting down to its start.
 - The site's icon is now the app's icon, the violet ghost, and the ghost has its face again: in the
   browser tab, on a phone's home screen, at the top of every email, beside the site's name, on the
   sign-in page and in the app section of the home page. The App Store QR codes and the guides and

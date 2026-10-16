@@ -59,6 +59,13 @@
     line-height: 1.25;
 }
 
+/* The countdown sits between the title and where it is, full width so its bar spans the card. */
+.nearby-card__body ::deep .nearby-card__countdown {
+    display: flex;
+    width: 100%;
+    margin: .4rem 0 .3rem;
+}
+
 .nearby-card__meta,
 .nearby-card__by {
     display: block;

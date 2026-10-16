@@ -180,6 +180,13 @@ public sealed partial class BenAdminClientAdapter
         return result;
     }
 
+    public Task<LoadResult<PublicEventListItem>> GetPublicEventsForMeAsync(
+        string? orgUrlName = null, int maxResults = 50, CancellationToken token = default)
+        => _api.GetListAsync<PublicEventListItem>(
+            $"/api/public/events?maxResults={maxResults}&includeMine=true"
+            + (string.IsNullOrWhiteSpace(orgUrlName) ? "" : $"&orgUrlName={Uri.EscapeDataString(orgUrlName)}"),
+            token);
+
     // Readable by a visitor who has never signed in — but the response also carries the viewer's
     // own RSVP and whether they organise the event, and fetching it anonymously meant a signed-in
     // visitor never saw either. GetAsync attaches a token only when there is one, so the anonymous
