@@ -121,7 +121,7 @@ The places went back on offer, and you're welcome to choose again if they're sti
 place at, whichever group is running it. When a venue answers you, the bell links here. Below your
 bookings are the other events and tours you said you'd come to and the investigations you're on the
 team of, soonest first, each counting down to its start. Anything that ended in the last 30 days is
-under **Recently**.
+under **Recently**, which says what you had, such as "You had a place" or "You were on the team".
 
 ![The list of what you are going to](/help/media/going-to-an-event/my-events.png)
 

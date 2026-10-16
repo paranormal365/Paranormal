@@ -106,6 +106,24 @@ else if (Pick() is { } pick)
         _ => "You're coming",
     };
 
+    /// <summary>
+    /// The same standing, said of something that is over: "You're coming" under Recently read as
+    /// if the night were still ahead (Ben, 10/16/2026). Says only what the record knows, never
+    /// "You went", because a place held is not proof somebody turned up.
+    /// </summary>
+    internal static string PastStandingWords(MyNextEventKind kind, MyNextEventStanding standing) => standing switch
+    {
+        MyNextEventStanding.AskedFor => "You asked for a place",
+        MyNextEventStanding.HeldForYou => "A place was held for you",
+        MyNextEventStanding.Invited => "You were invited",
+        _ => kind switch
+        {
+            MyNextEventKind.Investigation => "You were on the team",
+            MyNextEventKind.Event => "You said you'd come",
+            _ => "You had a place",
+        },
+    };
+
     internal static string KindWords(MyNextEventKind kind) => kind switch
     {
         MyNextEventKind.TourDate => "Tour",

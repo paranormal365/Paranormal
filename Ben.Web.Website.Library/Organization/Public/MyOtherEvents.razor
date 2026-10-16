@@ -33,7 +33,7 @@ else if (Coming.Count + Recent.Count > 0)
         <ul class="list-group" id="my-events-others">
             @foreach (var item in Coming)
             {
-                @Row(item)
+                @Row(item, past: false)
             }
         </ul>
     }
@@ -43,7 +43,7 @@ else if (Coming.Count + Recent.Count > 0)
         <ul class="list-group" id="my-events-recent">
             @foreach (var item in Recent)
             {
-                @Row(item)
+                @Row(item, past: true)
             }
         </ul>
     }
@@ -74,7 +74,7 @@ else if (Coming.Count + Recent.Count > 0)
     private IReadOnlyList<MyNextEventItem> Recent
         => [.. Others.Where(i => i.EndsAtUtc <= Now).OrderByDescending(i => i.StartsAtUtc)];
 
-    private RenderFragment Row(MyNextEventItem item) => @<li class="list-group-item my-other" data-kind="@item.Kind.ToString().ToLowerInvariant()">
+    private RenderFragment Row(MyNextEventItem item, bool past) => @<li class="list-group-item my-other" data-kind="@item.Kind.ToString().ToLowerInvariant()">
         <div class="my-other__what">
             <div class="fw-semibold"><a href="@item.Href">@item.Title</a></div>
             <div class="small text-secondary">
@@ -90,10 +90,20 @@ else if (Coming.Count + Recent.Count > 0)
                             Class="my-other__countdown" TestId="my-other-countdown" />
         </div>
         <div class="my-other__state">
-            <span class="badge @Badge(item.Standing).Class">
-                <BenIcon Name="@Badge(item.Standing).Icon" Class="me-1" />
-                @Ben.Web.Website.Library.Shared.NextUpCard.StandingWords(item.Standing)
-            </span>
+            @if (past)
+            {
+                @* Said in the past tense and drawn quietly: it's a record now, not a plan. *@
+                <span class="badge bg-body-secondary text-body-emphasis" data-testid="my-other-past-standing">
+                    @Ben.Web.Website.Library.Shared.NextUpCard.PastStandingWords(item.Kind, item.Standing)
+                </span>
+            }
+            else
+            {
+                <span class="badge @Badge(item.Standing).Class">
+                    <BenIcon Name="@Badge(item.Standing).Icon" Class="me-1" />
+                    @Ben.Web.Website.Library.Shared.NextUpCard.StandingWords(item.Standing)
+                </span>
+            }
         </div>
     </li>;
 
