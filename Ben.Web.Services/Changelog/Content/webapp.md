@@ -33,6 +33,11 @@ day-by-day account of building it would say nothing to anyone using it now.
 
 ## Unreleased
 
+- A visit with no case can have a team: on the group's Investigations list, whoever runs the visit
+  opens **Team** and adds members under **Add to the team**, or takes them off with **✕**. Before,
+  nobody could be added, so nobody could check in, lead the visit or take a duty.
+- On a group's calendar, the event editor lists who is invited and their answer, and whoever runs the
+  calendar can mark somebody as coming when they say so in person.
 - The site's icon is now the app's icon, the violet ghost, and the ghost has its face again: in the
   browser tab, on a phone's home screen, at the top of every email, beside the site's name, on the
   sign-in page and in the app section of the home page. The App Store QR codes and the guides and

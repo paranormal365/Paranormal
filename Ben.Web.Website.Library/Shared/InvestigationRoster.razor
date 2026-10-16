@@ -250,7 +250,13 @@
                 <div class="table-responsive mt-3">
                     <table class="table table-sm align-middle mb-0">
                         <thead>
-                            <tr><th>Who</th><th>Arrived</th><th class="text-center">Attended</th><th class="text-center">Lead</th></tr>
+                            <tr>
+                                <th>Who</th><th>Arrived</th><th class="text-center">Attended</th><th class="text-center">Lead</th>
+                                @if (CanChangeTeam)
+                                {
+                                    <th class="text-end"><span class="visually-hidden">Take off the team</span></th>
+                                }
+                            </tr>
                         </thead>
                         <tbody>
                             @foreach (var entry in _roster)
@@ -283,6 +289,17 @@
                                                checked="@entry.IsLead"
                                                @onchange="@(() => SetLeadAsync(entry, true))" />
                                     </td>
+                                    @if (CanChangeTeam)
+                                    {
+                                        <td class="text-end">
+                                            <button type="button" class="btn btn-outline-danger btn-sm text-nowrap"
+                                                    title="Take @entry.DisplayName off the team"
+                                                    disabled="@_teamBusy"
+                                                    @onclick="@(() => RemoveFromTeamAsync(entry))">
+                                                <BenIcon Name="x" /><span class="visually-hidden">Take @entry.DisplayName off the team</span>
+                                            </button>
+                                        </td>
+                                    }
                                 </tr>
                             }
                         </tbody>
@@ -300,6 +317,57 @@
                 </div>
             }
         }
+
+        @* ── Who's on the team (10/16/2026) ──────────────────────────────────
+           A visit booked from the group's Investigations page has no case, and the only way onto
+           a team used to be the case page's attendee table — so these teams could never be filled,
+           and check-in, the lead and duties were all out of reach. Manage-gated, on the server's
+           verdict, like everything else that changes somebody else's record here. *@
+        @if (CanManage && CanChangeTeam && !_rosterResult.Failed)
+        {
+            <div class="mt-3" id="@($"investigation-team-add-{InvestigationId}")">
+                @if (_teamError is not null)
+                {
+                    <div class="alert alert-danger py-2 small mb-2" role="alert">@_teamError</div>
+                }
+
+                @if (!_membersLoaded)
+                {
+                    <p class="text-secondary small mb-0">Loading the group's members…</p>
+                }
+                else if (_membersFailed)
+                {
+                    <p class="text-danger small mb-0">
+                        The group's member list couldn't be read, so nobody can be added just now.
+                    </p>
+                }
+                else if (Addable.Count == 0)
+                {
+                    <p class="text-secondary small mb-0">
+                        Everyone in the group who can take part is already on this team.
+                    </p>
+                }
+                else
+                {
+                    <label class="form-label small mb-1" for="@($"investigation-team-pick-{InvestigationId}")">Add to the team</label>
+                    <div class="d-flex gap-2 align-items-center flex-wrap">
+                        <BenSelect Id="@($"investigation-team-pick-{InvestigationId}")"
+                                   Data="@Addable" @bind-Value="@_addUserId"
+                                   TextField="@nameof(TeamOption.Label)" ValueField="@nameof(TeamOption.UserId)"
+                                   DefaultText="Choose a member…" Width="240px" Class="form-select-sm" />
+                        <button type="button" class="btn btn-primary btn-sm"
+                                disabled="@(_addUserId == Guid.Empty || _teamBusy)"
+                                @onclick="AddToTeamAsync">
+                            <BenIcon Name="plus" Class="me-1" />@(_teamBusy ? "Adding…" : "Add")
+                        </button>
+                    </div>
+                    <div class="form-text">
+                        Once they're on the team they can check in, write up what they saw, and be
+                        made the lead or given a duty.
+                    </div>
+                }
+            </div>
+        }
     </div>
 </div>
 
@@ -309,6 +377,20 @@
 
     /// <summary>The server's verdict, passed down. Not worked out here.</summary>
     [Parameter] public bool CanManage { get; set; }
+
+    /// <summary>
+    /// Whether this panel offers putting people on the team and taking them off (10/16/2026).
+    /// </summary>
+    /// <remarks>
+    /// Off by default because a case's own page already has an attendee table that does this, with
+    /// roles; two add controls on one screen that do not refresh each other would disagree. The
+    /// group's Investigations page turns it on — it is the only screen a visit with no case has.
+    /// Still shown only to <see cref="CanManage"/>.
+    /// </remarks>
+    [Parameter] public bool CanChangeTeam { get; set; }
+
+    /// <summary>Raised with the new team size after somebody is added or taken off.</summary>
+    [Parameter] public EventCallback<int> OnTeamChanged { get; set; }
 
     /// <summary>How often to re-read the roster. A few seconds is ample for a handful of chips.</summary>
     [Parameter] public TimeSpan PollInterval { get; set; } = TimeSpan.FromSeconds(12);
@@ -405,6 +487,10 @@
             // disaster.
             if (!_savingFinding && string.IsNullOrWhiteSpace(_narrative))
                 _narrative = _myFinding?.Narrative ?? string.Empty;
+
+            // Once, not every poll: the group's members change far less often than who has arrived.
+            if (CanManage && CanChangeTeam && !_membersLoaded)
+                await LoadMembersAsync();
         }
         catch
         {
@@ -556,6 +642,87 @@
         }
 
         await LoadAsync();
+    }
+
+    // ── Who's on the team (10/16/2026) ───────────────────────────────────────
+
+    private sealed record TeamOption(Guid UserId, string Label);
+
+    private List<OrgMembershipItem> _members = [];
+    private bool _membersLoaded;
+    private bool _membersFailed;
+    private Guid _addUserId;
+    private bool _teamBusy;
+    private string? _teamError;
+
+    /// <summary>
+    /// The group's members who could be put on this team: active, able to take part (a Viewer can
+    /// only look), and not on it already. The server applies the same rule and says why if not.
+    /// </summary>
+    private List<TeamOption> Addable => _members
+        .Where(m => m.IsActive && m.Role != Ben.Data.Common.Enums.OrganizationMemberRole.Viewer)
+        .Where(m => _roster.All(r => r.AppUserId != m.AppUserId))
+        .Select(m => new TeamOption(m.AppUserId, m.DisplayName ?? "A member"))
+        .OrderBy(o => o.Label, StringComparer.CurrentCultureIgnoreCase)
+        .ToList();
+
+    private async Task LoadMembersAsync()
+    {
+        var members = await AdminClient.GetOrganizationMembersAsync(OrgId);
+        _membersFailed = members.Failed;
+        _members = members.Items.ToList();
+        _membersLoaded = true;
+    }
+
+    private async Task AddToTeamAsync()
+    {
+        if (_addUserId == Guid.Empty || _teamBusy) return;
+
+        _teamBusy = true;
+        _teamError = null;
+        try
+        {
+            // The whole roster comes back; on a refusal it is empty and is not applied, so the
+            // people already on the team stay on screen beside the reason.
+            var (roster, error) = await AdminClient.AddInvestigationTeamMemberAsync(OrgId, InvestigationId, _addUserId);
+            if (error is not null) { _teamError = error; return; }
+
+            _addUserId = Guid.Empty;
+            await LoadAsync();
+            await OnTeamChanged.InvokeAsync(roster.Count);
+        }
+        catch
+        {
+            _teamError = "That could not be saved just now.";
+        }
+        finally
+        {
+            _teamBusy = false;
+        }
+    }
+
+    private async Task RemoveFromTeamAsync(InvestigationRosterEntry entry)
+    {
+        if (_teamBusy) return;
+
+        _teamBusy = true;
+        _teamError = null;
+        try
+        {
+            var (roster, error) = await AdminClient.RemoveInvestigationTeamMemberAsync(OrgId, InvestigationId, entry.AttendeeId);
+            if (error is not null) { _teamError = error; return; }
+
+            await LoadAsync();
+            await OnTeamChanged.InvokeAsync(roster.Count);
+        }
+        catch
+        {
+            _teamError = "That could not be saved just now.";
+        }
+        finally
+        {
+            _teamBusy = false;
+        }
     }
 
     private static string ChipClass(InvestigationRosterEntry entry) => entry.DidAttend switch

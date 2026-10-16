@@ -404,6 +404,12 @@ than guessing at another spelling.
 
 Invites are just invitations. To assign work, use investigations.
 
+**Who's coming.** When you open an event that has people on its list, the editor shows each of them
+and their answer. If somebody tells you they're coming, press **Mark as coming** beside their name;
+**Mark as not answered** undoes it. This saves straight away. People marked as coming get a reminder
+before the event starts. Anyone who can change the group's calendar can do this; for a tour date,
+places are approved on the date's sign-ups page instead.
+
 ## Calendar event types
 
 Under **Settings**, *Calendar Event Types* is the list of choices in the calendar's **Type**

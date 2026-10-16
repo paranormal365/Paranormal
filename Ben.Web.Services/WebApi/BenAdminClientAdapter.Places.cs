@@ -122,6 +122,28 @@ public sealed partial class BenAdminClientAdapter
         return (result, null);
     }
 
+    public async Task<(IReadOnlyList<InvestigationRosterEntry> Roster, string? Error)> AddInvestigationTeamMemberAsync(
+        Guid orgId, Guid investigationId, Guid appUserId, CancellationToken token = default)
+    {
+        var (result, error) = await _api.SendExpectingReasonAsync<object, IReadOnlyList<InvestigationRosterEntry>>(
+            HttpMethod.Post,
+            $"/api/organizations/{orgId}/investigations/{investigationId}/attendees",
+            new { AppUserId = appUserId }, token);
+
+        return result is null ? ([], error ?? "That person could not be added to the team.") : (result, null);
+    }
+
+    public async Task<(IReadOnlyList<InvestigationRosterEntry> Roster, string? Error)> RemoveInvestigationTeamMemberAsync(
+        Guid orgId, Guid investigationId, Guid attendeeId, CancellationToken token = default)
+    {
+        var (result, error) = await _api.SendExpectingReasonAsync<object?, IReadOnlyList<InvestigationRosterEntry>>(
+            HttpMethod.Delete,
+            $"/api/organizations/{orgId}/investigations/{investigationId}/attendees/{attendeeId}",
+            null, token);
+
+        return result is null ? ([], error ?? "That person could not be taken off the team.") : (result, null);
+    }
+
     public Task<LoadResult<InvestigationRosterEntry>> GetInvestigationRosterAsync(
         Guid orgId, Guid investigationId, CancellationToken token = default)
         => _api.GetListAsync<InvestigationRosterEntry>($"/api/organizations/{orgId}/investigations/{investigationId}/roster", token);

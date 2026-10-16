@@ -179,6 +179,12 @@ else
 
     /// <summary>Which row has its team open, if any. One at a time — each roster polls.</summary>
     private Guid? _openTeam;
+
+    /// <summary>
+    /// Team sizes changed on this page since the list was read, so the Team column agrees with the
+    /// roster open beneath it without re-reading every row (10/16/2026).
+    /// </summary>
+    private readonly Dictionary<Guid, int> _teamCounts = [];
     private string? _error;
     private Guid _loadedForOrg;
 
@@ -244,6 +250,7 @@ else
         {
             _rowsResult = await AdminClient.GetOrgInvestigationsAsync(OrgId);
             _rows       = _rowsResult.Items.ToList();
+            _teamCounts.Clear();   // the fresh rows carry their own counts
             // Null on failure means the schedule button stays hidden — the safe direction.
             try { _perms = await AdminClient.GetMyOrgPermissionsAsync(OrgId); } catch { _perms = null; }
         }
@@ -401,7 +408,7 @@ else
                                 <span class="text-secondary small fst-italic">No case</span>
                             }
                         </td>
-                        <td class="text-center">@row.AttendeeCount</td>
+                        <td class="text-center">@(_teamCounts.TryGetValue(row.Id, out var teamCount) ? teamCount : row.AttendeeCount)</td>
                         <td class="text-end text-nowrap">
                             @* The team is here rather than only on a case's tab, because a visit
                                with no case had nowhere at all to check in from — the endpoints were
@@ -450,7 +457,9 @@ else
                                    so the attendance and lead controls appear for exactly the
                                    people the endpoints will accept. *@
                                 <InvestigationRoster OrgId="@OrgId" InvestigationId="@row.Id"
-                                                     CanManage="@row.CanEditRecord" />
+                                                     CanManage="@row.CanEditRecord"
+                                                     CanChangeTeam="true"
+                                                     OnTeamChanged="@(count => _teamCounts[row.Id] = count)" />
                             </td>
                         </tr>
                     }

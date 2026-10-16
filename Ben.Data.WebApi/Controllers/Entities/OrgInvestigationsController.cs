@@ -481,6 +481,144 @@ public sealed class OrgInvestigationsController : BenControllerBase
         return Ok(await RosterAsync(db, id, ct));
     }
 
+    // ── The team itself (10/16/2026) ──────────────────────────────────────────
+
+    /// <summary>
+    /// Puts one of the group's members on this visit's team. Returns the whole roster.
+    /// </summary>
+    /// <remarks>
+    /// <para><b>Why it is here.</b> Until 10/16/2026 the only way onto a team was
+    /// <c>InvestigationController.AddAttendee</c>, which is nested under a case. A visit booked
+    /// from the group's Investigations page has no case, so its team could never be filled: the
+    /// roster said "Nobody has been added to this investigation yet", and check-in, the lead and
+    /// duties — which all need somebody on the team — were out of reach. Found on production
+    /// while setting up App Review's demo data as the group's Owner.</para>
+    ///
+    /// <para>Keyed on the investigation's own <c>OrganizationId</c>, so it serves visits with a
+    /// case too; the org-wide page mounts the same roster for both.</para>
+    ///
+    /// <para><b>Only an active member who can take part.</b> Being on the team is what lets
+    /// somebody check in and file an account, and both of those are refused to anyone who is not
+    /// an active member — so putting a stranger, a former member or a Viewer on it would make a
+    /// team row that can do nothing. Refused with a sentence rather than a bare 400.</para>
+    ///
+    /// <para><b>Once each.</b> The table has a unique index on (investigation, person), which the
+    /// InMemory provider the tests use does not enforce, and which in SQL Server would answer a
+    /// second add with a 500. Checked here so both say the same thing.</para>
+    /// </remarks>
+    [HttpPost("{id:guid}/attendees")]
+    public async Task<ActionResult<IEnumerable<InvestigationRosterEntry>>> AddTeamMember(
+        Guid orgId, Guid id, [FromBody] AddTeamMemberRequest request, CancellationToken ct)
+    {
+        if (!await IsMemberAsync(orgId, ct)) return Forbid();
+        if (await IsViewerAsync(orgId, ct)) return ViewerReadOnly();
+
+        var userId = GetCurrentUserId();
+        await using var db = await _db.CreateDbContextAsync(ct);
+
+        if (!await db.Investigations.AsNoTracking()
+                .AnyAsync(i => i.Id == id && i.OrganizationId == orgId, ct))
+            return NotFound();
+
+        if (!await InvestigationAccess.CanManageAsync(
+                db, id, userId, User.IsInRole(RoleNames.SuperAdmin), ct))
+            return Forbid();
+
+        // A closed account keeps its membership row so its work stays attributed (see the group
+        // roster), so "active member" here also means the account is still open.
+        var role = await db.OrganizationUserMemberships.AsNoTracking()
+            .Where(m => m.OrganizationId == orgId && m.AppUserId == request.AppUserId && m.IsActive)
+            .Join(db.AppUsers.AsNoTracking().Where(u => u.DateClosed == null),
+                m => m.AppUserId, u => u.Id, (m, u) => (OrganizationMemberRole?)m.Role)
+            .FirstOrDefaultAsync(ct);
+        if (role is null)
+            return BadRequest("That person isn't an active member of this group, so they can't be put on its team.");
+        if (role == OrganizationMemberRole.Viewer)
+            return BadRequest("That person is a viewer in this group. Viewers can look but can't take part, "
+                            + "so they can't be put on a team. Change their role first if they're coming.");
+
+        if (await db.InvestigationAttendees.AsNoTracking()
+                .AnyAsync(a => a.InvestigationId == id && a.AppUserId == request.AppUserId, ct))
+        {
+            var name = await db.AppUsers.AsNoTracking()
+                .Where(u => u.Id == request.AppUserId)
+                .Select(u => u.DisplayName)
+                .FirstOrDefaultAsync(ct);
+            return Conflict($"{name ?? "That person"} is already on this team.");
+        }
+
+        var attendee = new InvestigationAttendee
+        {
+            Id = Guid.NewGuid(),
+            InvestigationId = id,
+            AppUserId = request.AppUserId,
+            DateCreated = DateTime.UtcNow,
+            CreatedByAppUserId = userId,
+        };
+        db.InvestigationAttendees.Add(attendee);
+        await db.SaveChangesAsync(ct);
+
+        _ = TryAuditAsync(_auditLog.LogCreateAsync(
+            nameof(InvestigationAttendee), attendee.Id, attendee, userId, AppSources.WebApi));
+
+        return Ok(await RosterAsync(db, id, ct));
+    }
+
+    /// <summary>
+    /// Takes somebody off this visit's team. Returns the whole roster.
+    /// </summary>
+    /// <remarks>
+    /// <para>Same gate as adding. Their duties on the visit go with them: the assignment table's
+    /// key to the team row is NoAction, so leaving them would make SQL Server refuse the delete.</para>
+    ///
+    /// <para><b>Refused once they were there or have written it up.</b> Who attended is evidence,
+    /// and so is what they said they saw. Deleting the row would quietly rewrite both, so the
+    /// refusal says what to do instead.</para>
+    /// </remarks>
+    [HttpDelete("{id:guid}/attendees/{attendeeId:guid}")]
+    public async Task<ActionResult<IEnumerable<InvestigationRosterEntry>>> RemoveTeamMember(
+        Guid orgId, Guid id, Guid attendeeId, CancellationToken ct)
+    {
+        if (!await IsMemberAsync(orgId, ct)) return Forbid();
+        if (await IsViewerAsync(orgId, ct)) return ViewerReadOnly();
+
+        var userId = GetCurrentUserId();
+        await using var db = await _db.CreateDbContextAsync(ct);
+
+        var attendee = await db.InvestigationAttendees
+            .FirstOrDefaultAsync(a => a.Id == attendeeId
+                                   && a.InvestigationId == id
+                                   && a.Investigation.OrganizationId == orgId, ct);
+        if (attendee is null) return NotFound();
+
+        if (!await InvestigationAccess.CanManageAsync(
+                db, id, userId, User.IsInRole(RoleNames.SuperAdmin), ct))
+            return Forbid();
+
+        var name = await db.AppUsers.AsNoTracking()
+            .Where(u => u.Id == attendee.AppUserId)
+            .Select(u => u.DisplayName)
+            .FirstOrDefaultAsync(ct) ?? "That person";
+        if (attendee.DidAttend == true)
+            return Conflict($"{name} is recorded as having been there, so they stay on the team. "
+                          + "Untick Attended first if that was a mistake.");
+        if (await db.InvestigationFindings.AsNoTracking()
+                .AnyAsync(f => f.InvestigationId == id && f.AppUserId == attendee.AppUserId, ct))
+            return Conflict($"{name} has written up what they saw, so they stay on the team.");
+
+        var duties = await db.InvestigationDutyAssignments
+            .Where(x => x.InvestigationAttendeeId == attendee.Id)
+            .ToListAsync(ct);
+        db.InvestigationDutyAssignments.RemoveRange(duties);
+        db.InvestigationAttendees.Remove(attendee);
+        await db.SaveChangesAsync(ct);
+
+        _ = TryAuditAsync(_auditLog.LogDeleteAsync(
+            nameof(InvestigationAttendee), attendee.Id, attendee, userId, AppSources.WebApi));
+
+        return Ok(await RosterAsync(db, id, ct));
+    }
+
     // ── Duties (item 158) ─────────────────────────────────────────────────────
 
     /// <summary>
@@ -977,6 +1115,9 @@ public sealed record OverrideAttendanceRequest(bool? DidAttend, DateTime? Stated
 
 /// <summary>Whether this attendee is leading the visit. Naming one clears the previous holder.</summary>
 public sealed record SetLeadRequest(bool IsLead);
+
+/// <summary>Who to put on a visit's team: an active member of the group.</summary>
+public sealed record AddTeamMemberRequest(Guid AppUserId);
 
 /// <summary>
 /// One person's account of a visit.
