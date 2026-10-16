@@ -181,9 +181,10 @@ public class Oct16WhosComingTests : Oct16TestBase
             await Expect(JamesGuestRow).ToBeVisibleAsync(new() { Timeout = 15_000 });
 
             problems.AddRange(await LookAtAsync(GuestList, "whos-coming-list", theme));
-            problems.AddRange(await LookAtAsync(
-                JamesGuestRow.GetByRole(AriaRole.Button, new() { Name = "Mark as coming" }), "whos-coming-button", theme,
+            var markComing = JamesGuestRow.GetByRole(AriaRole.Button, new() { Name = "Mark as coming" });
+            problems.AddRange(await LookAtAsync(markComing, "whos-coming-button", theme,
                 JamesGuestRow.Locator(".badge"), JamesGuestRow.Locator("td").First));
+            problems.AddRange(await TouchTargetAsync(markComing, "whos-coming-button", theme));
 
             await Dialog.GetByRole(AriaRole.Button, new() { Name = "Cancel", Exact = true }).ClickAsync();
             await Expect(Page.Locator(".modal.show")).ToHaveCountAsync(0, new() { Timeout = 10_000 });

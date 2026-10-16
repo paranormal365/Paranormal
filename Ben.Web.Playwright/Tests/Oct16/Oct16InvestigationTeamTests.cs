@@ -242,9 +242,12 @@ public class Oct16InvestigationTeamTests : Oct16TestBase
             if (await Picker.CountAsync() > 0)
                 problems.AddRange(await LookAtAsync(Picker, "team-add-select", theme,
                     AddSection.GetByRole(AriaRole.Button, new() { Name = "Add", Exact = true }), addSentence));
-            problems.AddRange(await LookAtAsync(
-                JamesRow.Locator($"button[title='Take {_jamesName} off the team']"), "team-remove-button", theme,
+            var remove = JamesRow.Locator($"button[title='Take {_jamesName} off the team']");
+            problems.AddRange(await LookAtAsync(remove, "team-remove-button", theme,
                 JamesRow.Locator("input[type=radio]")));
+            problems.AddRange(await TouchTargetAsync(remove, "team-remove-button", theme));
+            problems.AddRange(await TouchTargetAsync(
+                AddSection.GetByRole(AriaRole.Button, new() { Name = "Add", Exact = true }), "team-add-button", theme));
         }
 
         NothingWrong(problems);

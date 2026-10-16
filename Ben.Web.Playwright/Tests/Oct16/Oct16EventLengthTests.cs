@@ -82,6 +82,61 @@ public class Oct16EventLengthTests : Oct16TestBase
         Assert.That(shown, Is.EqualTo("4 hr"), $"The tile read \"{shown}\".");
     }
 
+    /// <summary>
+    /// On every screen type, each fact tile shows all of what it says: on a 375px phone the
+    /// Starts tile once showed "Sun 10/25" and lost its "7:00 PM CDT" line (10/16/2026).
+    /// </summary>
+    [TestCase("dark")]
+    [TestCase("light")]
+    public async Task Every_fact_tile_shows_its_whole_value_and_time_on_every_screen(string theme)
+    {
+        await UseThemeAsync(theme);
+        var first = DateTime.UtcNow.Date.AddDays(20);
+        var (id, slug) = await PublicCalendarEventAsync(_sarah, _orgId, $"Oct16 tiles {Guid.NewGuid():N}"[..20],
+            UtcFrom(first.AddHours(19), "America/Chicago"), UtcFrom(first.AddHours(23), "America/Chicago"));
+        _dates.Add(id);
+
+        var problems = new List<string>();
+        foreach (var (width, height) in Widths)
+        {
+            await Page.SetViewportSizeAsync(width, height);
+            await Page.GotoAsync($"{BaseUrl}/o/{GroupSlug}/events/{slug}");
+            var starts = Page.Locator(".page-hero__fact", new() { HasTextString = "Starts" });
+            await Expect(starts).ToBeVisibleAsync(new() { Timeout = 30_000 });
+
+            // The time line is there and readable, not only present in the markup.
+            if (!(await starts.InnerTextAsync()).Contains("7:00 PM"))
+                problems.Add($"Starts tile at {width}px ({theme}) doesn't show the start time: \"{(await starts.InnerTextAsync()).ReplaceLineEndings(" ")}\".");
+
+            // Nothing in any tile is cut off by the tile: each child's box sits inside its tile's box.
+            var clipped = await Page.EvaluateAsync<string[]>(@"() => {
+                const out = [];
+                for (const tile of document.querySelectorAll('.page-hero__fact')) {
+                    const t = tile.getBoundingClientRect();
+                    for (const el of tile.querySelectorAll('*')) {
+                        if (!el.textContent.trim() || el.children.length) continue;
+                        const r = el.getBoundingClientRect();
+                        const hidden = getComputedStyle(el).visibility === 'hidden' || r.width === 0 || r.height === 0;
+                        if (hidden || r.bottom > t.bottom + 0.5 || r.right > t.right + 0.5 || r.top < t.top - 0.5 || r.left < t.left - 0.5
+                            || el.scrollWidth > el.clientWidth + 1)
+                            out.push(el.textContent.trim().slice(0, 40));
+                    }
+                }
+                return out;
+            }");
+            foreach (var text in clipped)
+                problems.Add($"A fact tile at {width}px ({theme}) cuts off \"{text}\".");
+
+            var (scrollWidth, innerWidth) = await PageWidthsAsync();
+            if (scrollWidth > innerWidth)
+                problems.Add($"Event page at {width}px ({theme}) slides sideways — scrollWidth {scrollWidth} > innerWidth {innerWidth}.");
+
+            await KeepAPictureAsync("event-facts", theme);
+        }
+
+        NothingWrong(problems);
+    }
+
     [Test]
     public async Task A_hosted_run_counts_its_own_nights()
     {

@@ -253,8 +253,31 @@ public abstract class Oct16TestBase : BenTestBase
         }
     }
 
-    /// <summary>The two widths every new piece is looked at in: a phone and a laptop.</summary>
-    protected static readonly (int Width, int Height)[] Widths = [(375, 812), (1280, 800)];
+    /// <summary>
+    /// Every screen type a new piece is looked at on (Ben, 10/16/2026: "account for all screen
+    /// types"): small phone, phone, large phone, the last width before Bootstrap's md layout, an
+    /// iPad in portrait, the iPhone Duo's unfolded inner screen (2853×2007 at 3×), an iPad in
+    /// landscape, an iPad Pro in landscape, a laptop and a wide desktop.
+    /// </summary>
+    protected static readonly (int Width, int Height)[] Widths =
+    [
+        (320, 568), (375, 812), (430, 932), (767, 1024), (820, 1180),
+        (951, 669), (1024, 768), (1180, 820), (1440, 900), (1920, 1080),
+    ];
+
+    /// <summary>
+    /// A control a finger has to hit is at least 44px each way on phone and tablet widths
+    /// (below Bootstrap's lg breakpoint), Apple's minimum.
+    /// </summary>
+    protected async Task<List<string>> TouchTargetAsync(ILocator control, string name, string theme)
+    {
+        var problems = new List<string>();
+        var width = Page.ViewportSize?.Width ?? 0;
+        if (width >= 992 || await control.CountAsync() == 0) return problems;
+        if (await control.First.BoundingBoxAsync() is { } box && (box.Width < 43.5 || box.Height < 43.5))
+            problems.Add($"{name} at {width}px ({theme}): {box.Width:0}×{box.Height:0}px, smaller than a 44px touch target.");
+        return problems;
+    }
 
     /// <summary>Fails with every problem found, one per line — never only the first.</summary>
     protected static void NothingWrong(List<string> problems)
