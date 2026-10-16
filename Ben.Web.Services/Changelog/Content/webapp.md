@@ -33,6 +33,14 @@ day-by-day account of building it would say nothing to anyone using it now.
 
 ## Unreleased
 
+- On an event's page, **Ask for a place** takes you down to the request form instead of to the
+  home page. Every other link to another part of the same page works the same way now, including
+  the section links on a group's settings and on the tour and event pages.
+- When a booking form's button is grayed out, the line beside it says what's still missing, such
+  as a phone number or your last name. The name and phone fields are marked as required.
+- An event that runs for days says how long in nights, days or weeks, such as "15 nights" or
+  "2 weeks", instead of hundreds of hours. A run of nights that keep the same hours says them too:
+  "15 nights, 6:00–11:00 PM".
 - The site's icon is now the app's icon, the violet ghost, and the ghost has its face again: in the
   browser tab, on a phone's home screen, at the top of every email, beside the site's name, on the
   sign-in page and in the app section of the home page. The App Store QR codes and the guides and

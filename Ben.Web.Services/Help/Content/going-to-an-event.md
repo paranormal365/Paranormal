@@ -78,6 +78,8 @@ answers.
 - **Two nights out of three is an ordinary booking.** Each night has its own checkbox, so if only
   Saturday suits you, just come for Saturday.
 - **Just for the day** is the same form without a room, for venues that offer day passes.
+- **Your first and last name and a phone number are required**, so the venue can reach you. Until
+  they're filled in, the button stays grayed out, and the line beside it says what's still missing.
 
 ## Who's coming
 

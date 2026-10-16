@@ -128,16 +128,18 @@
                               Changed="StateHasChanged" />
     </div>
 
+    @* The button never goes grey without a sentence beside it saying what it is waiting for
+       (10/16/2026: a guest with no phone on their account saw a filled-in form and a button that
+       would not press, and nothing to say why). *@
     <button type="button" class="btn btn-primary" id="ask-send"
-            disabled="@(_busy || _nights.Count == 0 || !_contact.IsEnough(withEmail: false) || _party.HasANoteWithoutAName)" @onclick="AskAsync">
+            disabled="@(_busy || Missing() is not null)" @onclick="AskAsync"
+            aria-describedby="@(Missing() is null ? null : "ask-missing")">
         @(_busy ? "Asking…" : "Ask for a place")
     </button>
 
-    @if (_nights.Count == 0)
+    @if (Missing() is { } missing)
     {
-        <span class="text-secondary small ms-2" id="ask-needs-a-night">
-            Tick at least one @Hosted.DateNoun.
-        </span>
+        <span class="text-secondary small ms-2" id="ask-missing">@missing</span>
     }
 </div>
 
@@ -185,6 +187,12 @@
         _party.FillLead(_contact.FirstName, _contact.LastName);
         StateHasChanged();
     }
+
+    /// <summary>The one thing still needed before the request can go, in the order the form asks; null when it can.</summary>
+    private string? Missing()
+        => _nights.Count == 0 ? $"Tick at least one {Hosted.DateNoun}."
+         : _party.WhatIsMissing
+           ?? _contact.WhatIsMissing(withEmail: false, Hosted.OrganizationName);
 
     private void Toggle(Guid nightId, bool on)
     {

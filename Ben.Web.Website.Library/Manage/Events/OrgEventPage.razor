@@ -209,14 +209,14 @@
         <div class="row g-3">
             <div class="col-12 col-lg-3">
                 <div class="list-group sticky-lg-top" style="top:1rem;" id="event-index">
-                    <a class="list-group-item list-group-item-action" href="#event-details">Details</a>
-                    <a class="list-group-item list-group-item-action" href="#event-dates">
+                    <a class="list-group-item list-group-item-action" href="@JumpLink.To(NavManager, "event-details")">Details</a>
+                    <a class="list-group-item list-group-item-action" href="@JumpLink.To(NavManager, "event-dates")">
                         @Capitalise(Plural(2, ev.DateNoun))
                     </a>
-                    <a class="list-group-item list-group-item-action" href="#event-venue">The venue's say-so</a>
-                    <a class="list-group-item list-group-item-action" href="#event-guests">Your guests</a>
-                    <a class="list-group-item list-group-item-action" href="#group-field-sessions">Field sessions</a>
-                    <a class="list-group-item list-group-item-action" href="#event-state">Ending it</a>
+                    <a class="list-group-item list-group-item-action" href="@JumpLink.To(NavManager, "event-venue")">The venue's say-so</a>
+                    <a class="list-group-item list-group-item-action" href="@JumpLink.To(NavManager, "event-guests")">Your guests</a>
+                    <a class="list-group-item list-group-item-action" href="@JumpLink.To(NavManager, "group-field-sessions")">Field sessions</a>
+                    <a class="list-group-item list-group-item-action" href="@JumpLink.To(NavManager, "event-state")">Ending it</a>
                     @* The screens of their own that hang off this page. *@
                     @IndexEntry("Plan", $"/organizations/{OrgId}/events/{EventId}/layout")
                     @IndexEntry("Bookings", $"/organizations/{OrgId}/events/{EventId}/bookings")
@@ -852,7 +852,7 @@
                         {
                             <div class="alert alert-dark mb-0">
                                 <strong>IsHaunted removed this event.</strong> Everybody who had a place has been told
-                                it is not going ahead. <a href="#event-removed">See the removal and appeal</a>.
+                                it is not going ahead. <a href="@JumpLink.To(NavManager, "event-removed")">See the removal and appeal</a>.
                             </div>
                         }
                         else if (ev.LifecycleState is HostedEventLifecycleState.VenueWithdrawn)

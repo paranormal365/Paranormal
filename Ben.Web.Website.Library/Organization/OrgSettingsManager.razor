@@ -4,6 +4,7 @@
 @using Ben.Service.Models.Entities
 
 @inject IBenAdminClient AdminClient
+@inject NavigationManager Nav
 
 @if (_loading)
 {
@@ -26,20 +27,20 @@ else
        and answer "is it here, and where". *@
     <nav class="mb-3" aria-label="Settings sections">
         <div class="d-flex flex-wrap gap-2 small">
-            <a class="btn btn-outline-secondary btn-sm" href="#settings-billing">Billing</a>
+            <a class="btn btn-outline-secondary btn-sm" href="@JumpLink.To(Nav, "settings-billing")">Billing</a>
             @if (_runsPublicTours || _kind == Ben.Data.Common.Enums.OrganizationKind.GhostWalkingTour
                                   || _kind == Ben.Data.Common.Enums.OrganizationKind.PublicEventProvider)
             {
-                <a class="btn btn-outline-secondary btn-sm" href="#settings-tours">Tours</a>
+                <a class="btn btn-outline-secondary btn-sm" href="@JumpLink.To(Nav, "settings-tours")">Tours</a>
             }
-            <a class="btn btn-outline-secondary btn-sm" href="#settings-events">Hosted events</a>
-            <a class="btn btn-outline-secondary btn-sm" href="#settings-promote">Promotion</a>
-            <a class="btn btn-outline-secondary btn-sm" href="#settings-attribution">Feed attribution</a>
-            <a class="btn btn-outline-secondary btn-sm" href="#settings-group">Group &amp; addresses</a>
-            <a class="btn btn-outline-secondary btn-sm" href="#settings-event-types">Event types</a>
-            <a class="btn btn-outline-secondary btn-sm" href="#settings-member-levels">Member titles</a>
-            <a class="btn btn-outline-secondary btn-sm" href="#settings-duties">Duties</a>
-            <a class="btn btn-outline-secondary btn-sm" href="#settings-duty-matrix">Who can do what</a>
+            <a class="btn btn-outline-secondary btn-sm" href="@JumpLink.To(Nav, "settings-events")">Hosted events</a>
+            <a class="btn btn-outline-secondary btn-sm" href="@JumpLink.To(Nav, "settings-promote")">Promotion</a>
+            <a class="btn btn-outline-secondary btn-sm" href="@JumpLink.To(Nav, "settings-attribution")">Feed attribution</a>
+            <a class="btn btn-outline-secondary btn-sm" href="@JumpLink.To(Nav, "settings-group")">Group &amp; addresses</a>
+            <a class="btn btn-outline-secondary btn-sm" href="@JumpLink.To(Nav, "settings-event-types")">Event types</a>
+            <a class="btn btn-outline-secondary btn-sm" href="@JumpLink.To(Nav, "settings-member-levels")">Member titles</a>
+            <a class="btn btn-outline-secondary btn-sm" href="@JumpLink.To(Nav, "settings-duties")">Duties</a>
+            <a class="btn btn-outline-secondary btn-sm" href="@JumpLink.To(Nav, "settings-duty-matrix")">Who can do what</a>
         </div>
     </nav>
 
