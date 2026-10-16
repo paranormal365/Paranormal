@@ -81,7 +81,8 @@ public sealed class LoadResultRenderedGuardTests
         "GetThreadAsync", "GetUploadFileTypesAsync", "GetUploadFilesAsync",
         "GetUserAddressTypesAsync", "GetUserEmailTypesAsync", "GetUserLinkTypesAsync",
         "GetUserNoteTypesAsync", "GetUserPhoneTypesAsync", "GetUsersAsync", "GetVideoAssetsAsync",
-        "SearchEquipmentModelsAsync", "SearchOrganizationsAsync", "SearchUsersAsync",
+        "SearchEquipmentModelsAsync", "SearchOrganizationsAsync", "SearchPublicPlacesAsync",
+        "SearchUsersAsync",
     ];
 
     /// <summary>

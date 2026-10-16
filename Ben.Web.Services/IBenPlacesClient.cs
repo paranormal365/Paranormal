@@ -91,6 +91,17 @@ public interface IBenPlacesClient
         decimal? latitude, decimal? longitude, CancellationToken token = default);
 
     /// <summary>
+    /// Public locations whose name or town contains every word typed — the place box on a public
+    /// calendar event.
+    /// </summary>
+    /// <remarks>
+    /// A search, unlike <see cref="FindPlaceCandidatesAsync"/>, which only answers "is this one
+    /// already here?" and so needs the exact name. Never returns a private residence. At most
+    /// twenty places come back.
+    /// </remarks>
+    Task<LoadResult<PlaceCandidate>> SearchPublicPlacesAsync(string text, CancellationToken token = default);
+
+    /// <summary>
     /// The visitor's view: the place plus only what has been published about it.
     /// </summary>
     /// <remarks>
