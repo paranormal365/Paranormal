@@ -110,6 +110,22 @@ public interface IBenPlacesClient
     Task<(IReadOnlyList<InvestigationRosterEntry> Roster, string? Error)> SetInvestigationLeadAsync(
         Guid orgId, Guid investigationId, Guid attendeeId, bool isLead, CancellationToken token = default);
 
+    /// <summary>
+    /// Puts one of the group's members on a visit's team, with or without a case. Returns the
+    /// whole roster, or the server's sentence when it refuses (10/16/2026).
+    /// </summary>
+    /// <remarks>
+    /// On a refusal the roster is empty and must not be applied — see
+    /// <see cref="SetInvestigationLeadAsync"/> for why an empty list here would read as "everybody
+    /// was taken off".
+    /// </remarks>
+    Task<(IReadOnlyList<InvestigationRosterEntry> Roster, string? Error)> AddInvestigationTeamMemberAsync(
+        Guid orgId, Guid investigationId, Guid appUserId, CancellationToken token = default);
+
+    /// <summary>Takes somebody off a visit's team. Same shape as adding.</summary>
+    Task<(IReadOnlyList<InvestigationRosterEntry> Roster, string? Error)> RemoveInvestigationTeamMemberAsync(
+        Guid orgId, Guid investigationId, Guid attendeeId, CancellationToken token = default);
+
     /// <summary>Every account filed for an investigation. Any member of the group may read them.</summary>
     Task<LoadResult<InvestigationFindingRecord>> GetInvestigationFindingsAsync(
         Guid orgId, Guid investigationId, CancellationToken token = default);
@@ -245,7 +261,15 @@ public interface IBenPlacesClient
     /// full house, which is what a late arrival needs.
     /// </remarks>
     Task<bool> InviteEventGuestAsync(Guid orgId, Guid eventId, string email, string? displayName = null, CancellationToken token = default);
-    Task<OrgCalendarEventAttendeeRecord?> RsvpCalendarEventAsync(Guid orgId, Guid eventId, Guid attendeeId, Ben.Data.Common.Enums.RsvpStatus status, CancellationToken token = default);
+    /// <summary>
+    /// Sets one guest's answer — their own, or anybody's for whoever runs the calendar.
+    /// </summary>
+    /// <remarks>
+    /// Keeps the server's refusal (10/16/2026), because the first screen to call it is a host's
+    /// "Mark as coming", and a hosted event's guest list is answered from its Bookings page — a
+    /// sentence the host can act on, where a bare null would leave the button looking broken.
+    /// </remarks>
+    Task<(OrgCalendarEventAttendeeRecord? Attendee, string? Error)> RsvpCalendarEventAsync(Guid orgId, Guid eventId, Guid attendeeId, Ben.Data.Common.Enums.RsvpStatus status, CancellationToken token = default);
     Task<bool> RemoveCalendarAttendeeAsync(Guid orgId, Guid eventId, Guid attendeeId, CancellationToken token = default);
 
 

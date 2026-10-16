@@ -85,7 +85,7 @@ public sealed class PublicByDefaultDoorTests
             f, Mapper(),
             new Ben.Data.WebApi.Services.Billing.SubscriptionLimitGuard(f),
             new Ben.Service.RepositoryService.Services.OrganizationSecurityService(f),
-            TestMailer.Quiet(), new Ben.Data.WebApi.Services.CmsMarkupSanitizer()), userId);
+            TestMailer.Quiet(), new Ben.Data.WebApi.Services.CmsMarkupSanitizer(), new Moq.Mock<Ben.Service.RepositoryService.GenericInterfaces.IAuditLogService>().Object), userId);
 
     private static OrgInvestigationsController FlatDoor(IDbContextFactory<BenDataContext> f, Guid userId)
         => AsUser(new OrgInvestigationsController(

@@ -455,7 +455,7 @@ public class InvestigationDeleteWithCitedSessionTests
             new Ben.Data.WebApi.Services.Billing.SubscriptionLimitGuard(factory),
             new Ben.Service.RepositoryService.Services.OrganizationSecurityService(factory),
             Ben.Web.Tests.TestMailer.Quiet(),
-            new Ben.Data.WebApi.Services.CmsMarkupSanitizer());
+            new Ben.Data.WebApi.Services.CmsMarkupSanitizer(), new Moq.Mock<Ben.Service.RepositoryService.GenericInterfaces.IAuditLogService>().Object);
         ctrl.ControllerContext = new ControllerContext
         {
             HttpContext = new DefaultHttpContext

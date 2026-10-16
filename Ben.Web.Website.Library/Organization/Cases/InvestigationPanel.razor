@@ -263,6 +263,13 @@
                                                 Add
                                             </button>
                                         </div>
+                                        @* The server's own sentence, beside the control that drew it
+                                           (10/16/2026): who can't be added, who is already on the team,
+                                           and who has to stay on it. *@
+                                        @if (_attendeeError is not null)
+                                        {
+                                            <div class="text-danger small mt-2" role="alert" id="investigation-attendee-error">@_attendeeError</div>
+                                        }
                                     }
                                 </div>
                             }
@@ -580,6 +587,9 @@
     private bool _attendeeBusy;
     private Guid _newAttendeeUserId;
     private string _newAttendeeRole = "";
+
+    /// <summary>The server's sentence when it refused an add or a removal, shown under the table.</summary>
+    private string? _attendeeError;
     private Guid _editRoleAttendeeId;
     private string _editRoleValue = "";
 
@@ -614,6 +624,7 @@
         _activeAttendeeInvId = inv.Id;
         _newAttendeeUserId = Guid.Empty;
         _newAttendeeRole = "";
+        _attendeeError = null;
         if (!_attendeeCache.ContainsKey(inv.Id))
             await RefreshAttendeesAsync(inv.Id);
     }
@@ -644,11 +655,19 @@
     {
         if (_newAttendeeUserId == Guid.Empty) return;
         _attendeeBusy = true;
+        _attendeeError = null;
         try
         {
-            await AdminClient.AddInvestigationAttendeeAsync(OrgId, CaseId, inv.Id,
+            // The refusal is shown, not swallowed (10/16/2026). This call used to ignore its result
+            // entirely, so a refused add cleared the picker and looked exactly like a success.
+            var (added, error) = await AdminClient.AddInvestigationAttendeeAsync(OrgId, CaseId, inv.Id,
                 new AddInvestigationAttendeeRequest(_newAttendeeUserId,
                     string.IsNullOrWhiteSpace(_newAttendeeRole) ? null : _newAttendeeRole.Trim()));
+            if (added is null)
+            {
+                _attendeeError = error ?? "That person could not be added. Nothing was changed.";
+                return;
+            }
             _newAttendeeUserId = Guid.Empty;
             _newAttendeeRole = "";
             await RefreshAttendeesAsync(inv.Id);
@@ -664,9 +683,17 @@
     private async Task RemoveAttendee(InvestigationRecord inv, InvestigationAttendeeRecord att)
     {
         _attendeeBusy = true;
+        _attendeeError = null;
         try
         {
-            await AdminClient.RemoveInvestigationAttendeeAsync(OrgId, CaseId, inv.Id, att.Id);
+            var (removed, error) = await AdminClient.RemoveInvestigationAttendeeAsync(OrgId, CaseId, inv.Id, att.Id);
+            if (!removed)
+            {
+                // e.g. somebody recorded as there stays on the team, and the sentence says how to
+                // correct a mistake instead.
+                _attendeeError = error ?? "That person could not be taken off the team. Nothing was changed.";
+                return;
+            }
             await RefreshAttendeesAsync(inv.Id);
             await LoadAsync();
             _rosterReloadToken++;
@@ -712,7 +739,10 @@
     private List<MemberOption> AvailableMembers(Guid invId)
     {
         var added = _attendeeCache.GetValueOrDefault(invId)?.Select(a => a.AppUserId).ToHashSet() ?? [];
+        // Only people the server will accept (10/16/2026): active, and not a Viewer, who can look
+        // but not take part. Offering the others would be offering a refusal.
         return _orgMembers
+            .Where(m => m.IsActive && m.Role != Ben.Data.Common.Enums.OrganizationMemberRole.Viewer)
             .Where(m => !added.Contains(m.AppUserId))
             .Select(m => new MemberOption(m.AppUserId, m.DisplayName ?? m.AppUserId.ToString()[..8]))
             .ToList();

@@ -37,9 +37,21 @@ public interface IBenInvestigationClient
     Task<bool> DeleteInvestigationAsync(Guid orgId, Guid caseId, Guid id, CancellationToken token = default);
     Task<bool> CancelInvestigationByOrgAsync(Guid orgId, Guid caseId, Guid id, CancellationToken token = default);
     Task<LoadResult<InvestigationAttendeeRecord>> GetInvestigationAttendeesAsync(Guid orgId, Guid caseId, Guid id, CancellationToken token = default);
-    Task<InvestigationAttendeeRecord?> AddInvestigationAttendeeAsync(Guid orgId, Guid caseId, Guid id, AddInvestigationAttendeeRequest request, CancellationToken token = default);
+    /// <summary>Puts a member on a case's visit. Keeps the server's refusal (10/16/2026).</summary>
+    /// <remarks>
+    /// The server refuses somebody who isn't an active member, a Viewer, and anybody already on the
+    /// team, each with a sentence. The old shape turned all three into null, and the case page then
+    /// said nothing at all.
+    /// </remarks>
+    Task<(InvestigationAttendeeRecord? Attendee, string? Error)> AddInvestigationAttendeeAsync(Guid orgId, Guid caseId, Guid id, AddInvestigationAttendeeRequest request, CancellationToken token = default);
     Task<InvestigationAttendeeRecord?> UpdateInvestigationAttendanceAsync(Guid orgId, Guid caseId, Guid id, Guid attendeeId, bool? didAttend, string? assignedRole, Ben.Data.Common.Enums.RsvpStatus? rsvp = null, CancellationToken token = default);
-    Task<bool> RemoveInvestigationAttendeeAsync(Guid orgId, Guid caseId, Guid id, Guid attendeeId, CancellationToken token = default);
+
+    /// <summary>Takes somebody off a case's visit. Keeps the server's refusal (10/16/2026).</summary>
+    /// <remarks>
+    /// Somebody recorded as there, or who has written up what they saw, stays on the team, and the
+    /// server says so. A bare bool would have shown that refusal as a removal that did nothing.
+    /// </remarks>
+    Task<(bool Removed, string? Error)> RemoveInvestigationAttendeeAsync(Guid orgId, Guid caseId, Guid id, Guid attendeeId, CancellationToken token = default);
 
     // ── Evidence Voting ───────────────────────────────────────────────────────
 

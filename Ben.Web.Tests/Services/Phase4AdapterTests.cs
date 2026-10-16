@@ -241,21 +241,41 @@ public class Phase4AdapterTests
         var eventId    = Guid.NewGuid();
         var attendeeId = Guid.NewGuid();
         var api        = ApiMock();
-        api.Setup(x => x.PutAsync<object, OrgCalendarEventAttendeeRecord>(
+        api.Setup(x => x.SendExpectingReasonAsync<object, OrgCalendarEventAttendeeRecord>(
+                HttpMethod.Put,
                 $"/api/organizations/{orgId}/calendar/{eventId}/attendees/{attendeeId}/rsvp",
                 It.IsAny<object>(),
                 It.IsAny<CancellationToken>()))
-           .ReturnsAsync(new OrgCalendarEventAttendeeRecord
+           .ReturnsAsync((new OrgCalendarEventAttendeeRecord
            {
                Id = attendeeId, OrgCalendarEventId = eventId, AppUserId = Guid.NewGuid(),
                RsvpStatus = RsvpStatus.Accepted,
-           });
+           }, (string?)null));
 
-        var result = await Build(api).RsvpCalendarEventAsync(orgId, eventId, attendeeId, RsvpStatus.Accepted);
+        var (result, error) = await Build(api).RsvpCalendarEventAsync(orgId, eventId, attendeeId, RsvpStatus.Accepted);
 
+        Assert.Null(error);
         Assert.Equal(RsvpStatus.Accepted, result!.RsvpStatus);
-        api.Verify(x => x.PutAsync<object, OrgCalendarEventAttendeeRecord>(
+        api.Verify(x => x.SendExpectingReasonAsync<object, OrgCalendarEventAttendeeRecord>(
+            HttpMethod.Put,
             $"/api/organizations/{orgId}/calendar/{eventId}/attendees/{attendeeId}/rsvp",
             It.IsAny<object>(), It.IsAny<CancellationToken>()), Times.Once);
+    }
+
+    [Fact]
+    public async Task RsvpCalendarEventAsync_KeepsTheServersRefusal()
+    {
+        // A host's "Mark as coming" on a hosted event's guest list is refused with a sentence
+        // naming where to go instead. Swallowed into null, the button would just look broken.
+        var orgId = Guid.NewGuid(); var eventId = Guid.NewGuid(); var attendeeId = Guid.NewGuid();
+        var api = ApiMock();
+        api.Setup(x => x.SendExpectingReasonAsync<object, OrgCalendarEventAttendeeRecord>(
+                HttpMethod.Put, It.IsAny<string>(), It.IsAny<object>(), It.IsAny<CancellationToken>()))
+           .ReturnsAsync(((OrgCalendarEventAttendeeRecord?)null, "Open its Bookings page."));
+
+        var (result, error) = await Build(api).RsvpCalendarEventAsync(orgId, eventId, attendeeId, RsvpStatus.Accepted);
+
+        Assert.Null(result);
+        Assert.Equal("Open its Bookings page.", error);
     }
 }

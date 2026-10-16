@@ -267,6 +267,71 @@
                 </div>
             }
 
+            @* Who's coming (10/16/2026). Shown for public events too: the invite boxes above are
+               hidden there on purpose, but the people already on the list are still on it, and a
+               host still needs to see who has said yes. *@
+            @if (!_isNewEvent && _editingEvent is not null && _guests.Count > 0)
+            {
+                <div class="col-12" id="calendar-guest-list">
+                    <div class="form-label fw-semibold mb-1">Who's coming</div>
+                    @if (_editingEvent.TourId is { } guestTourId)
+                    {
+                        <p class="text-secondary small mb-2">
+                            Places on a tour date are approved on its
+                            <a href="@($"/organizations/{OrgId}/tours/{guestTourId}/dates/{_editingEvent.Id}")">sign-ups page</a>.
+                        </p>
+                    }
+                    <div class="border rounded" style="max-height:200px;overflow-y:auto;">
+                        <table class="table table-sm align-middle mb-0">
+                            <tbody>
+                                @foreach (var guest in _guests.OrderBy(g => g.DisplayName, StringComparer.CurrentCultureIgnoreCase))
+                                {
+                                    var g = guest;
+                                    <tr @key="g.Id">
+                                        <td class="small">@(g.DisplayName ?? "A guest")</td>
+                                        <td><span class="badge @GuestAnswerBadge(g.RsvpStatus)">@GuestAnswer(g.RsvpStatus)</span></td>
+                                        @if (_mayAnswerForGuests && _editingEvent.TourId is null)
+                                        {
+                                            <td class="text-end text-nowrap">
+                                                @if (g.RsvpStatus == RsvpStatus.Accepted)
+                                                {
+                                                    <button type="button" class="btn btn-link btn-sm text-decoration-none"
+                                                            disabled="@(_guestBusy is not null)"
+                                                            @onclick="@(() => SetGuestAnswerAsync(g, RsvpStatus.Invited))">
+                                                        Mark as not answered
+                                                    </button>
+                                                }
+                                                else
+                                                {
+                                                    <button type="button" class="btn btn-outline-primary btn-sm"
+                                                            disabled="@(_guestBusy is not null)"
+                                                            @onclick="@(() => SetGuestAnswerAsync(g, RsvpStatus.Accepted))">
+                                                        @(_guestBusy == g.Id ? "Saving…" : "Mark as coming")
+                                                    </button>
+                                                }
+                                            </td>
+                                        }
+                                    </tr>
+                                }
+                            </tbody>
+                        </table>
+                    </div>
+                    @if (_guestError is not null)
+                    {
+                        <div class="text-danger small mt-1" role="alert">@_guestError</div>
+                    }
+                    @if (_mayAnswerForGuests && _editingEvent.TourId is null)
+                    {
+                        <div class="form-text">
+                            For somebody who told you they're coming. People marked as coming get a
+                            reminder before it starts, and a guest from outside the group can then
+                            send what they record to this event. This saves straight away; you don't
+                            need to press Save.
+                        </div>
+                    }
+                </div>
+            }
+
             <div class="col-12 d-flex gap-4">
                 <div class="d-flex align-items-center gap-2">
                     <input type="checkbox" class="form-check-input" id="ev-allday" @bind="@_form.IsAllDay" />
@@ -557,6 +622,61 @@
     private string _inviteEmail = "";
     private string? _inviteError;
 
+    // ── Who's coming (10/16/2026) ─────────────────────────────────────────────
+    // An invited member could never become "coming" on a private event: the RSVP endpoint and
+    // the adapter existed, and no screen called either. "Coming" is what reminders, Field Kit
+    // attach and the head count read, so a host needs to be able to record it for somebody who
+    // said yes in person.
+
+    /// <summary>The open event's guest list, as read when the editor opened.</summary>
+    private List<OrgCalendarEventAttendeeRecord> _guests = [];
+    private string? _guestError;
+    private Guid? _guestBusy;
+    private bool _mayAnswerForGuests;
+
+    private async Task SetGuestAnswerAsync(OrgCalendarEventAttendeeRecord guest, RsvpStatus answer)
+    {
+        if (_editingEvent is null || _guestBusy is not null) return;
+
+        _guestBusy = guest.Id;
+        _guestError = null;
+        try
+        {
+            var (updated, error) = await AdminClient.RsvpCalendarEventAsync(OrgId, _editingEvent.Id, guest.Id, answer);
+            if (updated is null)
+            {
+                _guestError = error ?? "That answer could not be saved. Nothing was changed.";
+                return;
+            }
+
+            var at = _guests.FindIndex(g => g.Id == guest.Id);
+            if (at >= 0) _guests[at] = updated;
+        }
+        catch
+        {
+            _guestError = "That answer could not be saved just now. Nothing was changed.";
+        }
+        finally
+        {
+            _guestBusy = null;
+        }
+    }
+
+    private static string GuestAnswer(RsvpStatus status) => status switch
+    {
+        RsvpStatus.Accepted  => "Coming",
+        RsvpStatus.Declined  => "Not coming",
+        RsvpStatus.Tentative => "Maybe",
+        _                    => "Hasn't answered",
+    };
+
+    private static string GuestAnswerBadge(RsvpStatus status) => status switch
+    {
+        RsvpStatus.Accepted => "text-bg-success",
+        RsvpStatus.Declined => "bg-body-secondary text-body-emphasis",
+        _                   => "bg-body-secondary text-body-emphasis border",
+    };
+
     private static readonly List<Telerik.Blazor.Components.IEditorTool> _editorTools =
     [
         new Telerik.Blazor.Components.Editor.EditorButtonGroup(
@@ -761,7 +881,12 @@
         {
             // Options for the type dropdown. A refusal narrows the choices; it does not
             // misreport the calendar, which reports its own state below.
-            _isViewer = !UserState.IsSuperAdmin && (await AdminClient.GetMyOrgPermissionsAsync(OrgId))?.IsViewer == true;
+            var perms = await AdminClient.GetMyOrgPermissionsAsync(OrgId);
+            _isViewer = !UserState.IsSuperAdmin && perms?.IsViewer == true;
+            // The rule the RSVP endpoint applies to answering for somebody else: whoever may change
+            // the calendar. Unknown means no, so the buttons never lead to a refusal.
+            _mayAnswerForGuests = UserState.IsSuperAdmin
+                || perms?.May(OrganizationPermissionArea.Calendar, OrganizationSecurityAction.Update) == true;
             _eventTypes = (await AdminClient.GetCalendarEventTypesAsync(OrgId)).Items.ToList();
             _eventTypeOptions = [new(null, "(No type)"),
                 .. _eventTypes.Select(t => new EventTypeOption(t.Id, t.Name))];
@@ -944,6 +1069,8 @@
         _emailInvitees.Clear();
         _inviteEmail = "";
         _inviteError = null;
+        _guestError = null;
+        _guests = [];
         if (_editingEvent is null)
         {
             _form.InviteeIds = [];
@@ -954,6 +1081,7 @@
             // rather than presenting an empty guest list as though nobody had been invited.
             var attendees = await AdminClient.GetCalendarEventAttendeesAsync(OrgId, _editingEvent.Id);
             _form.InviteeIds = attendees.Items.Select(a => a.AppUserId).ToHashSet();
+            _guests = attendees.Items.ToList();
 
             if (attendees.Failed)
                 _inviteError = attendees.SessionExpired

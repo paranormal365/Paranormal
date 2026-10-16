@@ -40,10 +40,17 @@ public sealed class InvestigationController : BenControllerBase
         Services.Billing.SubscriptionLimitGuard limits,
         Ben.Service.RepositoryService.GenericInterfaces.IOrganizationSecurityService security,
         Services.ClientStatusMailer clientMail,
-        Services.ICmsMarkupSanitizer sanitizer)
+        Services.ICmsMarkupSanitizer sanitizer,
+        Ben.Service.RepositoryService.GenericInterfaces.IAuditLogService auditLog)
     {
         _clientMail = clientMail; _db = db; _mapper = mapper; _limits = limits; _security = security;
-        _sanitizer = sanitizer; }
+        _sanitizer = sanitizer; _auditLog = auditLog; }
+
+    /// <summary>
+    /// Who was put on a team and taken off it, by whom (10/16/2026) — the same record the group's
+    /// Investigations page writes for its own door onto the same table.
+    /// </summary>
+    private readonly Ben.Service.RepositoryService.GenericInterfaces.IAuditLogService _auditLog;
 
     /// <summary>
     /// An investigation's notes are drawn as markup on the group's case screen
@@ -408,6 +415,13 @@ public sealed class InvestigationController : BenControllerBase
             return NotFound();
         if (!await CanManageAsync(id, ct)) return Forbid();
 
+        // Until 10/16/2026 this door checked nothing about the person: a stranger or a Viewer could
+        // be put on a case's team, and a second add of the same person was a 500 from the unique
+        // index. The rules now live in one place, shared with the group's Investigations page.
+        if (await Services.Investigations.InvestigationTeam.WhyCannotJoinAsync(
+                db, orgId, id, request.AppUserId, ct) is { } refusal)
+            return refusal.ToResult();
+
         var attendee = new InvestigationAttendee
         {
             Id = Guid.NewGuid(), InvestigationId = id, AppUserId = request.AppUserId,
@@ -416,6 +430,9 @@ public sealed class InvestigationController : BenControllerBase
         };
         db.InvestigationAttendees.Add(attendee);
         await db.SaveChangesAsync(ct);
+
+        _ = TryAuditAsync(_auditLog.LogCreateAsync(
+            nameof(InvestigationAttendee), attendee.Id, attendee, userId, AppSources.WebApi));
         var loaded = await db.InvestigationAttendees.AsNoTracking()
             .Include(a => a.AppUser).FirstAsync(a => a.Id == attendee.Id, ct);
         return CreatedAtAction(nameof(GetAttendees), new { orgId, caseId, id },
@@ -483,8 +500,17 @@ public sealed class InvestigationController : BenControllerBase
         if (attendee is null) return NotFound();
         if (!await CanManageAsync(id, ct)) return Forbid();
 
-        db.InvestigationAttendees.Remove(attendee);
+        // Same rules as the group's Investigations page (10/16/2026): somebody recorded as there,
+        // or who has written it up, stays; their duties go with them, because that key is NoAction
+        // and SQL Server refused the delete outright for anybody holding one.
+        if (await Services.Investigations.InvestigationTeam.WhyCannotLeaveAsync(db, attendee, ct) is { } refusal)
+            return refusal.ToResult();
+
+        await Services.Investigations.InvestigationTeam.RemoveAsync(db, attendee, ct);
         await db.SaveChangesAsync(ct);
+
+        _ = TryAuditAsync(_auditLog.LogDeleteAsync(
+            nameof(InvestigationAttendee), attendee.Id, attendee, GetCurrentUserId(), AppSources.WebApi));
         return NoContent();
     }
 
