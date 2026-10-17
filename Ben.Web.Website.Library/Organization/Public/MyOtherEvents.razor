@@ -1,0 +1,117 @@
+@namespace Ben.Web.Website.Library.Organization.Public
+@using Ben.Service.Models.Entities
+@using Ben.Web.Services
+@using Ben.Web.Website.Library.Kit
+@using Ben.Web.Website.Library.Manage.Icon
+
+@*
+    The rest of "What I'm going to" (10/16/2026): the calendar events and tours somebody said
+    they'd come to, and the investigations they're on the team of — everything Home's countdown
+    counts that is not a hosted-event booking. The bookings keep their own rows above, with their
+    passes and party panels exactly as they were.
+
+    By date, soonest first, each with the same compact countdown the event lists use and the same
+    words Home's card uses for where they stand. What ended in the last 30 days follows under
+    "Recently", the way this page already keeps past bookings: somebody checking "what was that
+    place called?" the morning after has somewhere to look.
+
+    A refusal is a sentence with a way to try again, never an empty space that reads as "nothing".
+*@
+
+@if (Refusal is not null)
+{
+    <div class="alert alert-warning mt-3" id="my-events-others-refusal">
+        @Refusal
+        <button type="button" class="btn btn-link btn-sm p-0 align-baseline" @onclick="OnRetry">Try again</button>
+    </div>
+}
+else if (Coming.Count + Recent.Count > 0)
+{
+    @if (Coming.Count > 0)
+    {
+        <h2 class="h6 text-secondary mt-4" id="my-events-others-heading">Events, tours and investigations</h2>
+        <ul class="list-group" id="my-events-others">
+            @foreach (var item in Coming)
+            {
+                @Row(item, past: false)
+            }
+        </ul>
+    }
+    @if (Recent.Count > 0)
+    {
+        <h2 class="h6 text-secondary mt-4">Recently</h2>
+        <ul class="list-group" id="my-events-recent">
+            @foreach (var item in Recent)
+            {
+                @Row(item, past: true)
+            }
+        </ul>
+    }
+}
+
+@code {
+    /// <summary>Everything Home counts, hosted bookings included; those are left to the page's own rows.</summary>
+    [Parameter] public IReadOnlyList<MyNextEventItem>? Items { get; set; }
+
+    /// <summary>Why they could not be read, in a sentence; null when they were.</summary>
+    [Parameter] public string? Refusal { get; set; }
+
+    [Parameter] public EventCallback OnRetry { get; set; }
+
+    /// <summary>The moment to sort and draw for. Tests set it; the site never does.</summary>
+    [Parameter] public DateTime? NowUtc { get; set; }
+
+    private DateTime Now => NowUtc ?? DateTime.UtcNow;
+
+    private IEnumerable<MyNextEventItem> Others
+        => (Items ?? []).Where(i => i.Kind != MyNextEventKind.HostedEvent);
+
+    /// <summary>Not over yet, soonest first: what is on now leads.</summary>
+    private IReadOnlyList<MyNextEventItem> Coming
+        => [.. Others.Where(i => i.EndsAtUtc > Now).OrderBy(i => i.StartsAtUtc)];
+
+    /// <summary>Over, the most recent first.</summary>
+    private IReadOnlyList<MyNextEventItem> Recent
+        => [.. Others.Where(i => i.EndsAtUtc <= Now).OrderByDescending(i => i.StartsAtUtc)];
+
+    private RenderFragment Row(MyNextEventItem item, bool past) => @<li class="list-group-item my-other" data-kind="@item.Kind.ToString().ToLowerInvariant()">
+        <div class="my-other__what">
+            <div class="fw-semibold"><a href="@item.Href">@item.Title</a></div>
+            <div class="small text-secondary">
+                @if (!string.IsNullOrWhiteSpace(item.OrganizationName))
+                {
+                    <text>@item.OrganizationName · </text>
+                }
+                @Ben.Web.Website.Library.Shared.NextUpCard.KindWords(item.Kind) ·
+                <BenTime Utc="@item.StartsAtUtc" ZoneId="@item.TimeZoneId" TestId="my-other-time" />
+            </div>
+            <EventCountdown StartUtc="@item.StartsAtUtc" EndUtc="@item.EndsAtUtc" ZoneId="@item.TimeZoneId"
+                            ListedUtc="@item.SignedUpUtc" Name="@item.Title" NowUtc="@NowUtc"
+                            Class="my-other__countdown" TestId="my-other-countdown" />
+        </div>
+        <div class="my-other__state">
+            @if (past)
+            {
+                @* Said in the past tense and drawn quietly: it's a record now, not a plan. *@
+                <span class="badge bg-body-secondary text-body-emphasis" data-testid="my-other-past-standing">
+                    @Ben.Web.Website.Library.Shared.NextUpCard.PastStandingWords(item.Kind, item.Standing)
+                </span>
+            }
+            else
+            {
+                <span class="badge @Badge(item.Standing).Class">
+                    <BenIcon Name="@Badge(item.Standing).Icon" Class="me-1" />
+                    @Ben.Web.Website.Library.Shared.NextUpCard.StandingWords(item.Standing)
+                </span>
+            }
+        </div>
+    </li>;
+
+    /// <summary>The colors the hosted rows above use for the same standing.</summary>
+    private static (string Class, string Icon) Badge(MyNextEventStanding standing) => standing switch
+    {
+        MyNextEventStanding.Going => ("text-bg-success", "check"),
+        MyNextEventStanding.AskedFor or MyNextEventStanding.HeldForYou => ("text-bg-warning", "clock"),
+        _ => ("bg-body-secondary text-body-emphasis", "help-circle"),
+    };
+}

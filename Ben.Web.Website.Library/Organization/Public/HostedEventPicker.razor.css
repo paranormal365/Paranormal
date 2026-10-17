@@ -84,4 +84,22 @@
         flex-direction: column;
         align-items: stretch;
     }
+
+    /* Stacked, the summary is as wide as the bar and no wider: its 12rem floor is for the
+       side-by-side row. */
+    .picker__what {
+        min-width: 0;
+        overflow-wrap: break-word;
+    }
+
+    /* The two buttons stack too, full width, as the rule above intends. Side by side, "Start
+       again" and "Email me a link to hold these" needed 318.8px, and on a 320px phone they pushed
+       the whole bar's contents 11px past the screen (screen-size e2e checks, 10/16/2026). */
+    .picker__bar > .d-flex {
+        flex-direction: column;
+    }
+    .picker__bar > .d-flex > .btn {
+        width: 100%;
+        white-space: normal;
+    }
 }

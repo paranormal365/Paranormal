@@ -632,7 +632,7 @@
     };
 
     private string ClockAt(long ms)
-        => _timeline!.StartUtc.AddMilliseconds(ms).ToViewerLocalTime(UserState).ToString("HH:mm:ss");
+        => _timeline!.StartUtc.AddMilliseconds(ms).ToViewerLocalTime(UserState).ToDisplayTimeWithSeconds();
 
     private static string Elapsed(long ms)
     {

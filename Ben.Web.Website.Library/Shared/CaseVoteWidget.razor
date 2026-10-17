@@ -134,7 +134,7 @@
                 </button>
 
                 @* Comments: straight down to them, since they are on this page. *@
-                <a class="vote-btn" href="#case-comments" title="Comments"
+                <a class="vote-btn" href="@JumpLink.To(NavManager, "case-comments")" title="Comments"
                    aria-label="Go to the comments">
                     <BenIcon Name="message-circle" />
                     @if (CommentCount > 0)

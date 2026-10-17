@@ -126,7 +126,7 @@ public class DateTimeViewerExtensionsTests
         var start = new DateTime(2026, 9, 14, 19, 0, 0);
         var end   = new DateTime(2026, 9, 14, 23, 30, 0);
 
-        Assert.Equal("09/14/2026 07:00 PM – 11:30 PM", start.ToDisplaySpan(end));
+        Assert.Equal("09/14/2026 7:00 PM – 11:30 PM", start.ToDisplaySpan(end));
     }
 
     [Fact]
@@ -135,7 +135,7 @@ public class DateTimeViewerExtensionsTests
         var start = new DateTime(2026, 9, 14, 15, 0, 0);
         var end   = new DateTime(2026, 9, 15, 8, 0, 0);
 
-        Assert.Equal("09/14/2026 03:00 PM – 08:00 AM next day", start.ToDisplaySpan(end));
+        Assert.Equal("09/14/2026 3:00 PM – 8:00 AM next day", start.ToDisplaySpan(end));
     }
 
     [Fact]
@@ -144,7 +144,7 @@ public class DateTimeViewerExtensionsTests
         var start = new DateTime(2026, 9, 14, 15, 0, 0);
         var end   = new DateTime(2026, 9, 21, 8, 0, 0);
 
-        Assert.Equal("09/14/2026 03:00 PM – 09/21/2026 08:00 AM", start.ToDisplaySpan(end));
+        Assert.Equal("09/14/2026 3:00 PM – 09/21/2026 8:00 AM", start.ToDisplaySpan(end));
     }
 
     [Fact]
@@ -152,7 +152,7 @@ public class DateTimeViewerExtensionsTests
     {
         var start = new DateTime(2026, 9, 14, 15, 0, 0);
 
-        Assert.Equal("09/14/2026 03:00 PM", start.ToDisplaySpan(null));
+        Assert.Equal("09/14/2026 3:00 PM", start.ToDisplaySpan(null));
     }
 
     [Fact]
@@ -163,7 +163,7 @@ public class DateTimeViewerExtensionsTests
         var start = new DateTime(2026, 9, 14, 15, 0, 0);
         var end   = new DateTime(2026, 9, 14, 14, 0, 0);
 
-        Assert.Equal("09/14/2026 03:00 PM", start.ToDisplaySpan(end));
+        Assert.Equal("09/14/2026 3:00 PM", start.ToDisplaySpan(end));
     }
 
     /// <summary>

@@ -164,7 +164,7 @@ figcaption { color: var(--faint); font-size: 8.4pt; margin-top: .07in; }
   color: #fff; font-weight: 700; font-size: 13pt; letter-spacing: -.01em; }
 .site-cover .tile { width: .5in; height: .5in; border-radius: .13in; display: grid; place-items: center; background: var(--grad);
   box-shadow: var(--glow); }
-.site-cover .tile img { width: 68%; height: 68%; border: 0; border-radius: 0; box-shadow: none; filter: brightness(0) invert(1); }
+.site-cover .tile img { width: 68%; height: 68%; border: 0; border-radius: 0; box-shadow: none; }
 .site-cover .brand span { color: var(--link); }
 .site-cover .words { position: absolute; left: .45in; right: .6in; bottom: .48in; z-index: 2; }
 .site-cover h1 { font-size: 40pt; line-height: 1.02; color: #fff; margin: .06in 0 .14in; }
@@ -187,13 +187,13 @@ figure img { max-height: 6.6in; max-width: 3.4in; }
 
 <section class="site-cover">
   <div class="hero" style="background-image:url('media/stock/p1-phone-camera.jpg')"></div>
-  <div class="brand" style="top:.82in;left:.9in"><div class="tile"><img src="../Ben.Web.Website/wwwroot/static/images/is-haunted-logo.svg" alt=""></div><div>IsHaunted<span>.com</span></div></div>
+  <div class="brand" style="top:.82in;left:.9in"><div class="tile"><img src="../Ben.Web.Website/wwwroot/static/images/is-haunted-mark.svg" alt=""></div><div>IsHaunted<span>.com</span></div></div>
   <div class="words" style="left:.9in;right:1in;bottom:auto;top:4.3in">
     <div class="kicker">Developer guide</div>
     <h1>IsHaunted for <span class='accent-text'>iPad</span></h1>
     <p class="lede">What the app does, how it is built, and how to run it — written for a developer joining the project.</p>
   </div>
-  <div class="facts"><div class="fact"><b>Device</b><span>iPad</span></div><div class="fact"><b>Screens</b><span>33</span></div><div class="fact"><b>Built</b><span>10/13/2026</span></div></div>
+  <div class="facts"><div class="fact"><b>Device</b><span>iPad</span></div><div class="fact"><b>Screens</b><span>33</span></div><div class="fact"><b>Built</b><span>10/15/2026</span></div></div>
   <div class="about"><b>Every screenshot in this document shows simulated data.</b> The accounts, cases, feed posts and recordings are seeded; the photographs and audio waveforms are generated, and each is captioned <span class='mono'>SIMULATED</span>. Nothing here is a real investigation or a real person. Screens were captured on an iPad simulator in dark mode.</div>
   <div class="foot"><span>ishaunted.com</span><span>iPad developer guide</span></div>
 </section>
@@ -275,10 +275,10 @@ other.</p>
 inbox. A message that cannot be read in context is worth much less.</p>
 
 <figure><img src='ios-media/ipad/22-case-messages.png'><figcaption>Case messages &mdash; iPad, dark mode</figcaption></figure>
-<h2>Field Kit — the reason the app exists</h2>
+<h2>The Paranormal Platform — the reason the app exists</h2>
 
-<p>Everything above has a website equivalent. <b>This does not.</b> The Field Kit turns the phone
-into an instrument, and it is the part a new developer should read first and most carefully.</p>
+<p>Everything above has a website equivalent. <b>This does not.</b> The Paranormal Platform turns the
+phone into an instrument, and it is the part a new developer should read first and most carefully.</p>
 
 <p>The home screen lists past sessions and starts a new one. A session is a recording in the
 fullest sense: not a single measurement, but <b>every reading from every enabled sensor, for as
@@ -295,7 +295,7 @@ nothing downstream knows the difference; only a Source line on the review says w
 device, or at a place searched for by name or town — and downloads the archive's public copy, whose
 positions are all the place's public point rather than the path somebody walked.</p>
 
-<figure><img src='ios-media/ipad/40-fieldkit-home.png'><figcaption>Field Kit — the reason the app exists &mdash; iPad, dark mode</figcaption></figure>
+<figure><img src='ios-media/ipad/40-fieldkit-home.png'><figcaption>The Paranormal Platform — the reason the app exists &mdash; iPad, dark mode</figcaption></figure>
 <h2>Naming a session</h2>
 
 <p>A session is named before it starts, not afterwards. The name is how it is found later, and
@@ -458,7 +458,7 @@ specific control in the dark is exactly what somebody cannot do.</p>
 <figure><img src='ios-media/ipad/52-blackout.png'><figcaption>Blackout &mdash; iPad, dark mode</figcaption></figure>
 <h2>How a recording is replayed — and why</h2>
 
-<p class="rule"><b>The Field Kit records every reading, continuously, for the whole session — and
+<p class="rule"><b>The Paranormal Platform records every reading, continuously, for the whole session — and
 selecting a past session plays the entire recording back as it happened. This is deliberate and it
 is the central idea of the feature.</b></p>
 
@@ -496,10 +496,10 @@ permission the app needs was refused, the switch says so and offers Settings.</p
 <h2>A group session, started by the lead</h2>
 
 <p>Item 252. A tour's guide, an event's organizer or door staff, or an investigation's lead starts
-everybody's Field Kit at once. The server (<code>FieldLaunchService</code>) finds who is
+the Paranormal Platform for everybody at once. The server (<code>FieldLaunchService</code>) finds who is
 registered, writes a card in the feed — public when the thing is, otherwise a
 <code>FieldLaunchNotice</code> only its people can read — and pushes to every registered phone
-through APNs. Nobody is forced in: the push, the card and Field Kit's <b>Happening now</b> all open
+through APNs. Nobody is forced in: the push, the card and the Paranormal Platform's <b>Happening now</b> all open
 the same link, <code>ishaunted://field-kit/launch/{id}</code>, and <code>JoinLaunchView</code>
 turns it into a session already set to the thing and its place (<code>startSession(joining:)</code>),
 pending until Start.</p>
@@ -523,7 +523,7 @@ The send screen replaces the investigation picker with <b>Send to …</b>; the u
 launch and the server resolves where it goes — so it works days later, and for a walk-up let in
 after they recorded. Each part of a long session goes under its own id
 (<code>SessionWindow.uploadId</code>), so the next ten minutes no longer replaces the first. Rows in
-Field Kit say Sent or Not sent.</p>
+the Paranormal Platform say Sent or Not sent.</p>
 
 <h2>Joining by the lead's code</h2>
 

@@ -899,8 +899,11 @@ public sealed class OrgCalendarEventController : BenControllerBase
     {
         var userId = GetCurrentUserId();
         await using var db = await _db.CreateDbContextAsync(ct);
+        // Tied to the group in the address as well (10/16/2026). The ids alone let somebody who
+        // runs one group's calendar answer for a guest on another group's event.
         var attendee = await db.OrgCalendarEventAttendees
-            .FirstOrDefaultAsync(a => a.Id == attendeeId && a.OrgCalendarEventId == eventId, ct);
+            .FirstOrDefaultAsync(a => a.Id == attendeeId && a.OrgCalendarEventId == eventId
+                                   && a.OrgCalendarEvent.OrganizationId == orgId, ct);
         if (attendee is null) return NotFound();
         // Only the attendee themselves or an org admin can update RSVP
         if (attendee.AppUserId != userId && !await IsAdminOrHasAsync(orgId, ct)) return Forbid();
@@ -922,8 +925,10 @@ public sealed class OrgCalendarEventController : BenControllerBase
     {
         if (!await IsAdminOrHasAsync(orgId, ct)) return Forbid();
         await using var db = await _db.CreateDbContextAsync(ct);
+        // The group in the address, too — see Rsvp.
         var attendee = await db.OrgCalendarEventAttendees
-            .FirstOrDefaultAsync(a => a.Id == attendeeId && a.OrgCalendarEventId == eventId, ct);
+            .FirstOrDefaultAsync(a => a.Id == attendeeId && a.OrgCalendarEventId == eventId
+                                   && a.OrgCalendarEvent.OrganizationId == orgId, ct);
         if (attendee is null) return NotFound();
 
         if (await WhyThisRowBelongsToAnEventAsync(db, eventId, orgId, ct) is { } elsewhere)

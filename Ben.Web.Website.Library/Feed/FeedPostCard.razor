@@ -224,7 +224,7 @@
                 <span class="flex-grow-1">
                     Join <strong>@launch.Title</strong> from the IsHaunted app on your phone — it's in the Paranormal Platform
                     under <em>Happening now</em>. Open until
-                    @launch.ExpiresUtc.ToViewerLocalTime(UserState).ToString("h:mm tt").
+                    @launch.ExpiresUtc.ToViewerLocalTime(UserState).ToDisplayTime().
                 </span>
                 <a class="btn btn-success btn-sm text-nowrap" href="@launch.AppLink"
                    data-testid="feed-post-launch-open">Open in the app</a>
@@ -240,7 +240,7 @@
                 <BenIcon Name="clock" />
                 <span>
                     Goes up @goesUp.ToViewerLocalTime(UserState).ToString("MM/dd/yyyy")
-                    at @goesUp.ToViewerLocalTime(UserState).ToString("h:mm tt") — only you can see it until then
+                    at @goesUp.ToViewerLocalTime(UserState).ToDisplayTime() — only you can see it until then
                 </span>
                 @* Both doors, because a scheduled post nobody else can see would otherwise be one
                    the author could neither release nor call back. *@

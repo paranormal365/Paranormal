@@ -1,0 +1,188 @@
+/* EventCountdown — the Signal look, small (10/16/2026).
+   Violet to cyan, the site's own gradient (signal-tokens.css), on whatever card it sits on. Every
+   colour is a token, so dark mode (the first design) and light mode are the same rules. The motion
+   is three things only, all off for a reader who asked for less: a dot that breathes as the start
+   gets close, a sheen along the bar on the day itself, and the bar's width easing between ticks. */
+
+.ev-cd {
+    display: inline-flex;
+    flex-direction: column;
+    gap: .3rem;
+    min-width: 0;
+    max-width: 100%;
+    font-variant-numeric: tabular-nums;
+    line-height: 1.2;
+}
+
+/* ── The compact line ─────────────────────────────────────────────────── */
+
+.ev-cd__line {
+    display: inline-flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: .2rem .4rem;
+    font-size: .78rem;
+    font-weight: 600;
+    color: var(--ben-ink-muted);
+}
+
+.ev-cd__dot {
+    flex: none;
+    width: .5rem;
+    height: .5rem;
+    border-radius: 50%;
+    background-image: var(--ben-accent-grad);
+}
+
+.ev-cd__digits { color: var(--ben-ink); letter-spacing: .01em; }
+
+/* Far off, the row reads "Starts in 12d 04h 12m"; from the day before it reads "Tomorrow · 1d 02h". */
+.ev-cd--compact .ev-cd__lead { display: none; }
+.ev-cd--compact[data-phase="later"] .ev-cd__lead { display: inline; }
+.ev-cd--compact[data-phase="later"] .ev-cd__words { display: none; }
+.ev-cd--compact:not([data-phase="later"]) .ev-cd__words { color: var(--ben-link); }
+.ev-cd--compact:not([data-phase="later"]) .ev-cd__words::after { content: " ·"; color: var(--ben-ink-faint); }
+.ev-cd--compact[data-phase="live"] .ev-cd__words::after,
+.ev-cd--compact[data-phase="over"] .ev-cd__words::after { content: none; }
+
+/* ── The bar ──────────────────────────────────────────────────────────── */
+
+.ev-cd__bar {
+    position: relative;
+    display: block;
+    height: 3px;
+    border-radius: var(--ben-radius-pill);
+    background-color: var(--ben-fill-strong);
+    overflow: hidden;
+}
+
+.ev-cd__fill {
+    position: relative;
+    display: block;
+    height: 100%;
+    border-radius: inherit;
+    background-image: var(--ben-accent-grad);
+    transition: width 1s linear;
+}
+
+/* The sheen: a soft highlight passing along the bar on the day itself, and while it runs. */
+.ev-cd[data-phase="today"] .ev-cd__fill::after,
+.ev-cd[data-phase="tonight"] .ev-cd__fill::after,
+.ev-cd[data-phase="live"] .ev-cd__fill::after {
+    content: "";
+    position: absolute;
+    inset: 0;
+    background: linear-gradient(90deg, transparent 0%, rgba(255, 255, 255, .55) 50%, transparent 100%);
+    background-size: 40% 100%;
+    background-repeat: no-repeat;
+    animation: ev-cd-sheen 2.6s ease-in-out infinite;
+}
+
+/* ── Close, running, over ─────────────────────────────────────────────── */
+
+.ev-cd[data-phase="tomorrow"] .ev-cd__dot,
+.ev-cd[data-phase="today"] .ev-cd__dot,
+.ev-cd[data-phase="tonight"] .ev-cd__dot {
+    animation: ev-cd-breathe 2.4s ease-in-out infinite;
+}
+
+.ev-cd[data-soon] .ev-cd__dot { animation-duration: 1.1s; }
+
+.ev-cd[data-phase="live"] .ev-cd__dot {
+    background: var(--ben-accent-2);
+    animation: ev-cd-ring 1.6s ease-out infinite;
+}
+
+.ev-cd[data-phase="live"] .ev-cd__words { color: var(--ben-accent-2); font-weight: 700; }
+.ev-cd[data-phase="live"] .ev-cd__digits,
+.ev-cd[data-phase="over"] .ev-cd__digits { display: none; }
+
+.ev-cd[data-phase="over"] { opacity: .6; }
+.ev-cd[data-phase="over"] .ev-cd__fill { background: var(--ben-ink-faint); }
+
+/* ── The hero: Home's card ────────────────────────────────────────────── */
+
+.ev-cd--hero { gap: .45rem; }
+
+.ev-cd--hero .ev-cd__words {
+    font-size: .72rem;
+    font-weight: 700;
+    letter-spacing: .09em;
+    text-transform: uppercase;
+    color: var(--ben-link);
+}
+
+.ev-cd__tiles { display: flex; gap: .4rem; }
+
+.ev-cd__tile {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    min-width: 3.1rem;
+    padding: .38rem .45rem .3rem;
+    border-radius: var(--ben-radius-sm);
+    background-color: var(--ben-fill);
+    border: 1px solid var(--ben-line);
+}
+
+.ev-cd__tile[hidden] { display: none; }
+
+.ev-cd__tile b {
+    font-size: 1.5rem;
+    font-weight: 800;
+    line-height: 1;
+    letter-spacing: -.02em;
+    background-image: var(--ben-accent-grad);
+    -webkit-background-clip: text;
+    background-clip: text;
+    color: transparent;
+}
+
+.ev-cd__tile small {
+    margin-top: .2rem;
+    font-size: .6rem;
+    font-weight: 600;
+    letter-spacing: .08em;
+    text-transform: uppercase;
+    color: var(--ben-ink-faint);
+}
+
+.ev-cd--hero .ev-cd__bar { height: 4px; }
+
+/* Running: the tiles go, and the words are the news. */
+.ev-cd--hero[data-phase="live"] .ev-cd__tiles,
+.ev-cd--hero[data-phase="over"] .ev-cd__tiles { display: none; }
+
+.ev-cd--hero[data-phase="live"] .ev-cd__words,
+.ev-cd--hero[data-phase="over"] .ev-cd__words {
+    font-size: 1.15rem;
+    letter-spacing: .02em;
+    text-transform: none;
+}
+
+.ev-cd--hero[data-phase="live"] .ev-cd__words { color: var(--ben-accent-2); }
+
+@keyframes ev-cd-breathe {
+    0%, 100% { opacity: 1; transform: scale(1); }
+    50%      { opacity: .55; transform: scale(.8); }
+}
+
+@keyframes ev-cd-ring {
+    0%   { box-shadow: 0 0 0 0 rgba(var(--ben-accent-2-rgb), .55); }
+    100% { box-shadow: 0 0 0 .5rem rgba(var(--ben-accent-2-rgb), 0); }
+}
+
+@keyframes ev-cd-sheen {
+    0%   { background-position: -60% 0; }
+    100% { background-position: 160% 0; }
+}
+
+/* A reader who asked for less motion gets a still countdown: no breathing, no sheen, no easing.
+   The numbers still change, a minute at a time (the ticker drops the seconds for them). */
+@media (prefers-reduced-motion: reduce) {
+    .ev-cd *,
+    .ev-cd *::after {
+        animation: none !important;
+        transition: none !important;
+    }
+}

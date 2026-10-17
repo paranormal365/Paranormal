@@ -14,6 +14,9 @@
     is only swapped out once the desk knows it has something to stand on.
 *@
 
+@* What the signed-in person is going to next, counting down (10/16/2026). Renders nothing for a
+   visitor, and nothing for somebody with nothing coming up. *@
+<Ben.Web.Website.Library.Shared.HomeEventCountdown />
 <MemberDesk OnHasGroups="@(v => { _hasGroups = v; StateHasChanged(); })" />
 @if (!_hasGroups)
 {

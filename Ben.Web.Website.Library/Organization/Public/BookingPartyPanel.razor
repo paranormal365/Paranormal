@@ -65,11 +65,16 @@
 
         <div class="d-flex flex-wrap gap-2 mt-2">
             <button type="button" class="btn btn-primary btn-sm" id="@($"{IdPrefix}-party-save")"
-                    disabled="@(_busy || _draft.HasANoteWithoutAName)" @onclick="SaveAsync">
+                    aria-describedby="@(_draft.WhatIsMissing is null ? null : $"{IdPrefix}-party-missing")"
+                    disabled="@(_busy || _draft.WhatIsMissing is not null)" @onclick="SaveAsync">
                 @(_busy ? "Saving…" : "Save")
             </button>
             <button type="button" class="btn btn-outline-secondary btn-sm" id="@($"{IdPrefix}-party-cancel")"
                     disabled="@_busy" @onclick="() => _draft = null">Cancel</button>
+            @if (_draft.WhatIsMissing is { } missing)
+            {
+                <span class="text-secondary small align-self-center" id="@($"{IdPrefix}-party-missing")">@missing</span>
+            }
         </div>
     }
 </div>

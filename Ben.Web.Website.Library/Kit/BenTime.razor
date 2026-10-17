@@ -63,7 +63,7 @@
             Shape.LongDate => (start.ToString(DateTimeViewerExtensions.LongDatePattern), ""),
             Shape.Time     => (start.ToDisplayTime(), letters),
             Shape.Span     => (start.ToDisplaySpan(EndUtc is { } end ? Zones.ToZone(end, zone) : null), letters),
-            // Under a heading that already names the night: "07:00 PM – 08:30 PM CDT".
+            // Under a heading that already names the night: "7:00 PM – 8:30 PM CDT".
             Shape.TimeSpan => (EndUtc is { } fin
                 ? $"{start.ToDisplayTime()} – {Zones.ToZone(fin, zone).ToDisplayTime()}"
                 : start.ToDisplayTime(), letters),

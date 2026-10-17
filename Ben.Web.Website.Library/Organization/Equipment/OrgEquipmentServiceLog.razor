@@ -140,7 +140,7 @@
 
     private List<EquipmentServiceLogRecord> _entries = [];
     private EquipmentServiceLogType _entryType = EquipmentServiceLogType.Service;
-    private DateTime? _entryDate = DateTime.Today;
+    private DateTime? _entryDate; // today on the reader's clock, set once their zone is known
     private string _notes = string.Empty;
     private bool _loading;
     private LoadResult<EquipmentServiceLogRecord> _entriesResult;
@@ -161,6 +161,7 @@
         if (!await UserState.WaitUntilAuthReadyAsync(RendererInfo.IsInteractive)) return;
         if (!UserState.IsAuthenticated) { NavManager.NavigateTo("/login"); return; }
 
+        _entryDate ??= UserState.NowInViewerTimeZone().Date;
         await LoadItemAsync();
         await LoadAsync();
         StateHasChanged();

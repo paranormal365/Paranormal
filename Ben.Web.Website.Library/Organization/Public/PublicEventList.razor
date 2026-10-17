@@ -3,7 +3,9 @@
 @namespace Ben.Web.Website.Library.Organization.Public
 @using Ben.Web.Services
 @using Ben.Web.Website.Library.Kit
+@using Ben.Data.Common.Enums
 @inject IBenAdminClient AdminClient
+@inject IBenUserState UserState
 
 @* Item 154: the address must die with the feature switch, not just the links to it. *@
 <FeatureGate Flag="@SiteFeatures.Events">
@@ -94,7 +96,12 @@
 
                         <span class="ev-row__main">
                             <span class="ev-row__title">
-                                @if (item.UrlName is string slug)
+                                @if (item.ReaderTie == EventReaderTie.YourGroup)
+                                {
+                                    @* Not public, so no public page: members read it on the group's calendar. *@
+                                    <a href="@($"/organizations/{item.OrganizationId}/calendar")">@item.Title</a>
+                                }
+                                else if (item.UrlName is string slug)
                                 {
                                     <a href="@($"/o/{item.OrganizationUrlName}/events/{slug}?from=events")">@item.Title</a>
                                 }
@@ -102,6 +109,7 @@
                                 {
                                     @item.Title
                                 }
+                                <EventTieBadge Tie="@item.ReaderTie" />
                             </span>
 
                             @* The group is named on every row. Somebody scanning this list is
@@ -134,6 +142,11 @@
                                     <text>@item.City@(item.State is null ? "" : $", {item.State}")</text>
                                 }
                             </span>
+
+                            @* How long until it starts, and a thin bar filling toward it (10/16/2026). *@
+                            <EventCountdown StartUtc="@item.StartDateTime" EndUtc="@item.EndDateTime"
+                                            ZoneId="@item.TimeZoneId" ListedUtc="@item.ListedUtc"
+                                            Name="@item.Title" Class="ev-row__countdown" />
                         </span>
 
                         <span class="ev-row__seats">
@@ -195,12 +208,12 @@
             {
                 new("Coming up", items.Count.ToString(), items.Count == 1 ? "night" : "nights",
                     Emphasis: true),
-                new("First", first.ToString("ddd MM/dd"), first.ToString("h:mm tt")),
+                new("First", first.ToString("ddd MM/dd"), first.ToDisplayTime()),
             };
 
             // Only when it says something the first one did not.
             if (last.Date != first.Date)
-                facts.Add(new BenFactItem("Last", last.ToString("ddd MM/dd"), last.ToString("h:mm tt")));
+                facts.Add(new BenFactItem("Last", last.ToString("ddd MM/dd"), last.ToDisplayTime()));
 
             // On a group's own page every night is theirs, so counting groups says nothing.
             if (UrlName is null)
@@ -214,6 +227,39 @@
     private LoadResult<PublicEventListItem> _events;
     private bool _loading = true;
     private string? _loadedFor;
+
+    /// <summary>
+    /// Whether this reader is signed in and so also sees their own groups' events (10/16/2026).
+    /// </summary>
+    /// <remarks>
+    /// Known only once sign-in has resolved, which is after the page is first drawn: the server
+    /// draws the public list (what a visitor sees, unchanged), and a signed-in reader's list then
+    /// replaces it once, with their groups' nights added and marked.
+    /// </remarks>
+    private bool _forMe;
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (!firstRender) return;
+        if (!await UserState.WaitUntilAuthReadyAsync(RendererInfo.IsInteractive)) return;
+        if (!UserState.IsAuthenticated) return;
+
+        _forMe = true;
+        var mine = await ForMeOrPublicAsync();
+        // A list that could not be had for them leaves the public one standing: it is still true.
+        if (!mine.Failed)
+        {
+            _events = mine;
+            StateHasChanged();
+        }
+    }
+
+    /// <summary>The signed-in reader's list; the public one if theirs cannot be had.</summary>
+    private async Task<LoadResult<PublicEventListItem>> ForMeOrPublicAsync()
+    {
+        var mine = await AdminClient.GetPublicEventsForMeAsync(UrlName);
+        return mine.Failed ? await AdminClient.GetPublicEventsAsync(UrlName) : mine;
+    }
 
     protected override async Task OnParametersSetAsync()
     {
@@ -245,7 +291,9 @@
 
         _loading = true;
         StateHasChanged();
-        _events  = await AdminClient.GetPublicEventsAsync(UrlName);
+        _events  = _forMe
+            ? await ForMeOrPublicAsync()
+            : await AdminClient.GetPublicEventsAsync(UrlName);
         _loading = false;
         if (!RendererInfo.IsInteractive && !_events.Failed && PrerenderCarry.Fits(_events.Items))
         {

@@ -243,7 +243,7 @@
                                                                        @onchange="@(e => ToggleAttendance(i, a, (bool)e.Value!))" />
                                                             </td>
                                                             <td class="align-middle">
-                                                                <button type="button" class="btn @(ThemeConstants.Button.FillMode.Flat == ThemeConstants.Button.FillMode.Solid ? "btn-danger" : "btn-outline-danger") btn-sm" @onclick="@(() => RemoveAttendee(i, a))"><BenIcon Name="x" /></button>
+                                                                <button type="button" class="btn @(ThemeConstants.Button.FillMode.Flat == ThemeConstants.Button.FillMode.Solid ? "btn-danger" : "btn-outline-danger") btn-sm" title="@($"Take {a.DisplayName ?? "this person"} off the team")" aria-label="@($"Take {a.DisplayName ?? "this person"} off the team")" @onclick="@(() => RemoveAttendee(i, a))"><BenIcon Name="x" /></button>
                                                             </td>
                                                         </tr>
                                                     }
@@ -252,8 +252,8 @@
                                         }
                                         <div class="d-flex gap-2 align-items-end flex-wrap">
                                             <div>
-                                                <label class="form-label mb-1" style="font-size:.8rem;">Add member</label>
-                                                <BenSelect Data="@AvailableMembers(i.Id)" @bind-Value="@_newAttendeeUserId" TextField="@nameof(MemberOption.Label)" ValueField="@nameof(MemberOption.UserId)" DefaultText="— select —" Width="180px" />
+                                                <label class="form-label mb-1" style="font-size:.8rem;" for="@($"investigationpanel-add-member-{i.Id}")">Add member</label>
+                                                <BenSelect Id="@($"investigationpanel-add-member-{i.Id}")" Data="@AvailableMembers(i.Id)" @bind-Value="@_newAttendeeUserId" TextField="@nameof(MemberOption.Label)" ValueField="@nameof(MemberOption.UserId)" DefaultText="— select —" Width="180px" />
                                             </div>
                                             <div>
                                                 <label class="form-label mb-1" style="font-size:.8rem;" for="investigationpanel-role-optional-3abb">Role (optional)</label>
@@ -263,6 +263,13 @@
                                                 Add
                                             </button>
                                         </div>
+                                        @* The server's own sentence, beside the control that drew it
+                                           (10/16/2026): who can't be added, who is already on the team,
+                                           and who has to stay on it. *@
+                                        @if (_attendeeError is not null)
+                                        {
+                                            <div class="text-danger small mt-2" role="alert" id="investigation-attendee-error">@_attendeeError</div>
+                                        }
                                     }
                                 </div>
                             }
@@ -272,7 +279,7 @@
                            than not offering it. *@
                         @if (i.CanEditRecord)
                         {
-                            <button type="button" class="btn btn-secondary btn-sm" @onclick="@(() => OpenEdit(i))"><BenIcon Name="edit-2" Class="me-1" />Edit</button>
+                            <button type="button" class="btn btn-secondary btn-sm" id="@($"case-inv-edit-{i.Id}")" @onclick="@(() => OpenEdit(i))"><BenIcon Name="edit-2" Class="me-1" />Edit</button>
                         }
                     </div>
                 </div>
@@ -420,7 +427,22 @@
         </div>
         @if (_dialogError is not null)
         {
-            <div class="alert alert-danger mt-3 mb-0">@_dialogError</div>
+            @* The server's sentence, such as why a visit with recordings can't be deleted (10/16/2026). *@
+            <div class="alert alert-danger mt-3 mb-0" role="alert" id="investigation-dialog-error">@_dialogError</div>
+        }
+
+        @* Delete asks first (10/16/2026), inline like the group page's window: never a
+           TelerikDialog, which breaks binding. It used to delete on the first click. *@
+        @if (_confirmDelete && _editInv is not null)
+        {
+            <div class="alert alert-warning py-2 small mt-3 mb-0 d-flex flex-wrap align-items-center gap-2 investigation-confirm"
+                 role="alert" id="investigation-dialog-confirm">
+                <span class="flex-grow-1">Delete this visit? This can't be undone.</span>
+                <button type="button" class="btn btn-outline-secondary btn-sm" id="investigation-dialog-confirm-no"
+                        disabled="@_isBusy" @onclick="@(() => _confirmDelete = false)">Keep</button>
+                <button type="button" class="btn btn-danger btn-sm" id="investigation-dialog-confirm-yes"
+                        disabled="@_isBusy" @onclick="DeleteInvestigation">@(_isBusy ? "Deleting…" : "Delete")</button>
+            </div>
         }
             <div class="dialog-footer-actions">
             <span class="dialog-footer-spacer"></span>
@@ -431,7 +453,8 @@
                 {
                     <button type="button" class="btn btn-warning" @onclick="CancelInvestigation" disabled="@(!(!_isBusy))"><BenIcon Name="x" Class="me-1" />Cancel Visit</button>
                 }
-                <button type="button" class="btn btn-danger" @onclick="DeleteInvestigation" disabled="@(!(!_isBusy))"><BenIcon Name="trash-2" Class="me-1" />Delete</button>
+                <button type="button" class="btn btn-danger" id="investigation-dialog-delete"
+                        @onclick="@(() => { _dialogError = null; _confirmDelete = true; })" disabled="@(!(!_isBusy))"><BenIcon Name="trash-2" Class="me-1" />Delete</button>
             }
             <button type="button" class="btn btn-secondary" @onclick="@(() => _showDialog = false)">Cancel</button>
             <button type="button" class="btn btn-primary" @onclick="Save" disabled="@(!(!_isBusy && !string.IsNullOrWhiteSpace(_form.Title)))"><BenIcon Name="save" Class="me-1" />
@@ -458,6 +481,9 @@
     private bool _showDialog;
     private InvestigationRecord? _editInv;
     private string? _dialogError;
+
+    /// <summary>Delete was pressed and is waiting for a yes, asked inline (10/16/2026).</summary>
+    private bool _confirmDelete;
     private InvForm _form = new();
 
     // ── Attendee state ────────────────────────────────────────────────────────
@@ -580,6 +606,9 @@
     private bool _attendeeBusy;
     private Guid _newAttendeeUserId;
     private string _newAttendeeRole = "";
+
+    /// <summary>The server's sentence when it refused an add or a removal, shown under the table.</summary>
+    private string? _attendeeError;
     private Guid _editRoleAttendeeId;
     private string _editRoleValue = "";
 
@@ -614,6 +643,7 @@
         _activeAttendeeInvId = inv.Id;
         _newAttendeeUserId = Guid.Empty;
         _newAttendeeRole = "";
+        _attendeeError = null;
         if (!_attendeeCache.ContainsKey(inv.Id))
             await RefreshAttendeesAsync(inv.Id);
     }
@@ -644,11 +674,19 @@
     {
         if (_newAttendeeUserId == Guid.Empty) return;
         _attendeeBusy = true;
+        _attendeeError = null;
         try
         {
-            await AdminClient.AddInvestigationAttendeeAsync(OrgId, CaseId, inv.Id,
+            // The refusal is shown, not swallowed (10/16/2026). This call used to ignore its result
+            // entirely, so a refused add cleared the picker and looked exactly like a success.
+            var (added, error) = await AdminClient.AddInvestigationAttendeeAsync(OrgId, CaseId, inv.Id,
                 new AddInvestigationAttendeeRequest(_newAttendeeUserId,
                     string.IsNullOrWhiteSpace(_newAttendeeRole) ? null : _newAttendeeRole.Trim()));
+            if (added is null)
+            {
+                _attendeeError = error ?? "That person could not be added. Nothing was changed.";
+                return;
+            }
             _newAttendeeUserId = Guid.Empty;
             _newAttendeeRole = "";
             await RefreshAttendeesAsync(inv.Id);
@@ -664,9 +702,17 @@
     private async Task RemoveAttendee(InvestigationRecord inv, InvestigationAttendeeRecord att)
     {
         _attendeeBusy = true;
+        _attendeeError = null;
         try
         {
-            await AdminClient.RemoveInvestigationAttendeeAsync(OrgId, CaseId, inv.Id, att.Id);
+            var (removed, error) = await AdminClient.RemoveInvestigationAttendeeAsync(OrgId, CaseId, inv.Id, att.Id);
+            if (!removed)
+            {
+                // e.g. somebody recorded as there stays on the team, and the sentence says how to
+                // correct a mistake instead.
+                _attendeeError = error ?? "That person could not be taken off the team. Nothing was changed.";
+                return;
+            }
             await RefreshAttendeesAsync(inv.Id);
             await LoadAsync();
             _rosterReloadToken++;
@@ -712,7 +758,10 @@
     private List<MemberOption> AvailableMembers(Guid invId)
     {
         var added = _attendeeCache.GetValueOrDefault(invId)?.Select(a => a.AppUserId).ToHashSet() ?? [];
+        // Only people the server will accept (10/16/2026): active, and not a Viewer, who can look
+        // but not take part. Offering the others would be offering a refusal.
         return _orgMembers
+            .Where(m => m.IsActive && m.Role != Ben.Data.Common.Enums.OrganizationMemberRole.Viewer)
             .Where(m => !added.Contains(m.AppUserId))
             .Select(m => new MemberOption(m.AppUserId, m.DisplayName ?? m.AppUserId.ToString()[..8]))
             .ToList();
@@ -753,6 +802,7 @@
             TimeZoneId        = inv.TimeZoneId,
         };
         _dialogError = null;
+        _confirmDelete = false;
         _showDialog = true;
     }
 
@@ -853,6 +903,7 @@
         _isBusy = true;
         try
         {
+            _confirmDelete = false;
             // The result is READ. Discarding it closed the dialog and reloaded as though the
             // delete had happened, so a server refusal looked exactly like success.
             var (deleted, reason) = await AdminClient
@@ -892,7 +943,9 @@
         public string             Title             { get; set; } = "";
         public string             Description       { get; set; } = "";
         public string             Location          { get; set; } = "";
-        public DateTime           ScheduledDateTime { get; set; } = DateTime.Now.AddDays(7);
+        // A placeholder only: OpenAdd and OpenEdit always set it on the visit's clock before the
+        // dialog shows. Not DateTime.Now, which is the server's clock.
+        public DateTime           ScheduledDateTime { get; set; } = DateTime.UtcNow.AddDays(7);
 
         /// <summary>The two halves of the start, over one field. Splitting the state as well as
         /// the controls is how the halves drift apart.</summary>

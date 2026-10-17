@@ -1,0 +1,17 @@
+/*
+    The Schedule / Change window's buttons (10/16/2026).
+
+    The footer wraps (flex-wrap in the markup), so on a 320px phone Delete and "Cancel this visit"
+    sit on one line and Close and Save on the next, rather than four buttons squeezed onto one.
+    At 576px and up they share a line as before, Delete and Cancel on the left.
+
+    At least 44px to touch on phones and tablets (up to 991px, which covers an iPad portrait and
+    an open folding phone), and anywhere the pointer is a finger.
+*/
+
+@media (max-width: 991.98px), (pointer: coarse) {
+    .dialog-footer-actions .btn,
+    .newinv-touch {
+        min-height: 44px;
+    }
+}

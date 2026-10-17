@@ -120,22 +120,55 @@ public class Phase5AdapterTests
         var invId  = Guid.NewGuid();
         var userId = Guid.NewGuid();
         var api    = ApiMock();
-        api.Setup(x => x.PostAsync<AddInvestigationAttendeeRequest, InvestigationAttendeeRecord>(
+        api.Setup(x => x.SendExpectingReasonAsync<AddInvestigationAttendeeRequest, InvestigationAttendeeRecord>(
+                HttpMethod.Post,
                 $"{InvBase(orgId, caseId)}/{invId}/attendees",
                 It.IsAny<AddInvestigationAttendeeRequest>(),
                 It.IsAny<CancellationToken>()))
-           .ReturnsAsync(new InvestigationAttendeeRecord
+           .ReturnsAsync((new InvestigationAttendeeRecord
            {
                Id = Guid.NewGuid(), InvestigationId = invId, AppUserId = userId,
                AssignedRole = "Lead Investigator",
-           });
+           }, (string?)null));
 
         var req = new AddInvestigationAttendeeRequest(userId, "Lead Investigator");
-        var result = await Build(api).AddInvestigationAttendeeAsync(orgId, caseId, invId, req);
+        var (result, error) = await Build(api).AddInvestigationAttendeeAsync(orgId, caseId, invId, req);
 
+        Assert.Null(error);
         Assert.Equal("Lead Investigator", result!.AssignedRole);
-        api.Verify(x => x.PostAsync<AddInvestigationAttendeeRequest, InvestigationAttendeeRecord>(
-            $"{InvBase(orgId, caseId)}/{invId}/attendees", req, It.IsAny<CancellationToken>()), Times.Once);
+        api.Verify(x => x.SendExpectingReasonAsync<AddInvestigationAttendeeRequest, InvestigationAttendeeRecord>(
+            HttpMethod.Post, $"{InvBase(orgId, caseId)}/{invId}/attendees", req, It.IsAny<CancellationToken>()), Times.Once);
+    }
+
+    [Fact]
+    public async Task AddInvestigationAttendeeAsync_KeepsTheServersRefusal()
+    {
+        var orgId = Guid.NewGuid(); var caseId = Guid.NewGuid(); var invId = Guid.NewGuid();
+        var api = ApiMock();
+        api.Setup(x => x.SendExpectingReasonAsync<AddInvestigationAttendeeRequest, InvestigationAttendeeRecord>(
+                HttpMethod.Post, It.IsAny<string>(), It.IsAny<AddInvestigationAttendeeRequest>(), It.IsAny<CancellationToken>()))
+           .ReturnsAsync(((InvestigationAttendeeRecord?)null, "Sam is already on this team."));
+
+        var (result, error) = await Build(api).AddInvestigationAttendeeAsync(
+            orgId, caseId, invId, new AddInvestigationAttendeeRequest(Guid.NewGuid(), null));
+
+        Assert.Null(result);
+        Assert.Equal("Sam is already on this team.", error);
+    }
+
+    [Fact]
+    public async Task RemoveInvestigationAttendeeAsync_KeepsTheServersRefusal()
+    {
+        var orgId = Guid.NewGuid(); var caseId = Guid.NewGuid(); var invId = Guid.NewGuid(); var rowId = Guid.NewGuid();
+        var api = ApiMock();
+        api.Setup(x => x.DeleteExpectingReasonAsync(
+                $"{InvBase(orgId, caseId)}/{invId}/attendees/{rowId}", It.IsAny<CancellationToken>()))
+           .ReturnsAsync((false, "Sam has written up what they saw, so they stay on the team."));
+
+        var (removed, error) = await Build(api).RemoveInvestigationAttendeeAsync(orgId, caseId, invId, rowId);
+
+        Assert.False(removed);
+        Assert.Contains("stay on the team", error);
     }
 
     // ── Evidence voting ───────────────────────────────────────────────────────

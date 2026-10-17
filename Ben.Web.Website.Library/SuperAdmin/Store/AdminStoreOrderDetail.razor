@@ -49,7 +49,7 @@
             <div>
                 <h3 class="mb-0">Order #@o.OrderNumber<HelpLink Slug="site-administration" Anchor="orders-and-fulfillment" /></h3>
                 <div class="small text-secondary">
-                    Placed @o.PlacedUtc.ToViewerLocalTime(UserState).ToString("MM/dd/yyyy h:mm tt") ·
+                    Placed @o.PlacedUtc.ToViewerLocalTime(UserState).ToDisplayDateTime() ·
                     <span class="fw-medium text-@StoreOrderStatusText.Tone(o.Status)-emphasis" data-testid="order-status">@StoreOrderStatusText.Label(o.Status)</span> ·
                     @o.PaymentStatus
                 </div>
@@ -244,7 +244,7 @@
                                 <span class="fw-medium">@StoreMoney.Format(r.Amount)</span> — @r.Reason
                                 <span class="badge ms-1 @RefundBadge(r)">@RefundWords(r)</span>
                                 <div class="text-secondary">
-                                    @r.DateCreated.ToViewerLocalTime(UserState).ToString("MM/dd/yyyy h:mm tt")@(r.RequestedByName is { } who ? $" · {who}" : null)@(r.Restock ? " · restocked" : null)
+                                    @r.DateCreated.ToViewerLocalTime(UserState).ToDisplayDateTime()@(r.RequestedByName is { } who ? $" · {who}" : null)@(r.Restock ? " · restocked" : null)
                                     @if (r.FailureReason is { } why) { <text> · @why</text> }
                                 </div>
                                 @if (r.IsRetryable)
@@ -285,7 +285,7 @@
             @foreach (var e in o.Events)
             {
                 <li class="border-bottom py-2">
-                    <span class="text-secondary">@e.OccurredUtc.ToViewerLocalTime(UserState).ToString("MM/dd/yyyy h:mm tt")</span>
+                    <span class="text-secondary">@e.OccurredUtc.ToViewerLocalTime(UserState).ToDisplayDateTime()</span>
                     · <span class="fw-medium">@EventWords(e)</span>
                     @if (e.Note is { } n && e.Kind != StoreOrderEventKind.LetterQueued) { <text> — @n</text> }
                     @if (e.Amount is { } a) { <text> (@StoreMoney.Format(a))</text> }

@@ -184,8 +184,17 @@
 }
 
 /* A phone: the frame is the first screen, so it is spent on the title and the action. The figures
-   become one row of small tiles without their sub-lines — on What's On the 2×2 grid filled the
-   rest of an 812px screen and pushed the first night below it. */
+   become small tiles — on What's On the 2×2 grid filled the rest of an 812px screen and pushed the
+   first night below it.
+
+   The sub-line stays (10/16/2026). It used to be hidden here, and on an event page the sub-line
+   is the start time: a phone visitor saw "Sun 10/25" with no "7:00 PM CDT". At 375px three tiles
+   at least 4.5rem wide each were also too narrow for "Sun 10/25", which wrapped onto two lines.
+   Now a tile is at least 6.25rem (100px, room for "Sun 10/25" and "7:00 PM CDT") and words wrap
+   only at spaces, so a row holds as many tiles as fit and the rest go to the next row:
+     320px (small phone): two to a row, the third below;
+     375 to 430px (phone to Pro Max, a folded Duo): three to a row where they fit, else two;
+     576px and up: the 2×2 grid beside the title, as before. */
 @media (max-width: 575.98px) {
     .page-hero,
     .page-hero--tall,
@@ -194,11 +203,11 @@
     .page-hero__lede { font-size: .98rem; margin-bottom: 1rem; }
     .page-hero__facts {
         width: 100%;
-        grid-template-columns: repeat(auto-fit, minmax(4.5rem, 1fr));
+        grid-template-columns: repeat(auto-fit, minmax(6.25rem, 1fr));
         gap: .4rem;
     }
-    .page-hero__fact { padding: .45rem .55rem; }
+    .page-hero__fact { padding: .45rem .55rem; min-width: 0; }
     .page-hero__fact dt { font-size: .58rem; letter-spacing: .1em; }
-    .page-hero__fact dd { font-size: 1rem; }
-    .page-hero__fact dd span { display: none; }
+    .page-hero__fact dd { font-size: 1rem; overflow-wrap: normal; }
+    .page-hero__fact dd span { font-size: .7rem; line-height: 1.2; margin-top: .1rem; }
 }

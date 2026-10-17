@@ -933,7 +933,7 @@
     private string? _error;
     private bool _isBusy;
     private HashSet<Guid> _uploading = [];
-    private DateTime _selectedDate = DateTime.Today;
+    private DateTime _selectedDate = DateTime.UtcNow.Date; // the reader's today once their zone is known
 
     // Dialog state
     private bool _showDialog;
@@ -1002,6 +1002,8 @@
         if (!firstRender) return;
         if (!await UserState.WaitUntilAuthReadyAsync(RendererInfo.IsInteractive)) return;
         if (!UserState.IsAuthenticated) { NavManager.NavigateTo("/login"); return; }
+        // Today on the reader's clock, not the server's.
+        _selectedDate = UserState.NowInViewerTimeZone().Date;
         await LoadAsync();
     }
 
@@ -1206,7 +1208,8 @@
 
     private class OccForm
     {
-        public DateTime? EventDateTime { get; set; } = DateTime.Now;
+        // A placeholder only: both ways of opening the form set it on the reader's clock.
+        public DateTime? EventDateTime { get; set; } = DateTime.UtcNow;
         public string    Title         { get; set; } = "";
         public string    Body          { get; set; } = "";
         public HashSet<Guid> ExperienceTypeIds { get; } = [];

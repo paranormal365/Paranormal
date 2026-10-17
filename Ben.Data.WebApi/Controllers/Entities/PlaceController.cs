@@ -430,6 +430,99 @@ public sealed class PlaceController : BenControllerBase
         return Ok(matches);
     }
 
+    /// <summary>The most places one search returns.</summary>
+    public const int SearchResultCap = 20;
+
+    /// <summary>The fewest characters a search needs before it looks at all.</summary>
+    public const int SearchMinimumLength = 2;
+
+    /// <summary>
+    /// Public locations whose name or town contains what was typed: the "Where (a place)" box on a
+    /// public calendar event (10/16/2026).
+    /// </summary>
+    /// <remarks>
+    /// <para><b>Why the matcher above was not enough.</b> The event form used
+    /// <see cref="FindCandidates"/>, which is a duplicate detector, not a search: it wants the exact
+    /// name or a near-identical misspelling. "Bell Witch" found nothing, so a group could not attach
+    /// its public event to Bell Witch Cave. That matcher is left exactly as it is; the screens that
+    /// stop duplicate places from being created depend on it being strict.</para>
+    ///
+    /// <para><b>Public locations only, always.</b> A public event is a date and an address advertised
+    /// to strangers, and <c>OrgCalendarEventController</c> refuses to publish one at a private
+    /// residence. Offering a home here would let anybody signed in learn its street by guessing what
+    /// its family called it, and would only lead to a refusal at save time anyway.</para>
+    ///
+    /// <para><b>Every word must appear, in the name or the town.</b> "Bell Witch Adams" finds the
+    /// cave as well as "bell witch" does. Case is ignored by the database's collation, and nothing
+    /// wraps the columns in a function, so the comparison stays as cheap as a contains match can be.
+    /// The kind filter runs first and the answer is capped, so a short word cannot return the whole
+    /// table.</para>
+    /// </remarks>
+    [HttpGet("search")]
+    public async Task<ActionResult<IEnumerable<PlaceCandidate>>> SearchPublicLocations(
+        [FromQuery] string? q, CancellationToken ct)
+    {
+        // [Authorize] on the class already turns away a caller with no token. This also turns away
+        // a token that names nobody, rather than searching on behalf of no one.
+        if (GetCurrentUserIdOrNull() is null) return Unauthorized();
+
+        var words = (q ?? string.Empty)
+            .Split((char[]?)null, StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+            .Take(6)
+            .Select(w => w.Length > 64 ? w[..64] : w)
+            .ToList();
+
+        if (words.Sum(w => w.Length) < SearchMinimumLength)
+            return Ok(Array.Empty<PlaceCandidate>());
+
+        await using var db = await _db.CreateDbContextAsync(ct);
+
+        var query = db.Places.AsNoTracking().Where(p => p.Kind == PlaceKind.PublicLocation);
+
+        foreach (var word in words)
+        {
+            var pattern = $"%{EscapeLike(word)}%";
+            query = query.Where(p =>
+                (p.Name != null && EF.Functions.Like(p.Name, pattern, LikeEscape))
+                || (p.City != null && EF.Functions.Like(p.City, pattern, LikeEscape)));
+        }
+
+        // A name that starts with what was typed is the likeliest one meant, so it comes first.
+        var first = $"{EscapeLike(string.Join(' ', words))}%";
+        var found = await query
+            .OrderBy(p => p.Name != null && EF.Functions.Like(p.Name, first, LikeEscape) ? 0 : 1)
+            .ThenBy(p => p.Name)
+            .ThenBy(p => p.City)
+            .Take(SearchResultCap)
+            .Select(p => new { p.Id, p.Name, p.StreetAddress1, p.City, p.State, p.Kind })
+            .ToListAsync(ct);
+
+        var ids = found.Select(p => p.Id).ToList();
+        var counts = await db.Investigations.AsNoTracking()
+            .Where(i => i.PlaceId != null && ids.Contains(i.PlaceId.Value))
+            .GroupBy(i => i.PlaceId!.Value)
+            .Select(g => new { g.Key, Count = g.Count() })
+            .ToDictionaryAsync(g => g.Key, g => g.Count, ct);
+
+        return Ok(found
+            .Select(p => new PlaceCandidate(
+                p.Id, p.Name, p.StreetAddress1, p.City, p.State, p.Kind,
+                DistanceMiles: null,
+                counts.GetValueOrDefault(p.Id)))
+            .ToList());
+    }
+
+    private const string LikeEscape = "\\";
+
+    /// <summary>What was typed, with LIKE's own wildcards made literal.</summary>
+    /// <remarks>Without this, a search for "100%" or "a_b" would match far more than it says.</remarks>
+    internal static string EscapeLike(string value)
+        => value
+            .Replace("\\", "\\\\")
+            .Replace("%", "\\%")
+            .Replace("_", "\\_")
+            .Replace("[", "\\[");
+
     private static double? DistanceMiles(Place place, decimal? latitude, decimal? longitude)
         => place.Latitude is null || place.Longitude is null || latitude is null || longitude is null
             ? null

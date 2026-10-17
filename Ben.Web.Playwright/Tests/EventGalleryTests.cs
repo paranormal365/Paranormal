@@ -67,20 +67,52 @@ public class EventGalleryTests : BenTestBase
         Assert.That(html, Does.Contain(@"name=""twitter:card"" content=""summary_large_image"""));
     }
 
+    /// <summary>
+    /// The phone's ask button stays on screen while the form is elsewhere, and steps aside while
+    /// the form is on screen — where it covered the form's last lines (10/16/2026).
+    /// </summary>
     [Test]
-    public async Task On_a_phone_the_ask_button_stays_on_screen()
+    public async Task On_a_phone_the_ask_button_steps_aside_for_the_form_and_comes_back()
     {
         await Page.SetViewportSizeAsync(375, 812);
         await Page.GotoAsync($"{BaseUrl}/o/paranormal365/events/{await SlugAsync()}");
         await WaitUntilLoadedAsync();
+        await WaitForTheCircuitAsync();
 
         var ask = Page.Locator("#hosted-sticky-ask");
         if (await ask.CountAsync() == 0) Assert.Ignore("The seeded weekend is not taking bookings on this database.");
-        await Expect(ask).ToBeInViewportAsync(new() { Timeout = 30_000 });
+        await Expect(Page.Locator("#event-act")).ToBeAttachedAsync(new() { Timeout = 30_000 });
 
-        await Page.Mouse.WheelAsync(0, 2000);
-        await Page.WaitForTimeoutAsync(300);
+        // At the form: out of the way.
+        await Page.EvaluateAsync("() => document.getElementById('event-act').scrollIntoView({ block: 'start' })");
+        await Expect(ask).ToBeHiddenAsync(new() { Timeout = 10_000 });
+
+        // Scrolled past it: back, and on screen.
+        await Page.EvaluateAsync("() => window.scrollBy(0, document.getElementById('event-act').getBoundingClientRect().bottom + 10)");
+        var gone = await Page.EvaluateAsync<bool>("() => document.getElementById('event-act').getBoundingClientRect().bottom < 0");
+        if (!gone)
+        {
+            // Not enough page below the form to scroll it away; above it, then, if there is room.
+            await Page.EvaluateAsync("() => window.scrollTo(0, 0)");
+            gone = await Page.EvaluateAsync<bool>("() => document.getElementById('event-act').getBoundingClientRect().top > window.innerHeight * 0.75");
+        }
+        if (!gone) Assert.Ignore("The form fills this page from top to bottom; there is nowhere it is off screen.");
+
+        await Expect(ask).ToBeVisibleAsync(new() { Timeout = 10_000 });
         await Expect(ask).ToBeInViewportAsync();
+
+        // And at the very bottom, the page's last line is clear of it.
+        await Page.EvaluateAsync("() => window.scrollTo(0, document.documentElement.scrollHeight)");
+        await Page.WaitForTimeoutAsync(400);
+        var clear = await Page.EvaluateAsync<bool>("""
+            () => {
+                const a = document.getElementById('hosted-sticky-ask');
+                const footer = document.querySelector('.app-footer');
+                if (!a || !footer || getComputedStyle(a).visibility === 'hidden') return true;
+                return footer.getBoundingClientRect().bottom <= a.getBoundingClientRect().top + 1;
+            }
+            """);
+        Assert.That(clear, Is.True, "At the bottom of the page the ask button covers the footer.");
     }
 
     private async Task<string> SlugAsync()

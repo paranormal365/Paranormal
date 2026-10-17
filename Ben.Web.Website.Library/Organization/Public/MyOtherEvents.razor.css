@@ -1,0 +1,27 @@
+/* The same two-part row as the bookings above (MyEvents.razor.css): what it is, and where it stands. */
+
+.my-other {
+    display: flex;
+    flex-wrap: wrap;
+    gap: .75rem;
+    align-items: center;
+    justify-content: space-between;
+}
+
+.my-other__what {
+    min-width: 14rem;
+    flex: 1 1 auto;
+}
+
+.my-other__state {
+    display: flex;
+    gap: .5rem;
+    align-items: center;
+    flex-wrap: wrap;
+}
+
+.my-other__what ::deep .my-other__countdown {
+    display: flex;
+    width: min(100%, 22rem);
+    margin-top: .4rem;
+}

@@ -49,6 +49,8 @@ public sealed class ReachableComponentTests
         // Area 4 (item #54): without this, UserAvatar is unreachable and nobody's profile photo
         // is ever rendered next to their name.
         { "ShowAvatar=\"true\"", "UserNameLink.ShowAvatar", "member rosters, attendee lists and comment threads" },
+        // 10/16/2026: without this the nearby search's tour cards never count down to their next walk.
+        { "ShowCountdown=\"true\"", "BenTourCard.ShowCountdown", "the nearby search's tour cards" },
     };
 
     /// <summary>

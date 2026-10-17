@@ -25,18 +25,23 @@
 <div class="container py-3" style="max-width:960px;">
 
     <h1 class="h3 mb-1">What I'm going to</h1>
-    <p class="text-secondary small mb-3">
-        Events you've asked to come to, or been given a place at. Nothing here is paid through
-        this site.
+    @* Says what is on the page (10/16/2026): it used to describe the bookings alone. *@
+    <p class="text-secondary small mb-3" id="my-events-intro">
+        Events you've booked or asked to come to, the events and tours you said you'd come to, and
+        the investigations you're on the team of. Nothing here is paid through this site.
     </p>
 
     <BenListState TItem="MyHostedEventBookingRecord" Result="_bookings" Loading="_loading"
                   LoadingText="Loading your bookings…" OnRetry="LoadAsync">
         <Empty>
-            <div class="alert alert-light" id="my-events-empty">
-                You haven't asked for a place at anything yet. Groups list what they are running on
-                their own pages, and on <a href="/events">What's On</a>.
-            </div>
+            @* "Nothing yet" only when there is nothing below either. *@
+            @if (!HasOthers)
+            {
+                <div class="alert alert-light" id="my-events-empty">
+                    You haven't asked for a place at anything yet. Groups list what they are running on
+                    their own pages, and on <a href="/events">What's On</a>.
+                </div>
+            }
         </Empty>
 
         <ChildContent>
@@ -63,6 +68,15 @@
                                 · @When(mine)
                             </div>
                             <div class="small text-secondary">@What(mine)</div>
+                            @if (CountdownFor(mine) is { } count)
+                            {
+                                @* The same countdown as everything else on the page (10/16/2026), on the
+                                   window of the nights this booking is for. *@
+                                <EventCountdown StartUtc="@count.StartsAtUtc" EndUtc="@count.EndsAtUtc"
+                                                ZoneId="@count.TimeZoneId" ListedUtc="@count.SignedUpUtc"
+                                                Name="@mine.EventName" Class="my-event__countdown"
+                                                TestId="my-event-countdown" />
+                            }
                             @if (mine.Sessions is { Count: > 0 } sessions)
                             {
                                 @* The ghost hunt at eleven is part of what they are going to (phase 12). *@
@@ -108,7 +122,7 @@
                 }
             </ul>
 
-            @if (Coming.Count == 0)
+            @if (Coming.Count == 0 && !HasOthers)
             {
                 <div class="alert alert-light" id="my-events-none-coming">
                     Nothing coming up. What you have asked for before is below.
@@ -143,6 +157,12 @@
             }
         </ChildContent>
     </BenListState>
+
+    @* Everything else they are going to, by date (10/16/2026). Its own load, its own refusal. *@
+    @if (!_loading)
+    {
+        <MyOtherEvents Items="_others?.Items" Refusal="@_othersRefusal" OnRetry="LoadAsync" />
+    }
 </div>
 
 @code {
@@ -176,9 +196,42 @@
     private async Task LoadAsync()
     {
         _loading = true;
-        _bookings = await AdminClient.GetMyHostedEventBookingsAsync();
+        // Both at once: the bookings, and everything Home's countdown counts (up to 30 days back,
+        // the way this page already keeps past bookings), which also gives each booking its clock.
+        var bookings = AdminClient.GetMyHostedEventBookingsAsync();
+        var others = AdminClient.GetMyNextEventsAsync(
+            take: OthersTake, pastDays: OthersPastDays);
+        _bookings = await bookings;
+
+        var answer = await others;
+        _others = answer.Failed ? null : answer.Item;
+        _othersRefusal = !answer.Failed ? null
+            : answer.SessionExpired ? "You have been signed out. Sign in again to see your other events."
+            : "Couldn't load your other events, tours and investigations just now.";
         _loading = false;
     }
+
+    /// <summary>All of them: the endpoint's ceiling, not Home's ten.</summary>
+    private const int OthersTake = 200;
+
+    /// <summary>The same 30 days the site keeps a past event on somebody's list.</summary>
+    private const int OthersPastDays = 30;
+
+    private MyNextEventsResponse? _others;
+    private string? _othersRefusal;
+
+    /// <summary>Anything to show below the bookings, or a refusal to say there.</summary>
+    private bool HasOthers
+        => _othersRefusal is not null
+        || (_others?.Items.Any(i => i.Kind != MyNextEventKind.HostedEvent) ?? false);
+
+    /// <summary>A booking's own countdown: its window, worked out by the same read Home uses.</summary>
+    /// <remarks>
+    /// Only for a booking that is still counted — not one for a called-off event, and not one that
+    /// ended more than 30 days ago, which has nothing left to count down to.
+    /// </remarks>
+    private MyNextEventItem? CountdownFor(MyHostedEventBookingRecord booking)
+        => _others?.Items.FirstOrDefault(i => i.Kind == MyNextEventKind.HostedEvent && i.Id == booking.HostedEventId);
 
     /// <summary>
     /// Puts a changed booking back in the list where it was, keeping what only this list carries.

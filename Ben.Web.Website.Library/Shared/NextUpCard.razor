@@ -1,0 +1,135 @@
+@namespace Ben.Web.Website.Library.Shared
+@using Ben.Web.Services
+@using Ben.Service.Models.Entities
+@using Ben.Web.Website.Library.Kit
+@implements IDisposable
+
+@*
+    Home's "what you're going to next" card (10/16/2026), drawn from what HomeEventCountdown loaded.
+
+    NOTHING UPCOMING, NO CARD. Not an empty card: Home is not the place to say "you are going to
+    nothing". A FAILED LOAD is different, and says so in one line with a way to try again, because
+    silence there would read as "nothing coming up" when the site never looked.
+
+    THE WORDS for where they stand are the ones the page that owns each thing uses — "You're
+    coming", "Asked for", "Held for you" — so the card and /my-events never use two vocabularies for
+    one fact. A tap opens the pass for a confirmed booking and the event's page otherwise.
+
+    THE TICKING is the page's one JavaScript ticker (EventCountdown). The only server timer here is a
+    single one-shot at the moment the shown event ENDS, so the card can move on to the next one; it
+    re-renders nothing every second.
+*@
+
+@if (Refusal is not null)
+{
+    <div class="home-band pt-3">
+        <p class="next-up-note small mb-0" data-testid="home-countdown-refusal">
+            @Refusal
+            <button type="button" class="btn btn-link btn-sm p-0 align-baseline" @onclick="OnRetry">Try again</button>
+        </p>
+    </div>
+}
+else if (Pick() is { } pick)
+{
+    var item = pick.Next;
+    <div class="home-band pt-3">
+        <div class="next-up-wrap">
+            <a class="next-up" href="@item.Href" data-testid="home-event-countdown"
+               data-standing="@item.Standing.ToString().ToLowerInvariant()">
+                <span class="next-up__mark" aria-hidden="true">
+                    <img src="/static/images/is-haunted-mark.svg" alt="" width="44" height="44" />
+                </span>
+                <span class="next-up__body">
+                    <span class="next-up__kicker">@StandingWords(item.Standing) · @KindWords(item.Kind)</span>
+                    <span class="next-up__title">@item.Title</span>
+                    <span class="next-up__meta">
+                        @if (!string.IsNullOrWhiteSpace(item.OrganizationName))
+                        {
+                            <span>@item.OrganizationName</span>
+                            <span aria-hidden="true">·</span>
+                        }
+                        @* The event's own clock (or the reader's, if they chose it); stored UTC. *@
+                        <BenTime Utc="@item.StartsAtUtc" ZoneId="@item.TimeZoneId" TestId="home-countdown-start" />
+                    </span>
+                </span>
+                <EventCountdown Look="CountdownLook.Hero" Class="next-up__count"
+                                StartUtc="@item.StartsAtUtc" EndUtc="@item.EndsAtUtc" ZoneId="@item.TimeZoneId"
+                                ListedUtc="@item.SignedUpUtc" Name="@item.Title" NowUtc="@NowUtc"
+                                TestId="home-countdown-clock" />
+            </a>
+            @if (pick.More > 0)
+            {
+                <a class="next-up__more" href="/my-events" data-testid="home-countdown-more">
+                    and @pick.More more
+                </a>
+            }
+        </div>
+    </div>
+}
+
+@code {
+    /// <summary>What the person is going to; null draws nothing.</summary>
+    [Parameter] public MyNextEventsResponse? Next { get; set; }
+
+    /// <summary>Why it could not be read, in a sentence; null when it was.</summary>
+    [Parameter] public string? Refusal { get; set; }
+
+    [Parameter] public EventCallback OnRetry { get; set; }
+
+    /// <summary>The moment to choose for. Tests set it; the site never does.</summary>
+    [Parameter] public DateTime? NowUtc { get; set; }
+
+    private Timer? _moveOn;
+
+    private (MyNextEventItem Next, int More)? Pick()
+        => Next is null ? null : CountdownMath.PickNext(Next.Items, Next.Total, NowUtc ?? DateTime.UtcNow);
+
+    protected override void OnAfterRender(bool firstRender)
+    {
+        // One timer, for the end of the event on show: then the card draws the next one. Further off
+        // than a day is left alone — nobody keeps Home open that long, and the next visit re-reads.
+        if (NowUtc is not null || Pick() is not { } pick) return;
+        var due = pick.Next.EndsAtUtc - DateTime.UtcNow;
+        if (due <= TimeSpan.Zero || due > TimeSpan.FromDays(1)) return;
+
+        _moveOn?.Dispose();
+        _moveOn = new Timer(_ => _ = InvokeAsync(StateHasChanged), null,
+            due + TimeSpan.FromSeconds(1), Timeout.InfiniteTimeSpan);
+    }
+
+    /// <summary>The same words the page that owns each one uses.</summary>
+    internal static string StandingWords(MyNextEventStanding standing) => standing switch
+    {
+        MyNextEventStanding.AskedFor => "Asked for",
+        MyNextEventStanding.HeldForYou => "Held for you",
+        MyNextEventStanding.Invited => "You're invited",
+        _ => "You're coming",
+    };
+
+    /// <summary>
+    /// The same standing, said of something that is over: "You're coming" under Recently read as
+    /// if the night were still ahead (Ben, 10/16/2026). Says only what the record knows, never
+    /// "You went", because a place held is not proof somebody turned up.
+    /// </summary>
+    internal static string PastStandingWords(MyNextEventKind kind, MyNextEventStanding standing) => standing switch
+    {
+        MyNextEventStanding.AskedFor => "You asked for a place",
+        MyNextEventStanding.HeldForYou => "A place was held for you",
+        MyNextEventStanding.Invited => "You were invited",
+        _ => kind switch
+        {
+            MyNextEventKind.Investigation => "You were on the team",
+            MyNextEventKind.Event => "You said you'd come",
+            _ => "You had a place",
+        },
+    };
+
+    internal static string KindWords(MyNextEventKind kind) => kind switch
+    {
+        MyNextEventKind.TourDate => "Tour",
+        MyNextEventKind.Investigation => "Investigation",
+        _ => "Event",
+    };
+
+    public void Dispose() => _moveOn?.Dispose();
+}

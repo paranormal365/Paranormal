@@ -445,7 +445,7 @@ public sealed class PublicTourController : BenControllerBase
         var dates = await db.OrgCalendarEvents.AsNoTracking()
             .Where(e => e.TourId != null && ids.Contains(e.TourId.Value)
                      && e.IsPublic && e.EndDateTime >= now)
-            .Select(e => new { TourId = e.TourId!.Value, e.StartDateTime })
+            .Select(e => new { TourId = e.TourId!.Value, e.StartDateTime, e.EndDateTime, e.DateCreated })
             .ToListAsync(ct);
 
         var ratings = await db.TourReviews.AsNoTracking()
@@ -474,6 +474,8 @@ public sealed class PublicTourController : BenControllerBase
             var address = t.StartOrganizationAddress ?? addresses.FirstOrDefault(a => a.Id == t.StartOrganizationAddressId);
             var org = orgs.First(o => o.Id == t.OrganizationId);
             var mine = dates.Where(d => d.TourId == t.Id).ToList();
+            // The next date's end and listing, for its card's countdown (10/16/2026).
+            var nextDate = mine.MinBy(d => d.StartDateTime);
             var stars = ratings.Where(r => r.TourId == t.Id).Select(r => r.Stars).ToList();
 
             return new PublicTourListItem(
@@ -490,7 +492,9 @@ public sealed class PublicTourController : BenControllerBase
                 covers.FirstOrDefault(c => c.TourId == t.Id)?.UploadFileId,
                 // The walk's own clock, so a card says the time it actually starts rather than
                 // the time where the reader happens to be (Ben, 2026-09-10).
-                t.TimeZoneId);
+                t.TimeZoneId,
+                NextDateEndUtc: nextDate?.EndDateTime,
+                NextDateListedUtc: nextDate?.DateCreated);
         })];
     }
 

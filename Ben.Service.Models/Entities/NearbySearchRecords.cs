@@ -76,7 +76,15 @@ public sealed record NearbyEventResult(
     /// The IANA zone the night happens in, when it is recorded — today, the tour's. Null means
     /// nobody has said, and the reader is shown UTC and told so; see EventClock.
     /// </summary>
-    string?  TimeZoneId = null);
+    string?  TimeZoneId = null,
+    /// <summary>When it ends, so a card can say "Happening now" while it runs (10/16/2026).</summary>
+    DateTime? EndDateTime = null,
+    /// <summary>When it was listed: where the countdown's progress bar starts. See CountdownMath.Baseline.</summary>
+    DateTime? ListedUtc = null,
+    /// <summary>Why a signed-in reader who asked for their own events is shown it; None for a visitor.</summary>
+    Ben.Data.Common.Enums.EventReaderTie ReaderTie = Ben.Data.Common.Enums.EventReaderTie.None,
+    /// <summary>The group's id, for the link a group-only event takes (its calendar, not a public page).</summary>
+    Guid? OrganizationId = null);
 
 /// <summary>
 /// One organization near the caller, at whatever precision it chose when it opted into search.

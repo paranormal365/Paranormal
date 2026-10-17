@@ -346,6 +346,12 @@ public interface IBenOrganizationClient
     /// <summary>Upcoming public events, across every organization or narrowed to one.</summary>
     Task<LoadResult<PublicEventListItem>> GetPublicEventsAsync(string? orgUrlName = null, int maxResults = 50, CancellationToken token = default);
 
+    /// <summary>
+    /// The same list for a signed-in reader, with their own groups' events added and marked
+    /// (10/16/2026). Only for a signed-in reader: it sends their token.
+    /// </summary>
+    Task<LoadResult<PublicEventListItem>> GetPublicEventsForMeAsync(string? orgUrlName = null, int maxResults = 50, CancellationToken token = default);
+
     /// <summary>One public event by its readable URL.</summary>
     Task<PublicEventRecord?> GetPublicEventAsync(string orgUrlName, string eventSlug, CancellationToken token = default);
 

@@ -9,6 +9,7 @@
 @inject NavigationManager NavManager
 @inject IMediaUrlBuilder MediaUrls
 @inject TimeView View
+@inject IJSRuntime JS
 @implements IDisposable
 
 @* Item 154: the address must die with the feature switch, not just the links to it. *@
@@ -127,7 +128,7 @@ else
                                 <span class="small" data-testid="night-menus">
                                     @foreach (var (pair, at) in served.Select((p, n) => (p, n)))
                                     {
-                                        @(at > 0 ? " · " : "")<a href="@($"o/{UrlName}/events/{EventSlug}#menu-{pair.Menu.Id}")">@pair.Meal.MealTitle@(pair.Menu.ShownHeading != pair.Meal.MealTitle ? $": {pair.Menu.ShownHeading}" : "")</a>
+                                        @(at > 0 ? " · " : "")<a href="@JumpLink.To(NavManager, $"menu-{pair.Menu.Id}")">@pair.Meal.MealTitle@(pair.Menu.ShownHeading != pair.Meal.MealTitle ? $": {pair.Menu.ShownHeading}" : "")</a>
                                     }
                                 </span>
                             }
@@ -181,13 +182,14 @@ else
                 @if (_hosted is { } hostedPlaces)
                 {
                     <HostedEventPlaces Hosted="hostedPlaces" IsAuthenticated="_isAuthenticated">
-                        <SignedOut>
+                        <SignedOut Context="drawsHeading">
                             @* The umbrella's own email flow, unchanged and passed in rather than
                                copied: it is what issues the token, and a second copy would be a
-                               second way to reach it. *@
+                               second way to reach it. The component says whether it already has
+                               a heading above this, so "Coming along?" is never asked twice. *@
                             @if (!_event.Flags.RsvpHasClosed && !_event.Flags.IsFull)
                             {
-                                @AttendByEmail
+                                @AttendByEmail(drawsHeading)
                             }
                         </SignedOut>
                     </HostedEventPlaces>
@@ -284,7 +286,7 @@ else
                 }
                 else if (!_isAuthenticated && !_event.Flags.RsvpHasClosed && !_event.Flags.IsFull)
                 {
-                    @AttendByEmail
+                    @AttendByEmail(true)
                 }
                 else if (_event.Flags.RsvpBlockedReason is string reason)
                 {
@@ -566,19 +568,32 @@ else
     /// A fragment because two branches render it: an ordinary event's own sign-up, and a hosted
     /// event's, which draws the house first and puts this underneath. A second copy would be a
     /// second way to reach the same token, and the two would drift.
+    /// <para><c>drawsHeading</c> is <c>false</c> where something above has already
+    /// asked "Coming along?" — a hosted event's plan, with "Just for the day?" over this form — so
+    /// the question is asked once (10/16/2026: a signed-out visitor read it twice).</para>
     /// </remarks>
-    private RenderFragment AttendByEmail => @<text>
+    private RenderFragment<bool> AttendByEmail => drawsHeading => @<text>
                 @if (_emailSent)
                 {
-                    <div class="event-act__ask mb-1">Check your email</div>
+                    @if (drawsHeading)
+                    {
+                        <div class="event-act__ask mb-1">Check your email</div>
+                    }
                     <p class="text-secondary small mb-0">
+                        @if (!drawsHeading)
+                        {
+                            <strong>Check your email.</strong>
+                        }
                         If that address can come along, there's a link on its way. Click it to
                         confirm — it works once, and it's good for two weeks.
                     </p>
                 }
                 else
                 {
-                    <div class="event-act__ask mb-1">Coming along?</div>
+                    @if (drawsHeading)
+                    {
+                        <div class="event-act__ask mb-1">Coming along?</div>
+                    }
                     <p class="text-secondary small">
                         You don't need an account. Give us an email address and we'll send you a
                         link to confirm — no password to invent.
@@ -596,29 +611,52 @@ else
                         <BookingContactFields Draft="_attendContact" IdPrefix="attend" AskEmail="true"
                                               OrganizationName="@askingHost.OrganizationName"
                                               Changed="StateHasChanged" />
-                        <button type="button" class="btn btn-primary mt-2" id="attend-send"
-                                @onclick="RequestAttendanceAsync"
-                                disabled="@(_busy || !_attendContact.IsEnough(withEmail: true))">Send me the link</button>
+                        @* Never a grey button with nothing to say why (10/16/2026). *@
+                        var attendMissing = _attendContact.WhatIsMissing(withEmail: true, askingHost.OrganizationName);
+                        <div class="d-flex flex-wrap align-items-center gap-2 mt-2">
+                            <button type="button" class="btn btn-primary" id="attend-send"
+                                    @onclick="RequestAttendanceAsync"
+                                    aria-describedby="@(attendMissing is null ? null : "attend-missing")"
+                                    disabled="@(_busy || attendMissing is not null)">Send me the link</button>
+                            @if (attendMissing is not null)
+                            {
+                                <span class="text-secondary small" id="attend-missing">@attendMissing</span>
+                            }
+                        </div>
                     }
                     else
                     {
-                    <div class="row g-2">
+                    @* Labeled, with ids of their own (10/16/2026): a placeholder is not a label,
+                       and it vanishes the moment somebody starts typing. *@
+                    <div class="row g-2 align-items-end">
                         <div class="col-md-5">
-                            <input class="form-control" type="email" maxlength="320"
+                            <label class="form-label small mb-1" for="attend-email">Email address <span class="text-secondary">(required)</span></label>
+                            <input id="attend-email" class="form-control" type="email" maxlength="320"
+                                   autocomplete="email" aria-required="true"
                                    placeholder="you@example.com" value="@_attendEmail"
                                    @oninput="@(e => _attendEmail = e.Value?.ToString() ?? "")" />
                         </div>
                         <div class="col-md-4">
-                            <input class="form-control" maxlength="200"
-                                   placeholder="Your name (optional)" value="@_attendName"
+                            <label class="form-label small mb-1" for="attend-name">Your name <span class="text-secondary">(optional)</span></label>
+                            <input id="attend-name" class="form-control" maxlength="200" autocomplete="name"
+                                   value="@_attendName"
                                    @oninput="@(e => _attendName = e.Value?.ToString() ?? "")" />
                         </div>
                         <div class="col-md-3">
                             <button type="button" class="btn btn-primary w-100"
                                     @onclick="RequestAttendanceAsync"
+                                    aria-describedby="@(_attendEmail.Contains('@') ? null : "attend-email-missing")"
                                     disabled="@(_busy || !_attendEmail.Contains('@'))">Send me the link</button>
                         </div>
                     </div>
+                    @if (!_attendEmail.Contains('@'))
+                    {
+                        <div class="text-secondary small mt-1" id="attend-email-missing">
+                            @(_attendEmail.Trim().Length == 0
+                                ? "Add your email address so we can send you the link."
+                                : "Check your email address. It needs an @.")
+                        </div>
+                    }
                     }
 
                     <p class="text-secondary mt-2 mb-0" style="font-size:.75rem;">
@@ -776,15 +814,18 @@ else
 
             if (!_event.IsAllDay)
             {
-                var minutes = (int)(_event.EndDateTime - _event.StartDateTime).TotalMinutes;
-                if (minutes > 0)
+                // Said the way a person would (10/16/2026): "4 hr" for an evening, "15 nights" for
+                // a fortnight, never "352 hr". A hosted run counts its own dates and, when every
+                // one keeps the same hours, says them: "15 nights, 6:00–11:00 PM".
+                var length = _hosted is { Nights.Count: > 1 } many
+                    ? EventLength.Run(many.DateNoun, [.. many.Nights.Select(n => (n.StartsLocal, n.EndsLocal))])
+                    : EventLength.Between(_event.StartDateTime, _event.EndDateTime, _event.TimeZoneId);
+                if (length is not null)
                     // "On your feet" is a walk's phrase and belongs to a walk. A weekend at a
                     // hotel, a run of performances or a talk are not things anybody stands up for
                     // (item 235), so the note only appears where it is true.
-                    facts.Add(new BenFactItem("How long", Duration(minutes),
-                        _event.TourName is not null ? "on your feet"
-                        : _hosted is { Nights.Count: > 1 } many ? $"over {many.Nights.Count} {many.DateNoun}s"
-                        : null));
+                    facts.Add(new BenFactItem("How long", length,
+                        _event.TourName is not null ? "on your feet" : null));
             }
 
             facts.Add(_event.AttendeeCapacity is { } cap
@@ -799,19 +840,6 @@ else
 
             return facts;
         }
-    }
-
-    /// <summary>A length short enough to be a figure in the rail.</summary>
-    private static string Duration(int minutes)
-    {
-        var hours = minutes / 60;
-        var rest = minutes % 60;
-        return hours switch
-        {
-            0 => $"{rest} min",
-            _ when rest == 0 => $"{hours} hr",
-            _ => $"{hours} hr {rest} min",
-        };
     }
 
     /// <summary>
@@ -900,6 +928,8 @@ else
 
     protected override async Task OnAfterRenderAsync(bool firstRender)
     {
+        await ScrollToTheAddressedSpotAsync();
+
         if (!firstRender) return;
         await View.EnsureLoadedAsync();
 
@@ -911,6 +941,34 @@ else
             // pass necessarily computed them for nobody.
             await LoadAsync();
         }
+    }
+
+    /// <summary>
+    /// An address that names a spot on this page (<c>#event-act</c> from a group's "Ask for a
+    /// place", <c>#hosted-room</c> from the organizer's page) is followed once the event has drawn.
+    /// </summary>
+    /// <remarks>
+    /// Blazor scrolls to the top after moving to another page and never to the fragment, and the
+    /// browser's own jump runs against the loading spinner, so without this a visitor sent to the
+    /// request form arrived at the top of the page. The help guides do the same, with the same
+    /// helper.
+    /// </remarks>
+    private bool _scrollPending = true;
+
+    private async Task ScrollToTheAddressedSpotAsync()
+    {
+        if (!_scrollPending || _loading || _event is null || !RendererInfo.IsInteractive) return;
+        _scrollPending = false;
+        if (!NavManager.Uri.Contains('#')) return;
+
+        try
+        {
+            await using var dom = await JS.InvokeAsync<IJSObjectReference>(
+                "import", "/_content/Ben.Web.Website.Library/js/domInterop.js");
+            await dom.InvokeVoidAsync("scrollToHashWhenSettled");
+        }
+        catch (JSDisconnectedException) { }
+        catch (JSException) { }   // a page that cannot scroll is still a page that can be read
     }
 
     private Ben.Web.Services.WebApi.LoadResult<EventEvidenceRecord> _acceptedEvidence;
@@ -1072,9 +1130,9 @@ else
     {
         if (night.StartsLocal is not { } from) return "";
 
-        var start = DateTime.Today.Add(from).ToString("h:mm tt");
+        var start = DateTime.MinValue.Add(from).ToDisplayTime();
         return night.EndsLocal is { } to
-            ? $"{start} – {DateTime.Today.Add(to):h:mm tt}"
+            ? $"{start} – {DateTime.MinValue.Add(to):h:mm tt}"
             : start;
     }
 }

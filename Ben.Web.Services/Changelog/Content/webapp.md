@@ -33,6 +33,43 @@ day-by-day account of building it would say nothing to anyone using it now.
 
 ## Unreleased
 
+- Under **Recently** on What I'm going to, events that are over say so in the past tense, such as
+  "You had a place" or "You were on the team", instead of "You're coming".
+- A visit with no case can have a team: on the group's Investigations list, whoever runs the visit
+  opens **Team** and adds members under **Add to the team**, or takes them off with **✕**. Before,
+  nobody could be added, so nobody could check in, lead the visit or take a duty.
+- On a case's Investigations tab, the attendee list follows the same rules: only active members can
+  be added, each person once, and somebody recorded as there or who has written up what they saw
+  stays on the team. When an add or a removal can't be done, the page says why instead of looking as
+  if it worked. Taking off somebody who had a duty for the visit works now.
+- On a group's calendar, the event editor lists who is invited and their answer, and whoever runs the
+  calendar can mark somebody as coming when they say so in person.
+- Choosing a place for a public calendar event, or a venue for an event, finds it from part of its
+  name or its town, so "Bell Witch" finds Bell Witch Cave. The first press of Search now shows the
+  answer, the box says "Searching…" while it looks, and a search that can't run says so instead of
+  reporting that nothing was found.
+- On an event's page, **Ask for a place** takes you down to the request form instead of to the
+  home page. Every other link to another part of the same page works the same way now, including
+  the section links on a group's settings and on the tour and event pages.
+- When a booking form's button is grayed out, the line beside it says what's still missing, such
+  as a phone number or your last name. The name and phone fields are marked as required.
+- An event that runs for days says how long in nights, days or weeks, such as "15 nights" or
+  "2 weeks", instead of hundreds of hours. A run of nights that keep the same hours says them too:
+  "15 nights, 6:00–11:00 PM".
+- Once you're signed in, the home page shows a small card for the next event you're going to,
+  counting down to when it starts, with "and 2 more" when there are others. Tap it to open your
+  pass or the event.
+- Every upcoming event in What's On and in What's Near You now counts down to its start, with a thin
+  bar that fills as the day gets closer and "Happening now" while it's on. Tours near you count down
+  to their next walk.
+- Signed in, What's On and What's Near You also show your own groups' events that aren't public,
+  marked "Your group", and mark public events you've been invited to or said you're going to.
+- What I'm going to now lists everything you're going to, not only bookings: events and tours you
+  said you'd come to and investigations you're on the team of, each counting down to its start.
+- The site's icon is now the app's icon, the violet ghost, and the ghost has its face again: in the
+  browser tab, on a phone's home screen, at the top of every email, beside the site's name, on the
+  sign-in page and in the app section of the home page. The App Store QR codes and the guides and
+  flyers show it too.
 - Field Kit is now called the Paranormal Platform, and the site's tagline reads “The Paranormal
   Platform”.
 - Field sessions play back more smoothly and in step with the clock: Play starts at once, and the
@@ -63,6 +100,44 @@ day-by-day account of building it would say nothing to anyone using it now.
   page you opened starts on the screen rather than below it.
 - When asking for help, an address the map service could not look up just then says so, and Verify
   Address tries again; only an address the map really cannot find is reported as not found.
+- Times you enter when scheduling an investigation are saved in your own time zone; they were an
+  hour off. The form says which time zone it uses.
+- Dates you propose to a client are saved in your own time zone; they were several hours off.
+- When you check in at an investigation, the arrival time filled in for you is now your own time,
+  and the time you enter is saved as your time.
+- Date fields and calendars start on today in your own time zone.
+- Times read the way people write them, like 7:00 PM instead of 07:00 PM, across the site. Dates
+  are still MM/DD/YYYY.
+- On a hosted event's page, a visitor who isn't signed in is asked "Coming along?" once, not twice.
+- On a phone, the **Ask for a place** button at the bottom of a hosted event's page moves out of the
+  way while the request form is on screen, so it no longer covers the form's last lines or its send
+  button. It comes back when you scroll away, and the end of the page is never stuck under it.
+- A visit with no case can be changed, canceled or deleted: press **Edit** on it in the group's
+  Investigations list. A visit saved at the wrong time can now be put right, and its calendar entry
+  moves with it.
+- A visit that has recordings, written-up accounts or anybody marked as there can't be deleted, with
+  a case or without; the page says so and suggests canceling it instead, which keeps them on record.
+  Before, deleting a case's visit deleted its recordings too.
+- On a case's Investigations tab, **Delete** on a visit asks first instead of deleting at once.
+- Editing a visit on a case's Investigations tab keeps it on the group's calendar at its new time.
+  A canceled visit's calendar entry says it's canceled.
+- Scheduling a visit with no case starts at 7:00 PM tomorrow, and the time zone it names is the one
+  in effect on the visit's date, so a November visit reads CST.
+- When scheduling a visit at a public location, typing part of a name finds a place we already
+  have, so "Bell Witch" finds Bell Witch Cave instead of making a second one.
+- Taking somebody off a visit's team asks first, and says which of their duties go with them.
+- If a check-in or an attendance change can't be saved, the team panel says why.
+- On a group's calendar, unticking an invited member and saving takes them off the event, and
+  **Remove** in Who's coming takes anybody off, after asking. A guest can be marked as coming, not
+  coming or not answered, whatever they said before.
+- Pressing Enter in a place or venue search box searches. The boxes say what to type: part of the
+  name, or the town.
+- The Your venue section has its own link at the top of a group's settings.
+- On a phone, a group's investigations are listed as cards, and a visit's team fits the screen.
+  Who's coming puts each guest's buttons on their own line, and an event's start time shows under
+  its date.
+- Search boxes, an event's "Coming along?" email and name boxes, and the case page's Add member list
+  are labeled for screen readers.
 
 ### Administration
 

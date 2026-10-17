@@ -105,7 +105,7 @@ figcaption { color: var(--faint); font-size: 8.4pt; margin-top: .07in; }
   color: #fff; font-weight: 700; font-size: 13pt; letter-spacing: -.01em; }
 .site-cover .tile { width: .5in; height: .5in; border-radius: .13in; display: grid; place-items: center; background: var(--grad);
   box-shadow: var(--glow); }
-.site-cover .tile img { width: 68%; height: 68%; border: 0; border-radius: 0; box-shadow: none; filter: brightness(0) invert(1); }
+.site-cover .tile img { width: 68%; height: 68%; border: 0; border-radius: 0; box-shadow: none; }
 .site-cover .brand span { color: var(--link); }
 .site-cover .words { position: absolute; left: .45in; right: .6in; bottom: .48in; z-index: 2; }
 .site-cover h1 { font-size: 40pt; line-height: 1.02; color: #fff; margin: .06in 0 .14in; }
@@ -132,7 +132,8 @@ def cover(html_dir, *, kicker, title_html, lede, photo, facts, about_html, foot_
     """The site's PageHero as a cover page. `photo` is a file name in docs/media/stock."""
     e = _html.escape
     photo_url = _rel(html_dir, os.path.join(DOCS, "media", "stock", photo))
-    logo_url = _rel(html_dir, os.path.join(WWWROOT, "static", "images", "is-haunted-logo.svg"))
+    # The white ghost with its face, the app icon's own artwork (10/15/2026), not the color logo washed white.
+    logo_url = _rel(html_dir, os.path.join(WWWROOT, "static", "images", "is-haunted-mark.svg"))
     fact_html = "".join(f'<div class="fact"><b>{e(k)}</b><span>{e(v)}</span></div>' for k, v in facts)
     return f"""
 <section class="site-cover">

@@ -1,8 +1,10 @@
 @namespace Ben.Web.Website.Library.Organization
 @using Ben.Data.Common.Enums
 @using System.Timers
+@using Ben.Data.Common.Helpers
 
 @inject IBenAdminClient AdminClient
+@inject IBenUserState UserState
 @implements IDisposable
 
 @*
@@ -15,11 +17,16 @@
    to stop that is before the second row exists.
 *@
 
-<BenModal Visible="true" Title="Schedule an investigation" Size="lg">
+<BenModal Visible="true" Title="@(IsEditing ? "Change this investigation" : "Schedule an investigation")" Size="lg">
     <ChildContent>
         @if (_error is not null)
         {
-            <div class="alert alert-danger py-2 small">@_error</div>
+            <div class="alert alert-danger py-2 small" role="alert" id="newinvestigationwindow-error">@_error</div>
+        }
+
+        @if (IsEditing && !_loaded)
+        {
+            <p class="text-secondary small" role="status">@(_loadFailed ? "" : "Loading this visit…")</p>
         }
 
         <div class="row g-3">
@@ -35,6 +42,9 @@
             <div class="col-md-6">
                 <label class="form-label fw-semibold" for="newinvestigationwindow-when-60b5">Starts</label>
                 <BenDateField Mode="DateEntryMode.DateTime" Id="newinvestigationwindow-when-60b5" @bind-Value="_when" />
+                @* The letters at the typed start, not today's (10/16/2026): a November visit typed
+                   in October is CST, and the line said CDT. *@
+                <div class="form-text" data-testid="newinvestigationwindow-zone">Times are in your time zone (@MyLetters).</div>
             </div>
 
             @* One arrival and one departure, allowed to cross midnight — 3pm until 8am the next
@@ -136,6 +146,41 @@
                            @oninput="@(e => OnPlaceFieldChanged(() => _zip = e.Value?.ToString() ?? ""))" />
                 </div>
             </div>
+
+            @* ── Places we already have (10/16/2026) ─────────────────────────────
+               The duplicate check below wants the whole name, so "Bell Witch" suggested nothing and
+               the visit saved a second Bell Witch place. For a public location the name is also
+               searched as part of a name or a town, the same search the event forms use. Never
+               for a private residence: nobody's home is listed to anybody. *@
+            @if (_kind == PlaceKind.PublicLocation && !string.IsNullOrWhiteSpace(_name))
+            {
+                @if (_publicFinder.IsSearching)
+                {
+                    <div class="form-text mt-2" role="status">Looking for places we already have…</div>
+                }
+                else if (_publicFinder.Error is { } publicError)
+                {
+                    <div class="form-text text-danger mt-2" role="alert">@publicError</div>
+                }
+                else if (PublicMatches.Count > 0)
+                {
+                    <div class="border rounded p-2 mt-3 small" id="newinvestigationwindow-public-matches">
+                        <div class="fw-semibold mb-1">Places we already have that match “@_name.Trim()”</div>
+                        @foreach (var match in PublicMatches)
+                        {
+                            var pick = match;
+                            <div class="d-flex justify-content-between align-items-center gap-2 border-top pt-2 mt-2 flex-wrap">
+                                <div>
+                                    <div class="fw-semibold">@DescribeCandidate(pick)</div>
+                                    <div class="text-secondary">@string.Join(", ", new[] { pick.StreetAddress1, pick.City, pick.State }.Where(p => !string.IsNullOrWhiteSpace(p)))</div>
+                                </div>
+                                <button type="button" class="btn btn-secondary btn-sm" @onclick="@(() => ChoosePlace(pick))">Use this place</button>
+                            </div>
+                        }
+                        <div class="text-secondary mt-2">None of these? Carry on, and a new place is made when you save.</div>
+                    </div>
+                }
+            }
 
             @* ── "Did you mean" ───────────────────────────────────────────────── *@
             @if (_candidateError is not null)
@@ -243,10 +288,43 @@
             </div>
         }
 
-        <div class="dialog-footer-actions mt-4 d-flex justify-content-end gap-2">
-            <button type="button" class="btn @(ThemeConstants.Button.FillMode.Flat == ThemeConstants.Button.FillMode.Solid ? "btn-secondary" : "btn-outline-secondary")" @onclick="@(() => OnClosed.InvokeAsync())" disabled="@(!(!_saving))">Cancel</button>
-            <button type="button" class="btn btn-primary" @onclick="@SaveAsync" disabled="@(!(CanSave && !_saving))">
-                @(_saving ? "Scheduling…" : "Schedule")
+        @* ── Cancel or delete (10/16/2026) ─────────────────────────────────────
+           Asked inline, never in a dialog (TelerikDialog breaks binding). The server's refusal,
+           such as "it has recordings, cancel it instead", shows in the error line above. *@
+        @if (IsEditing && _confirming != Confirming.Nothing)
+        {
+            <div class="alert alert-warning py-2 small mt-3 mb-0 d-flex flex-wrap align-items-center gap-2"
+                 role="alert" id="newinvestigationwindow-confirm">
+                <span class="flex-grow-1">
+                    @(_confirming == Confirming.Cancel
+                        ? "Cancel this visit? It stays on record as canceled, and its calendar entry says so."
+                        : "Delete this visit? It's removed for good, with its team and its calendar entry.")
+                </span>
+                <button type="button" class="btn btn-danger btn-sm newinv-touch" id="newinvestigationwindow-confirm-yes"
+                        disabled="@_saving" @onclick="@(() => _confirming == Confirming.Cancel ? CancelVisitAsync() : DeleteVisitAsync())">
+                    @(_saving ? "Saving…" : _confirming == Confirming.Cancel ? "Yes, cancel it" : "Yes, delete it")
+                </button>
+                <button type="button" class="btn btn-outline-secondary btn-sm newinv-touch" id="newinvestigationwindow-confirm-no"
+                        disabled="@_saving" @onclick="@(() => _confirming = Confirming.Nothing)">Keep it</button>
+            </div>
+        }
+
+        <div class="dialog-footer-actions mt-4 d-flex flex-wrap justify-content-end gap-2">
+            @if (IsEditing && _loaded)
+            {
+                <div class="d-flex flex-wrap gap-2 me-auto">
+                    <button type="button" class="btn btn-outline-danger" id="newinvestigationwindow-delete"
+                            disabled="@_saving" @onclick="@(() => Ask(Confirming.Delete))">Delete</button>
+                    @if (_status == InvestigationStatus.Scheduled)
+                    {
+                        <button type="button" class="btn btn-outline-secondary" id="newinvestigationwindow-cancel-visit"
+                                disabled="@_saving" @onclick="@(() => Ask(Confirming.Cancel))">Cancel this visit</button>
+                    }
+                </div>
+            }
+            <button type="button" class="btn @(ThemeConstants.Button.FillMode.Flat == ThemeConstants.Button.FillMode.Solid ? "btn-secondary" : "btn-outline-secondary")" @onclick="@(() => OnClosed.InvokeAsync())" disabled="@(!(!_saving))">@(IsEditing ? "Close" : "Cancel")</button>
+            <button type="button" class="btn btn-primary" id="newinvestigationwindow-save" @onclick="@SaveAsync" disabled="@(!(CanSave && !_saving))">
+                @(IsEditing ? (_saving ? "Saving…" : "Save changes") : (_saving ? "Scheduling…" : "Schedule"))
             </button>
         </div>
     </ChildContent>
@@ -264,7 +342,16 @@
     /// </remarks>
     [Parameter] public Guid? PrechosenPlaceId { get; set; }
 
-    /// <summary>Raised after a successful create, so the caller can refresh its list.</summary>
+    /// <summary>
+    /// A visit with no case to change instead of scheduling a new one (10/16/2026).
+    /// </summary>
+    /// <remarks>
+    /// The same window, so changing a visit asks the same questions in the same order as booking
+    /// it, with the same place checks. It also offers Cancel this visit and Delete.
+    /// </remarks>
+    [Parameter] public Guid? EditInvestigationId { get; set; }
+
+    /// <summary>Raised after a successful create, change, cancel or delete, so the caller can refresh.</summary>
     [Parameter] public EventCallback OnCreated { get; set; }
 
     /// <summary>Raised on cancel, and after <see cref="OnCreated"/>.</summary>
@@ -272,7 +359,7 @@
 
     private string _title = "";
     private string _description = "";
-    private DateTime? _when = TomorrowToTheMinute();
+    private DateTime? _when;
     private DateTime? _end;
     private string _endTimeText = "";
     private bool   _multiDay;
@@ -293,6 +380,31 @@
     private Timer? _lookupTimer;
     private bool _saving;
     private string? _error;
+
+    /// <summary>Public places whose name or town matches what is typed (10/16/2026).</summary>
+    private readonly Ben.Web.Services.PlaceSearch _publicFinder = new();
+
+    /// <summary>The public matches the duplicate check has not already offered.</summary>
+    private List<PlaceCandidate> PublicMatches => _publicFinder.Results
+        .Where(p => p.Kind == PlaceKind.PublicLocation && _candidates.All(c => c.Id != p.Id))
+        .ToList();
+
+    private bool IsEditing => EditInvestigationId is not null;
+    private bool _loaded;
+    private bool _loadFailed;
+    private InvestigationStatus _status = InvestigationStatus.Scheduled;
+
+    private enum Confirming { Nothing, Cancel, Delete }
+    private Confirming _confirming;
+
+    private void Ask(Confirming what)
+    {
+        _error = null;
+        _confirming = what;
+    }
+
+    /// <summary>What an &lt;input type="time"&gt; holds: 24-hour, as the browser reads it.</summary>
+    private static string TimeBoxValue(DateTime t) => t.ToString("HH:mm");
 
     /// <summary>
     /// The end a single-day visit gets from a clock time: at or before the start is the next
@@ -326,19 +438,20 @@
         }
         else
         {
-            _endTimeText = carried?.ToString("HH:mm") ?? "";
+            _endTimeText = carried is { } carriedEnd ? TimeBoxValue(carriedEnd) : "";
             _end = null;
         }
     }
 
-    private static DateTime TomorrowToTheMinute()
-    {
-        var t = DateTime.Now.AddDays(1);
-        return new DateTime(t.Year, t.Month, t.Day, t.Hour, t.Minute, 0);
-    }
+    /// <summary>
+    /// The letters of the clock the times are typed on, as it will be at the typed start: "CST"
+    /// for a November visit typed in October. Follows the start as it changes.
+    /// </summary>
+    private string MyLetters => Ben.Web.Services.InvestigationWindow.ViewerLetters(_when, UserState, DateTime.UtcNow);
 
     private bool CanSave =>
-        !string.IsNullOrWhiteSpace(_title)
+        (!IsEditing || _loaded)
+        && !string.IsNullOrWhiteSpace(_title)
         && _when is not null
         && (_chosenPlace is not null
             || !string.IsNullOrWhiteSpace(_name)
@@ -375,6 +488,7 @@
         if (string.IsNullOrWhiteSpace(_street) && string.IsNullOrWhiteSpace(_name))
         {
             _candidates = [];
+            _publicFinder.Clear();
             StateHasChanged();
             return;
         }
@@ -406,6 +520,12 @@
             _candidates = [];
         }
 
+        // Part of a name finds the place too, for a public location only (10/16/2026).
+        if (_kind == PlaceKind.PublicLocation && !string.IsNullOrWhiteSpace(_name))
+            await _publicFinder.SearchAsync(_name, text => AdminClient.SearchPublicPlacesAsync(text));
+        else
+            _publicFinder.Clear();
+
         StateHasChanged();
     }
 
@@ -419,12 +539,24 @@
     /// </remarks>
     protected override async Task OnInitializedAsync()
     {
+        // The reader's zone arrives with sign-in; the suggested start is on their clock.
+        await UserState.AuthReady;
+
         try
         {
             var perms = await AdminClient.GetMyOrgPermissionsAsync(OrgId);
             _publicByDefault = perms?.PublicByDefault ?? false;
         }
         catch { _publicByDefault = false; }
+
+        if (EditInvestigationId is { } editId)
+        {
+            await LoadForEditAsync(editId);
+            return;
+        }
+
+        // 7:00 PM tomorrow on the person's own clock (10/16/2026; it was this minute tomorrow).
+        _when ??= Ben.Web.Services.InvestigationWindow.DefaultStart(UserState.NowInViewerTimeZone());
 
         // Arrived from a place's own page, so the place is settled and its kind decides the rest.
         // Read through the anonymous place endpoint: somebody may investigate a place their group
@@ -447,10 +579,119 @@
         KeepScopeLegal();
     }
 
+    /// <summary>
+    /// Fills the window from a saved visit, its times on the reader's own clock.
+    /// </summary>
+    /// <remarks>
+    /// A failed read says so and leaves Save off: saving a half-filled form over a real visit would
+    /// replace what was there with blanks.
+    /// </remarks>
+    private async Task LoadForEditAsync(Guid id)
+    {
+        ItemResult<Ben.Service.Models.Entities.InvestigationRecord> found;
+        try { found = await AdminClient.GetOrgInvestigationAsync(OrgId, id); }
+        catch { found = ItemResult<Ben.Service.Models.Entities.InvestigationRecord>.Failure(); }
+
+        if (found.Failed || found.Item is not { } visit)
+        {
+            _loadFailed = true;
+            _error = found.SessionExpired
+                ? "You've been signed out, so this visit couldn't be opened. Sign in again."
+                : "This visit couldn't be opened just now, so nothing can be changed yet. Close this and try again.";
+            return;
+        }
+
+        if (visit.CaseId is not null)
+        {
+            _loadFailed = true;
+            _error = "This visit belongs to a case, so it's changed from the case's Investigations tab.";
+            return;
+        }
+
+        _title = visit.Title;
+        _description = visit.Description ?? "";
+        _status = visit.Status;
+        _visibility = visit.Visibility;
+
+        var start = visit.ScheduledDateTime.ToViewerLocalTime(UserState);
+        _when = start;
+        if (visit.EndDateTime is { } endUtc)
+        {
+            var end = endUtc.ToViewerLocalTime(UserState);
+            _multiDay = Ben.Web.Services.InvestigationWindow.NeedsMultiDay(start, end);
+            if (_multiDay) _end = end;
+            else _endTimeText = TimeBoxValue(end);
+        }
+
+        if (visit.PlaceId is { } placeId)
+        {
+            try
+            {
+                if (await AdminClient.GetPlaceAsync(placeId) is { } place)
+                {
+                    _chosenPlace = new PlaceCandidate(
+                        place.Id, place.Name, place.StreetAddress1, place.City, place.State,
+                        place.Kind, DistanceMiles: null, InvestigationCount: 0);
+                    _kind = place.Kind;
+                }
+            }
+            catch { /* the place fields are still there to fill in */ }
+        }
+
+        KeepScopeLegal();
+        _loaded = true;
+    }
+
+    private async Task CancelVisitAsync()
+    {
+        if (EditInvestigationId is not { } id || _saving) return;
+        _saving = true;
+        _error = null;
+        try
+        {
+            var (canceled, error) = await AdminClient.CancelOrgInvestigationAsync(OrgId, id);
+            if (!canceled)
+            {
+                _error = error ?? "This visit couldn't be canceled just now, so it's still scheduled.";
+                _confirming = Confirming.Nothing;
+                return;
+            }
+
+            await OnCreated.InvokeAsync();
+            await OnClosed.InvokeAsync();
+        }
+        catch { _error = "This visit couldn't be canceled just now, so it's still scheduled."; }
+        finally { _saving = false; }
+    }
+
+    private async Task DeleteVisitAsync()
+    {
+        if (EditInvestigationId is not { } id || _saving) return;
+        _saving = true;
+        _error = null;
+        try
+        {
+            // The refusal is the server's sentence: what would be lost, and to cancel instead.
+            var (deleted, error) = await AdminClient.DeleteOrgInvestigationAsync(OrgId, id);
+            if (!deleted)
+            {
+                _error = error ?? "This visit couldn't be deleted just now.";
+                _confirming = Confirming.Nothing;
+                return;
+            }
+
+            await OnCreated.InvokeAsync();
+            await OnClosed.InvokeAsync();
+        }
+        catch { _error = "This visit couldn't be deleted just now."; }
+        finally { _saving = false; }
+    }
+
     private void ChoosePlace(PlaceCandidate candidate)
     {
         _chosenPlace = candidate;
         _candidates = [];
+        _publicFinder.Clear();
         _lookupTimer?.Stop();
 
         // The place decides what kind of location this is, so the sharing options follow it rather
@@ -465,6 +706,9 @@
     {
         if (!Enum.TryParse<PlaceKind>(value, out var kind)) return;
         _kind = kind;
+        // A home is never searched for among listed places; anything already found goes.
+        if (kind == PlaceKind.PrivateResidence) _publicFinder.Clear();
+        else if (!string.IsNullOrWhiteSpace(_name)) OnPlaceFieldChanged(() => { });
         KeepScopeLegal();
     }
 
@@ -512,23 +756,44 @@
 
         try
         {
+            // Typed on the person's own clock, stored as UTC (10/16/2026: this went through the
+            // server's zone and every visit saved an hour out).
+            var (startUtc, endUtc) = Ben.Web.Services.InvestigationWindow.ToUtc(_when!.Value, EffectiveEnd(), UserState);
+
+            if (EditInvestigationId is { } editId)
+            {
+                var change = new UpdateOrgInvestigationRequest(
+                    Title: _title.Trim(),
+                    ScheduledDateTime: startUtc,
+                    EndDateTime: endUtc,
+                    Description: string.IsNullOrWhiteSpace(_description) ? null : _description.Trim(),
+                    PlaceId: _chosenPlace?.Id,
+                    NewPlace: _chosenPlace is not null ? null : NewPlaceFromFields(),
+                    Visibility: _visibility);
+
+                var (saved, saveError) = await AdminClient.UpdateOrgInvestigationAsync(OrgId, editId, change);
+                if (!saved)
+                {
+                    _error = saveError ?? "Your changes couldn't be saved just now.";
+                    _saving = false;
+                    return;
+                }
+
+                await OnCreated.InvokeAsync();
+                await OnClosed.InvokeAsync();
+                _saving = false;
+                return;
+            }
+
             var request = new CreateOrgInvestigationRequest(
                 Title: _title.Trim(),
-                ScheduledDateTime: _when!.Value.ToUniversalTime(),
-                EndDateTime: EffectiveEnd()?.ToUniversalTime(),
+                ScheduledDateTime: startUtc,
+                EndDateTime: endUtc,
                 Description: string.IsNullOrWhiteSpace(_description) ? null : _description.Trim(),
                 PlaceId: _chosenPlace?.Id,
                 // Only sent when no existing place was picked — otherwise the server would be
                 // asked to both use a place and create one.
-                NewPlace: _chosenPlace is not null ? null : new NewPlaceRequest(
-                    Name: Trimmed(_name),
-                    StreetAddress1: Trimmed(_street),
-                    StreetAddress2: null,
-                    City: Trimmed(_city),
-                    State: Trimmed(_state),
-                    ZipCode: Trimmed(_zip),
-                    Country: null,
-                    Kind: _kind),
+                NewPlace: _chosenPlace is not null ? null : NewPlaceFromFields(),
                 Visibility: _visibility);
 
             var (created, error) = await AdminClient.CreateOrgInvestigationAsync(OrgId, request);
@@ -549,6 +814,16 @@
 
         _saving = false;
     }
+
+    private NewPlaceRequest NewPlaceFromFields() => new(
+        Name: Trimmed(_name),
+        StreetAddress1: Trimmed(_street),
+        StreetAddress2: null,
+        City: Trimmed(_city),
+        State: Trimmed(_state),
+        ZipCode: Trimmed(_zip),
+        Country: null,
+        Kind: _kind);
 
     private static string? Trimmed(string value) =>
         string.IsNullOrWhiteSpace(value) ? null : value.Trim();

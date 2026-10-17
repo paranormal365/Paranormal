@@ -126,6 +126,13 @@
 
 .ev-row__main { min-width: 0; }
 
+/* The countdown under where it is: a line and a hairline bar, no wider than a phrase needs. */
+.ev-row__main ::deep .ev-row__countdown {
+    display: flex;
+    width: min(100%, 22rem);
+    margin-top: .5rem;
+}
+
 .ev-row__title {
     display: block;
     font-size: 1.08rem;

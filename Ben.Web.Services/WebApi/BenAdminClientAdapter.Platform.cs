@@ -25,6 +25,10 @@ public sealed partial class BenAdminClientAdapter
     public Task<ItemResult<MemberDeskResponse>> GetMyDeskAsync(CancellationToken token = default)
         => _api.GetItemAsync<MemberDeskResponse>("/api/me/desk", token);
 
+    public Task<ItemResult<MyNextEventsResponse>> GetMyNextEventsAsync(
+        int take = 10, int pastDays = 0, CancellationToken token = default)
+        => _api.GetItemAsync<MyNextEventsResponse>($"/api/me/next-events?take={take}&pastDays={pastDays}", token);
+
     public Task<ItemResult<NavCountsResponse>> GetMyNavCountsAsync(CancellationToken token = default)
         => _api.GetItemAsync<NavCountsResponse>("/api/me/nav-counts", token);
 
@@ -336,13 +340,14 @@ public sealed partial class BenAdminClientAdapter
                $"/api/organizations/{orgId}/calendar/{eventId}/guest-invites",
                new InviteGuestRequest(email, displayName), token);
 
-    public Task<OrgCalendarEventAttendeeRecord?> RsvpCalendarEventAsync(Guid orgId, Guid eventId, Guid attendeeId, Ben.Data.Common.Enums.RsvpStatus status, CancellationToken token = default)
-        => _api.PutAsync<object, OrgCalendarEventAttendeeRecord>(
+    public Task<(OrgCalendarEventAttendeeRecord? Attendee, string? Error)> RsvpCalendarEventAsync(Guid orgId, Guid eventId, Guid attendeeId, Ben.Data.Common.Enums.RsvpStatus status, CancellationToken token = default)
+        => _api.SendExpectingReasonAsync<object, OrgCalendarEventAttendeeRecord>(
+               HttpMethod.Put,
                $"/api/organizations/{orgId}/calendar/{eventId}/attendees/{attendeeId}/rsvp",
                new { RsvpStatus = status }, token);
 
-    public Task<bool> RemoveCalendarAttendeeAsync(Guid orgId, Guid eventId, Guid attendeeId, CancellationToken token = default)
-        => _api.DeleteAsync($"/api/organizations/{orgId}/calendar/{eventId}/attendees/{attendeeId}", token);
+    public Task<(bool Removed, string? Error)> RemoveCalendarAttendeeAsync(Guid orgId, Guid eventId, Guid attendeeId, CancellationToken token = default)
+        => _api.DeleteExpectingReasonAsync($"/api/organizations/{orgId}/calendar/{eventId}/attendees/{attendeeId}", token);
 
     // ── Experience Taxonomy ───────────────────────────────────────────────────
 
@@ -531,6 +536,22 @@ public sealed partial class BenAdminClientAdapter
             url += $"&query={Uri.EscapeDataString(query)}";
 
         return _api.GetAnonymousAsync<NearbyResults>(url, token);
+    }
+
+    public async Task<NearbyResults?> GetNearbyForMeAsync(
+        double latitude, double longitude, double radiusMiles, string? query = null,
+        CancellationToken token = default)
+    {
+        var url = $"/api/public/search/nearby?lat={latitude.ToString(System.Globalization.CultureInfo.InvariantCulture)}"
+                + $"&lon={longitude.ToString(System.Globalization.CultureInfo.InvariantCulture)}"
+                + $"&radiusMiles={radiusMiles.ToString(System.Globalization.CultureInfo.InvariantCulture)}"
+                + "&includeMine=true";
+
+        if (!string.IsNullOrWhiteSpace(query))
+            url += $"&query={Uri.EscapeDataString(query)}";
+
+        return await _api.GetAsync<NearbyResults>(url, token)
+            ?? await GetNearbyAsync(latitude, longitude, radiusMiles, query, token);
     }
 
     // ── Merging groups (item 110) ─────────────────────────────────────────────

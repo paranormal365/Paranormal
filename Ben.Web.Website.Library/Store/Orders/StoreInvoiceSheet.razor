@@ -14,7 +14,7 @@
             </div>
             <div class="col-sm-6 text-sm-end">
                 <h1 class="h4 mb-0">Invoice: #@Invoice.OrderNumber</h1>
-                <p class="mb-0">@((Invoice.PaidUtc ?? Invoice.PlacedUtc).ToViewerLocalTime(User).ToString("MM/dd/yyyy h:mm tt"))</p>
+                <p class="mb-0">@((Invoice.PaidUtc ?? Invoice.PlacedUtc).ToViewerLocalTime(User).ToDisplayDateTime())</p>
             </div>
         </div>
     </div>
