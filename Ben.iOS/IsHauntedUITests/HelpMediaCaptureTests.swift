@@ -366,7 +366,15 @@ final class HelpMediaCaptureTests: XCTestCase {
         settle(1)
         snap("iphone-door-scanned")
         reservation.tap()
-        guard app.buttons["reservation-check-in"].waitForExistence(timeout: 8) else { return XCTFail("The reservation did not open.") }
+        // The kitchen's notes and the party's names come first now, so Check in is below the fold of
+        // the sheet, and a List only builds the rows on screen (10/17/2026).
+        let checkIn = app.buttons["reservation-check-in"].firstMatch
+        _ = app.staticTexts["Reservation"].firstMatch.waitForExistence(timeout: 8)
+        for _ in 0..<4 where !(checkIn.waitForExistence(timeout: 2) && checkIn.isHittable) {
+            let middle = app.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.7))
+            middle.press(forDuration: 0.05, thenDragTo: middle.withOffset(CGVector(dx: 0, dy: -250)))
+        }
+        guard checkIn.exists else { return XCTFail("The reservation did not open.") }
         settle(1)
         snap("iphone-door-reservation")
     }
