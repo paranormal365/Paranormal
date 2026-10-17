@@ -126,8 +126,10 @@ said Paranormal365, now corrected).
 Review notes edited the same day: group name, "Field Kit" → "Paranormal" in the tab lists, and the
 demo-account sentence now names the confirmed place at App Review night.
 
-**After approval:** archive or call off the hosted event (Events → App Review night → Ending it), and
-delete the calendar event and the investigation. Keep the account and the group.
+**Removed 10/17/2026, after 1.1.4 was approved and released:** the hosted event was **archived** (not called off, which
+would have emailed apple@apple.com; "Bring it back" restores it), and the calendar event and the empty
+investigation were deleted. The account and the Apple-Beta group stay. The next review needs a fresh
+hosted event and booking: the 1.1.4 review notes still describe this one.
 
 ## Also on the live site, unrelated to review
 
