@@ -33,6 +33,9 @@ day-by-day account of building it would say nothing to anyone using it now.
 
 ## Unreleased
 
+- The help for the iPhone and iPad app now covers version 1.1.4: the **Paranormal** tab, playing
+  back a session, adding details to a mark afterwards, and the app on iPhone Duo. Its pictures, the
+  printable guides and the app's screens on the home page show the app as it is today.
 - Under **Recently** on What I'm going to, events that are over say so in the past tense, such as
   "You had a place" or "You were on the team", instead of "You're coming".
 - A visit with no case can have a team: on the group's Investigations list, whoever runs the visit
