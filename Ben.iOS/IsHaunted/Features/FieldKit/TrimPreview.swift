@@ -25,12 +25,12 @@ struct TrimPreview: View {
             HStack(spacing: 8) {
                 readout("Field",
                         value: replay.frame.magneticDeviationMilligauss(from: source.baselines)
-                            .map { String(format: "%+.0f mG", $0) }
+                            .map { ReadingText.signedWhole($0, unit: "mG") }
                           ?? replay.frame.magneticMicrotesla.map { String(format: "%.0f mG", $0 * 10) }
                           ?? "—",
                         icon: "gauge.with.needle")
                 readout("Sound",
-                        value: replay.frame.soundDbfs.map { String(format: "%.0f dB", $0) } ?? "—",
+                        value: replay.frame.soundDbfs.map { "\(ReadingText.whole($0)) dB" } ?? "—",
                         icon: "waveform")
                 readout("At",
                         value: SessionTrimPlan.clock(replay.playhead.timeIntervalSince(source.startedAt)),

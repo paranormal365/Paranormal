@@ -493,10 +493,10 @@ struct SessionReviewView: View {
                     value: replay.timeline.baselines.magneticMicrotesla == nil
                         ? "no base"
                         : replay.frame.magneticDeviationMilligauss(from: replay.timeline.baselines)
-                            .map { String(format: "%+.0f mG", $0) } ?? "—",
+                            .map { ReadingText.signedWhole($0, unit: "mG") } ?? "—",
                     icon: "gauge.with.needle")
             readout("Sound",
-                    value: replay.frame.soundDbfs.map { String(format: "%.0f dB", $0) } ?? "—",
+                    value: replay.frame.soundDbfs.map { "\(ReadingText.whole($0)) dB" } ?? "—",
                     icon: "waveform")
             // Titled by what the number IS at this moment: the compass says which way they were
             // looking, and with no compass — which is most of a night indoors — the fix says
