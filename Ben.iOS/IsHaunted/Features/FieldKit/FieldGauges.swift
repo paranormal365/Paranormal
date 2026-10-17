@@ -20,7 +20,7 @@ struct AudioLevelMeter: View {
                 Label("Sound", systemImage: "waveform")
                     .font(.caption).foregroundStyle(Theme.fog)
                 Spacer()
-                Text(dbfs.map { String(format: "%.0f dB", $0) } ?? "—")
+                Text(dbfs.map { "\(ReadingText.whole($0)) dB" } ?? "—")
                     .font(.caption.monospacedDigit())
                     .foregroundStyle(Theme.bone)
             }
@@ -53,8 +53,7 @@ struct AudioLevelMeter: View {
             .frame(height: 14)
 
             if let baselineDbfs {
-                Text(String(format: "base %.0f dB · reports at %+.0f dB",
-                            baselineDbfs, reportAtDb))
+                Text("base \(ReadingText.whole(baselineDbfs)) dB · reports at \(ReadingText.signedWhole(reportAtDb)) dB")
                     .font(.caption2).foregroundStyle(Theme.fog)
             } else {
                 Text("No base level set — sound won't be reported.")

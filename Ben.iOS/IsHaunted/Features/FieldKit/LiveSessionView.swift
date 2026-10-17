@@ -872,7 +872,7 @@ private struct LevelsSheet: View {
                     }
                     LabeledContent("Sound base") {
                         Text(session.baselines.soundDbfs
-                                .map { String(format: "%.0f dB", $0) } ?? "not set")
+                                .map { "\(ReadingText.whole($0)) dB" } ?? "not set")
                     }
                     Button("Take the room as it is now") {
                         Task { await session.setBaselines() }

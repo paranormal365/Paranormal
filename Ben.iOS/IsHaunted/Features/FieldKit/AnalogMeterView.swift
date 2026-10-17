@@ -62,8 +62,7 @@ struct AnalogMeterView: View {
         guard hasBaseline, let value else {
             return absoluteText.map { "\($0), no base level set" } ?? "No reading"
         }
-        let direction = value >= 0 ? "above" : "below"
-        return String(format: "%.0f %@ %@ base", abs(value), unit, direction)
+        return ReadingText.fromBase(value, unit: unit)
     }
 
     // MARK: - Face
@@ -139,7 +138,7 @@ struct AnalogMeterView: View {
         ForEach([0.0, 0.25, 0.5, 0.75, 1.0], id: \.self) { fraction in
             let labelValue = -range + range * 2 * fraction
             let a = angle(for: fraction).radians
-            Text(labelValue == 0 ? "0" : String(format: "%+.0f", labelValue))
+            Text(ReadingText.signedWhole(labelValue))
                 .font(.system(size: 11, weight: .medium, design: .rounded))
                 .foregroundStyle(Theme.fog)
                 .position(x: centre.x + cos(a) * (radius - 40),
@@ -182,7 +181,7 @@ struct AnalogMeterView: View {
         VStack(spacing: 2) {
             if hasBaseline, let value {
                 HStack(alignment: .firstTextBaseline, spacing: 4) {
-                    Text(String(format: "%+.0f", value))
+                    Text(ReadingText.signedWhole(value))
                         .font(.system(size: 40, weight: .semibold, design: .rounded))
                         .monospacedDigit()
                     Text(unit)
