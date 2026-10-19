@@ -1,0 +1,36 @@
+@inject Microsoft.Extensions.Configuration.IConfiguration Configuration
+
+@* Google Ads measurement and its consent banner (10/19/2026). Nothing at all renders unless
+   GoogleAds:TagId is configured. With a tag id, ads-consent.js sets every Consent Mode purpose to
+   denied and fetches nothing from Google until the visitor presses Accept. The banner starts
+   hidden; the script shows it only when no choice has been kept. Accept and Decline are the same
+   size and style on purpose: neither is the easy way out. *@
+@if (_ads.Enabled)
+{
+    <div id="ads-consent-banner" class="ads-consent card shadow" role="region" aria-label="Cookie choice"
+         data-testid="ads-consent-banner" hidden>
+        <div class="card-body">
+            <p class="mb-2">
+                <strong>May we measure our ads?</strong>
+                If you accept, this website loads Google's ad measurement so we can tell when somebody
+                who came from one of our ads goes on to subscribe. If you decline, nothing from Google
+                loads. Either way the site works the same, and you can change your mind any time
+                from Cookie settings at the bottom of the page.
+                <a href="/privacy">Privacy</a>
+            </p>
+            <div class="ads-consent-buttons">
+                <button type="button" class="btn btn-secondary" data-ads-consent="accept"
+                        data-testid="ads-consent-accept">Accept</button>
+                <button type="button" class="btn btn-secondary" data-ads-consent="decline"
+                        data-testid="ads-consent-decline">Decline</button>
+            </div>
+        </div>
+    </div>
+    <script src="/js/ads-consent.js" data-tag-id="@_ads.TagId"></script>
+}
+
+@code {
+    private GoogleAdsSettings _ads = new("", "");
+
+    protected override void OnInitialized() => _ads = GoogleAdsSettings.From(Configuration);
+}

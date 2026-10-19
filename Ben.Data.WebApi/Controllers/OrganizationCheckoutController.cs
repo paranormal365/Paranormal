@@ -172,6 +172,10 @@ public sealed class OrganizationCheckoutController : OrgCmsControllerBase
         // Back to the billing page either way: the person left it to pay, and landing them on
         // the public group page instead would make a successful payment feel like a wrong turn.
         var billingUrl = $"{baseUrl}/organizations/{organizationId}/billing";
+        // A new subscription that went through lands on one fixed page first (10/19/2026), so
+        // Google Ads has a single address to count as the conversion. /subscribed checks the
+        // group is the visitor's own and forwards to billingUrl with the same outcome it always had.
+        var subscribedUrl = $"{baseUrl}/subscribed?org={organizationId}";
 
         // ── the 100%-off period: real subscription, no card ──────────────────
         // A free trial coupon prices the period at zero, and Stripe refuses zero-amount
@@ -183,7 +187,7 @@ public sealed class OrganizationCheckoutController : OrgCmsControllerBase
                 SessionId: $"free-{Guid.NewGuid():N}",
                 PaymentIntentRef: null, CustomerRef: null, PaymentMethodRef: null,
                 facts.ToMetadata()), ct);
-            return Ok(new StartCheckoutResponse($"{billingUrl}?checkout=free", PaidWithoutCharge: true));
+            return Ok(new StartCheckoutResponse($"{subscribedUrl}&how=free", PaidWithoutCharge: true));
         }
 
         if (!_stripe.IsConfigured)
@@ -194,7 +198,7 @@ public sealed class OrganizationCheckoutController : OrgCmsControllerBase
             organizationId, org.Name, sub?.ProviderCustomerRef,
             payable, tax,
             $"IsHaunted \"{tier.Name}\" — {BillableUnits.Describe(priced)}, billed {Cadence(request.Interval)}",
-            SuccessUrl: $"{billingUrl}?checkout=success",
+            SuccessUrl: $"{subscribedUrl}&how=paid",
             CancelUrl:  $"{billingUrl}?checkout=cancelled",
             facts.ToMetadata()), ct);
 

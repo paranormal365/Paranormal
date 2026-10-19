@@ -1,0 +1,105 @@
+@page "/subscribed"
+@namespace Ben.Web.Website.Library.Billing
+@implements IDisposable
+
+@inject IBenAdminClient AdminClient
+@inject IBenUserState UserState
+@inject NavigationManager Nav
+@inject IJSRuntime JS
+@inject Microsoft.Extensions.Configuration.IConfiguration Configuration
+
+@using Ben.Web.Services
+@using Ben.Web.Services.WebApi
+@using Microsoft.JSInterop
+
+@* The one fixed "you're subscribed" address (10/19/2026), so Google Ads has a single page to count
+   as a conversion. Stripe's success URL and the free-trial path both land here with ?org=&how=,
+   and the page forwards to that group's billing page, whose own banner and receipt still show.
+
+   It never forwards anywhere but the billing page of a group the signed-in person belongs to:
+   anything else goes to /organizations, so the query string can't bounce anybody elsewhere. *@
+
+<PageTitle>You're subscribed</PageTitle>
+
+<div class="container py-5" style="max-width:640px;" data-testid="subscribed-page">
+    @if (_destination is null)
+    {
+        <p class="text-secondary">One moment…</p>
+    }
+    else if (_isOwnGroup)
+    {
+        <h1 class="h3 mb-3">You're subscribed</h1>
+        <p>
+            @(_how == "free"
+                ? "Your group's subscription has started. The coupon covered this period, so nothing was charged."
+                : "Your payment went through and your group's subscription is active.")
+            Taking you to your group's billing page, where your receipt is.
+        </p>
+        <a class="btn btn-primary" href="@_destination" data-testid="subscribed-go-billing">Go to your group's billing</a>
+    }
+    else
+    {
+        <h1 class="h3 mb-3">Taking you to your groups</h1>
+        @if (_refusal is not null)
+        {
+            <p class="text-secondary">We couldn't check your groups just now (@_refusal).</p>
+        }
+        <a class="btn btn-primary" href="@_destination" data-testid="subscribed-go-billing">Go to your groups</a>
+    }
+</div>
+
+@code {
+    [SupplyParameterFromQuery(Name = "org")] public string? Org { get; set; }
+    [SupplyParameterFromQuery(Name = "how")] public string? How { get; set; }
+
+    private string? _destination;
+    private bool _isOwnGroup;
+    private string? _how;
+    private string? _refusal;
+    private bool _conversionSent;
+    private readonly CancellationTokenSource _cts = new();
+
+    protected override async Task OnInitializedAsync()
+    {
+        if (!await UserState.WaitUntilAuthReadyAsync(RendererInfo.IsInteractive)) return;
+
+        _how = How;
+        IEnumerable<Guid> mine = [];
+        if (UserState.IsAuthenticated)
+        {
+            var result = await AdminClient.GetMyMembershipOrganizationsAsync();
+            if (result.Failed) _refusal = result.Reason ?? "the request failed";
+            else mine = result.Items.Select(o => o.OrganizationId);
+        }
+
+        _destination = SubscribedLanding.Destination(Org, How, mine);
+        _isOwnGroup = _destination != SubscribedLanding.Fallback;
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (_destination is null || _conversionSent || !RendererInfo.IsInteractive) return;
+        _conversionSent = true;
+
+        // Counted only for a real new subscription of the visitor's own group, and only if they
+        // accepted Google's measurement: ads-consent.js refuses otherwise. send_to is the
+        // configured tag and label; nothing about the person or the group goes with it.
+        if (_isOwnGroup && _how is "paid" or "free"
+            && GoogleAdsSettings.From(Configuration).SubscribeConversionSendTo is { } sendTo)
+        {
+            try { await JS.InvokeVoidAsync("benAdsConsent.conversion", sendTo); }
+            catch (JSException) { /* tag script missing or blocked: nothing to count */ }
+            catch (JSDisconnectedException) { return; }
+        }
+
+        try { await Task.Delay(TimeSpan.FromSeconds(_isOwnGroup ? 4 : 2), _cts.Token); }
+        catch (TaskCanceledException) { return; }
+        Nav.NavigateTo(_destination);
+    }
+
+    public void Dispose()
+    {
+        _cts.Cancel();
+        _cts.Dispose();
+    }
+}

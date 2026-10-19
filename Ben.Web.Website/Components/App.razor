@@ -142,6 +142,9 @@
     <EntraTokenPersister />
     <StoreCartTokenPersister />
     <Routes @rendermode="@InteractiveServer" />
+    @* Google Ads measurement, only when configured and only after consent. Static, outside the
+       interactive tree, so the banner works before the circuit connects. *@
+    <AdsConsent />
     <script src="/_framework/blazor.web.js" autostart="false"></script>
     <script>
         // A do-nothing link (href="#" with a click handler) never leaves the page. With <base href="/">
