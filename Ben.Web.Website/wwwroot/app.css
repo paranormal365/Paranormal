@@ -114,6 +114,8 @@
     gap: .5rem;
 }
 .ads-consent-buttons .btn {
+    /* A finger-sized target on phones and tablets (44px, Apple's minimum). */
+    min-height: 2.75rem;
     flex: 1 1 8rem;
 }
 .app-footer button.app-footer-link { font-size: inherit; text-decoration: none; }
