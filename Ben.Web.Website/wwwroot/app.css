@@ -94,6 +94,30 @@
     }
 }
 
+/* ── Cookie choice (AdsConsent.razor, 10/19/2026) ───────────────────────────
+   Bootstrap's card colors, so it follows the light and dark themes. Pinned to the bottom, never
+   wider than the screen at 320px, and capped so it does not cover a wide page. */
+.ads-consent {
+    position: fixed;
+    left: 1rem;
+    right: 1rem;
+    bottom: 1rem;
+    max-width: 40rem;
+    margin-inline: auto;
+    z-index: 1080;
+    font-size: .9rem;
+}
+.ads-consent[hidden] { display: none !important; }
+.ads-consent-buttons {
+    display: flex;
+    flex-wrap: wrap;
+    gap: .5rem;
+}
+.ads-consent-buttons .btn {
+    flex: 1 1 8rem;
+}
+.app-footer button.app-footer-link { font-size: inherit; text-decoration: none; }
+
 /* ── Blazor's error bar ─────────────────────────────────────────────────── */
 #blazor-error-ui {
     background: var(--bs-warning-bg-subtle, #ffe69c);

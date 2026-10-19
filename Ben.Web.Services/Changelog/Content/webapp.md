@@ -33,6 +33,12 @@ day-by-day account of building it would say nothing to anyone using it now.
 
 ## Unreleased
 
+- After you pay for your group's subscription, or start one a coupon fully covers, a short page
+  confirms it went through and then takes you to your group's **Billing** page.
+- The website may ask once whether we can measure our ads. Accept and Decline are equal, nothing
+  from Google loads unless you accept, and **Cookie settings** at the bottom of every page changes
+  your answer. The [privacy page](/privacy) explains what is measured. The iPhone and iPad app is
+  unchanged and sends nothing.
 - The help for the iPhone and iPad app now covers version 1.1.4: the **Paranormal** tab, playing
   back a session, adding details to a mark afterwards, and the app on iPhone Duo. Its pictures, the
   printable guides and the app's screens on the home page show the app as it is today.

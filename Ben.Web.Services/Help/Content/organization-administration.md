@@ -144,6 +144,10 @@ The price depends on how many members the group has. The **Billing** screen unde
 which band you are in and what it costs. If the price list has no charge for a group your size,
 that screen tells you there is nothing to buy, rather than offering you a plan for nothing.
 
+After you pay on Stripe's page, or start a plan that a coupon fully covers, you see a short page
+saying your subscription went through. It takes you on to your group's **Billing** screen, where the
+receipt is, after a few seconds, or straight away with **Go to your group's billing**.
+
 ### With no plan, work at a public place is public
 
 This is the trade-off, and it matches how the field archive has always worked: what a free account

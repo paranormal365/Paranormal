@@ -171,8 +171,22 @@ public sealed class TrialCheckoutTests
 
         Assert.True(response.PaidWithoutCharge);
         Assert.Empty(gateway.Sessions);                       // the whole point
-        Assert.Contains("checkout=free", response.RedirectUrl);
+        // Through the one fixed confirmation page Google Ads counts (10/19/2026).
+        Assert.Equal($"https://ishaunted.test/subscribed?org={w.OrgId}&how=free", response.RedirectUrl);
         Assert.DoesNotContain("stripe", response.RedirectUrl, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public async Task A_paid_checkout_returns_through_the_subscribed_page_and_a_cancel_to_billing()
+    {
+        var w = await SeedAsync();
+        var gateway = new FakeGateway();
+
+        await StartAsync(w, gateway, code: null);
+
+        var spec = Assert.Single(gateway.Sessions);
+        Assert.Equal($"https://ishaunted.test/subscribed?org={w.OrgId}&how=paid", spec.SuccessUrl);
+        Assert.Equal($"https://ishaunted.test/organizations/{w.OrgId}/billing?checkout=cancelled", spec.CancelUrl);
     }
 
     [Fact]
