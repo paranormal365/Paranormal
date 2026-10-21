@@ -206,6 +206,7 @@
         public bool RunsTheDoor { get; set; } = true;
         public bool SeesMenus { get; set; }
         public bool SeesFiles { get; set; }
+        public bool StartsSessions { get; set; }
     }
 
     private sealed record Flag(string Id, string Words, Func<Adding, bool> Get, Action<Adding, bool> Set);
@@ -229,12 +230,15 @@
             a => a.SeesMenus, (a, v) => a.SeesMenus = v),
         new("staff-can-files", "The event's files",
             a => a.SeesFiles, (a, v) => a.SeesFiles = v),
+        // A guide or a lead who starts the sessions without being on the door (event-scenario-gaps).
+        new("staff-can-start-sessions", "Start the sessions (\"time to investigate\")",
+            a => a.StartsSessions, (a, v) => a.StartsSessions = v),
     ];
 
     private bool CanAdd
         => _email.Contains('@')
         && (_adding.SeesBookings || _adding.Decides || _adding.RunsTheDoor
-            || _adding.SeesMenus || _adding.SeesFiles);
+            || _adding.SeesMenus || _adding.SeesFiles || _adding.StartsSessions);
 
     protected override async Task OnAfterRenderAsync(bool firstRender)
     {
@@ -274,7 +278,8 @@
                 Decides: _adding.Decides,
                 RunsTheDoor: _adding.RunsTheDoor,
                 SeesMenus: _adding.SeesMenus,
-                SeesFiles: _adding.SeesFiles));
+                SeesFiles: _adding.SeesFiles,
+                StartsSessions: _adding.StartsSessions));
 
         _busy = false;
 
@@ -336,6 +341,7 @@
         if (them.Decides) can.Add("decides bookings");
         if (them.SeesMenus) can.Add("menus and dietary");
         if (them.SeesFiles) can.Add("files");
+        if (them.StartsSessions) can.Add("starts sessions");
 
         return can.Count == 0 ? "nothing yet" : string.Join(" · ", can);
     }

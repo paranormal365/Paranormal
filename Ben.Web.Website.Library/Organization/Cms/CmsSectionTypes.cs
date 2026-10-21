@@ -64,6 +64,9 @@ public static class CmsSectionTypes
             "The photo wall from one of your events.",
             Heading + Photo(8, 18, 50, 50) + Photo(61, 18, 24, 23.5) + Photo(88, 18, 24, 23.5)
                     + Photo(61, 44.5, 24, 23.5) + Photo(88, 44.5, 24, 23.5)),
+        new(CmsSectionType.EventEvidence, "An event's evidence",
+            "The evidence you accepted from one of your events, with the most positive votes first, kept up to date for you.",
+            Heading + Session(19) + Session(35) + Session(51)),
         new(CmsSectionType.EventVenue, "An event's venue",
             "Where the event is held: the place on a map, the building's story and its rooms.",
             Heading + Venue),

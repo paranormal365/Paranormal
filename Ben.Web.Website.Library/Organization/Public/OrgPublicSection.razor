@@ -1,6 +1,7 @@
 @namespace Ben.Web.Website.Library.Organization.Public
 @using Ben.Data.Common.Enums
 @using System.Text.Json
+@inject Ben.Web.Services.IBenAdminClient EvidenceLinks
 
 @* Renders a single CmsSection on a public org page. *@
 
@@ -51,6 +52,7 @@
         case CmsSectionType.EventBooking:
         case CmsSectionType.EventGallery:
         case CmsSectionType.EventVenue:
+        case CmsSectionType.EventEvidence:
             @RenderEvent()
             break;
 
@@ -489,6 +491,41 @@
                     else
                     {
                         <p class="text-secondary mb-0">No pictures yet.</p>
+                    }
+                }
+                else if (Section!.SectionType == CmsSectionType.EventEvidence)
+                {
+                    @* The evidence the event accepted, most positive votes first and then the earliest caught
+                       (event-scenario-gaps): the "evidence collected" page Jim builds after the night. *@
+                    @if (ev.Evidence is { Count: > 0 } evidence)
+                    {
+                        <ol class="list-group list-group-numbered" data-testid="cms-event-evidence">
+                            @foreach (var piece in evidence)
+                            {
+                                <li class="list-group-item d-flex flex-column flex-sm-row gap-2 justify-content-between">
+                                    <div style="min-width:0;">
+                                        <a href="@EvidenceLinks.GetEventEvidenceFileUrl(piece.OrgCalendarEventId, piece.SubmissionId)"
+                                           target="_blank" rel="noopener" style="overflow-wrap:anywhere;">@piece.FileName</a>
+                                        <span class="small text-secondary">— @piece.By, @piece.CaughtUtc.ToString("MM/dd/yyyy")</span>
+                                        @if (piece.Note is { Length: > 0 } note)
+                                        {
+                                            <div class="small" style="overflow-wrap:anywhere;">@note</div>
+                                        }
+                                    </div>
+                                    @if (piece.PositiveVotes > 0)
+                                    {
+                                        <span class="badge text-bg-success align-self-start text-nowrap">@(piece.PositiveVotes == 1 ? "1 confirms" : $"{piece.PositiveVotes} confirm")</span>
+                                    }
+                                </li>
+                            }
+                        </ol>
+                        <p class="small text-secondary mt-2 mb-0">
+                            <a href="@($"{ev.Url}#event-evidence")">@(ev.AsksForVotes ? "Vote for the best on the event's page" : "See it on the event's page")</a>
+                        </p>
+                    }
+                    else
+                    {
+                        <p class="text-secondary mb-0">No evidence has been accepted yet.</p>
                     }
                 }
                 else if (ev.Venue is { } venue)

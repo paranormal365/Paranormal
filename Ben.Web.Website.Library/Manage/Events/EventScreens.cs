@@ -33,6 +33,7 @@ public static class EventScreens
         new("Program", "/sessions"),
         new("Staff", "/staff"),
         new("The door", "/door"),
+        new("Tickets at the door poster", "/door-tickets/poster"),
         new("Bands", "/bands"),
         new("Files", "/files"),
         new("Gallery", "/gallery"),

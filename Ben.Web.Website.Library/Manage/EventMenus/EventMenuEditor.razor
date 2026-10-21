@@ -182,7 +182,17 @@
                                         </div>
                                     </div>
                                 }
-                                <button type="button" class="btn btn-sm btn-outline-primary" id="menu-price-add" @onclick="() => Set(() => _prices.Add(new PriceForm()))">Add a price</button>
+                                <div class="d-flex flex-wrap gap-2 align-items-center">
+                                    <button type="button" class="btn btn-sm btn-outline-primary" id="menu-price-add" @onclick="() => Set(() => _prices.Add(new PriceForm()))">Add a price</button>
+                                    @* The kinds of guest a menu is most often priced for (Ben's menu rules: "categories like
+                                       children, seniors or first responders"). One tap adds the row with its name filled in. *@
+                                    @foreach (var kind in PriceKinds.Where(k => !_prices.Any(p => string.Equals(p.Label?.Trim(), k, StringComparison.OrdinalIgnoreCase))))
+                                    {
+                                        var label = kind;
+                                        <button type="button" class="btn btn-sm btn-outline-secondary text-nowrap" data-testid="menu-price-kind"
+                                                @onclick="() => Set(() => _prices.Add(new PriceForm { Label = label }))">+ @label</button>
+                                    }
+                                </div>
                                 <div class="mt-2">
                                     <label class="form-label small mb-1" for="menu-price-note">A note under the prices <span class="text-secondary">(optional)</span></label>
                                     <input id="menu-price-note" class="form-control form-control-sm" maxlength="300" placeholder="Such as Gratuity not included"
@@ -340,6 +350,9 @@
     [Inject] private Ben.Web.Services.IMediaUrlBuilder Media { get; set; } = default!;
 
     private sealed class PriceForm { public string? Label { get; set; } public decimal Amount { get; set; } }
+
+    /// <summary>The kinds of guest offered as one-tap price rows; any label can still be typed.</summary>
+    private static readonly string[] PriceKinds = ["Adults", "Children", "Seniors", "First responders", "Military"];
     private sealed class EntryForm { public Guid ItemId { get; init; } public MenuPricing Pricing { get; set; } public decimal? Price { get; set; } public string? Note { get; set; } }
     private sealed class SectionForm { public Guid CategoryId { get; init; } public string? Heading { get; set; } public List<EntryForm> Entries { get; } = []; }
 

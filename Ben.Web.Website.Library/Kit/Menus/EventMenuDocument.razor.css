@@ -253,6 +253,15 @@
     opacity: .85;
 }
 
+/* The small site mark beside the credit, at the credit's own height. */
+.menu-doc__credit-mark {
+    width: .7rem;
+    height: .7rem;
+    vertical-align: -.1rem;
+    margin-right: .25rem;
+    border-radius: 2px;
+}
+
 /* The design gallery's small card: the whole menu drawn at full size and scaled down as one, so a
    card shows the design's real proportions rather than a reflowed squeeze. */
 .menu-doc--compact {

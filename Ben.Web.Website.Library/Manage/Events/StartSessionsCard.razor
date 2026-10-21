@@ -1,0 +1,57 @@
+@namespace Ben.Web.Website.Library.Manage.Events
+@using Ben.Service.Models.FieldLaunches
+@using Ben.Web.Services
+@inject IBenAdminClient AdminClient
+
+@* "Time to investigate" from the website (event-scenario-gaps). The same launch the iPhone app's
+   Paranormal Platform has had since item 252, so the organizer at a laptop, or a guide the organizer
+   asked to start the sessions, needn't find a phone.
+
+   WHAT IT SAYS IS PLAIN. Everybody with a place gets "Sessions are now being accepted for this event"
+   as a notification on the app and a card in their feed. Nobody's phone starts recording: each person
+   presses Start themselves. The server decides who may press it and says why when it refuses. *@
+
+<div class="card mb-3 d-print-none" id="start-sessions">
+    <div class="card-header fw-semibold">Time to investigate</div>
+    <div class="card-body">
+        <p class="small text-secondary mb-2">
+            Tells everybody with a place that sessions are now being accepted for this event, with a
+            notification on the IsHaunted app and a card in their feed. Each person starts their own
+            session on their phone. It can be sent from three hours before the event starts until it ends.
+        </p>
+        @if (_said is { Length: > 0 }) { <div class="alert alert-success py-2" role="status" id="start-sessions-said">@_said</div> }
+        @if (_error is { Length: > 0 }) { <div class="alert alert-danger py-2" role="alert" id="start-sessions-error">@_error</div> }
+        <button type="button" class="btn btn-primary" style="min-height:44px;" id="start-sessions-button"
+                disabled="@_busy" @onclick="StartAsync">
+            @(_busy ? "Sending…" : "Start the sessions")
+        </button>
+    </div>
+</div>
+
+@code {
+    /// <summary>The hosted event.</summary>
+    [Parameter, EditorRequired] public Guid HostedEventId { get; set; }
+
+    private bool _busy;
+    private string? _said, _error;
+
+    private async Task StartAsync()
+    {
+        _busy = true; _said = null; _error = null;
+        var (outcome, error) = await AdminClient.StartHostedEventSessionsAsync(HostedEventId);
+        _busy = false;
+        if (outcome is null) { _error = error; return; }
+        _said = Said(outcome);
+    }
+
+    /// <summary>What the launch did, in a sentence.</summary>
+    internal static string Said(LaunchOutcomeRecord outcome)
+    {
+        var people = outcome.People == 1 ? "1 person" : $"{outcome.People} people";
+        var phones = !outcome.PushConfigured
+            ? "Notifications aren't set up on this site, so it's a card in their feed only."
+            : outcome.PeopleWithTheApp == 0 ? "None of them is signed in on the app, so it's a card in their feed."
+            : $"{outcome.PeopleWithTheApp} of them have the app and were notified.";
+        return $"Sent to {people}. {phones}";
+    }
+}

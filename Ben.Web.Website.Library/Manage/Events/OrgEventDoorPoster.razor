@@ -1,0 +1,78 @@
+@page "/organizations/{OrgId:guid}/events/{EventId:guid}/door-tickets/poster"
+@namespace Ben.Web.Website.Library.Manage.Events
+@using Ben.Service.Models.Entities
+@using Ben.Web.Services
+@using Ben.Web.Services.WebApi
+@using Ben.Web.Website.Library.Kit
+@inject IBenAdminClient AdminClient
+@inject IBenUserState UserState
+@inject IJSRuntime JS
+
+@* The door's poster (event-scenario-gaps): a big QR code to print, or to leave on a tablet by the door.
+   Nothing on it names anybody; the code only asks for a place, and the door still confirms each one. *@
+
+<PageTitle>Tickets at the door</PageTitle>
+
+<div class="container py-4 door-poster" style="max-width:720px;">
+    <div class="d-print-none mb-3 d-flex flex-wrap gap-2">
+        <a href="@($"/organizations/{OrgId}/events/{EventId}/door")">Back to the door</a>
+        <button type="button" class="btn btn-outline-secondary btn-sm ms-auto" id="door-poster-print" @onclick="PrintAsync">Print it</button>
+    </div>
+
+    @if (_loading)
+    {
+        <BenLoaderOverlay Visible="true" Text="Making the poster…" />
+    }
+    else if (_tickets.Failed)
+    {
+        <div class="alert alert-warning" role="alert" id="door-poster-failed">@(_tickets.Reason ?? "The poster couldn't be made just now.")</div>
+    }
+    else if (_tickets.Item is not { On: true, Url: { } url } t)
+    {
+        <div class="alert alert-secondary" id="door-poster-off">
+            The door isn't selling tickets. Turn it on from <a href="@($"/organizations/{OrgId}/events/{EventId}/door")">the door</a> first.
+        </div>
+    }
+    else
+    {
+        <div class="text-center border rounded-3 p-3 p-sm-5" id="door-poster">
+            <h1 class="display-6 fw-bold mb-1">@(_eventName ?? "Tickets")</h1>
+            <p class="fs-4 mb-4">Tickets at the door</p>
+            <div class="d-flex justify-content-center mb-4">
+                <BenQrPlate Value="@url" Size="240px" />
+            </div>
+            <p class="fs-5 mb-2">Point your phone's camera at the code and ask for a place.</p>
+            <p class="mb-1">
+                @(t.DayPassPrice switch
+                {
+                    null => "Pay at the door, then show your phone to be let in.",
+                    0 => "It's free. Show your phone at the door to be let in.",
+                    var p => $"{p:C} a person, paid at the door. Then show your phone to be let in.",
+                })
+            </p>
+            <p class="small text-secondary mt-4 mb-0" style="overflow-wrap:anywhere;">@url</p>
+        </div>
+    }
+</div>
+
+@code {
+    [Parameter] public Guid OrgId { get; set; }
+    [Parameter] public Guid EventId { get; set; }
+
+    private ItemResult<HostedEventDoorTicketsRecord> _tickets;
+    private string? _eventName;
+    private bool _loading = true;
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (!firstRender) return;
+        if (!await UserState.WaitUntilAuthReadyAsync(RendererInfo.IsInteractive)) return;
+        _tickets = await AdminClient.GetDoorTicketsAsync(OrgId, EventId);
+        if (_tickets.Item is { Url: { } url } && url.LastIndexOf('/') is var slash and >= 0)
+            _eventName = (await AdminClient.GetDoorTicketAsync(url[(slash + 1)..])).Item?.Name;
+        _loading = false;
+        StateHasChanged();
+    }
+
+    private async Task PrintAsync() => await JS.InvokeVoidAsync("window.print");
+}
