@@ -1676,7 +1676,11 @@ public sealed record FieldSessionSummaryRecord(
     DateTime? PublishedAtUtc = null,
     /// <summary>Sent to a group's tour date or event, or hosted event (item 252) — the group's, like an investigation's.</summary>
     Guid? OrgCalendarEventId = null,
-    Guid? HostedEventId = null)
+    Guid? HostedEventId = null,
+    /// <summary>When the sender agreed it may be shown with the event's results (event-scenario-gaps).</summary>
+    DateTime? EventResultsConsentAtUtc = null,
+    /// <summary>When the organizer chose to show it with the event's results.</summary>
+    DateTime? ShownWithEventResultsAtUtc = null)
 {
     /// <summary>Whether it belongs to a group's record rather than to the person alone.</summary>
     public bool IsGroupWork => InvestigationId is not null || OrgCalendarEventId is not null || HostedEventId is not null;

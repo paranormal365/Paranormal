@@ -41,6 +41,7 @@ public interface IBenAdminClient :
     IBenEventFileClient,
     IBenEventRoomClient,
     IBenEventOversightClient,
+    IBenEventScenarioClient,
     IBenStoreAdminClient,
     IBenStoreClient,
     IBenStoreSellerClient

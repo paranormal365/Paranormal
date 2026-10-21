@@ -123,6 +123,9 @@ public struct EventRoomMessage: Sendable, Codable, Equatable, Identifiable {
     public var isHidden: Bool
     public var sentToHosts: Bool
     public var reports: Int
+    /// "Organizer", "Guide", "Venue" or the role a helper was given, for the people running the event; nil for a
+    /// guest. Their posts stand out (event-scenario-gaps). Absent on an older server, which reads as nil.
+    public var authorRole: String?
 
     public var isVideo: Bool { mediaContentType?.hasPrefix("video/") == true }
 }

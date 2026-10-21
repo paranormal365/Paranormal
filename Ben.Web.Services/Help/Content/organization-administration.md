@@ -1401,11 +1401,20 @@ is the one action that costs money.
 
 ### The group's session on the night
 
-As with a tour, the organizer — or staff running the door — can start the Paranormal Platform for everyone from
-the IsHaunted app, and confirmed guests are notified. What they send appears on the event's page
-under **Field sessions sent up**, visible to your group and the event's staff. Letting in someone who
-scanned the code and asked to join never creates a booking: it only lets them record along with
-everyone else.
+When it's time to investigate, press **Start the sessions**. It's on the event page and on the door,
+on the website, and in the Paranormal Platform in the IsHaunted app. Everybody with a place, and the
+guests they named, gets a plain notice: *Sessions are now being accepted for this event.* It arrives
+as a notification for people with the app and as a card in everyone's feed. Nobody's phone starts
+recording; each person presses Start on their own. You can send it from three hours before the event
+starts until it ends.
+
+The organizer can press it, and so can anyone running the door. To let a guide or a lead do it without
+handing them the door, tick **Start the sessions ("time to investigate")** when you add them on the
+staff list.
+
+What people send appears on the event's page under **Field sessions sent up**, visible to your group
+and the event's staff. Letting in someone who scanned the code and asked to join never creates a
+booking: it only lets them record along with everyone else.
 
 ### Minimum numbers
 
@@ -1592,18 +1601,26 @@ You can set a date when the event stops taking new requests, so you know your nu
 and staffing. It only stops *new* requests — any request already waiting when bookings close is
 still yours to decide, so nobody who asked in time is turned away automatically.
 
-#### Inviting somebody who has no account
+#### Inviting people, and sending somebody a ticket
 
-Most guests ask through the event's page, which needs an account. For people who phone you, or who
-you meet at a conference, there is **Invite by email**: type their address and we send them a link.
-Clicking it confirms their email address, creates a passwordless account for them, and puts a
-**day-pass request** on your board, which you then confirm like any other.
+Most guests ask through the event's page, which needs an account. For the people you mean to ask
+yourself, there is **Invite people by email** on the bookings board. Paste one address or your whole
+list, one a line or separated by commas, and add a message of your own: the price and how to pay
+you, for example. Each person gets their own link. Clicking it confirms their email address, creates
+a passwordless account for them, and puts a **day-pass request** on your board, which you then
+confirm like any other. Anything in your list that isn't an email address is handed back to you, so
+you can fix the typo and send it again.
 
-Two things are worth knowing before you use it.
+**Send somebody a ticket** is for someone who has already paid you, by phone, at your own door or
+any other way, or who comes free. We email them a link, and opening it confirms their place straight
+away and sends them their ticket, with the code to show at the door. They appear on your board as
+confirmed when they open it. The site never takes the money; you settle it with them yourself.
 
-**Nothing is held until they click.** The invitation doesn't reserve a room or a day pass, and the
-screen says so clearly. If you need to hold a room *right now* for someone on the phone, create the
-booking under an account instead.
+Two things are worth knowing before you use either.
+
+**Nothing is held until they click.** Neither an invitation nor a ticket reserves a room or a day
+pass until the link is opened, and the screen says so clearly. If the day passes have run out by the
+time a ticket is opened, it arrives on your board as a request instead, for you to sort out.
 
 **It only ever requests a day pass.** Staying overnight means choosing rooms night by night, which
 a link can't do. So if they are staying over, move them into a room when you confirm, just as you
@@ -1697,8 +1714,12 @@ On the menu:
     event's price includes, under the dates.
   - **Priced on its own.** An extra or an add-on, such as alcohol, or blue cheese on a steak. Give its
     price.
-- **Prices**: the meal's price, as one amount for everybody or one for each kind of guest: adults,
-  children, seniors, first responders. A note under them can say *Gratuity not included*.
+- **Alcohol** has its own mark, **21+**. Anything marked as alcohol is always priced on its own; the
+  menu won't save if it's in the meal's price or covered by the event.
+- **Prices**: the meal's price, as one amount for everybody or one for each kind of guest. The
+  buttons **+ Adults**, **+ Children**, **+ Seniors**, **+ First responders** and **+ Military** add
+  a row with its name filled in, and you can type any other. A note under them can say *Gratuity not
+  included*.
 - **A logo or picture** at the top of the menu.
 
 #### The look, and the preview
@@ -1720,7 +1741,10 @@ blackletter and Case File's typewriter, and the PDF uses the same ones.
 ![The ghost-hunting designs, each drawn as a finished menu](help-media:organization-administration/event-menu-designs.png) The design picker
 shows each one as a finished sample menu, and a new menu starts in Séance Parlor.
 
-Every menu ends with a very small line saying it was made with IsHaunted.com.
+Every menu ends with a very small line: *IsHaunted.com © 2026 ISHAUNTED LLC*, with the current year.
+
+Published menus also appear on your group's calendar, on the event's entry for each date they're
+served, and in the calendar file guests download from the event's page.
 
 #### Publishing, copies and the PDF
 
@@ -1860,6 +1884,24 @@ because the number at the top only matters if it is enforced.
 
 If you don't expect a signal, print the page before the doors open, since a browser can't scan a
 code without a connection. Or run the door from the iPhone or iPad app, which can.
+
+**Selling tickets at the door.** Turn on **Sell tickets at the door** on the door page and you get a
+QR code. Print the poster, or leave it on a tablet by the door. Somebody who scans it with their
+phone sees the event and the day-pass price, signs in or makes an account, and asks for a place. They
+pay you however you take money; the site never handles it. Then whoever is on the door presses
+**Paid — confirm** beside their name, and their pass is on their phone, ready to scan in. The door
+may confirm only the places asked for at the door; every other booking stays with whoever decides
+bookings. Only the organizer turns door sales on or off, and turning them off stops the printed code
+working.
+
+- **An account is needed at the door.** A guest makes one with an email address before asking, so
+  their pass, the room and the results letter have somewhere to go.
+- **A sold-out event still takes requests at the door.** What somebody asks for becomes a request on
+  the booking board, and you or the door can confirm it if a place opens up.
+
+**Who's at the classes**, linked from the door, lists each class with a switch per person with a
+place, so a helper running the door can mark who came without opening the program, which is your
+group's. The app has the same screen under the door.
 
 **On the iPhone or iPad app.** Anyone who can run an event's door — a group member with door access,
 a helper who accepted an invitation, or the venue's own staff if the venue granted it — will find
@@ -2057,6 +2099,9 @@ one of the venue's rooms, or something like "meet at reception" — and who lead
   the queue moves up in order, a party is never skipped in favor of one person behind it, and
   whoever gets in is emailed.
 - **Who's coming** lists the people with places and the queue, and lets you remove someone.
+- **Who was there**: tick **There** beside each person with a place as they arrive at a class, and the
+  list counts how many came. Whoever runs the door can mark it too. Someone still in the queue can't be
+  marked, because they were never let in.
 
 ![The program, as the host builds it](help-media:organization-administration/event-programme.png)
 
@@ -2103,6 +2148,13 @@ appears on the public feed.
 - **Hide** removes a post from the room for everyone but you. Members can **Report** a post, and
   you see how many have. **Close the room** stops new posts early; otherwise it closes a week after
   the last night.
+- **Posts from the people running the event stand out**, with a colored edge and a badge:
+  *Organizer* for your group, the role you gave a helper (such as *Guide* or *Door*), or *Venue*.
+
+**A ghost walk has a room too.** On a tour date, the people the guide checked in and the walk's
+guides can stay in touch on the date's page and in the app. Somebody with a seat who never turned up
+isn't in it. It's words only, the guides' posts carry their role, and it closes a week after the
+walk.
 
 **The photo wall** (*Photo wall* on the event page) shows the room's photos full screen, one at a
 time, newest first, checking for new ones every 30 seconds. **It only opens for your group, the
@@ -2126,6 +2178,10 @@ the people in them didn't agree to appear on a public page.
 
 The public event page opens with the pictures, shows how long until the first night, and on a
 phone keeps an **Ask for a place** button at the bottom of the screen as people scroll.
+
+**Where people find it.** Once published, the event appears on the map on the home page, at an
+approximate spot near the venue rather than its exact address, until the day after it ends. It can
+be found on **What's on** by its name, your group's name, a tour or the town.
 
 **Putting an event on your group's own pages.** When you edit one of your public pages, four
 section types show one of your published events and stay up to date automatically: *An event: dates
@@ -2187,6 +2243,17 @@ about to expire gets its own row there.
 The color's name is always shown along with the color itself, because about one in twelve men can't
 tell red from green.
 
+### When a guest writes to you
+
+Anybody with a booking at the event can **write to the organizers** from the event's page or the
+app. Their message arrives in your group's **Messages** as *Guest Message*, one thread per guest,
+addressed to everyone who can say yes or no to bookings, and your bell counts it.
+
+**Guest messages**, on the event page, lists every guest who has written, the newest first, with
+*Waiting on you* beside the ones you haven't answered. Choose one to read it and answer. The guest
+sees your answer on the event's page and in the app, and their bell tells them. Messages are words
+only, and the event stops taking them a month after it ends.
+
 ### Writing to your guests
 
 **Write to your guests**, at the bottom of the booking board, sends one message to everyone with a
@@ -2220,9 +2287,37 @@ one message.
 ![After the event](help-media:organization-administration/event-after.png)
 
 - **Thank-you email** is sent automatically the morning after the event ends, once to each
-  confirmed booking. It includes your note, a link to leave a review, a link to the gallery if you
-  added pictures, and up to three of your upcoming events. It is on unless you turn it off, and it
-  is never sent for an event that ended more than a week earlier.
+  confirmed booking that was checked in at the door. It includes your note, a link to leave a review,
+  a link to the gallery if you added pictures, and up to three of your upcoming events. It is on
+  unless you turn it off, and it is never sent for an event that ended more than a week earlier.
+- **We missed you** goes instead to anyone with a confirmed place who was never checked in, with a
+  note of its own. If the door didn't check anybody in at all, the site can't tell who came, so
+  everybody gets the thank-you.
+- **Who came.** Before the letters go, the *Who came* card lists each confirmed party, with a **Here**
+  switch that starts from the door's scans. Change any that are wrong, for example somebody who came
+  in by the side door: the thank-you goes to everyone marked here and *we missed you* to the rest.
+  Once a party's letter has gone, its switch can't change.
+- **The evidence window.** On an event that takes evidence, say how many days after the event you'll
+  accept evidence, and roughly how many days until the results are ready. Both letters say it — for
+  example, *We're accepting evidence for three days … ready to see in about a week* — and the
+  event's page shows the deadline. After it, the page stops taking evidence and says so.
+- **Votes.** Tick **Ask people to vote for the best evidence** and the evidence you accept is shown
+  with a vote beside each piece. Accepted evidence is always listed with the most *confirms* votes
+  first, then in the order it was caught. Only *confirms* votes count toward the order, and a tie
+  goes to the piece caught first.
+- **Sessions from the app aren't held to the window.** The deadline closes the event's page to new
+  evidence; a guest can still send a session they recorded in the app afterward.
+- **Sessions in the results.** Under the sessions sent to the event, **Show with the results** puts a
+  session on the event's page, where anybody can play it in the session player with its EVPs marked.
+  It needs the sender's yes first: they give it when they send it from the app, or later on the
+  website, and the button says *Waiting for the sender's OK* until they do. It's only offered at an
+  event that takes evidence, at a public place. **Stop showing** takes it off, and so does the
+  sender changing their mind.
+- **The results.** When the evidence is ready, **Send the results letter** emails everybody who had
+  a place, including those who missed it, with a link and a QR code to the results. The link goes to
+  the event's page, or to a page you built: add the section **An event's evidence** to one of your
+  group's pages and paste its address under **Results page**. Pressing it again only reaches people
+  who haven't had it. Guests with the IsHaunted app also see the results on the event in the app.
 - **Reviews** can only come from people who had a confirmed place, for two months after the event.
   You can hide a review from the page, but you can't change what it says, and the person who wrote
   it still sees it, marked as hidden. Turning reviews off stops new ones.

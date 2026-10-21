@@ -454,6 +454,14 @@ public sealed class HostedEventBookingController : OrgCmsControllerBase
             var now = DateTime.UtcNow;
             BookingTransitions.Confirm(booking, userId.Value, note: null, now);
             await BookingTransitions.ApplyUmbrellaAsync(db, _sync, ev, booking, userId.Value, now, ct);
+
+            // A booking the host confirms on the spot is a ticket like any other confirmed one: it
+            // has a pass, and the guest is sent it (event-scenario-gaps). It used to be confirmed
+            // with no pass and no letter, so the guest had nothing to show at the door.
+            await EventPasses.EnsureAsync(db, booking, userId.Value, ct);
+            await SaveInOneTransactionAndAuditAsync(db, booking, booking.Id, userId.Value,
+                () => _guestMail.SendDecisionAsync(db, booking.Id, ct), ct);
+            return Ok(await OneAsync(db, eventId, booking.Id, ct));
         }
 
         await db.SaveChangesAsync(ct);
@@ -510,17 +518,122 @@ public sealed class HostedEventBookingController : OrgCmsControllerBase
         // nobody has booked into.
         var umbrella = await _sync.SyncAsync(db, ev, userId.Value, ct);
 
+        var (sent, expires, alreadyAccepted) = await InviteOneAsync(
+            db, ev, umbrella.Id, userId.Value, email, Trimmed(request.DisplayName), request.PartySize,
+            request.ConfirmsOnAccept, Trimmed(request.Message), ct);
+        await db.SaveChangesAsync(ct);
+
+        return Ok(new HostedEventGuestInviteRecord(email, sent && !alreadyAccepted, expires));
+    }
+
+    /// <summary>
+    /// Invites a whole list at once, with the organizer's own words at the top of every letter
+    /// (event-scenario-gaps: "He has a list of people he is going to ask to come. He creates email on
+    /// our site and sends it out.").
+    /// </summary>
+    /// <remarks>
+    /// The same door as one invitation, address by address, so each person still gets their own
+    /// single-use link and nothing is held until they click. The list may be pasted however it came:
+    /// one a line, or separated by commas, semicolons or spaces. Pieces that are not addresses are
+    /// handed back as typed, so a host can see the typo instead of wondering who never got one.
+    /// </remarks>
+    [HttpPost("on-behalf/invite-many")]
+    public async Task<ActionResult<HostedEventGuestInvitesRecord>> InviteMany(
+        Guid orgId, Guid eventId,
+        [FromBody] InviteHostedEventGuestsRequest request, CancellationToken ct)
+    {
+        var userId = GetCurrentUserId();
+        if (userId is null) return Unauthorized();
+
+        var (addresses, notAddresses) = SplitAddresses(request.Emails);
+        if (addresses.Count == 0)
+            return BadRequest(notAddresses.Count > 0
+                ? $"None of those is an email address: {string.Join(", ", notAddresses.Take(5))}."
+                : "Paste at least one email address.");
+        if (addresses.Count > MaxInvitesAtOnce)
+            return BadRequest($"That's {addresses.Count} addresses. Send up to {MaxInvitesAtOnce} at a time.");
+
+        var message = Trimmed(request.Message);
+        if (message is { Length: > 2000 }) return BadRequest("The message is longer than 2,000 characters.");
+
+        await using var db = await DbFactory.CreateDbContextAsync(ct);
+        if (!await CanDecideAsync(userId.Value, orgId, eventId, db, ct)) return Forbid();
+
+        var ev = await LoadEventAsync(db, orgId, eventId, ct);
+        if (ev is null) return NotFound();
+
+        if (HostedEventGuestDoor.WhyTheEmailDoorIsClosed(ev, DateTime.UtcNow, theHostSentThisLink: true)
+            is { } shut)
+            return BadRequest(shut);
+
+        var umbrella = await _sync.SyncAsync(db, ev, userId.Value, ct);
+
+        var invited = new List<string>();
+        var accepted = new List<string>();
+        var allSent = true;
+        foreach (var address in addresses)
+        {
+            var (sent, _, alreadyAccepted) = await InviteOneAsync(
+                db, ev, umbrella.Id, userId.Value, address, null, request.PartySize,
+                request.ConfirmsOnAccept, message, ct);
+            if (alreadyAccepted) { accepted.Add(address); continue; }
+            invited.Add(address);
+            allSent &= sent;
+        }
+        await db.SaveChangesAsync(ct);
+
+        return Ok(new HostedEventGuestInvitesRecord(invited, accepted, notAddresses, allSent && invited.Count > 0));
+    }
+
+    /// <summary>The most addresses one list may carry.</summary>
+    internal const int MaxInvitesAtOnce = 200;
+
+    /// <summary>A pasted list, split into addresses (lower-cased, each once) and the pieces that aren't.</summary>
+    internal static (List<string> Addresses, List<string> NotAddresses) SplitAddresses(string? pasted)
+    {
+        var addresses = new List<string>();
+        var not = new List<string>();
+        // "Jim Smith <jim@example.com>" pasted from a mail program keeps only the address.
+        var text = System.Text.RegularExpressions.Regex.Replace(pasted ?? "", @"[^,;\n<>]*<([^<>]+)>", " $1 ");
+        foreach (var raw in text.Split(['\n', '\r', ',', ';', ' ', '\t'], StringSplitOptions.RemoveEmptyEntries))
+        {
+            var piece = raw.Trim().Trim('"', '\'');
+            if (piece.Length == 0) continue;
+            var lower = piece.ToLowerInvariant();
+            if (lower.Length <= 320 && System.Net.Mail.MailAddress.TryCreate(lower, out var parsed) && parsed.Address == lower
+                && lower.IndexOf('@') > 0 && lower.LastIndexOf('.') > lower.IndexOf('@'))
+            {
+                if (!addresses.Contains(lower)) addresses.Add(lower);
+            }
+            else
+            {
+                not.Add(piece);
+            }
+        }
+        return (addresses, not);
+    }
+
+    /// <summary>
+    /// One invitation (or ticket) to one address: made, or reissued with a new link. The caller saves.
+    /// </summary>
+    /// <returns>Whether a letter will leave, when the link expires, and whether they had already accepted.</returns>
+    private async Task<(bool Sent, DateTime Expires, bool AlreadyAccepted)> InviteOneAsync(
+        BenDataContext db, HostedEvent ev, Guid umbrellaId, Guid userId, string email,
+        string? displayName, int partySize, bool confirmsOnAccept, string? message, CancellationToken ct)
+    {
         // One pending invitation per address, reissued rather than stacked: a host who is not sure
         // the first one arrived will simply send it again.
-        var invite = await db.EventAttendanceInvites
-            .FirstOrDefaultAsync(i => i.OrgCalendarEventId == umbrella.Id && i.Email == email, ct);
+        var invite = db.EventAttendanceInvites.Local
+                         .FirstOrDefault(i => i.OrgCalendarEventId == umbrellaId && i.Email == email)
+                     ?? await db.EventAttendanceInvites
+                         .FirstOrDefaultAsync(i => i.OrgCalendarEventId == umbrellaId && i.Email == email, ct);
 
         var expires = DateTime.UtcNow.Add(InviteLifetime);
 
         if (invite is { DateConfirmed: not null })
             // Already accepted; their booking is on the board. Saying so distinguishes nothing
             // that the host cannot already see there.
-            return Ok(new HostedEventGuestInviteRecord(email, Sent: false, invite.DateExpires));
+            return (false, invite.DateExpires, true);
 
         var token = Convert.ToHexString(
             System.Security.Cryptography.RandomNumberGenerator.GetBytes(32));
@@ -530,15 +643,16 @@ public sealed class HostedEventBookingController : OrgCmsControllerBase
             invite = new EventAttendanceInvite
             {
                 Id = Guid.NewGuid(),
-                OrgCalendarEventId = umbrella.Id,
+                OrgCalendarEventId = umbrellaId,
                 Email = email,
-                DisplayName = Trimmed(request.DisplayName),
-                Seats = EventCapacity.ClampPartySize(request.PartySize),
+                DisplayName = displayName,
+                Seats = EventCapacity.ClampPartySize(partySize),
                 Token = token,
                 DateExpires = expires,
-                InvitedByAppUserId = userId.Value,
+                InvitedByAppUserId = userId,
+                ConfirmsOnAccept = confirmsOnAccept,
                 DateCreated = DateTime.UtcNow,
-                CreatedByAppUserId = userId.Value,
+                CreatedByAppUserId = userId,
             };
             db.EventAttendanceInvites.Add(invite);
         }
@@ -546,23 +660,22 @@ public sealed class HostedEventBookingController : OrgCmsControllerBase
         {
             invite.Token = token;
             invite.DateExpires = expires;
-            invite.Seats = EventCapacity.ClampPartySize(request.PartySize);
+            invite.Seats = EventCapacity.ClampPartySize(partySize);
             // A guest who asked for their own link and is now being invited by the host gets the
             // host's latitude from here on: same person, better standing.
-            invite.InvitedByAppUserId = userId.Value;
-            if (Trimmed(request.DisplayName) is { } name) invite.DisplayName = name;
+            invite.InvitedByAppUserId = userId;
+            invite.ConfirmsOnAccept = confirmsOnAccept;
+            if (displayName is { } name) invite.DisplayName = name;
             invite.DateUpdated = DateTime.UtcNow;
-            invite.UpdatedByAppUserId = userId.Value;
+            invite.UpdatedByAppUserId = userId;
         }
 
         // Queued BEFORE the save, so the token and the letter carrying it are one write (item
         // 239b). Inviting again rotates the token; saving it first and sending afterwards could
         // leave the guest's earlier link dead and no new one written — and because the outbox
         // swallowed its own failure, "sent" still came back true to the host at the door.
-        var sent = await TryQueueInviteAsync(db, email, ev, token, ct);
-        await db.SaveChangesAsync(ct);
-
-        return Ok(new HostedEventGuestInviteRecord(email, sent, expires));
+        var sent = await TryQueueInviteAsync(db, email, ev, token, ct, confirmsOnAccept, message);
+        return (sent, expires, false);
     }
 
     // ── passes and the door (phase 3) ────────────────────────────────────────
@@ -932,8 +1045,38 @@ public sealed class HostedEventBookingController : OrgCmsControllerBase
     /// <para>It deliberately says nothing about the room, the price or the programme. Those are
     /// the confirmation's to say, and this letter goes to an address nobody has proved yet.</para>
     /// </remarks>
+    /// <summary>The invitation's words, or the ticket's (event-scenario-gaps). Separate so a test can read them.</summary>
+    /// <param name="safeName">The event's name, already escaped.</param>
+    /// <param name="message">The organizer's own words, plain text; escaped here.</param>
+    internal static string InviteLetter(string safeName, DateTime startsOn, string link, bool isTicket, string? message)
+    {
+        var body = new System.Text.StringBuilder();
+        if (message is { Length: > 0 })
+            foreach (var paragraph in message.Split(["\r\n\r\n", "\n\n"], StringSplitOptions.RemoveEmptyEntries))
+                body.Append($"<p>{NotificationText.Safe(paragraph).Replace("\n", "<br>")}</p>");
+
+        if (isTicket)
+        {
+            body.Append($"<p>You have a place at <strong>{safeName}</strong>, starting {startsOn:dddd, MMMM d}.</p>");
+            body.Append($"<p><a href=\"{link}\">Get your ticket</a></p>");
+            body.Append("<p>Opening the link confirms your place and sends you your ticket, with the code to show "
+                      + "at the door. Nothing is paid through this site. The link is good for two weeks and only "
+                      + "works once.</p>");
+        }
+        else
+        {
+            body.Append($"<p>The venue has invited you to <strong>{safeName}</strong>, starting {startsOn:dddd, MMMM d}.</p>");
+            body.Append($"<p><a href=\"{link}\">Accept the invitation</a></p>");
+            body.Append("<p>Accepting puts your name in front of the venue, who will confirm your place "
+                      + "and tell you what happens next. That link is good for two weeks and only works "
+                      + "once.</p>");
+        }
+        return body.ToString();
+    }
+
     private async Task<bool> TryQueueInviteAsync(
-        BenDataContext db, string email, HostedEvent ev, string token, CancellationToken ct)
+        BenDataContext db, string email, HostedEvent ev, string token, CancellationToken ct,
+        bool isTicket = false, string? message = null)
     {
         var link = _site.AbsoluteUrl($"/attending/{token}");
 
@@ -948,13 +1091,8 @@ public sealed class HostedEventBookingController : OrgCmsControllerBase
         try
         {
             await _outbox.EnqueueAsync(db, new Ben.Data.Common.Interfaces.EmailMessage(email,
-                $"You're invited to {ev.Name}",
-                $"<p>The venue has invited you to <strong>{safeName}</strong>, starting "
-              + $"{ev.StartsOn:dddd, MMMM d}.</p>"
-              + $"<p><a href=\"{link}\">Accept the invitation</a></p>"
-              + "<p>Accepting puts your name in front of the venue, who will confirm your place "
-              + "and tell you what happens next. That link is good for two weeks and only works "
-              + "once.</p>"), ct);
+                isTicket ? $"Your ticket for {ev.Name}" : $"You're invited to {ev.Name}",
+                InviteLetter(safeName, ev.StartsOn, link, isTicket, message)), ct);
 
             // Sent means it will leave. Queued with nowhere to go is the truth the host needs.
             return _email.IsConfigured;
@@ -1047,30 +1185,38 @@ public sealed class HostedEventBookingController : OrgCmsControllerBase
             .Where(n => n.HostedEventId == ev.Id)
             .ToDictionaryAsync(n => n.Id, ct);
 
-        foreach (var choice in nights)
+        // One night at a time: a party spread over several seats or rooms on a night is checked
+        // against what those places hold together, not the whole party against each one (a party
+        // of three in three seats was refused, "H9 seats 1 more … and this is a party of 3").
+        foreach (var onANight in nights.Where(c => c.HostedEventLayoutUnitId is not null)
+                                       .GroupBy(c => c.HostedEventNightId))
         {
-            if (!eventNights.TryGetValue(choice.HostedEventNightId, out var night))
+            if (!eventNights.TryGetValue(onANight.Key, out var night))
                 return "One of those nights is not part of this event any more.";
 
-            // A night with no unit is somebody here for the day and going home again, which holds
-            // nothing and so cannot be over capacity. It is how a three-night event sells its
-            // Saturday on its own, and refusing it here would make that impossible to say.
-            if (choice.HostedEventLayoutUnitId is not { } unitId) continue;
+            var places = new List<(string Name, int? Left, int? People)>();
+            foreach (var choice in onANight.DistinctBy(c => c.HostedEventLayoutUnitId))
+            {
+                var unitId = choice.HostedEventLayoutUnitId!.Value;
+                var unit = offered.FirstOrDefault(u => u.Id == unitId);
+                if (unit is null)
+                    return ev.LayoutKind == HostedEventLayoutKind.Seats
+                        ? "That seat is not one on this event's plan. Add it to the plan first."
+                        : "That room is not one this event is offering. Add it to the plan first.";
 
-            var unit = offered.FirstOrDefault(u => u.Id == unitId);
-            if (unit is null)
-                return ev.LayoutKind == HostedEventLayoutKind.Seats
-                    ? "That seat is not one on this event's plan. Add it to the plan first."
-                    : "That room is not one this event is offering. Add it to the plan first.";
+                var taken = EventCapacity.PeopleIn(all, onANight.Key, unitId, excludingBookingId: booking.Id);
+                places.Add((EventCapacity.NameOf(unit), EventCapacity.BedsLeft(EventCapacity.CapacityOf(unit), taken), choice.People));
+            }
 
-            var taken = EventCapacity.PeopleIn(all, choice.HostedEventNightId, unitId,
-                                               excludingBookingId: booking.Id);
-            if (EventCapacity.WhyThisRoomCannotTakeThem(
-                    EventCapacity.NameOf(unit), night.Date, EventCapacity.CapacityOf(unit),
-                    taken, party, ev.LayoutKind)
-                is { } refusal)
+            if (EventCapacity.WhyThesePlacesCannotTakeThem(places, night.Date, party, ev.LayoutKind) is { } refusal)
                 return refusal;
         }
+
+        // A night with no unit is somebody here for the day and going home again, which holds
+        // nothing and so cannot be over capacity. It is how a three-night event sells its
+        // Saturday on its own, and refusing it here would make that impossible to say.
+        if (nights.FirstOrDefault(c => !eventNights.ContainsKey(c.HostedEventNightId)) is not null)
+            return "One of those nights is not part of this event any more.";
 
         return null;
     }

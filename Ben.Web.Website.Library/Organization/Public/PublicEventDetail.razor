@@ -135,6 +135,10 @@ else
                         </div>
                     }
                 </div>
+                @* The dates for a calendar app, each with what's served on it (event-scenario-gaps). *@
+                <p class="small mt-2 mb-0">
+                    <a href="@($"/calendar/hosted-events/{hosted.Id}.ics")" id="event-calendar-file" download>Add the dates to your calendar</a>
+                </p>
                 @if (hosted.DatesAreSeparate)
                 {
                     <p class="text-secondary small mt-2">
@@ -393,7 +397,13 @@ else
             @if (_isAuthenticated)
             {
                 <HostedEventRoom HostedEventId="withProgramme.Id" />
+                <HostedEventOrganizerThread HostedEventId="withProgramme.Id" />
             }
+        }
+        else if (_isAuthenticated && _event.TourName is not null)
+        {
+            @* A tour date's room, for the people checked in on the walk (event-scenario-gaps). *@
+            <TourDateRoom DateId="_event.Id" />
         }
 
         @if (!string.IsNullOrWhiteSpace(_event.Description))
@@ -429,27 +439,70 @@ else
 
 
         @* ── Evidence from the night (item 111) ────────────────────────────── *@
+        @* The anchor the after-event letters link to (event-scenario-gaps). *@
+        <div id="event-evidence"></div>
         @if (_acceptedEvidence.Items.Count > 0)
         {
             <BenSectionHeading Text="What people caught" />
-            <div class="card mb-4">
+            <div class="card mb-4" data-testid="event-evidence-list">
                 <div class="card-body">
+                    @* Ranked by the server: most "confirms" votes first, then the earliest caught (Ben's
+                       scenario, 10/21/2026). *@
+                    @if (_hosted?.AsksForVotes == true)
+                    {
+                        <p class="small text-secondary" id="event-evidence-vote-ask">
+                            The organizers would like to know which evidence is the best. Sign in and vote on any of it.
+                        </p>
+                    }
                     @foreach (var ev in _acceptedEvidence.Items)
                     {
-                        <div class="py-2 border-bottom">
-                            @* Absolute against the API origin: on the split deployment a raw
-                               /api href resolves to the SITE and 404s — the img-sends-no-token
-                               trap's anonymous sibling. *@
-                            <a href="@AdminClient.GetEventEvidenceFileUrl(ev.OrgCalendarEventId, ev.Id)"
-                               target="_blank" rel="noopener">@ev.FileName</a>
-                            <span class="text-secondary small">— @ev.SubmitterDisplayName, @ev.DateCreated.ToString("MM/dd/yyyy")</span>
-                            @if (!string.IsNullOrWhiteSpace(ev.Note))
+                        <div class="py-2 border-bottom d-flex flex-column flex-sm-row gap-2 justify-content-between" data-testid="event-evidence-item">
+                            <div style="min-width:0;">
+                                @* Absolute against the API origin: on the split deployment a raw
+                                   /api href resolves to the SITE and 404s — the img-sends-no-token
+                                   trap's anonymous sibling. *@
+                                <a href="@AdminClient.GetEventEvidenceFileUrl(ev.OrgCalendarEventId, ev.Id)"
+                                   target="_blank" rel="noopener" style="overflow-wrap:anywhere;">@ev.FileName</a>
+                                <span class="text-secondary small">— @ev.SubmitterDisplayName, @Local(ev.CaughtAtUtc ?? ev.DateCreated).ToString("MM/dd/yyyy h:mm tt")</span>
+                                @if (ev.PositiveVotes > 0)
+                                {
+                                    <span class="badge text-bg-success ms-1" data-testid="event-evidence-votes">@(ev.PositiveVotes == 1 ? "1 confirms" : $"{ev.PositiveVotes} confirm")</span>
+                                }
+                                @if (!string.IsNullOrWhiteSpace(ev.Note))
+                                {
+                                    <div class="small" style="overflow-wrap:anywhere;">@ev.Note</div>
+                                }
+                            </div>
+                            @if (_hosted?.AsksForVotes == true)
                             {
-                                <div class="small">@ev.Note</div>
+                                <Ben.Web.Website.Library.Organization.Cases.EvidenceVoteWidget UploadFileId="@ev.UploadFileId" Compact="true" />
                             }
                         </div>
                     }
                 </div>
+            </div>
+        }
+
+        @* Sessions from the night (event-scenario-gaps; Ben's scenario: "all the sessions will run in the
+           session player. Any EVPs will be displayed"). Each plays in the archive's player, with its marks —
+           the questions asked for EVP among them — and its recordings once they've been checked. *@
+        @if (_resultSessions.Items.Count > 0)
+        {
+            <BenSectionHeading Text="Sessions from the night" />
+            <div class="list-group mb-4" data-testid="event-result-sessions">
+                @foreach (var s in _resultSessions.Items)
+                {
+                    <a class="list-group-item list-group-item-action d-flex flex-wrap justify-content-between gap-2"
+                       href="@($"/places/{s.PlaceId}/sessions/{s.Id}")" data-testid="event-result-session">
+                        <span style="min-width:0;overflow-wrap:anywhere;">
+                            <span class="fw-semibold">@s.RecordedBy</span>
+                            <span class="text-secondary small">· @Local(s.StartedAt).ToString("ddd MM/dd h:mm tt")@(s.LocationLabel is { Length: > 0 } where ? $" · {where}" : "")</span>
+                        </span>
+                        <span class="small text-secondary text-nowrap">
+                            @(s.MarkerCount == 1 ? "1 mark" : $"{s.MarkerCount} marks")@(s.MediaReady ? "" : " · readings only for now")
+                        </span>
+                    </a>
+                }
             </div>
         }
 
@@ -468,7 +521,17 @@ else
                         A group member reviews every submission. If yours is accepted it becomes
                         part of this event's <strong>public</strong> record, credited to you.
                     </p>
+                    @if (_hosted?.EvidenceSentence is { Length: > 0 } window)
+                    {
+                        <p class="small" id="evidence-window">@window</p>
+                    }
 
+                    @if (_hosted?.EvidenceClosedSentence is { Length: > 0 } closed)
+                    {
+                        <div class="alert alert-secondary py-2 small" id="evidence-closed">@closed</div>
+                    }
+                    else
+                    {
                     <InputFile OnChange="OnEvidenceFileChosen" class="form-control mb-2" id="evidence-file" />
                     <textarea class="form-control mb-2" rows="2" maxlength="2000" id="evidence-note"
                               placeholder="What is this? Where in the building, what time, what did you hear or see?"
@@ -482,6 +545,7 @@ else
                             disabled="@(_evidenceFile is null || _evidenceBusy)" @onclick="SubmitEvidenceAsync">
                         @(_evidenceBusy ? "Sending…" : "Offer it to the group")
                     </button>
+                    }
 
                     @if (_myEvidence.Items.Count > 0)
                     {
@@ -723,22 +787,7 @@ else
     /// What the event's price covers, for beside the booking (Ben, 10/13/2026: "If the price is
     /// included in the event price, it will be notated in the event ticket information").
     /// </summary>
-    private string? IncludedWithTheEvent()
-    {
-        var covered = _menus.Where(m => m.Sections.SelectMany(s => s.Entries).Any(e => e.Pricing == Ben.Data.Common.Enums.MenuPricing.IncludedInEvent)).ToList();
-        if (covered.Count == 0) return null;
-        var names = covered.Select(m =>
-        {
-            var all = EventMenuPresentation.AllIncludedInEvent(m);
-            var what = m.ThroughoutTheEvent ? m.ShownHeading : m.Meals.Count == 1 ? $"{m.Meals[0].NightDate:dddd} {m.Meals[0].MealTitle.ToLowerInvariant()}" : m.ShownHeading;
-            return all ? what : $"some of {what}";
-        }).Distinct().ToList();
-        return names.Count switch
-        {
-            1 => names[0],
-            _ => string.Join(", ", names.Take(names.Count - 1)) + " and " + names[^1],
-        };
-    }
+    private string? IncludedWithTheEvent() => EventMenuPresentation.IncludedWithTheEvent(_menus);
 
     /// <summary>Whether this event invites evidence — always, unless a hosted event says not.</summary>
     private bool _collectsEvidence => _hosted?.CollectsEvidence ?? true;
@@ -972,6 +1021,8 @@ else
     }
 
     private Ben.Web.Services.WebApi.LoadResult<EventEvidenceRecord> _acceptedEvidence;
+    /// <summary>Sessions the organizers show with the results, which anybody can play (event-scenario-gaps).</summary>
+    private Ben.Web.Services.WebApi.LoadResult<Ben.Service.Models.FieldSessions.PublicEventSessionRow> _resultSessions;
     private Ben.Web.Services.WebApi.LoadResult<EventEvidenceRecord> _myEvidence;
     private IBrowserFile? _evidenceFile;
     private string _evidenceNote = "";
@@ -1060,6 +1111,8 @@ else
                 : [];
 
             _acceptedEvidence = await AdminClient.GetAcceptedEventEvidenceAsync(_event.Id);
+            if (_hosted is { } shownFor)
+                _resultSessions = await AdminClient.GetEventResultSessionsAsync(shownFor.Id);
             if (_isAuthenticated)
                 _myEvidence = await AdminClient.GetMyEventEvidenceAsync(_event.Id);
         }

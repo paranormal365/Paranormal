@@ -88,6 +88,23 @@ public sealed class EventMenuRulesTests
 
     // ── saving and publishing ────────────────────────────────────────────────
 
+    /// <summary>Ben, 10/21/2026: "alcohol gets its own mark and 21+, plus priced separately".</summary>
+    [Fact]
+    public void Alcohol_is_marked_21_plus_and_always_priced_on_its_own()
+    {
+        var cat = Guid.NewGuid(); var wine = Guid.NewGuid();
+        var alcohol = new HashSet<Guid> { wine };
+
+        Assert.Equal("Alcohol is always priced on its own. Set it to \"Priced on its own\" and give its price.",
+            EventMenus.WhyItCannotBeSaved(Request(cat, wine, MenuPricing.IncludedInEvent, price: null),
+                new HashSet<Guid> { wine }, new HashSet<Guid> { cat }, new HashSet<Guid>(), alcohol));
+        Assert.Null(EventMenus.WhyItCannotBeSaved(Request(cat, wine, MenuPricing.PricedSeparately, price: 9m),
+            new HashSet<Guid> { wine }, new HashSet<Guid> { cat }, new HashSet<Guid>(), alcohol));
+
+        Assert.Equal("VG 21+", EventMenuPresentation.Letters(MenuDietary.Vegan | MenuDietary.Alcohol));
+        Assert.Equal("IsHaunted.com © 2026 ISHAUNTED LLC", Ben.Data.Common.Menus.MenuDesigns.Credit(2026));
+    }
+
     [Fact]
     public void An_item_priced_on_its_own_needs_its_price()
     {
@@ -198,6 +215,11 @@ public sealed class EventMenuRulesTests
         await using var sqlite = await SqliteTestDb.CreateAsync();
         var f = await MenuFixture.SeedAsync(sqlite);
         var (published, _) = await TwoMenusAsync(sqlite, f);
+        await using (var db = await sqlite.NewContextAsync())
+        {
+            (await db.EventMenus.SingleAsync(m => m.Id == published)).Title = "Jim's dinner, third go";
+            await db.SaveChangesAsync();
+        }
 
         await using (var db = await sqlite.NewContextAsync())
         {
@@ -205,6 +227,10 @@ public sealed class EventMenuRulesTests
             var menu = Assert.Single(menus);
             Assert.Equal(published, menu.Id);
             Assert.Equal(2, menu.Meals.Count);
+            // The planner's own title is the planner's: guests are sent the heading in its place
+            // (event-scenario-gaps; Ben's menu rules: titles are "so the event manager will know").
+            Assert.Equal(menu.ShownHeading, menu.Title);
+            Assert.NotEqual("Jim's dinner, third go", menu.Title);
             Assert.All(menu.Sections.SelectMany(s => s.Entries), e => Assert.False(e.Item.CanEdit));
         }
 
@@ -215,6 +241,32 @@ public sealed class EventMenuRulesTests
             await db.SaveChangesAsync();
             Assert.Empty(await PublicEventMenuController.PublishedAsync(db, f.EventId, default));
         }
+    }
+
+    /// <summary>
+    /// Ben's menu rules: a published menu "will appear on the site in the calendar for the event". The
+    /// event's calendar file names, on each date, what is served; a draft is never in it.
+    /// </summary>
+    [Fact]
+    public async Task The_events_calendar_file_names_the_menus_served_on_each_date()
+    {
+        await using var sqlite = await SqliteTestDb.CreateAsync();
+        var f = await MenuFixture.SeedAsync(sqlite);
+        await TwoMenusAsync(sqlite, f);
+
+        var controller = new PublicEventMenuController(sqlite.Factory, new Moq.Mock<Ben.Data.Common.Interfaces.IFileStorageService>().Object);
+        var file = Assert.IsType<Microsoft.AspNetCore.Mvc.FileContentResult>(await controller.Calendar(f.EventId,
+            Microsoft.Extensions.Options.Options.Create(new Ben.Data.Common.SiteIdentity { BaseUrl = "https://example.test" }), default));
+        var ics = System.Text.Encoding.UTF8.GetString(file.FileContents);
+
+        await using var db = await sqlite.NewContextAsync();
+        var menus = await PublicEventMenuController.PublishedAsync(db, f.EventId, default);
+        var friday = EventMenuPresentation.OnTheDate(menus, MenuFixture.Friday);
+        Assert.NotNull(friday);
+        Assert.StartsWith("Dinner: ", friday);
+        Assert.Contains("DESCRIPTION:Menus: Dinner: ", ics.Replace("\r\n ", ""));
+        Assert.Equal(2, ics.Split("BEGIN:VEVENT").Length - 1);
+        Assert.Null(EventMenuPresentation.OnTheDate(menus, MenuFixture.Friday.AddDays(5)));
     }
 
     [Fact]

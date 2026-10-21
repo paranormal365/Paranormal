@@ -44,7 +44,9 @@ public sealed partial class FieldSessionUploadController
         CancellationToken ct,
         // Item 252: a tour date or event, a hosted event, or the lead's launch it was joined from.
         [FromForm] Guid? orgCalendarEventId = null, [FromForm] Guid? hostedEventId = null,
-        [FromForm] Guid? fieldLaunchId = null)
+        [FromForm] Guid? fieldLaunchId = null,
+        // The sender's yes to the organizers showing it with a hosted event's results (event-scenario-gaps).
+        [FromForm] bool showWithResults = false)
     {
         var userId = GetCurrentUserId();
         if (userId == Guid.Empty) return Unauthorized();
@@ -240,6 +242,8 @@ public sealed partial class FieldSessionUploadController
         session.InvestigationId = investigationId;
         session.OrgCalendarEventId = destination.OrgCalendarEventId;
         session.HostedEventId = destination.HostedEventId;
+        if (showWithResults && destination.HostedEventId is not null)
+            session.EventResultsConsentAtUtc ??= DateTime.UtcNow;
         session.FieldLaunchId = destination.FieldLaunchId;
         session.DocumentUploadFileId = uploadFile.Id;
         session.DeviceModel = summary.DeviceModel;

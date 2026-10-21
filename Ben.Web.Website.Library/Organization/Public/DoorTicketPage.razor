@@ -1,0 +1,155 @@
+@page "/door-tickets/{Token}"
+@namespace Ben.Web.Website.Library.Organization.Public
+@using Ben.Data.Common.Enums
+@using Ben.Service.Models.Entities
+@using Ben.Web.Services
+@using Ben.Web.Services.WebApi
+@using Ben.Web.Website.Library.Kit
+@inject IBenAdminClient AdminClient
+@inject IBenUserState UserState
+@inject NavigationManager NavManager
+
+@* What the door's QR code opens (event-scenario-gaps): somebody standing at the door asks for a day pass
+   on their own phone. They pay the door however the organizer takes money; the door confirms them and
+   this phone then shows their pass. Nothing is paid here.
+
+   SIGNING IN IS NEEDED TO ASK, because the place belongs to an account and the pass is shown on it. The
+   page says what the event is first, and sends them to sign in or make an account and straight back. *@
+
+<FeatureGate Flag="@SiteFeatures.Events">
+<PageTitle>@(_ticket.Item?.Name is { Length: > 0 } n ? $"Tickets — {n}" : "Tickets at the door")</PageTitle>
+
+<div class="container py-4" style="max-width:560px;">
+    @if (_loading)
+    {
+        <BenLoaderOverlay Visible="true" Text="Reading the door's code…" />
+    }
+    else if (_ticket.Failed || _ticket.Item is null)
+    {
+        <div class="alert alert-warning" role="alert" id="door-ticket-missing">
+            @(_ticket.Reason ?? "This code doesn't lead to an event any more. Ask at the door.")
+        </div>
+    }
+    else
+    {
+        var t = _ticket.Item;
+        <div class="card" id="door-ticket">
+            <div class="card-body">
+                <p class="text-secondary small mb-1">Tickets at the door</p>
+                <h1 class="h4 mb-1" style="overflow-wrap:anywhere;">@t.Name</h1>
+                <p class="text-secondary mb-3">@t.DateLine · @t.OrganizationName</p>
+                <p class="mb-3" id="door-ticket-price">
+                    @(t.DayPassPrice switch
+                    {
+                        null => "Pay at the door, however they take it. Nothing is paid through this site.",
+                        0 => "It's free.",
+                        var p => $"{p:C} a person, paid at the door. Nothing is paid through this site.",
+                    })
+                </p>
+
+                @if (_said is { Length: > 0 })
+                {
+                    <div class="alert alert-success" role="status" id="door-ticket-asked">@_said</div>
+                }
+                @if (_error is { Length: > 0 })
+                {
+                    <div class="alert alert-danger" role="alert" id="door-ticket-error">@_error</div>
+                }
+
+                @if (t.MyStatus == HostedEventBookingStatus.Confirmed)
+                {
+                    <div class="alert alert-success" id="door-ticket-have-place">You have a place. Show your pass at the door.</div>
+                    <a class="btn btn-primary" style="min-height:44px;" id="door-ticket-pass" href="@($"/my-events/{t.HostedEventId}/pass")">Show my pass</a>
+                }
+                else if (t.MyStatus is not null)
+                {
+                    <div class="alert alert-info" id="door-ticket-waiting">
+                        You've asked. Show this screen at the door; once they confirm you, your pass is here.
+                    </div>
+                    <a class="btn btn-outline-primary" style="min-height:44px;" id="door-ticket-check" href="@($"/my-events/{t.HostedEventId}/pass")">See my pass</a>
+                }
+                else if (t.NotSellingSentence is { Length: > 0 } why)
+                {
+                    <div class="alert alert-secondary" id="door-ticket-not-selling">@why</div>
+                }
+                else if (!_signedIn)
+                {
+                    <p>Sign in to ask for your place, and you come straight back here. New to IsHaunted? Make an account, then scan the code again.</p>
+                    <div class="d-flex flex-wrap gap-2">
+                        <a class="btn btn-primary" style="min-height:44px;" id="door-ticket-sign-in" href="@SignInUrl()">Sign in</a>
+                        <a class="btn btn-outline-primary" style="min-height:44px;" id="door-ticket-sign-up" href="@SignUpUrl()">Make an account</a>
+                    </div>
+                }
+                else
+                {
+                    <div class="mb-3">
+                        <label class="form-label fw-semibold" for="door-ticket-party">How many of you</label>
+                        <input id="door-ticket-party" type="number" class="form-control" min="1" max="50" step="1" style="max-width:8rem;"
+                               @bind="_party" @bind:event="oninput" />
+                    </div>
+                    <div class="mb-3">
+                        <BookingContactFields Draft="_contact" IdPrefix="@("door-ticket")" OrganizationName="@t.OrganizationName"
+                                              Changed="StateHasChanged" />
+                    </div>
+                    @if (_contact.WhatIsMissing(withEmail: false, t.OrganizationName) is { } missing)
+                    {
+                        <p class="small text-secondary" id="door-ticket-missing-detail">@missing</p>
+                    }
+                    <button type="button" class="btn btn-primary" style="min-height:44px;" id="door-ticket-ask"
+                            disabled="@(_busy || !_contact.IsEnough(withEmail: false))" @onclick="AskAsync">
+                        @(_busy ? "Asking…" : "Ask for my place")
+                    </button>
+                }
+
+                @if (t.ContactLine is { Length: > 0 } contact)
+                {
+                    <p class="small text-secondary mt-3 mb-0">Arranging it: @contact</p>
+                }
+                <p class="small mt-3 mb-0">
+                    <a href="@($"/o/{t.OrganizationUrlName}/events/{t.UrlName}")">About the event</a>
+                </p>
+            </div>
+        </div>
+    }
+</div>
+</FeatureGate>
+
+@code {
+    [Parameter] public string Token { get; set; } = "";
+
+    private ItemResult<PublicDoorTicketRecord> _ticket;
+    private readonly BookingContactDraft _contact = new();
+    private int _party = 1;
+    private bool _loading = true, _busy, _signedIn;
+    private string? _said, _error;
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (!firstRender) return;
+        await UserState.WaitUntilAuthReadyAsync(RendererInfo.IsInteractive);
+        _signedIn = UserState.IsAuthenticated;
+
+        _ticket = await AdminClient.GetDoorTicketAsync(Token);
+        if (_signedIn) _contact.Fill((await AdminClient.GetMyBookingContactAsync()).Item);
+        _loading = false;
+        StateHasChanged();
+    }
+
+    private string Here() => "/" + NavManager.ToBaseRelativePath(NavManager.Uri);
+    private string SignInUrl() => $"/login?returnUrl={Uri.EscapeDataString(Here())}";
+    private static string SignUpUrl() => "/signup";
+
+    private async Task AskAsync()
+    {
+        _busy = true; _error = null; _said = null;
+        var (ticket, error) = await AdminClient.AskAtTheDoorAsync(Token, new AskAtTheDoorRequest(
+            Math.Clamp(_party, 1, 50),
+            BookingContactDraft.Sent(_contact.FirstName),
+            BookingContactDraft.Sent(_contact.LastName),
+            BookingContactDraft.Sent(_contact.Phone)));
+        _busy = false;
+        if (ticket is null) { _error = error ?? "That couldn't be asked just now. Ask at the door."; return; }
+        _ticket = ItemResult<PublicDoorTicketRecord>.Ok(ticket);
+        _said = "Asked. Show this screen at the door and pay them; once they confirm you, your pass is here.";
+    }
+}

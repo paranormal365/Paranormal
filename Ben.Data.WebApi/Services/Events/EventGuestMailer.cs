@@ -124,15 +124,22 @@ public sealed class EventGuestMailer
                 .FirstOrDefaultAsync(ct)
             : null;
 
+        // What the price covers, from the published menus (Ben's menu rules: "If the price is included
+        // in the event price, it will be notated in the event ticket information").
+        var menus = confirmed && ev is not null
+            ? await Controllers.Public.PublicEventMenuController.PublishedAsync(db, ev.Id, ct)
+            : [];
+        var included = Ben.Service.Models.Entities.EventMenuPresentation.IncludedWithTheEvent(menus);
+
         var (subject, body) = booking.Status switch
         {
-            HostedEventBookingStatus.Confirmed  => Confirmation(booking, ev, pass),
+            HostedEventBookingStatus.Confirmed  => Confirmation(booking, ev, pass, included),
             HostedEventBookingStatus.TurnedDown => TurnedDown(booking, ev),
             _                                   => Released(booking, ev),
         };
 
         var attachments = new List<EmailAttachment>();
-        if (confirmed && CalendarFor(booking, ev) is { Length: > 0 } calendar)
+        if (confirmed && CalendarFor(booking, ev, menus) is { Length: > 0 } calendar)
             attachments.Add(new EmailAttachment("event.ics", IcsBuilder.ContentType, calendar));
 
         // The pass travels in the letter; a template of this kind is promised it as PassImage and
@@ -168,7 +175,7 @@ public sealed class EventGuestMailer
     // ── the letters ──────────────────────────────────────────────────────────
 
     private (string Subject, string Body) Confirmation(
-        HostedEventBooking booking, HostedEvent? ev, HostedEventPass? pass)
+        HostedEventBooking booking, HostedEvent? ev, HostedEventPass? pass, string? included = null)
     {
         var name = Safe(ev?.Name ?? "the event");
         var body = new System.Text.StringBuilder();
@@ -187,6 +194,9 @@ public sealed class EventGuestMailer
         {
             body.Append("<p>This is a day pass, so there is no room with it.</p>");
         }
+
+        if (included is { Length: > 0 })
+            body.Append($"<p><strong>Included with the event:</strong> {Safe(included)}.</p>");
 
         if (Trimmed(booking.DecisionNote) is { } note)
             body.Append($"<p>From the venue: {Safe(note)}</p>");
@@ -500,13 +510,18 @@ public sealed class EventGuestMailer
     /// it was, then what the group has coming — the letter that closes one weekend is the one most
     /// likely to fill the next.</para>
     /// </remarks>
+    /// <param name="evidence">
+    /// What the organizer said about the evidence window and the results
+    /// (<see cref="HostedEventEvidence.WindowSentence"/>), or null when there is nothing to say.
+    /// </param>
     public async Task<bool> SendThankYouAsync(
-        HostedEventBooking booking, bool hasGallery, IReadOnlyList<HostedEvent> upcoming, CancellationToken ct)
+        HostedEventBooking booking, bool hasGallery, IReadOnlyList<HostedEvent> upcoming, CancellationToken ct,
+        string? evidence = null)
     {
         if (!_email.IsConfigured) return false;
         if (booking.LeadAppUser?.Email is not { Length: > 0 } to) return false;
 
-        var (subject, body) = ThankYouLetter(booking, hasGallery, upcoming, _site.AbsoluteUrl);
+        var (subject, body) = ThankYouLetter(booking, hasGallery, upcoming, _site.AbsoluteUrl, evidence);
         await _email.SendAsync(new EmailMessage(to, subject, body,
             ReplyTo: booking.HostedEvent?.Organization?.PublicEmail, Kind: MailKinds.EventThankYou.Key,
             Payload: MailRows.For(MailKinds.EventThankYou, booking.LeadAppUser, booking.HostedEvent,
@@ -516,7 +531,8 @@ public sealed class EventGuestMailer
 
     /// <summary>The thank-you's words, separate so they can be read in a test without a mail server.</summary>
     internal static (string Subject, string Body) ThankYouLetter(
-        HostedEventBooking booking, bool hasGallery, IReadOnlyList<HostedEvent> upcoming, Func<string, string> absolute)
+        HostedEventBooking booking, bool hasGallery, IReadOnlyList<HostedEvent> upcoming, Func<string, string> absolute,
+        string? evidence = null)
     {
         var ev = booking.HostedEvent;
         var org = ev.Organization;
@@ -526,12 +542,11 @@ public sealed class EventGuestMailer
         body.Append($"<p>{Greeting(booking)}</p>");
         body.Append($"<p>Thank you for coming to <strong>{Safe(ev.Name)}</strong>.</p>");
 
-        if (ev.ThankYouNote is { Length: > 0 } note)
-        {
-            foreach (var paragraph in note.Split(["\r\n\r\n", "\n\n"], StringSplitOptions.RemoveEmptyEntries))
-                body.Append($"<p>{Safe(paragraph).Replace("\n", "<br>")}</p>");
-            body.Append($"<p>— {Safe(org?.Name)}</p>");
-        }
+        AppendNote(body, ev.ThankYouNote, org?.Name);
+
+        // The window, in the organizer's numbers: "accepting evidence for three days … ready in about a week".
+        if (evidence is { Length: > 0 })
+            body.Append($"<p>{Safe(evidence)} <a href=\"{page}#event-evidence\">Offer what you caught</a></p>");
 
         if (hasGallery)
             body.Append($"<p><a href=\"{page}#hosted-gallery\">See the pictures</a></p>");
@@ -540,16 +555,121 @@ public sealed class EventGuestMailer
             body.Append($"<p><a href=\"{absolute($"/my-events/{ev.Id}/review")}\">Say how it was</a> — "
                       + "a few words help the next people deciding whether to come.</p>");
 
-        if (upcoming.Count > 0)
-        {
-            body.Append($"<p><strong>Coming up with {Safe(org?.Name)}</strong></p><ul>");
-            foreach (var next in upcoming)
-                body.Append($"<li><a href=\"{absolute($"/o/{org?.UrlName}/events/{next.UrlName}")}\">{Safe(next.Name)}</a>"
-                          + $" · {next.StartsOn:ddd MM/dd/yyyy}</li>");
-            body.Append("</ul>");
-        }
+        AppendUpcoming(body, upcoming, org, absolute);
 
         return ($"Thank you for coming to {ev.Name}", body.ToString());
+    }
+
+    /// <summary>
+    /// Writes to a party with a place whom the door never saw arrive (event-scenario-gaps: Ben's "we
+    /// missed you letters to those who were unable to attend").
+    /// </summary>
+    public async Task<bool> SendMissedYouAsync(
+        HostedEventBooking booking, IReadOnlyList<HostedEvent> upcoming, string? evidence, CancellationToken ct)
+    {
+        if (!_email.IsConfigured) return false;
+        if (booking.LeadAppUser?.Email is not { Length: > 0 } to) return false;
+
+        var (subject, body) = MissedYouLetter(booking, upcoming, _site.AbsoluteUrl, evidence);
+        await _email.SendAsync(new EmailMessage(to, subject, body,
+            ReplyTo: booking.HostedEvent?.Organization?.PublicEmail, Kind: MailKinds.EventMissedYou.Key,
+            Payload: MailRows.For(MailKinds.EventMissedYou, booking.LeadAppUser, booking.HostedEvent,
+                                  booking.HostedEvent?.Organization)), ct);
+        return true;
+    }
+
+    /// <summary>The we-missed-you letter's words, separate so a test can read them.</summary>
+    internal static (string Subject, string Body) MissedYouLetter(
+        HostedEventBooking booking, IReadOnlyList<HostedEvent> upcoming, Func<string, string> absolute, string? evidence)
+    {
+        var ev = booking.HostedEvent;
+        var org = ev.Organization;
+        var page = absolute($"/o/{org?.UrlName}/events/{ev.UrlName}");
+
+        var body = new System.Text.StringBuilder();
+        body.Append($"<p>{Greeting(booking)}</p>");
+        body.Append($"<p>We missed you at <strong>{Safe(ev.Name)}</strong>.</p>");
+
+        AppendNote(body, ev.MissedYouNote, org?.Name);
+
+        if (evidence is { Length: > 0 })
+            body.Append($"<p>{Safe(evidence)} <a href=\"{page}#event-evidence\">See the event's page</a></p>");
+
+        AppendUpcoming(body, upcoming, org, absolute);
+
+        return ($"We missed you at {ev.Name}", body.ToString());
+    }
+
+    /// <summary>
+    /// The organizer's last letter: the results are ready, with a link and a QR code to them
+    /// (event-scenario-gaps: "a link to the evidence page and a QR code to jump there directly if they
+    /// didn't have the iPhone app").
+    /// </summary>
+    /// <param name="resultsUrl">The page, already absolute.</param>
+    public async Task<bool> SendResultsAsync(
+        HostedEventBooking booking, string resultsUrl, string? note, CancellationToken ct)
+    {
+        if (!_email.IsConfigured) return false;
+        if (booking.LeadAppUser?.Email is not { Length: > 0 } to) return false;
+
+        var qrImage = _site.ApiAbsoluteUrl($"/api/public/hosted-events/{booking.HostedEventId}/results-qr.png");
+        var (subject, body) = ResultsLetter(booking, resultsUrl, qrImage, note);
+        var supplied = new Dictionary<string, MailSuppliedValue>(StringComparer.OrdinalIgnoreCase)
+        {
+            ["ResultsUrl"] = new(resultsUrl),
+            ["ResultsQr"] = new(ResultsQrImage(resultsUrl), IsHtml: true),
+        };
+        await _email.SendAsync(new EmailMessage(to, subject, body,
+            ReplyTo: booking.HostedEvent?.Organization?.PublicEmail, Kind: MailKinds.EventResults.Key,
+            Payload: MailRows.For(MailKinds.EventResults, supplied, booking.LeadAppUser, booking.HostedEvent,
+                                  booking.HostedEvent?.Organization)), ct);
+        return true;
+    }
+
+    private static string ResultsQrImage(string resultsUrl)
+        => $"<img src=\"{EventPasses.DataUri(resultsUrl, 4)}\" alt=\"QR code for the results\" width=\"160\" height=\"160\" />";
+
+    /// <summary>The results letter's words, separate so a test can read them.</summary>
+    /// <param name="qrImageUrl">The same code as a hosted picture, for a mail client that strips inline ones.</param>
+    internal static (string Subject, string Body) ResultsLetter(
+        HostedEventBooking booking, string resultsUrl, string qrImageUrl, string? note)
+    {
+        var ev = booking.HostedEvent;
+        var body = new System.Text.StringBuilder();
+        body.Append($"<p>{Greeting(booking)}</p>");
+        body.Append($"<p>The evidence from <strong>{Safe(ev.Name)}</strong> is ready to see.</p>");
+
+        AppendNote(body, note, ev.Organization?.Name);
+
+        body.Append($"<p><a href=\"{resultsUrl}\">See the results</a></p>");
+        body.Append("<p>Or point your phone's camera at this code:</p>");
+        // Inline first: a linked picture a mail client blocked is a letter with no code in it.
+        body.Append($"<p>{ResultsQrImage(resultsUrl)}</p>");
+        body.Append($"<p>If the code above didn't load, <a href=\"{qrImageUrl}\">open it here</a>.</p>");
+        body.Append("<p>If you have the IsHaunted app on your iPhone, the results are on the event's page there too.</p>");
+
+        return ($"The results from {ev.Name} are ready", body.ToString());
+    }
+
+    /// <summary>The organizer's own words, paragraph by paragraph, signed with the group's name.</summary>
+    private static void AppendNote(System.Text.StringBuilder body, string? note, string? signedBy)
+    {
+        if (note is not { Length: > 0 }) return;
+        foreach (var paragraph in note.Split(["\r\n\r\n", "\n\n"], StringSplitOptions.RemoveEmptyEntries))
+            body.Append($"<p>{Safe(paragraph).Replace("\n", "<br>")}</p>");
+        body.Append($"<p>— {Safe(signedBy)}</p>");
+    }
+
+    /// <summary>Up to three of the group's next events, so the letter closing one weekend fills the next.</summary>
+    private static void AppendUpcoming(
+        System.Text.StringBuilder body, IReadOnlyList<HostedEvent> upcoming, Organization? org, Func<string, string> absolute)
+    {
+        if (upcoming.Count == 0) return;
+        body.Append($"<p><strong>Coming up with {Safe(org?.Name)}</strong></p><ul>");
+        foreach (var next in upcoming)
+            body.Append($"<li><a href=\"{absolute($"/o/{org?.UrlName}/events/{next.UrlName}")}\">{Safe(next.Name)}</a>"
+                      + $" · {next.StartsOn:ddd MM/dd/yyyy}</li>");
+        body.Append("</ul>");
     }
 
     /// <summary>
@@ -877,6 +997,8 @@ public sealed class EventGuestMailer
             can.Add("read and write the menus, and read the kitchen's sheet");
         if (staff.SeesFiles)
             can.Add("read the event's files");
+        if (staff.StartsSessions)
+            can.Add("tell everybody with a place that sessions are being accepted");
 
         // Never an empty list: the endpoint refuses a helper who may do nothing, and a letter
         // saying "accepting lets you:" followed by nothing would be worse than not sending it.
@@ -964,8 +1086,12 @@ public sealed class EventGuestMailer
     /// plus sixteen hours: on the weekend the clocks go back, the Saturday night is an hour longer
     /// and a fixed span would have put the Sunday check-out at nine.</para>
     /// </remarks>
-    private byte[] CalendarFor(HostedEventBooking booking, HostedEvent? ev)
+    /// <param name="menus">The event's published menus: each night's entry says what is served
+    /// (Ben's menu rules: published menus appear "in the calendar for the event").</param>
+    private byte[] CalendarFor(HostedEventBooking booking, HostedEvent? ev,
+        IReadOnlyList<Ben.Service.Models.Entities.EventMenuRecord>? menus = null)
     {
+        menus ??= [];
         if (ev is null) return [];
 
         var zone = HostedEventCalendarSync.ZoneOf(ev.TimeZoneId);
@@ -987,7 +1113,8 @@ public sealed class EventGuestMailer
                 StartUtc: AtVenueUtc(n.HostedEventNight.Date, NightBegins, zone),
                 EndUtc: AtVenueUtc(n.HostedEventNight.Date.AddDays(1), NightEnds, zone),
                 Summary: $"{ev.Name} — {EventCapacity.NameOf(n, booking.Kind)}",
-                Description: null,
+                Description: Ben.Service.Models.Entities.EventMenuPresentation.OnTheDate(menus, n.HostedEventNight.Date) is { } served
+                    ? $"Menus: {served}" : null,
                 Location: venue,
                 Url: absolute,
                 OrganizerName: ev.Organization?.Name,
@@ -997,7 +1124,8 @@ public sealed class EventGuestMailer
                 StartUtc: AtVenueUtc(ev.StartsOn, NightBegins, zone),
                 EndUtc: AtVenueUtc(ev.EndsOn.AddDays(1), DayPassEnds, zone),
                 Summary: ev.Name,
-                Description: null,
+                Description: menus.Count == 0 ? null
+                    : "Menus: " + string.Join(" · ", menus.Select(m => m.ShownHeading).Distinct()),
                 Location: venue,
                 Url: absolute,
                 OrganizerName: ev.Organization?.Name,

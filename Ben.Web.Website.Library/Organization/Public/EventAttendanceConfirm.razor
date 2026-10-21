@@ -6,7 +6,7 @@
 
 @* Item 154: the address must die with the feature switch, not just the links to it. *@
 <FeatureGate Flag="@SiteFeatures.Events">
-<PageTitle>@(_confirmed is { HostedEventId: not null } or { AwaitsApproval: true } ? "You've asked for a place" : "You're coming")</PageTitle>
+<PageTitle>@(_confirmed is { IsConfirmed: true } ? "Your place is confirmed" : _confirmed is { HostedEventId: not null } or { AwaitsApproval: true } ? "You've asked for a place" : "You're coming")</PageTitle>
 
 @* The other end of the emailed link. Confirms the address, makes an account if there is not one,
    and records that they are coming — all in one click, because the person on the other end of this
@@ -18,6 +18,45 @@
     {
         <div class="d-flex justify-content-center py-5">
             <BenLoaderOverlay Visible="true" Text="Checking your link…" />
+        </div>
+    }
+    else if (_confirmed is { HostedEventId: not null, IsConfirmed: true } ticket)
+    {
+        @* A TICKET THE ORGANIZER SENT (event-scenario-gaps): they had already said yes, so the click
+           confirmed the place and the pass went to this address. *@
+        <div class="card" id="ticket-confirmed">
+            <div class="card-body text-center py-5">
+                <h3 class="mb-3">Your place is confirmed</h3>
+                <p class="mb-1"><strong>@ticket.Title</strong></p>
+                <p class="text-secondary mb-1">
+                    <BenTime Utc="@ticket.StartDateTime" ZoneId="@ticket.TimeZoneId" TestId="event-start" />
+                    · @ticket.OrganizationName
+                </p>
+                <p class="text-secondary mb-4">
+                    @ticket.PartySize @(ticket.PartySize == 1 ? "person" : "people")
+                </p>
+                <p>
+                    Your ticket is on its way to your email. It has the code to show at the door.
+                    Nothing is paid here.
+                </p>
+                @if (ticket.EventUrlName is string ticketSlug)
+                {
+                    <a class="btn btn-primary" href="@($"/o/{ticket.OrganizationUrlName}/events/{ticketSlug}")">Open the event</a>
+                }
+                @if (ticket.AccountHasNoPassword)
+                {
+                    <p class="text-secondary small mt-4 mb-0">
+                        We've made you an account with this email address. <a href="/forgot-password">Set a password</a>
+                        to see your ticket on the site or in the IsHaunted app.
+                    </p>
+                }
+                else
+                {
+                    <p class="text-secondary small mt-4 mb-0">
+                        Your ticket is also on <a href="/my-events">what you're going to</a>.
+                    </p>
+                }
+            </div>
         </div>
     }
     else if (_confirmed is { HostedEventId: not null } hosted)

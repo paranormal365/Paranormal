@@ -85,6 +85,74 @@ public sealed class PublicEventMenuController : BenControllerBase
         return File(bytes, "font/ttf");
     }
 
+    /// <summary>
+    /// The event's dates as a calendar file, each date carrying the menus served on it (event-scenario-gaps;
+    /// Ben's menu rules: published menus "appear on the site in the calendar for the event").
+    /// </summary>
+    /// <remarks>Anonymous, like the event's page: a calendar app following the link carries no session.</remarks>
+    [HttpGet("hosted-events/{eventId:guid}/calendar.ics")]
+    public async Task<IActionResult> Calendar(Guid eventId, [FromServices] Microsoft.Extensions.Options.IOptions<Ben.Data.Common.SiteIdentity> site, CancellationToken ct)
+    {
+        await using var db = await _db.CreateDbContextAsync(ct);
+        var ev = await db.HostedEvents.AsNoTracking().Include(e => e.Nights).Include(e => e.Organization).Include(e => e.Place)
+            .FirstOrDefaultAsync(e => e.Id == eventId && HostedEventStates.OnThePublicSite.Contains(e.LifecycleState), ct);
+        if (ev is null) return NotFound();
+
+        var menus = await PublishedAsync(db, eventId, ct);
+        var url = site.Value.AbsoluteUrl($"/o/{ev.Organization.UrlName}/events/{ev.UrlName}");
+        var entries = ev.Nights.OrderBy(n => n.Date).Select(n =>
+        {
+            var (start, end) = HostedEventCalendarSync.Window(ev, [n]);
+            return new Ben.Data.Common.Helpers.IcsBuilder.IcsEvent(
+                Uid: $"{ev.Id}-{n.Id}@ishaunted.com", StartUtc: start, EndUtc: end,
+                Summary: n.Title is { Length: > 0 } title ? $"{ev.Name} — {title}" : ev.Name,
+                Description: EventMenuPresentation.OnTheDate(menus, n.Date) is { } served ? $"Menus: {served}" : null,
+                Location: ev.HideExactLocation ? ev.Place?.City : ev.Place?.Name,
+                Url: url.StartsWith("http", StringComparison.OrdinalIgnoreCase) ? url : null,
+                OrganizerName: ev.Organization.Name, OrganizerEmail: ev.Organization.PublicEmail,
+                Sequence: (int)((ev.DateUpdated ?? ev.DateCreated).Ticks / TimeSpan.TicksPerMinute % int.MaxValue));
+        }).ToList();
+
+        return File(Ben.Data.Common.Helpers.IcsBuilder.BuildBytes(entries), Ben.Data.Common.Helpers.IcsBuilder.ContentType, "event.ics");
+    }
+
+    /// <summary>
+    /// Every upcoming public hosted event that can be drawn on the home map, at an approximate point
+    /// (event-scenario-gaps; Ben's scenario: "it will appear in the map on the home page").
+    /// </summary>
+    /// <remarks>
+    /// Always the approximate cell, whatever the event's own setting: a map pin is seen by everybody
+    /// who loads the home page, and the event's page still gives the address to whoever it is meant for.
+    /// </remarks>
+    [HttpGet("hosted-events/map")]
+    public async Task<ActionResult<IReadOnlyList<PublicHostedEventMapPin>>> MapPins(
+        [FromQuery] int maxResults = 500, CancellationToken ct = default)
+    {
+        await using var db = await _db.CreateDbContextAsync(ct);
+        var today = DateTime.UtcNow.Date.AddDays(-1);
+        var rows = await db.HostedEvents.AsNoTracking()
+            .Where(e => (e.LifecycleState == Ben.Data.Common.Enums.HostedEventLifecycleState.Published
+                      || e.LifecycleState == Ben.Data.Common.Enums.HostedEventLifecycleState.Live)
+                     && e.EndsOn >= today
+                     && e.Place.Latitude != null && e.Place.Longitude != null)
+            .OrderBy(e => e.StartsOn)
+            .Take(Math.Clamp(maxResults, 1, 1000))
+            .Select(e => new
+            {
+                e.Id, e.Name, e.UrlName, e.StartsOn, e.EndsOn,
+                OrgName = e.Organization.Name, OrgUrl = e.Organization.UrlName,
+                e.Place.Latitude, e.Place.Longitude,
+            })
+            .ToListAsync(ct);
+
+        return Ok(rows
+            .Select(r => (r, Point: Controllers.Public.PublicCoordinates.Approximate(r.Latitude, r.Longitude)))
+            .Where(x => x.Point.Item1 is not null && x.Point.Item2 is not null)
+            .Select(x => new PublicHostedEventMapPin(x.r.Id, x.r.Name, x.r.UrlName, x.r.OrgName, x.r.OrgUrl,
+                x.Point.Item1!.Value, x.Point.Item2!.Value, x.r.StartsOn, x.r.EndsOn))
+            .ToList());
+    }
+
     /// <summary>The published menus of an event that is on the public site, as guests read them.</summary>
     public static async Task<IReadOnlyList<EventMenuRecord>> PublishedAsync(BenDataContext db, Guid eventId, CancellationToken ct)
     {
@@ -94,7 +162,10 @@ public sealed class PublicEventMenuController : BenControllerBase
             .ToListAsync(ct);
 
         // Nobody reading a published menu can change an item, so no group is "the viewer's".
-        return [.. EventMenus.InReadingOrder(menus.Select(m => EventMenus.Record(m, Guid.Empty, null)))
+        // The planner's own title is only for the planner (Ben's menu rules: "They are given titles so
+        // the event manager will know which menu they are looking at"); guests read the heading.
+        return [.. EventMenus.InReadingOrder(menus.Select(m => EventMenus.Record(m, Guid.Empty, null))
+                                                  .Select(m => m with { Title = m.ShownHeading }))
             // A menu with nowhere to be served isn't on show, even if it was published before its meal went.
             .Where(m => m.ThroughoutTheEvent || m.Meals.Count > 0)];
     }

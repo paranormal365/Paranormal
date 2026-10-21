@@ -79,6 +79,12 @@ namespace Ben.Data.Source.Entities
         /// </remarks>
         public bool SeesFiles { get; set; }
 
+        /// <summary>
+        /// May start the event's recording sessions — the "time to investigate" notice — for
+        /// everybody with a place. Given to a guide or a lead who is not on the door.
+        /// </summary>
+        public bool StartsSessions { get; set; }
+
         /// <summary>Single-use, cleared on acceptance so a forwarded email cannot be replayed.</summary>
         public string? Token { get; set; }
 

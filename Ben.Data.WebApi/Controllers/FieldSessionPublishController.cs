@@ -244,6 +244,81 @@ public sealed class FieldSessionPublishController : BenControllerBase
         return insights is null ? NotFound() : Ok(insights);
     }
 
+    // ── shown with a hosted event's results (event-scenario-gaps) ────────────
+
+    /// <summary>
+    /// The sender agrees their session may be shown with the event's results, publicly and credited to them.
+    /// </summary>
+    /// <remarks>
+    /// They were told when sending that only the group would see it, so nothing about the session becomes
+    /// public without this. Withdrawing it takes the session off the results at once.
+    /// </remarks>
+    [HttpPost("~/api/field-sessions/{id:guid}/event-results-consent")]
+    public Task<IActionResult> AgreeToShow(Guid id, CancellationToken ct) => SetConsentAsync(id, agree: true, ct);
+
+    [HttpDelete("~/api/field-sessions/{id:guid}/event-results-consent")]
+    public Task<IActionResult> WithdrawShow(Guid id, CancellationToken ct) => SetConsentAsync(id, agree: false, ct);
+
+    private async Task<IActionResult> SetConsentAsync(Guid id, bool agree, CancellationToken ct)
+    {
+        var userId = GetCurrentUserId();
+        if (userId == Guid.Empty) return Unauthorized();
+
+        await using var db = await _db.CreateDbContextAsync(ct);
+        var session = await db.FieldSessionUploads.FirstOrDefaultAsync(s => s.Id == id, ct);
+        if (session is null || session.SubmittedByAppUserId != userId) return NotFound();
+        if (session.HostedEventId is null) return BadRequest("This session wasn't sent to an event.");
+
+        session.EventResultsConsentAtUtc = agree ? session.EventResultsConsentAtUtc ?? DateTime.UtcNow : null;
+        session.DateUpdated = DateTime.UtcNow;
+        session.UpdatedByAppUserId = userId;
+        await db.SaveChangesAsync(ct);
+        return NoContent();
+    }
+
+    /// <summary>
+    /// The event's organizer shows a sent session with the results, where anybody can play it — or stops.
+    /// </summary>
+    /// <remarks>
+    /// Refused in words unless the sender agreed and the event can show anything (see
+    /// <see cref="Public.EventSessionPublication"/>). The media is screened the first time, as the archive
+    /// screens it.
+    /// </remarks>
+    [HttpPost("~/api/field-sessions/{id:guid}/event-results")]
+    public Task<IActionResult> ShowWithResults(Guid id, CancellationToken ct) => SetShownAsync(id, show: true, ct);
+
+    [HttpDelete("~/api/field-sessions/{id:guid}/event-results")]
+    public Task<IActionResult> StopShowing(Guid id, CancellationToken ct) => SetShownAsync(id, show: false, ct);
+
+    private async Task<IActionResult> SetShownAsync(Guid id, bool show, CancellationToken ct)
+    {
+        var userId = GetCurrentUserId();
+        if (userId == Guid.Empty) return Unauthorized();
+
+        await using var db = await _db.CreateDbContextAsync(ct);
+        var session = await db.FieldSessionUploads.FirstOrDefaultAsync(s => s.Id == id && s.HostedEventId != null, ct);
+        if (session is null) return NotFound();
+        var hosted = await db.HostedEvents.Include(h => h.Place).FirstOrDefaultAsync(h => h.Id == session.HostedEventId, ct);
+        if (hosted is null) return NotFound();
+
+        // The event's own people: its group, or a helper who accepted. Anybody else is told nothing.
+        var team = await CallerIsSuperAdminAsync()
+                || await db.OrganizationUserMemberships.AnyAsync(m => m.OrganizationId == hosted.OrganizationId && m.AppUserId == userId && m.IsActive, ct)
+                || await db.HostedEventStaff.AnyAsync(s => s.HostedEventId == hosted.Id && s.AppUserId == userId && s.DateConfirmed != null, ct);
+        if (!team) return NotFound();
+
+        if (show && Public.EventSessionPublication.WhyNotShown(session, hosted) is { } why) return BadRequest(why);
+
+        session.ShownWithEventResultsAtUtc = show ? session.ShownWithEventResultsAtUtc ?? DateTime.UtcNow : null;
+        session.ShownWithEventResultsByAppUserId = show ? userId : null;
+        if (show && session.MediaReviewState == FeedMediaReviewState.Pending && session.MediaReviewedUtc is null)
+            await ScreenMediaAsync(db, session, ct);
+        session.DateUpdated = DateTime.UtcNow;
+        session.UpdatedByAppUserId = userId;
+        await db.SaveChangesAsync(ct);
+        return NoContent();
+    }
+
     /// <summary>Publishes this session to a place's archive.</summary>
     [HttpPost]
     public async Task<IActionResult> Publish(

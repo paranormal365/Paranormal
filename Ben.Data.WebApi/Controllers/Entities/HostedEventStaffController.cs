@@ -192,6 +192,7 @@ public sealed class HostedEventStaffController : OrgCmsControllerBase
         staff.RunsTheDoor = request.RunsTheDoor;
         staff.SeesMenus = request.SeesMenus;
         staff.SeesFiles = request.SeesFiles;
+        staff.StartsSessions = request.StartsSessions;
 
         if (invited) Reissue(staff, now);
 
@@ -291,7 +292,7 @@ public sealed class HostedEventStaffController : OrgCmsControllerBase
     // ── the work ─────────────────────────────────────────────────────────────
 
     private static bool Grants(SaveHostedEventStaffRequest r)
-        => r.SeesBookings || r.Decides || r.RunsTheDoor || r.SeesMenus || r.SeesFiles;
+        => r.SeesBookings || r.Decides || r.RunsTheDoor || r.SeesMenus || r.SeesFiles || r.StartsSessions;
 
     private static void Reissue(HostedEventStaff staff, DateTime now)
     {
@@ -331,7 +332,8 @@ public sealed class HostedEventStaffController : OrgCmsControllerBase
                     s.SeesFiles,
                     Accepted: s.DateConfirmed is not null,
                     s.DateExpires,
-                    s.DateCreated))]);
+                    s.DateCreated,
+                    s.StartsSessions))]);
     }
 
     /// <summary>What to call somebody, whichever of the three names exists.</summary>

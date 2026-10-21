@@ -203,12 +203,12 @@
                         <button type="button" class="btn btn-sm btn-outline-secondary"
                                 id="board-invite-guest" disabled="@_busy"
                                 @onclick="@(() => { _inviteError = null; _inviteSent = null; _inviteVisible = true; })">
-                            <BenIcon Name="mail" Class="me-1" />Invite by email
+                            <BenIcon Name="mail" Class="me-1" />Invite people by email
                         </button>
                         <button type="button" class="btn btn-sm btn-outline-secondary"
                                 id="board-book-on-behalf" disabled="@_busy"
-                                @onclick="@(() => { _behalfError = null; _behalfVisible = true; })">
-                            <BenIcon Name="user-plus" Class="me-1" />Book somebody in
+                                @onclick="@(() => { _behalfError = null; _behalfSent = null; _behalfVisible = true; })">
+                            <BenIcon Name="user-plus" Class="me-1" />Send somebody a ticket
                         </button>
                     </div>
                 </div>
@@ -260,37 +260,40 @@
                       Bands="@_bands"
                       OnDecided="OnDecidedAsync" />
 
-@* ── Inviting somebody with no account, and booking somebody in (2026-09-17 audit) ──────
-   The help chapter describes both and neither existed. Kept as two dialogs because they are two
-   different promises: an invitation holds NOTHING until the person clicks, and a booking on
-   behalf holds a room now. Saying so on the screen is the part that stops a host believing they
-   have reserved something they have not — which is the same reason the invite RESPONSE carries no
-   booking shape. *@
-<BenModal @bind-Visible="@_inviteVisible" Title="Invite somebody by email">
+@* ── Inviting people, and sending somebody a ticket (2026-09-17 audit; event-scenario-gaps) ──
+   Two dialogs because they are two different promises. An invitation holds NOTHING until the
+   person clicks, and then asks you. A ticket is your yes already given — they've paid you, or it's
+   free — so their click confirms the place and hands them the pass. Neither makes an account from a
+   typed address: the account is made at the click, which is what proves the address. *@
+<BenModal @bind-Visible="@_inviteVisible" Title="Invite people by email">
     <ChildContent>
         <p class="text-secondary small">
-            We send them a link. Clicking it proves the address, makes them an account without a
-            password, and puts a <strong>day-pass request</strong> on this board for you to confirm.
+            Paste one address or a whole list — one a line, or separated by commas. Each person gets
+            their own link. Clicking it proves the address, makes them an account without a password,
+            and puts a <strong>day-pass request</strong> on this board for you to confirm.
         </p>
         <div class="alert alert-info py-2 small">
-            <strong>Nothing is held until they click.</strong> No room and no day pass is reserved
-            by the invitation. If you need a room held now, use <em>Book somebody in</em> instead.
+            <strong>Nothing is held until they click.</strong> If they've already paid you, send them a
+            ticket instead.
         </div>
 
         <div class="mb-3">
-            <label class="form-label fw-semibold" for="invite-guest-email">Their email address</label>
-            <input id="invite-guest-email" type="email" class="form-control" maxlength="256"
-                   value="@_inviteEmail"
-                   @oninput="@(e => { _inviteEmail = e.Value?.ToString() ?? string.Empty; _inviteError = null; })" />
+            <label class="form-label fw-semibold" for="invite-guest-email">Email addresses</label>
+            <textarea id="invite-guest-email" class="form-control" rows="4"
+                      placeholder="jim@example.com, sam@example.com"
+                      value="@_inviteEmail"
+                      @oninput="@(e => { _inviteEmail = e.Value?.ToString() ?? string.Empty; _inviteError = null; })"></textarea>
+        </div>
+        <div class="mb-3">
+            <label class="form-label fw-semibold" for="invite-guest-message">Your message <span class="text-secondary small">(optional, at the top of every letter)</span></label>
+            <textarea id="invite-guest-message" class="form-control" rows="4" maxlength="2000"
+                      placeholder="e.g. Join us overnight at The Factory. Tickets are $45, paid to me before you come."
+                      value="@_inviteMessage"
+                      @oninput="@(e => _inviteMessage = e.Value?.ToString() ?? string.Empty)"></textarea>
         </div>
         <div class="row">
-            <div class="col-sm-8 mb-3">
-                <label class="form-label fw-semibold" for="invite-guest-name">Their name <span class="text-secondary small">(optional)</span></label>
-                <input id="invite-guest-name" class="form-control" maxlength="200" value="@_inviteName"
-                       @oninput="@(e => _inviteName = e.Value?.ToString() ?? string.Empty)" />
-            </div>
             <div class="col-sm-4 mb-3">
-                <label class="form-label fw-semibold" for="invite-guest-party">How many</label>
+                <label class="form-label fw-semibold" for="invite-guest-party">How many each</label>
                 <input id="invite-guest-party" type="number" class="form-control" min="1" max="50" step="1"
                        @bind="@_invitePartySize" @bind:event="oninput" />
             </div>
@@ -312,17 +315,18 @@
             <button type="button" class="btn btn-primary" id="invite-guest-send"
                     disabled="@(_busy || string.IsNullOrWhiteSpace(_inviteEmail))"
                     @onclick="SendGuestInviteAsync">
-                @(_busy ? "Sending…" : "Send the invitation")
+                @(_busy ? "Sending…" : "Send the invitations")
             </button>
         </div>
     </ChildContent>
 </BenModal>
 
-<BenModal @bind-Visible="@_behalfVisible" Title="Book somebody in">
+<BenModal @bind-Visible="@_behalfVisible" Title="Send somebody a ticket">
     <ChildContent>
         <p class="text-secondary small">
-            For somebody on the phone. This holds a place now, against the email address you give —
-            an existing account if there is one, a new passwordless one if not.
+            For somebody who has paid you, by phone, at your door or any other way — or who comes free.
+            We email them a link. Opening it confirms their place straight away and sends them their
+            ticket, with the code to show at the door. Nothing is paid through this site.
         </p>
 
         <div class="mb-3">
@@ -343,32 +347,35 @@
             </div>
         </div>
         <div class="mb-3">
-            <label class="form-label fw-semibold" for="behalf-note">Note <span class="text-secondary small">(optional)</span></label>
+            <label class="form-label fw-semibold" for="behalf-note">A few words for them <span class="text-secondary small">(optional)</span></label>
             <input id="behalf-note" class="form-control" maxlength="500" value="@_behalfNote"
                    @oninput="@(e => _behalfNote = e.Value?.ToString() ?? string.Empty)" />
         </div>
 
-        @* A day pass, deliberately. Sleeping over means choosing rooms night by night, which is
-           the picker on the event's own page — the help says the same thing, and a host who needs
-           that moves them into a room afterwards. *@
+        @* A day pass, deliberately: sleeping over means a room on each night, which is chosen on the
+           board once they're on it. *@
         <div class="alert alert-info py-2 small">
-            This asks for a <strong>day pass</strong>. For somebody staying over, move them into a
-            room once they are on the board.
+            The ticket is a <strong>day pass</strong>. For somebody staying over, choose their room on
+            the board once they've opened it.
         </div>
 
         @if (_behalfError is not null)
         {
             <div class="alert alert-danger" data-testid="behalf-error">@_behalfError</div>
         }
+        @if (_behalfSent is not null)
+        {
+            <div class="alert alert-success" data-testid="behalf-sent">@_behalfSent</div>
+        }
 
         <div class="dialog-footer-actions">
             <span class="dialog-footer-spacer"></span>
             <button type="button" class="btn btn-secondary" disabled="@_busy"
-                    @onclick="@(() => _behalfVisible = false)">Cancel</button>
+                    @onclick="@(() => _behalfVisible = false)">Close</button>
             <button type="button" class="btn btn-primary" id="behalf-create"
                     disabled="@(_busy || string.IsNullOrWhiteSpace(_behalfEmail))"
                     @onclick="CreateBookingOnBehalfAsync">
-                @(_busy ? "Booking…" : "Put them on the board")
+                @(_busy ? "Sending…" : "Send the ticket")
             </button>
         </div>
     </ChildContent>
@@ -400,7 +407,7 @@
 
     private bool _inviteVisible;
     private string _inviteEmail = string.Empty;
-    private string _inviteName = string.Empty;
+    private string _inviteMessage = string.Empty;
     private int _invitePartySize = 1;
     private string? _inviteError;
     private string? _inviteSent;
@@ -411,6 +418,7 @@
     private string _behalfNote = string.Empty;
     private int _behalfPartySize = 1;
     private string? _behalfError;
+    private string? _behalfSent;
 
     /// <summary>
     /// Sends the invitation, and says so without pretending anything is held.
@@ -430,52 +438,69 @@
         _inviteSent = null;
         try
         {
-            var (result, error) = await AdminClient.InviteEventGuestAsync(
+            var (result, error) = await AdminClient.InviteEventGuestsAsync(
                 OrgId, EventId,
-                new InviteHostedEventGuestRequest(
-                    _inviteEmail.Trim(),
-                    string.IsNullOrWhiteSpace(_inviteName) ? null : _inviteName.Trim(),
+                new InviteHostedEventGuestsRequest(
+                    _inviteEmail,
+                    string.IsNullOrWhiteSpace(_inviteMessage) ? null : _inviteMessage.Trim(),
                     Math.Clamp(_invitePartySize, 1, 50)));
 
-            if (result is null) { _inviteError = error ?? "The invitation could not be sent."; return; }
+            if (result is null) { _inviteError = error ?? "The invitations could not be sent."; return; }
 
-            _inviteSent = $"Sent to {_inviteEmail.Trim()}. Nothing is held until they click it.";
-            _inviteEmail = string.Empty;
-            _inviteName = string.Empty;
+            var said = new List<string>
+            {
+                result.Invited.Count == 1 ? $"Sent to {result.Invited[0]}." : $"Sent to {result.Invited.Count} people.",
+            };
+            if (!result.Sent && result.Invited.Count > 0)
+                said.Add("Email isn't set up on this site, so they are waiting to go.");
+            if (result.AlreadyAccepted.Count > 0)
+                said.Add($"Already accepted, so not sent again: {string.Join(", ", result.AlreadyAccepted)}.");
+            if (result.NotAddresses.Count > 0)
+                said.Add($"Not email addresses, so skipped: {string.Join(", ", result.NotAddresses)}.");
+            said.Add("Nothing is held until they click.");
+            _inviteSent = string.Join(" ", said);
+            _inviteEmail = string.Join("\n", result.NotAddresses);
             _invitePartySize = 1;
         }
         finally { _busy = false; }
     }
 
-    /// <summary>Puts somebody on the board now, against an account made if it has to be.</summary>
+    /// <summary>
+    /// Sends somebody a ticket: a link that confirms their place and hands them the pass when they open
+    /// it (event-scenario-gaps: "Jim can generate them on our site").
+    /// </summary>
+    /// <remarks>
+    /// This used to send no account id and so was refused every time ("Choose who this booking is
+    /// for…"). It goes through the invitation door now, marked as a ticket, so the account is still
+    /// made only at the click. The board is not reloaded: nothing is on it until they open the link.
+    /// </remarks>
     private async Task CreateBookingOnBehalfAsync()
     {
         if (string.IsNullOrWhiteSpace(_behalfEmail)) return;
 
         _busy = true;
         _behalfError = null;
+        _behalfSent = null;
         try
         {
-            var (result, error) = await AdminClient.CreateEventBookingOnBehalfAsync(
+            var (result, error) = await AdminClient.InviteEventGuestAsync(
                 OrgId, EventId,
-                new CreateHostedEventBookingOnBehalfRequest(
-                    LeadAppUserId: null,
-                    LeadEmail: _behalfEmail.Trim(),
-                    LeadName: string.IsNullOrWhiteSpace(_behalfName) ? null : _behalfName.Trim(),
-                    Kind: HostedEventBookingKind.DayPass,
-                    PartySize: Math.Clamp(_behalfPartySize, 1, 50),
-                    Note: string.IsNullOrWhiteSpace(_behalfNote) ? null : _behalfNote.Trim()));
+                new InviteHostedEventGuestRequest(
+                    _behalfEmail.Trim(),
+                    string.IsNullOrWhiteSpace(_behalfName) ? null : _behalfName.Trim(),
+                    Math.Clamp(_behalfPartySize, 1, 50),
+                    ConfirmsOnAccept: true,
+                    Message: string.IsNullOrWhiteSpace(_behalfNote) ? null : _behalfNote.Trim()));
 
-            if (result is null) { _behalfError = error ?? "That booking could not be made."; return; }
+            if (result is null) { _behalfError = error ?? "The ticket could not be sent."; return; }
 
-            _behalfVisible = false;
+            _behalfSent = result.Sent
+                ? $"The ticket is on its way to {_behalfEmail.Trim()}. They appear on the board, confirmed, when they open it."
+                : $"Email isn't set up on this site, so the ticket for {_behalfEmail.Trim()} is waiting to go.";
             _behalfEmail = string.Empty;
             _behalfName = string.Empty;
             _behalfNote = string.Empty;
             _behalfPartySize = 1;
-
-            // This one DID change the board.
-            await LoadAsync();
         }
         finally { _busy = false; }
     }

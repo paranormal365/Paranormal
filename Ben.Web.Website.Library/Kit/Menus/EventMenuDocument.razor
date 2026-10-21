@@ -115,7 +115,10 @@
         }
 
         @* Ben, 10/13/2026: a very small credit to the site, the year and the company's legal name. *@
-        <footer class="menu-doc__credit">@MenuDesigns.Credit(DateTime.UtcNow.Year)</footer>
+        <footer class="menu-doc__credit">
+            <img class="menu-doc__credit-mark" src="@MenuDesigns.CreditMarkPath" alt="" width="10" height="10" />
+            @MenuDesigns.Credit(DateTime.UtcNow.Year)
+        </footer>
     </div>
 </article>
 

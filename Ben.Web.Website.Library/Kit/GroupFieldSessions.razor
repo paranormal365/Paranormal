@@ -21,6 +21,17 @@
             They can send them long after the night — each arrives here when it does.
         </p>
 
+        @if (HostedEventId is not null)
+        {
+            @* Sessions in the results (event-scenario-gaps): Ben's "all the sessions will run in the session
+               player". Shown only with the sender's agreement — they were told only the group would see it. *@
+            <p class="text-secondary small mb-3">
+                <strong>Show with the results</strong> lets anybody play a session from the event's page, with its
+                marks, once the person who sent it has agreed. Recordings play once they've been checked.
+            </p>
+        }
+        @if (_note is { Length: > 0 }) { <div class="alert alert-success py-2" role="status" data-testid="group-sessions-note">@_note</div> }
+        @if (_error is { Length: > 0 }) { <div class="alert alert-danger py-2" role="alert" data-testid="group-sessions-error">@_error</div> }
         @if (_loading)
         {
             <div class="text-secondary small">Loading…</div>
@@ -62,6 +73,24 @@
                                 <td class="text-end text-nowrap">
                                     <a class="btn btn-secondary btn-sm text-nowrap" data-testid="group-session-play"
                                        href="@($"/field-sessions/{row.Id}")">Play back</a>
+                                    @if (HostedEventId is not null)
+                                    {
+                                        var it = row;
+                                        @if (it.ShownWithEventResultsAtUtc is not null)
+                                        {
+                                            <button type="button" class="btn btn-outline-secondary btn-sm text-nowrap ms-1" data-testid="group-session-hide"
+                                                    disabled="@_busy" @onclick="() => ShowAsync(it, false)">Stop showing</button>
+                                        }
+                                        else if (it.EventResultsConsentAtUtc is null)
+                                        {
+                                            <span class="badge bg-body-secondary text-body-emphasis ms-1" data-testid="group-session-waiting">Waiting for the sender's OK</span>
+                                        }
+                                        else
+                                        {
+                                            <button type="button" class="btn btn-outline-primary btn-sm text-nowrap ms-1" data-testid="group-session-show"
+                                                    disabled="@_busy" @onclick="() => ShowAsync(it, true)">Show with the results</button>
+                                        }
+                                    }
                                 </td>
                             </tr>
                         }
@@ -79,8 +108,18 @@
     /// <summary>A hosted event.</summary>
     [Parameter] public Guid? HostedEventId { get; set; }
 
-    private bool _loading = true;
-    private string? _refusal;
+    private bool _loading = true, _busy;
+    private string? _refusal, _note, _error;
+
+    private async Task ShowAsync(FieldSessionSummaryRecord row, bool show)
+    {
+        _busy = true; _note = null; _error = null;
+        var (done, error) = await AdminClient.SetSessionShownWithResultsAsync(row.Id, show);
+        _busy = false;
+        if (!done) { _error = error; return; }
+        _rows = [.. _rows.Select(r => r.Id == row.Id ? r with { ShownWithEventResultsAtUtc = show ? DateTime.UtcNow : null } : r)];
+        _note = show ? "Shown with the results. Anybody can play it from the event's page." : "No longer shown with the results.";
+    }
     private IReadOnlyList<FieldSessionSummaryRecord> _rows = [];
     private Guid? _loadedFor;
 

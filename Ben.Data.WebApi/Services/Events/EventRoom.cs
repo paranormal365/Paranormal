@@ -96,6 +96,45 @@ public static class EventRoom
             .AnyAsync(m => m.OrganizationId == org && m.AppUserId == userId && m.IsActive, ct);
     }
 
+    /// <summary>
+    /// What each author is at this event when they are running it: "Organizer" for the organizing
+    /// group, the role the organizer gave a helper ("Guide", "Door"), or "Venue" — and nothing for a
+    /// guest (event-scenario-gaps, Ben 10/20/2026: "if there is a leader or organizer or guide, their
+    /// response or text is given a different color").
+    /// </summary>
+    public static async Task<Dictionary<Guid, string>> RolesAsync(
+        BenDataContext db, HostedEvent hosted, IReadOnlyCollection<Guid> authorIds, CancellationToken ct)
+    {
+        var roles = new Dictionary<Guid, string>();
+        if (authorIds.Count == 0) return roles;
+
+        if (hosted.VenueGrantId is Guid grantId
+            && await db.OrganizationVenueGrants.AsNoTracking().Where(g => g.Id == grantId && g.RevokedUtc == null)
+                   .Select(g => (Guid?)g.VenueOrganizationId).FirstOrDefaultAsync(ct) is Guid venueOrg)
+        {
+            foreach (var id in await db.OrganizationUserMemberships.AsNoTracking()
+                         .Where(m => m.OrganizationId == venueOrg && m.IsActive && authorIds.Contains(m.AppUserId))
+                         .Select(m => m.AppUserId).ToListAsync(ct))
+                roles[id] = "Venue";
+        }
+
+        foreach (var helper in await db.HostedEventStaff.AsNoTracking()
+                     .Where(s => s.HostedEventId == hosted.Id && s.DateConfirmed != null
+                              && s.AppUserId != null && authorIds.Contains(s.AppUserId.Value))
+                     .Select(s => new { Id = s.AppUserId!.Value, s.RoleLabel, s.StartsSessions })
+                     .ToListAsync(ct))
+            roles[helper.Id] = helper.RoleLabel is { Length: > 0 } label ? label
+                             : helper.StartsSessions ? "Guide"
+                             : "Helper";
+
+        foreach (var id in await db.OrganizationUserMemberships.AsNoTracking()
+                     .Where(m => m.OrganizationId == hosted.OrganizationId && m.IsActive && authorIds.Contains(m.AppUserId))
+                     .Select(m => m.AppUserId).ToListAsync(ct))
+            roles[id] = "Organizer";
+
+        return roles;
+    }
+
     /// <summary>Why nobody can post in this room now, or null when it is open.</summary>
     public static string? WhyClosed(HostedEvent hosted, IReadOnlyList<DateTime> nightDates, DateTime now)
     {

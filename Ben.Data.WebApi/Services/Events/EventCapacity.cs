@@ -151,8 +151,16 @@ public static class EventCapacity
                 .Where(n => n.HostedEventNightId == nightId
                          && n.HostedEventLayoutUnitId == unitId
                          && n.ReleasedUtc is null)
-                // People on the night when the party is split across rooms, else the whole party.
-                .Select(n => (Booking: b, People: Math.Max(1, n.People ?? b.PartySize))));
+                // People on the night when the host said; else the party, shared across the places
+                // it holds that night (three seats are one person each, not three each).
+                .Select(n => (Booking: b, People: Math.Max(1, n.People ?? ShareOf(b, n.HostedEventNightId)))));
+
+    /// <summary>A party's share of each place it holds on a night, when the host didn't say.</summary>
+    private static int ShareOf(HostedEventBooking booking, Guid nightId)
+    {
+        var places = booking.Nights.Count(n => n.HostedEventNightId == nightId && n.HostedEventLayoutUnitId != null && n.ReleasedUtc is null);
+        return places <= 1 ? booking.PartySize : (int)Math.Ceiling(booking.PartySize / (double)places);
+    }
 
     /// <summary>
     /// Whether a unit is on offer on a night at all, given what the venue is holding back.
@@ -185,6 +193,46 @@ public static class EventCapacity
     /// <summary>Beds still free in a room on a night, or null when the room states no capacity.</summary>
     public static int? BedsLeft(int? capacity, int taken)
         => capacity is int cap ? Math.Max(0, cap - taken) : null;
+
+    /// <summary>
+    /// Why a party cannot be confirmed into the places it holds on one night, or null when it can.
+    /// </summary>
+    /// <remarks>
+    /// <para>One place: the party against it, as <see cref="WhyThisRoomCannotTakeThem"/> always said.</para>
+    ///
+    /// <para><b>Several places on one night</b> (event-scenario-gaps): a party of three in three
+    /// seats, or a family across two rooms. Each place is checked against the people the host put in
+    /// it when they said, else against one person at least, and the party against what the places
+    /// hold together. Checking the whole party against each seat refused every multi-seat party.</para>
+    /// </remarks>
+    /// <param name="places">Each place's name, how many it has left (null: no limit), and the people
+    /// the host said are in it.</param>
+    public static string? WhyThesePlacesCannotTakeThem(
+        IReadOnlyList<(string Name, int? Left, int? People)> places, DateTime night, int partySize,
+        HostedEventLayoutKind kind = HostedEventLayoutKind.Rooms)
+    {
+        if (places.Count == 0) return null;
+        if (places.Count == 1)
+            return WhyThisRoomCannotTakeThem(places[0].Name, night,
+                places[0].Left is int l ? l : null, 0, places[0].People ?? partySize, kind);
+
+        var date = night.ToString("MM/dd/yyyy");
+        foreach (var (name, left, people) in places)
+        {
+            var here = Math.Max(1, people ?? 1);
+            if (left is int l && here > l)
+                return l == 0
+                    ? (kind == HostedEventLayoutKind.Seats
+                        ? $"{name} is taken on {date}. Free it first, or seat them somewhere else."
+                        : $"{name} is full on {date}. Free a place there first, or put them somewhere else.")
+                    : $"{name} {(kind == HostedEventLayoutKind.Seats ? "seats" : "sleeps")} {l} more on {date}, and {here} are going in it.";
+        }
+
+        if (places.All(p => p.Left is not null) && places.Sum(p => p.Left!.Value) < partySize)
+            return $"Those places {(kind == HostedEventLayoutKind.Seats ? "seat" : "sleep")} {places.Sum(p => p.Left!.Value)} on {date}, and this is a party of {partySize}.";
+
+        return null;
+    }
 
     /// <summary>
     /// Why this party cannot be confirmed into this unit on this night, or null when it can.

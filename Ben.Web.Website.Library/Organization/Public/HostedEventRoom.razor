@@ -117,9 +117,16 @@
             @foreach (var message in room.Messages)
             {
                 var m = message;
-                <div class="list-group-item room-message @(m.IsHidden ? "opacity-50" : "")" data-message="@m.Id">
+                @* The people running the event stand out: a colored edge and their role (Ben, 10/20/2026: "if
+                   there is a leader or organizer or guide, their response or text is given a different color"). *@
+                <div class="list-group-item room-message @(m.IsHidden ? "opacity-50" : "") @(m.AuthorRole is not null ? "border-start border-4 border-primary" : "")"
+                     data-message="@m.Id" data-role="@m.AuthorRole">
                     <div class="d-flex flex-wrap gap-2 small text-secondary">
                         <strong class="text-body">@m.AuthorName</strong>
+                        @if (m.AuthorRole is { Length: > 0 } role)
+                        {
+                            <span class="badge text-bg-primary" data-testid="room-role">@role</span>
+                        }
                         <span>@m.PostedUtc.ToViewerLocalTime(UserState).ToDisplayDateTime()</span>
                         @if (m.IsHidden) { <span class="badge bg-secondary">Hidden</span> }
                         @if (m.MediaWaiting) { <span class="badge bg-secondary">Photo waiting for a check</span> }

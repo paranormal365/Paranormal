@@ -171,7 +171,19 @@ public sealed class PublicFieldSessionController : ControllerBase
                 s.StartedAt, s.EndedAt, s.DeviceModel,
                 RecordedBy = s.RecordedByName ?? s.SubmittedByAppUser.DisplayName ?? "A contributor",
             })
-            .FirstOrDefaultAsync(ct);
+            .FirstOrDefaultAsync(ct)
+            // Or shown with a hosted event's results (event-scenario-gaps): the event's place stands in.
+            ?? await EventSessionPublication.Shown(db)
+                .Where(s => s.Id == sessionId)
+                .Select(s => new
+                {
+                    s.Id,
+                    PlaceId = db.HostedEvents.Where(h => h.Id == s.HostedEventId).Select(h => h.PlaceId).First(),
+                    PlaceName = db.HostedEvents.Where(h => h.Id == s.HostedEventId).Select(h => h.Place.Name).First(),
+                    s.LocationLabel, s.StartedAt, s.EndedAt, s.DeviceModel,
+                    RecordedBy = s.RecordedByName ?? s.SubmittedByAppUser.DisplayName ?? "A contributor",
+                })
+                .FirstOrDefaultAsync(ct);
         if (session is null) return NotFound();
 
         // The same list the media route serves from, so the page and the door agree; empty while
@@ -203,8 +215,18 @@ public sealed class PublicFieldSessionController : ControllerBase
             .Include(s => s.Files).ThenInclude(f => f.UploadFile)
             .Include(s => s.DocumentUploadFile)
             .Include(s => s.Place)
-            .FirstOrDefaultAsync(s => s.Id == sessionId, ct);
+            .FirstOrDefaultAsync(s => s.Id == sessionId, ct)
+            // Or shown with a hosted event's results (event-scenario-gaps).
+            ?? await EventSessionPublication.Shown(db)
+                .Include(s => s.Files).ThenInclude(f => f.UploadFile)
+                .Include(s => s.DocumentUploadFile)
+                .FirstOrDefaultAsync(s => s.Id == sessionId, ct);
         if (session is null || session.DocumentUploadFile.StoragePath is not { Length: > 0 } path) return NotFound();
+
+        // The point positions are swept to: the archive's place, or the hosted event's own.
+        var place = session.Place
+            ?? await db.HostedEvents.AsNoTracking().Where(h => h.Id == session.HostedEventId).Select(h => h.Place).FirstAsync(ct);
+        var shownAt = session.PublishedAtUtc ?? session.ShownWithEventResultsAtUtc!.Value;
 
         var approved = session.MediaReviewState == FeedMediaReviewState.Approved;
         // By the id the archive's media route takes: the upload's own, or the row's for a
@@ -218,7 +240,7 @@ public sealed class PublicFieldSessionController : ControllerBase
                 .ToList()
             : [];
 
-        var (lat, lon) = PublicCoordinates.Approximate(session.Place!.Latitude, session.Place.Longitude);
+        var (lat, lon) = PublicCoordinates.Approximate(place.Latitude, place.Longitude);
         Func<string, string?> redact = document =>
         {
             try
@@ -236,9 +258,33 @@ public sealed class PublicFieldSessionController : ControllerBase
             session.Id, session.IsBundle, path, session.DocumentUploadFileId,
             session.DocumentUploadFile.DateUpdated ?? session.DocumentUploadFile.DateCreated,
             files, Ben.Service.Models.FieldSessions.TimelinePositionPolicy.PublicPoint, redact,
-            Variant: $"public:{session.PublishedAtUtc!.Value.Ticks}:{(int)session.MediaReviewState}:{lat}:{lon}"), ct);
+            Variant: $"public:{shownAt.Ticks}:{(int)session.MediaReviewState}:{lat}:{lon}"), ct);
 
         return payload is null ? NotFound() : FieldSessionTimelineService.Respond(this, payload);
+    }
+
+    /// <summary>
+    /// The sessions shown with a hosted event's results, for its page (event-scenario-gaps). Anonymous; an
+    /// event whose sessions aren't shown answers an empty list, whatever the reason.
+    /// </summary>
+    [HttpGet("for-hosted-event/{hostedEventId:guid}")]
+    public async Task<ActionResult<IReadOnlyList<Ben.Service.Models.FieldSessions.PublicEventSessionRow>>> ForHostedEvent(
+        Guid hostedEventId, CancellationToken ct = default)
+    {
+        await using var db = await _db.CreateDbContextAsync(ct);
+        var placeId = await db.HostedEvents.AsNoTracking().Where(h => h.Id == hostedEventId).Select(h => (Guid?)h.PlaceId).FirstOrDefaultAsync(ct);
+        if (placeId is null) return NotFound();
+
+        var rows = await EventSessionPublication.Shown(db)
+            .Where(s => s.HostedEventId == hostedEventId)
+            .OrderBy(s => s.StartedAt)
+            .Select(s => new Ben.Service.Models.FieldSessions.PublicEventSessionRow(
+                s.Id, placeId.Value,
+                s.RecordedByName ?? s.SubmittedByAppUser.DisplayName ?? "A contributor",
+                s.LocationLabel, s.StartedAt, s.EndedAt, s.MarkerCount,
+                s.MediaReviewState == FeedMediaReviewState.Approved))
+            .ToListAsync(ct);
+        return Ok(rows);
     }
 
     /// <summary>The archive's own gate, as a query.</summary>

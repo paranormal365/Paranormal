@@ -55,7 +55,11 @@ public sealed class NotificationSummaryController : BenControllerBase
         // counted — a number no surface can show is a lie on a badge.
         var orgMessageGroups = await db.OrgMessageRecipients.AsNoTracking()
             .Where(r => r.RecipientAppUserId == userId && r.DateRead == null
-                     && r.OrgMessage!.OrganizationId != null)
+                     && r.OrgMessage!.OrganizationId != null
+                     // A guest's own conversation with an event's organizers is not the group's mail to
+                     // them: they have no inbox there to open. It has a row of its own (event-scenario-gaps).
+                     && !(r.OrgMessage.ChannelType == OrgMessageChannel.EventGuestThread
+                          && r.OrgMessage.AuthorAppUserId == userId))
             .GroupBy(r => r.OrgMessage!.OrganizationId!.Value)
             .Select(g => new { OrgId = g.Key, Count = g.Count(),
                                Oldest = g.Min(x => (DateTime?)x.OrgMessage!.DateCreated) })
@@ -460,6 +464,32 @@ public sealed class NotificationSummaryController : BenControllerBase
                     .Max(x => x.ChangedUtc)),
             ct);
 
+        // ── The organizers answered a guest (event-scenario-gaps) ────────────────
+        // Opens the event's page, where the guest's conversation is: the oldest unanswered-by-them first.
+        var organizerReplies = await BucketAsync(
+            db.OrgMessageRecipients.AsNoTracking()
+                .Where(r => r.RecipientAppUserId == userId && r.DateRead == null
+                         && r.OrgMessage!.ChannelType == OrgMessageChannel.EventGuestThread
+                         && r.OrgMessage.ParentMessageId == null
+                         && r.OrgMessage.AuthorAppUserId == userId)
+                .Select(r => r.OrgMessage!.DateUpdated ?? r.OrgMessage.DateCreated)
+                .Select(d => (DateTime?)d),
+            ct);
+        if (organizerReplies.Count > 0)
+        {
+            var place = await db.OrgMessageRecipients.AsNoTracking()
+                .Where(r => r.RecipientAppUserId == userId && r.DateRead == null
+                         && r.OrgMessage!.ChannelType == OrgMessageChannel.EventGuestThread
+                         && r.OrgMessage.ParentMessageId == null
+                         && r.OrgMessage.AuthorAppUserId == userId)
+                .OrderBy(r => r.OrgMessage!.DateUpdated ?? r.OrgMessage.DateCreated)
+                .Select(r => db.HostedEvents.Where(h => h.Id == r.OrgMessage!.HostedEventId)
+                    .Select(h => new { Org = h.Organization.UrlName, h.UrlName }).FirstOrDefault())
+                .FirstOrDefaultAsync(ct);
+            if (place is { Org.Length: > 0, UrlName.Length: > 0 })
+                organizerReplies = organizerReplies with { Where = $"/o/{place.Org}/events/{place.UrlName}#event-organizer-thread" };
+        }
+
         return Ok(new NotificationSummaryResponse(
             orgMessages, caseMessagesAsOrg, caseMessagesAsClient, systemMessages, pendingRequests,
             investigationInvites, equipmentCheckouts, feedMentions,
@@ -473,7 +503,8 @@ public sealed class NotificationSummaryController : BenControllerBase
             EventHoldsLapsing: eventHoldsLapsing,
             MyEventHoldLapsing: myEventHoldLapsing,
             VenueRequestsToDecide: venueRequestsToDecide,
-            EventScheduleChanges: eventScheduleChanges));
+            EventScheduleChanges: eventScheduleChanges,
+            EventOrganizerReplies: organizerReplies));
     }
 
     /// <summary>The aggregate a breakdown folds to — the bell's total stays the sum of its rows.</summary>

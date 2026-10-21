@@ -1,0 +1,33 @@
+@namespace Ben.Web.Website.Library.Organization.Public
+@using Ben.Service.Models.Entities
+@using Ben.Web.Services
+@inject IBenUserState UserState
+
+@* One guest's conversation with an event's organizers, oldest first, as either side reads it
+   (event-scenario-gaps). Words are shown as text, never as markup. The organizers' answers stand out
+   with a colored edge, the way the people running an event do in its room. *@
+
+@if (Messages.Count == 0)
+{
+    <p class="small text-secondary mb-0" data-testid="guest-thread-empty">Nothing written yet.</p>
+}
+else
+{
+    <div class="list-group">
+        @foreach (var m in Messages)
+        {
+            <div class="list-group-item guest-thread-message @(m.FromOrganizer ? "border-start border-4 border-primary" : "")"
+                 data-message="@m.Id" data-from-organizer="@(m.FromOrganizer ? "true" : "false")">
+                <div class="d-flex flex-wrap gap-2 small text-secondary">
+                    <strong class="text-body" style="overflow-wrap:anywhere;">@(m.IsMine ? "You" : m.AuthorName)</strong>
+                    <span>@m.PostedUtc.ToViewerLocalTime(UserState).ToDisplayDateTime()</span>
+                </div>
+                <div class="mt-1" style="white-space:pre-line;overflow-wrap:anywhere;">@m.Body</div>
+            </div>
+        }
+    </div>
+}
+
+@code {
+    [Parameter, EditorRequired] public IReadOnlyList<EventGuestThreadMessageRecord> Messages { get; set; } = [];
+}

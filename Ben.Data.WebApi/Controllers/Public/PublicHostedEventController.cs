@@ -366,6 +366,10 @@ public sealed class PublicHostedEventController : BenControllerBase
             r.Event.MinimumGuests,
             r.Event.GoNoGoDeadlineUtc,
             r.Event.GoNoGoDecision,
-            AccessNotes: r.Event.AccessNotes);
+            AccessNotes: r.Event.AccessNotes,
+            EvidenceDeadlineUtc: HostedEventEvidence.DeadlineUtc(r.Event, [.. r.Nights]),
+            EvidenceClosedSentence: HostedEventEvidence.WhyClosed(r.Event, [.. r.Nights], DateTime.UtcNow),
+            EvidenceSentence: HostedEventEvidence.WindowSentence(r.Event, [.. r.Nights]),
+            AsksForVotes: r.Event.AsksForVotes);
     }
 }

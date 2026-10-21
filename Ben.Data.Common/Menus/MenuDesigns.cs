@@ -217,7 +217,23 @@ public static class MenuDesigns
     public static MenuDesign FindOrDefault(string? key) => Find(key) ?? Default;
 
     /// <summary>The credit at the foot of every menu (Ben, 10/13/2026).</summary>
-    public static string Credit(int year) => $"Menu made with IsHaunted.com · © {year} ISHAUNTED LLC";
+    public static string Credit(int year) => $"IsHaunted.com © {year} ISHAUNTED LLC";
+
+    /// <summary>
+    /// Where the website serves the small site mark drawn beside the credit (event-scenario-gaps: the
+    /// menus branch's notes promised "the small site mark beside it", and no design drew one).
+    /// </summary>
+    public const string CreditMarkPath = "/favicon.png";
+
+    /// <summary>The same mark as JPEG bytes, for the PDF (Telerik draws JPEG without an image decoder). 64 pixels square.</summary>
+    public static byte[] CreditMarkJpeg()
+    {
+        using var stream = typeof(MenuDesigns).Assembly.GetManifestResourceStream("MenuMark.site-mark.jpg")
+            ?? throw new InvalidOperationException("The menu credit's site mark is not embedded.");
+        using var copy = new MemoryStream();
+        stream.CopyTo(copy);
+        return copy.ToArray();
+    }
 }
 
 /// <summary>

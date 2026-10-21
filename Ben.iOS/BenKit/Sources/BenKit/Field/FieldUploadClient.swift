@@ -96,7 +96,8 @@ public struct FieldUploadClient: Sendable {
                              recordedByName: String?,
                              orgCalendarEventId: UUID? = nil,
                              hostedEventId: UUID? = nil,
-                             fieldLaunchId: UUID? = nil) async -> Result<ServerSession, FeedActionError> {
+                             fieldLaunchId: UUID? = nil,
+                             showWithResults: Bool = false) async -> Result<ServerSession, FeedActionError> {
         var parts: [MultipartBody.Part] = [
             .file("file", filename: url.lastPathComponent,
                   contentType: DeviceDataExporter.contentType, url: url),
@@ -109,6 +110,9 @@ public struct FieldUploadClient: Sendable {
         if let orgCalendarEventId { parts.append(.field("orgCalendarEventId", orgCalendarEventId.uuidString)) }
         if let hostedEventId { parts.append(.field("hostedEventId", hostedEventId.uuidString)) }
         if let fieldLaunchId { parts.append(.field("fieldLaunchId", fieldLaunchId.uuidString)) }
+        // The sender's agreement that the organizers may show it with the event's results (event-scenario-gaps).
+        // Only ever sent as yes: no is the default, and an older server ignores the field.
+        if showWithResults { parts.append(.field("showWithResults", "true")) }
         if let recordedByAppUserId {
             parts.append(.field("recordedByAppUserId", recordedByAppUserId.uuidString))
         }

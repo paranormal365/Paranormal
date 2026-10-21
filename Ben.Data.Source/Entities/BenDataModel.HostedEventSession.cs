@@ -95,6 +95,12 @@ namespace Ben.Data.Source.Entities
         public DateTime? WaitlistedUtc { get; set; }
         public DateTime? PromotedUtc { get; set; }
 
+        /// <summary>When the class's host marked this sign-up as there. Null: not marked (yet).</summary>
+        public DateTime? AttendedUtc { get; set; }
+
+        /// <summary>Who marked them there.</summary>
+        public Guid? AttendanceRecordedByAppUserId { get; set; }
+
         public DateTime DateCreated { get; set; }
         public DateTime? DateUpdated { get; set; }
         public Guid CreatedByAppUserId { get; set; }

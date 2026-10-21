@@ -1017,6 +1017,17 @@ app.MapGet("/calendar/hosted-events/{eventId:guid}/sessions/{sessionId:guid}.ics
         accessToken: null, httpFactory, ctx, ct);
 }).AllowAnonymous();
 
+// The event's dates as a calendar file, each date with the menus served on it (event-scenario-gaps).
+app.MapGet("/calendar/hosted-events/{eventId:guid}.ics", async (
+    Guid eventId,
+    IHttpClientFactory httpFactory, IConfiguration config,
+    HttpContext ctx, CancellationToken ct) =>
+{
+    return await Ben.Web.Website.Services.MediaProxy.StreamAsync(
+        $"{config["WebApi:BaseUrl"]}/api/public/hosted-events/{eventId}/calendar.ics",
+        accessToken: null, httpFactory, ctx, ct);
+}).AllowAnonymous();
+
 app.MapGet("/media/{fileId:guid}/{kind}", async (
     Guid fileId, string kind, string? t,
     Ben.Web.Website.Services.MediaTicketService tickets,

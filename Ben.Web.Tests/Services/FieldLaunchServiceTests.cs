@@ -283,7 +283,10 @@ public sealed class FieldLaunchServiceTests
         Assert.Equal([w.TokenOf(w.Guest)], w.PushedTo());
         Assert.Equal((1, 1, 1, true), (outcome.People, outcome.PeopleWithTheApp, outcome.PhonesReached, outcome.PushConfigured));
         var push = w.Sender.Sent.Single().Message;
-        Assert.Equal("Nashville Ghost Walk: Saturday walk is starting", push.Title);
+        // Plainly, under the walk's name (event-scenario-gaps, Ben 10/20/2026).
+        Assert.Equal("Nashville Ghost Walk: Saturday walk", push.Title);
+        Assert.Equal(FieldLaunchService.PushText, push.Body);
+        Assert.StartsWith("Sessions are now being accepted for this event.", push.Body);
         Assert.Equal(FieldLaunchService.AppLink(outcome.Launch.Id), push.Data["link"]);
         Assert.Equal(w.TourDate, outcome.Launch.OrgCalendarEventId);
         Assert.Equal("Printers Alley", outcome.Launch.LocationLabel);
@@ -326,6 +329,48 @@ public sealed class FieldLaunchServiceTests
 
         Assert.Equal([w.TokenOf(w.Booker), w.TokenOf(w.NamedGuest)], w.PushedTo());
     }
+
+    // ── Starting the sessions can be handed to a guide (event-scenario-gaps) ──
+
+    /// <summary>
+    /// A helper the organizer asked to start the sessions may, though they are not on the door; a helper
+    /// with neither may not.
+    /// </summary>
+    /// <remarks>
+    /// Ben, 10/20/2026: "This can be delegated to those who are leading a tour or guide or are the event
+    /// organizer." Before, only somebody trusted with the door could launch a hosted event.
+    /// </remarks>
+    [Fact]
+    public async Task AHelperAskedToStartTheSessionsMayDoSoWithoutRunningTheDoor()
+    {
+        var w = new World(Tonight);
+        await w.SeedAsync(starts: Tonight);
+        await using (var db = await w.Db.CreateDbContextAsync())
+        {
+            foreach (var (who, starts) in new[] { (w.Stranger, true), (w.Pending, false) })
+            {
+                db.HostedEventStaff.Add(new HostedEventStaff
+                {
+                    Id = Guid.NewGuid(), HostedEventId = w.Hosted, AppUserId = who, StartsSessions = starts,
+                    SeesMenus = !starts, RoleLabel = starts ? "Guide" : "Kitchen",
+                    DateConfirmed = Tonight, DateCreated = Tonight, CreatedByAppUserId = w.Owner,
+                });
+            }
+            await db.SaveChangesAsync();
+        }
+
+        Assert.IsType<FieldLaunchService.LaunchResult.Forbidden>(
+            await w.Service().LaunchAsync(w.Pending, false, FieldLaunchTarget.HostedEvent, w.Hosted, default));
+
+        Launched(await w.Service().LaunchAsync(w.Stranger, false, FieldLaunchTarget.HostedEvent, w.Hosted, default));
+        Assert.Equal([w.TokenOf(w.Booker), w.TokenOf(w.NamedGuest)], w.PushedTo());
+        Assert.Equal(["hosted-event"], (await w.Service().LaunchableAsync(w.Stranger, default)).Select(l => l.Target));
+    }
+
+    [Fact]
+    public void TheCardSaysSessionsAreBeingAccepted()
+        => Assert.StartsWith("Sessions are now being accepted for Overnight at The Factory.",
+                             FieldLaunchService.CardText("Overnight at The Factory"));
 
     // ── Who may press it ─────────────────────────────────────────────────────
 

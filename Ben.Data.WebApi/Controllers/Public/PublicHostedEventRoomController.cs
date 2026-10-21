@@ -397,6 +397,7 @@ public sealed class PublicHostedEventRoomController : BenControllerBase
             .ToListAsync(ct);
 
         var names = await db.Organizations.AsNoTracking().Where(o => hostOrgs.Contains(o.Id)).Select(o => o.Name).ToListAsync(ct);
+        var roles = await EventRoom.RolesAsync(db, hosted, [.. rows.Select(r => r.AuthorAppUserId).Distinct()], ct);
         var whyClosed = EventRoom.WhyClosed(hosted, [.. hosted.Nights.Select(n => n.Date)], DateTime.UtcNow);
 
         return new EventRoomRecord(
@@ -412,7 +413,8 @@ public sealed class PublicHostedEventRoomController : BenControllerBase
                         r.Id, r.AuthorAppUserId, r.AuthorName, r.Body, r.DateCreated,
                         showMedia, showMedia ? r.MediaType : null, waiting && showMedia,
                         r.AuthorAppUserId == viewerId, r.HiddenUtc is not null,
-                        r.Sent, standing.CanModerate ? r.Reports : 0);
+                        r.Sent, standing.CanModerate ? r.Reports : 0,
+                        roles.GetValueOrDefault(r.AuthorAppUserId));
                 })],
             note,
             hosted.PhotoPosting,

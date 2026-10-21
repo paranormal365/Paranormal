@@ -232,6 +232,13 @@
                                         {
                                             <div class="text-secondary">Nobody yet.</div>
                                         }
+                                        @* Who was actually there (event-scenario-gaps: classes that "track who attends"). *@
+                                        @if (roster.In.Count > 0)
+                                        {
+                                            <div class="text-secondary mb-1" data-testid="roster-there">
+                                                @(roster.PeopleThere == 1 ? "1 person marked there" : $"{roster.PeopleThere} people marked there")
+                                            </div>
+                                        }
                                         @foreach (var (label, lines) in new[] { ("In", roster.In), ("Waiting", roster.Waiting) })
                                         {
                                             @if (lines.Count > 0)
@@ -241,7 +248,17 @@
                                                     @foreach (var line in lines)
                                                     {
                                                         var l = line;
-                                                        <li>
+                                                        var waiting = label == "Waiting";
+                                                        <li class="py-1">
+                                                            @if (!waiting && roster.CanMarkAttendance)
+                                                            {
+                                                                <span class="form-check form-check-inline me-1">
+                                                                    <input class="form-check-input" type="checkbox" id="@($"attended-{l.SignUpId:N}")"
+                                                                           checked="@(l.AttendedUtc is not null)" disabled="@_busy"
+                                                                           @onchange="e => MarkAsync(s, l, e.Value is true)" />
+                                                                    <label class="form-check-label" for="@($"attended-{l.SignUpId:N}")">There</label>
+                                                                </span>
+                                                            }
                                                             @l.Name @(l.People > 1 ? $"× {l.People}" : "") @(l.IsHelping ? "(helping)" : "")
                                                             <button type="button" class="btn btn-link btn-sm p-0 ms-1 text-danger" disabled="@_busy"
                                                                     @onclick="() => RemoveAsync(s, l)">Remove</button>
@@ -382,6 +399,17 @@
         if (_rosterFor == s.Id) { _rosterFor = null; return; }
         _rosterFor = s.Id;
         _roster = await AdminClient.GetEventSessionRosterAsync(OrgId, EventId, s.Id);
+    }
+
+    private async Task MarkAsync(HostedEventSessionRecord s, HostedEventSessionRosterLine line, bool there)
+    {
+        _busy = true;
+        _error = null;
+        var (roster, error) = await AdminClient.SetSessionAttendanceAsync(OrgId, EventId, s.Id, line.SignUpId, there);
+        _busy = false;
+        if (roster is null) { _error = error ?? "That couldn't be marked just now."; return; }
+        _roster = ItemResult<HostedEventSessionRosterRecord>.Ok(roster);
+        _note = there ? $"{line.Name} is marked there for {s.Title}." : $"{line.Name} is no longer marked there for {s.Title}.";
     }
 
     private async Task RemoveAsync(HostedEventSessionRecord s, HostedEventSessionRosterLine line)

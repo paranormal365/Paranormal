@@ -6,6 +6,7 @@ using Ben.Data.Source.Entities;
 using Ben.Data.WebApi.Services;
 using Ben.Data.WebApi.Services.Media;
 using Ben.Data.WebApi.Services.Feed;
+using Ben.Data.WebApi.Services.Events;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
@@ -82,7 +83,11 @@ public sealed class EventEvidenceController : BenControllerBase
         // When it comes off the site, or null when nothing is counting (item 233).
         DateTime? ExpiresAtUtc = null,
         // Whether the business has kept it for good.
-        bool IsKept = false);
+        bool IsKept = false,
+        // "Confirms" votes on it, which rank the public list (event-scenario-gaps).
+        int PositiveVotes = 0,
+        // When it was caught, from the file itself; null when the file does not say.
+        DateTime? CaughtAtUtc = null);
 
     // ── the visitor's door ────────────────────────────────────────────────────
 
@@ -107,7 +112,19 @@ public sealed class EventEvidenceController : BenControllerBase
         if (!evt.IsPublic)
             return BadRequest("Only public events take visitor evidence.");
 
-        if (!await AttendedAsync(db, eventId, evt.OrganizationId, userId, ct))
+        // A hosted event (item 235) answers for itself: its own switch, its own deadline, and its
+        // confirmed guests count as having attended (event-scenario-gaps).
+        var hosted = evt.HostedEventId is Guid hostedId
+            ? await db.HostedEvents.AsNoTracking().Include(h => h.Nights)
+                .FirstOrDefaultAsync(h => h.Id == hostedId, ct)
+            : null;
+        if (hosted is not null
+            && HostedEventEvidence.WhyClosed(hosted, [.. hosted.Nights], DateTime.UtcNow) is { } closed)
+            return BadRequest(closed);
+
+        var attended = await AttendedAsync(db, eventId, evt.OrganizationId, userId, ct)
+                    || (hosted is not null && await HostedEventEvidence.HadAPlaceAsync(db, hosted.Id, userId, ct));
+        if (!attended)
             return BadRequest("Evidence can be offered by people who attended this event.");
 
         var storedName  = $"{Guid.NewGuid()}{Path.GetExtension(file.FileName)}";
@@ -437,10 +454,36 @@ public sealed class EventEvidenceController : BenControllerBase
             .AnyAsync(e => e.Id == eventId && e.IsPublic, ct);
         if (!isPublic) return NotFound();
 
-        return Ok(await ProjectAsync(db.EventEvidenceSubmissions.AsNoTracking()
-            .Where(s => s.OrgCalendarEventId == eventId
-                     && s.Status == EvidenceSubmissionStatus.Accepted)
-            .OrderBy(s => s.DateCreated), ct));
+        return Ok(await RankedAcceptedAsync(db, eventId, ct));
+    }
+
+    /// <summary>
+    /// An event's accepted evidence, most positive votes first and then the earliest caught (Ben's
+    /// scenario, 10/21/2026: "ranked by number of positive votes then by the time of the evidence").
+    /// </summary>
+    /// <remarks>
+    /// "The time of the evidence" is when it was recorded, read from the file; a file that says
+    /// nothing falls back to when it was offered. Shared with the CMS evidence section and the app.
+    /// </remarks>
+    internal static async Task<List<EvidenceSubmissionRecord>> RankedAcceptedAsync(
+        BenDataContext db, Guid calendarEventId, CancellationToken ct)
+    {
+        var accepted = await ProjectAsync(db.EventEvidenceSubmissions.AsNoTracking()
+            .Where(s => s.OrgCalendarEventId == calendarEventId
+                     && s.Status == EvidenceSubmissionStatus.Accepted), ct);
+
+        var files = accepted.Select(a => a.UploadFileId).ToList();
+        var votes = await HostedEventEvidence.PositiveVotesAsync(db, files, ct);
+        var caught = await HostedEventEvidence.CaughtAsync(db, files, ct);
+
+        return [.. HostedEventEvidence.Rank(
+            accepted.Select(a => a with
+            {
+                PositiveVotes = votes.GetValueOrDefault(a.UploadFileId),
+                CaughtAtUtc = caught.TryGetValue(a.UploadFileId, out var at) ? at : null,
+            }),
+            a => a.PositiveVotes,
+            a => a.CaughtAtUtc ?? a.DateCreated)];
     }
 
     /// <summary>

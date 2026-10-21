@@ -31,12 +31,7 @@ public static class ArchiveMediaPublication
     /// <summary>True when an anonymous caller may receive this file's bytes.</summary>
     public static Task<bool> MayServeAsync(
         BenDataContext db, Guid fieldSessionId, Guid uploadFileId, CancellationToken ct)
-        => db.FieldSessionUploads.AsNoTracking()
-            .Where(s => s.Id == fieldSessionId
-                     && s.PublishedAtUtc != null
-                     && s.PlaceId != null
-                     && s.Place!.Kind == PlaceKind.PublicLocation
-                     && s.MediaReviewState == FeedMediaReviewState.Approved)
+        => Servable(db, fieldSessionId)
             // A recording with a file of its own is asked for by that file's id; one inside the
             // session's .ben has no file of its own and is asked for by its row's id. Both are the
             // id the listing below hands out, so the page and the door agree.
@@ -55,12 +50,7 @@ public static class ArchiveMediaPublication
     public static async Task<IReadOnlyList<ArchiveMediaItem>> ServableFilesAsync(
         BenDataContext db, Guid fieldSessionId, CancellationToken ct)
     {
-        var rows = await db.FieldSessionUploads.AsNoTracking()
-            .Where(s => s.Id == fieldSessionId
-                     && s.PublishedAtUtc != null
-                     && s.PlaceId != null
-                     && s.Place!.Kind == PlaceKind.PublicLocation
-                     && s.MediaReviewState == FeedMediaReviewState.Approved)
+        var rows = await Servable(db, fieldSessionId)
             .SelectMany(s => s.Files)
             // A recording sent on its own has an UploadFile; one sent inside the session's .ben has
             // the path of its member instead (since 2026-09-16 the archive serves those too, as a
@@ -81,6 +71,20 @@ public static class ArchiveMediaPublication
                 r.UploadContentType ?? r.ContentType ?? Services.FieldSessionFileGuard.ContentTypeFor(r.RelativePath),
                 r.UploadFileName ?? Path.GetFileName(r.RelativePath)))
             .ToList();
+    }
+
+    /// <summary>
+    /// The one session, when its media may be served to anybody: in a public place's archive, or shown with
+    /// a hosted event's results (<see cref="EventSessionPublication"/>) — and approved either way.
+    /// </summary>
+    private static IQueryable<Ben.Data.Source.Entities.FieldSessionUpload> Servable(BenDataContext db, Guid fieldSessionId)
+    {
+        var shown = EventSessionPublication.Shown(db);
+        return db.FieldSessionUploads.AsNoTracking()
+            .Where(s => s.Id == fieldSessionId
+                     && s.MediaReviewState == FeedMediaReviewState.Approved
+                     && ((s.PublishedAtUtc != null && s.PlaceId != null && s.Place!.Kind == PlaceKind.PublicLocation)
+                         || shown.Any(e => e.Id == s.Id)));
     }
 }
 

@@ -110,6 +110,12 @@ public record OrgCalendarEventRecord
 {
     public Guid Id { get; init; }
     public Guid OrganizationId { get; init; }
+
+    /// <summary>
+    /// The hosted event this row stands for, when it is one's umbrella row — so the calendar can show
+    /// its published menus on their dates (event-scenario-gaps).
+    /// </summary>
+    public Guid? HostedEventId { get; init; }
     public Guid? EventTypeId { get; init; }
     public string? EventTypeName { get; init; }
     public string? EventTypeColor { get; init; }

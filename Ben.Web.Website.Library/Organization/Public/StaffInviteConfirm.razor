@@ -69,6 +69,13 @@
                         <a class="btn btn-sm btn-primary" href="/forgot-password">Set a password</a>
                     </div>
                 }
+                else if (invite.RunsTheDoor && invite.OrganizationId is Guid doorOrg)
+                {
+                    @* The nephew on the door (event-scenario-gaps) belongs to no group, so "your groups"
+                       was a page with nothing on it. *@
+                    <a class="btn btn-primary" id="helping-door" href="@($"/organizations/{doorOrg}/events/{invite.HostedEventId}/door")">Open the door</a>
+                    <p class="small text-secondary mt-3 mb-0">On the night you can also scan passes with the IsHaunted app: Settings, then Doors I'm running.</p>
+                }
                 else
                 {
                     <a class="btn btn-primary" href="/organizations">Open your groups</a>

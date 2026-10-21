@@ -1,0 +1,148 @@
+@namespace Ben.Web.Website.Library.Manage.Events
+@using Ben.Service.Models.Entities
+@using Ben.Web.Services
+@using Ben.Web.Services.WebApi
+@using Ben.Web.Website.Library.Kit
+@inject IBenAdminClient AdminClient
+@inject IBenUserState UserState
+
+@* Tickets at the door (event-scenario-gaps). Ben's scenario: "Our site will give him a QR code for him
+   to print or display for people to use to get tickets at the door."
+
+   THE SITE STILL TAKES NO MONEY. A person scans the code with their own phone and asks for a day pass;
+   whoever is on the door takes the money however the organizer does, then presses "Paid — confirm" here
+   and their phone shows the pass. The door may confirm these and only these. *@
+
+@if (_tickets.Failed)
+{
+    <div class="alert alert-warning py-2 d-print-none" role="alert" id="door-tickets-failed">
+        @(_tickets.Reason ?? "Tickets at the door couldn't be read just now.")
+    </div>
+}
+else if (_tickets.Item is { } t)
+{
+    <div class="card mb-3 d-print-none" id="door-tickets">
+        <div class="card-header fw-semibold d-flex justify-content-between align-items-center flex-wrap gap-2">
+            <span>Tickets at the door</span>
+            @if (t.Requests.Count(r => !r.IsConfirmed) is > 0 and var waiting)
+            {
+                <span class="badge text-bg-warning" id="door-tickets-waiting">@waiting waiting</span>
+            }
+        </div>
+        <div class="card-body">
+            @if (_note is { Length: > 0 }) { <div class="alert alert-success py-2" role="status" id="door-tickets-note">@_note</div> }
+            @if (_error is { Length: > 0 }) { <div class="alert alert-danger py-2" role="alert" id="door-tickets-error">@_error</div> }
+
+            @if (!t.On)
+            {
+                <p class="small text-secondary mb-2" id="door-tickets-off">
+                    Turn this on to get a QR code to print or show on a screen. People scan it with their phone to ask
+                    for a day pass; you take their money your usual way and confirm them here.
+                </p>
+                @if (t.CanChange)
+                {
+                    <button type="button" class="btn btn-primary btn-sm" id="door-tickets-on" disabled="@_busy" @onclick="() => SetAsync(true)">
+                        Sell tickets at the door
+                    </button>
+                }
+                else
+                {
+                    <p class="small mb-0">Ask the organizer to turn it on.</p>
+                }
+            }
+            else
+            {
+                @if (t.NotSellingSentence is { Length: > 0 } why)
+                {
+                    <div class="alert alert-secondary py-2 small" id="door-tickets-not-selling">@why</div>
+                }
+                <div class="d-flex flex-column flex-sm-row gap-3 align-items-sm-start">
+                    <BenQrPlate Value="@(t.Url ?? "")" Size="160px" />
+                    <div style="min-width:0;">
+                        <p class="small mb-2">
+                            People scan this with their phone's camera and ask for a place.
+                            @(t.DayPassPrice switch { null => "", 0 => "The day pass is free.", var p => $"The day pass is {p:C}, paid to you." })
+                        </p>
+                        <div class="d-flex flex-wrap gap-2">
+                            <a class="btn btn-outline-secondary btn-sm" id="door-tickets-poster" target="_blank" rel="noopener"
+                               href="@($"/organizations/{OrgId}/events/{EventId}/door-tickets/poster")">Print or show the poster</a>
+                            @if (t.CanChange)
+                            {
+                                <button type="button" class="btn btn-outline-danger btn-sm" id="door-tickets-off-button" disabled="@_busy"
+                                        @onclick="() => SetAsync(false)">Stop selling at the door</button>
+                            }
+                        </div>
+                        <p class="small text-secondary mt-2 mb-0" style="overflow-wrap:anywhere;">@t.Url</p>
+                    </div>
+                </div>
+            }
+
+            @if (t.Requests.Count > 0)
+            {
+                <ul class="list-group list-group-flush mt-3" id="door-tickets-requests">
+                    @foreach (var request in t.Requests)
+                    {
+                        var r = request;
+                        <li class="list-group-item d-flex justify-content-between align-items-center gap-2 px-0" data-booking="@r.BookingId">
+                            <div style="min-width:0;">
+                                <div class="fw-semibold" style="overflow-wrap:anywhere;">@r.Name</div>
+                                <div class="small text-secondary">
+                                    @(r.PartySize == 1 ? "1 person" : $"{r.PartySize} people") ·
+                                    asked @r.AskedUtc.ToViewerLocalTime(UserState).ToString("h:mm tt")
+                                </div>
+                            </div>
+                            @if (r.IsConfirmed)
+                            {
+                                <span class="badge text-bg-success text-nowrap">Confirmed</span>
+                            }
+                            else
+                            {
+                                <button type="button" class="btn btn-success text-nowrap door-ticket-confirm" style="min-height:44px;"
+                                        id="@($"door-ticket-confirm-{r.BookingId}")" disabled="@_busy" @onclick="() => ConfirmAsync(r)">
+                                    Paid — confirm
+                                </button>
+                            }
+                        </li>
+                    }
+                </ul>
+            }
+        </div>
+    </div>
+}
+
+@code {
+    [Parameter, EditorRequired] public Guid OrgId { get; set; }
+    [Parameter, EditorRequired] public Guid EventId { get; set; }
+
+    private ItemResult<HostedEventDoorTicketsRecord> _tickets;
+    private bool _busy;
+    private string? _note, _error;
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (!firstRender) return;
+        if (!await UserState.WaitUntilAuthReadyAsync(RendererInfo.IsInteractive)) return;
+        _tickets = await AdminClient.GetDoorTicketsAsync(OrgId, EventId);
+        StateHasChanged();
+    }
+
+    private async Task SetAsync(bool on)
+    {
+        _busy = true; _note = null; _error = null;
+        var (saved, error) = await AdminClient.SetDoorTicketsAsync(OrgId, EventId, on);
+        _busy = false;
+        if (saved is null) { _error = error ?? "That couldn't be changed just now."; return; }
+        _tickets = ItemResult<HostedEventDoorTicketsRecord>.Ok(saved);
+        _note = on ? "The door is selling. Print the poster or show it on a screen." : "The door has stopped selling. The old code no longer works.";
+    }
+
+    private async Task ConfirmAsync(HostedEventDoorRequestRecord request)
+    {
+        _busy = true; _note = null; _error = null;
+        var (saved, error) = await AdminClient.ConfirmDoorTicketAsync(OrgId, EventId, request.BookingId);
+        _busy = false;
+        if (saved is null) { _error = error ?? "That couldn't be confirmed just now."; return; }
+        _tickets = ItemResult<HostedEventDoorTicketsRecord>.Ok(saved);
+        _note = $"{request.Name} is confirmed. Their pass is on their phone; scan it to let them in.";
+    }
+}

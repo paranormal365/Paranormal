@@ -74,18 +74,23 @@
                     They asked for what is selected. Put them wherever suits you.
                 </p>
 
-                @foreach (var night in party.Nights)
+                @* One picker per place the party holds, not per night (event-scenario-gaps): a party of
+                   three in seats holds three seats on one night, and keying the choice by night kept one
+                   of them and confirmed the party into a single seat. *@
+                @for (var i = 0; i < party.Nights.Count; i++)
                 {
-                    var thisNight = night;
+                    var at = i;
+                    var thisNight = party.Nights[i];
+                    var sameNight = party.Nights.Take(i).Count(n => n.HostedEventNightId == thisNight.HostedEventNightId);
+                    var pickerId = sameNight == 0 ? $"sheet-night-{thisNight.HostedEventNightId}" : $"sheet-night-{thisNight.HostedEventNightId}-{sameNight + 1}";
                     <div class="mb-2">
-                        <label class="form-label small mb-1"
-                               for="@($"sheet-night-{thisNight.HostedEventNightId}")">
-                            @thisNight.Date.ToFullDayDate()
+                        <label class="form-label small mb-1" for="@pickerId">
+                            @thisNight.Date.ToFullDayDate()@(party.Nights.Count(n => n.HostedEventNightId == thisNight.HostedEventNightId) > 1 ? $" · place {sameNight + 1}" : "")
                         </label>
-                        <select id="@($"sheet-night-{thisNight.HostedEventNightId}")"
+                        <select id="@pickerId"
                                 class="form-select"
-                                value="@Chosen(thisNight.HostedEventNightId)"
-                                @onchange="e => Choose(thisNight.HostedEventNightId, e.Value?.ToString())">
+                                value="@Chosen(at)"
+                                @onchange="e => Choose(at, e.Value?.ToString())">
                             <option value="">Here that day, sleeping elsewhere</option>
                             @foreach (var unit in Offered(thisNight.HostedEventNightId))
                             {
@@ -177,7 +182,8 @@
     /// <summary>The event's bands, for giving one out by hand. Empty hides the picker.</summary>
     [Parameter] public IReadOnlyList<HostedEventBandRecord>? Bands { get; set; }
 
-    private readonly Dictionary<Guid, Guid?> _where = [];
+    /// <summary>Where each place the party holds goes, in the order of <c>Booking.Nights</c>.</summary>
+    private readonly List<(Guid NightId, Guid? UnitId)> _where = [];
     private string? _note;
     private string? _error;
     private bool _busy;
@@ -199,16 +205,26 @@
         _error = null;
         _where.Clear();
         foreach (var night in party.Nights)
-            _where[night.HostedEventNightId] = night.HostedEventLayoutUnitId;
+            _where.Add((night.HostedEventNightId, night.HostedEventLayoutUnitId));
     }
 
     private string Title => Booking is { } party ? party.LeadName : "Booking";
 
-    private string Chosen(Guid nightId)
-        => _where.TryGetValue(nightId, out var unit) && unit is { } id ? id.ToString() : "";
+    private string Chosen(int at)
+        => at < _where.Count && _where[at].UnitId is { } id ? id.ToString() : "";
 
-    private void Choose(Guid nightId, string? unitId)
-        => _where[nightId] = Guid.TryParse(unitId, out var id) ? id : null;
+    private void Choose(int at, string? unitId)
+    {
+        if (at >= _where.Count) return;
+        _where[at] = (_where[at].NightId, Guid.TryParse(unitId, out var id) ? id : null);
+    }
+
+    /// <summary>
+    /// What the confirm sends: every place the party holds, as chosen. Two choices of the same room on
+    /// the same night are one place, so the server counts the party once there.
+    /// </summary>
+    internal static List<HostedEventBookingNightChoice> Choices(IEnumerable<(Guid NightId, Guid? UnitId)> where)
+        => [.. where.Distinct().Select(w => new HostedEventBookingNightChoice(w.NightId, w.UnitId))];
 
     /// <summary>
     /// What this event has to offer on a night, with anything the venue is holding back left out.
@@ -223,13 +239,14 @@
         if (Board is not { } board) return [];
 
         var theirs = Booking?.Nights
-            .FirstOrDefault(n => n.HostedEventNightId == nightId)?.HostedEventLayoutUnitId;
+            .Where(n => n.HostedEventNightId == nightId)
+            .Select(n => n.HostedEventLayoutUnitId).ToHashSet() ?? [];
 
         return
         [
             .. board.UnitNights
                 .Where(n => n.HostedEventNightId == nightId)
-                .Where(n => n.NotOffered is null || n.HostedEventLayoutUnitId == theirs)
+                .Where(n => n.NotOffered is null || theirs.Contains(n.HostedEventLayoutUnitId))
                 .OrderBy(n => n.UnitName, StringComparer.OrdinalIgnoreCase)
                 .Select(n => (Id: n.HostedEventLayoutUnitId, Name: Describe(n)))
         ];
@@ -258,7 +275,7 @@
         _error = null;
 
         var nights = party.Kind == HostedEventBookingKind.Overnight
-            ? _where.Select(w => new HostedEventBookingNightChoice(w.Key, w.Value)).ToList()
+            ? Choices(_where)
             : [.. party.Nights.Select(n => new HostedEventBookingNightChoice(
                     n.HostedEventNightId, n.HostedEventLayoutUnitId))];
 

@@ -38,6 +38,7 @@ public static class MenuWords
         (MenuDietary.Vegan, "Vegan"), (MenuDietary.Vegetarian, "Vegetarian"), (MenuDietary.GlutenFree, "Gluten free"),
         (MenuDietary.DairyFree, "Dairy free"), (MenuDietary.NutFree, "Nut free"), (MenuDietary.Spicy, "Spicy"),
         (MenuDietary.Halal, "Halal"), (MenuDietary.Kosher, "Kosher"),
+        (MenuDietary.Alcohol, "Alcohol (21+, always priced on its own)"),
     ];
 
     public static readonly (MenuAllergen Mark, string Name)[] Allergens =

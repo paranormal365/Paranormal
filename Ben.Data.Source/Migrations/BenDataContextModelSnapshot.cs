@@ -2653,6 +2653,9 @@ namespace Ben.Data.Source.Migrations
                     b.Property<Guid?>("ConfirmedByAppUserId")
                         .HasColumnType("uniqueidentifier");
 
+                    b.Property<bool>("ConfirmsOnAccept")
+                        .HasColumnType("bit");
+
                     b.Property<Guid>("CreatedByAppUserId")
                         .HasColumnType("uniqueidentifier");
 
@@ -3948,6 +3951,9 @@ namespace Ben.Data.Source.Migrations
                     b.Property<DateTime?>("EndedAt")
                         .HasColumnType("datetime2");
 
+                    b.Property<DateTime?>("EventResultsConsentAtUtc")
+                        .HasColumnType("datetime2");
+
                     b.Property<Guid?>("FieldLaunchId")
                         .HasColumnType("uniqueidentifier");
 
@@ -4009,6 +4015,12 @@ namespace Ben.Data.Source.Migrations
                     b.Property<string>("RecordedByName")
                         .HasMaxLength(200)
                         .HasColumnType("nvarchar(200)");
+
+                    b.Property<DateTime?>("ShownWithEventResultsAtUtc")
+                        .HasColumnType("datetime2");
+
+                    b.Property<Guid?>("ShownWithEventResultsByAppUserId")
+                        .HasColumnType("uniqueidentifier");
 
                     b.Property<DateTime>("StartedAt")
                         .HasColumnType("datetime2");
@@ -4254,6 +4266,9 @@ namespace Ben.Data.Source.Migrations
                     b.Property<DateTime?>("ArchivedAtUtc")
                         .HasColumnType("datetime2");
 
+                    b.Property<bool>("AsksForVotes")
+                        .HasColumnType("bit");
+
                     b.Property<int>("BookingMode")
                         .HasColumnType("int");
 
@@ -4305,11 +4320,18 @@ namespace Ben.Data.Source.Migrations
                     b.Property<string>("Description")
                         .HasColumnType("nvarchar(max)");
 
+                    b.Property<string>("DoorTicketToken")
+                        .HasMaxLength(64)
+                        .HasColumnType("nvarchar(64)");
+
                     b.Property<DateTime?>("EndedAtUtc")
                         .HasColumnType("datetime2");
 
                     b.Property<DateTime>("EndsOn")
                         .HasColumnType("datetime2");
+
+                    b.Property<int?>("EvidenceDays")
+                        .HasColumnType("int");
 
                     b.Property<DateTime?>("FirstPublishedUtc")
                         .HasColumnType("datetime2");
@@ -4363,6 +4385,10 @@ namespace Ben.Data.Source.Migrations
                     b.Property<int?>("MinimumGuests")
                         .HasColumnType("int");
 
+                    b.Property<string>("MissedYouNote")
+                        .HasMaxLength(2000)
+                        .HasColumnType("nvarchar(2000)");
+
                     b.Property<string>("Name")
                         .IsRequired()
                         .HasMaxLength(160)
@@ -4380,6 +4406,16 @@ namespace Ben.Data.Source.Migrations
                     b.Property<DateTime?>("ProgrammePublishedUtc")
                         .HasColumnType("datetime2");
 
+                    b.Property<int?>("ResultsInDays")
+                        .HasColumnType("int");
+
+                    b.Property<DateTime?>("ResultsSentUtc")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("ResultsUrl")
+                        .HasMaxLength(500)
+                        .HasColumnType("nvarchar(500)");
+
                     b.Property<DateTime?>("RetentionWarnedMonthUtc")
                         .HasColumnType("datetime2");
 
@@ -4388,6 +4424,9 @@ namespace Ben.Data.Source.Migrations
 
                     b.Property<DateTime?>("RoomClosedUtc")
                         .HasColumnType("datetime2");
+
+                    b.Property<bool>("SendMissedYou")
+                        .HasColumnType("bit");
 
                     b.Property<bool>("SendThankYou")
                         .HasColumnType("bit");
@@ -4445,6 +4484,10 @@ namespace Ben.Data.Source.Migrations
                     b.HasKey("Id");
 
                     b.HasIndex("CreatedByAppUserId");
+
+                    b.HasIndex("DoorTicketToken")
+                        .IsUnique()
+                        .HasFilter("[DoorTicketToken] IS NOT NULL");
 
                     b.HasIndex("GoNoGoDecidedByAppUserId");
 
@@ -4592,6 +4635,9 @@ namespace Ben.Data.Source.Migrations
                         .ValueGeneratedOnAdd()
                         .HasColumnType("uniqueidentifier");
 
+                    b.Property<DateTime?>("AskedAtTheDoorUtc")
+                        .HasColumnType("datetime2");
+
                     b.Property<string>("CancellationReason")
                         .HasMaxLength(1000)
                         .HasColumnType("nvarchar(1000)");
@@ -4644,10 +4690,19 @@ namespace Ben.Data.Source.Migrations
                         .HasMaxLength(2000)
                         .HasColumnType("nvarchar(2000)");
 
+                    b.Property<DateTime?>("OrganizerMarkedUtc")
+                        .HasColumnType("datetime2");
+
+                    b.Property<bool?>("OrganizerSaysCame")
+                        .HasColumnType("bit");
+
                     b.Property<int>("PartySize")
                         .HasColumnType("int");
 
                     b.Property<DateTime?>("ProgrammeSeenUtc")
+                        .HasColumnType("datetime2");
+
+                    b.Property<DateTime?>("ResultsSentUtc")
                         .HasColumnType("datetime2");
 
                     b.Property<int>("Status")
@@ -5618,6 +5673,12 @@ namespace Ben.Data.Source.Migrations
                     b.Property<Guid>("AppUserId")
                         .HasColumnType("uniqueidentifier");
 
+                    b.Property<Guid?>("AttendanceRecordedByAppUserId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<DateTime?>("AttendedUtc")
+                        .HasColumnType("datetime2");
+
                     b.Property<Guid>("CreatedByAppUserId")
                         .HasColumnType("uniqueidentifier");
 
@@ -5713,6 +5774,9 @@ namespace Ben.Data.Source.Migrations
                         .HasColumnType("bit");
 
                     b.Property<bool>("SeesMenus")
+                        .HasColumnType("bit");
+
+                    b.Property<bool>("StartsSessions")
                         .HasColumnType("bit");
 
                     b.Property<string>("Token")
@@ -7117,6 +7181,9 @@ namespace Ben.Data.Source.Migrations
                     b.Property<Guid?>("MediaUploadFileId")
                         .HasColumnType("uniqueidentifier");
 
+                    b.Property<Guid?>("OrgCalendarEventId")
+                        .HasColumnType("uniqueidentifier");
+
                     b.Property<Guid?>("OrganizationId")
                         .HasColumnType("uniqueidentifier");
 
@@ -7175,6 +7242,9 @@ namespace Ben.Data.Source.Migrations
                         .HasFilter("[HostedEventId] IS NOT NULL");
 
                     b.HasIndex("MediaReviewState", "DateCreated");
+
+                    b.HasIndex("OrgCalendarEventId", "DateCreated")
+                        .HasFilter("[OrgCalendarEventId] IS NOT NULL");
 
                     b.HasIndex("PlaceId", "DateCreated")
                         .HasFilter("[PlaceId] IS NOT NULL");
@@ -18640,6 +18710,11 @@ namespace Ben.Data.Source.Migrations
                     b.HasOne("Ben.Data.Source.Entities.UploadFile", "MediaUploadFile")
                         .WithMany()
                         .HasForeignKey("MediaUploadFileId")
+                        .OnDelete(DeleteBehavior.NoAction);
+
+                    b.HasOne("Ben.Data.Source.Entities.OrgCalendarEvent", null)
+                        .WithMany()
+                        .HasForeignKey("OrgCalendarEventId")
                         .OnDelete(DeleteBehavior.NoAction);
 
                     b.HasOne("Ben.Data.Source.Entities.Organization", "Organization")

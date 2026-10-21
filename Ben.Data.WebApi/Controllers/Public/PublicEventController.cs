@@ -78,7 +78,7 @@ public sealed class PublicEventController : BenControllerBase
     [AllowAnonymous]
     public async Task<ActionResult<IReadOnlyList<PublicEventListItem>>> GetUpcoming(
         [FromQuery] string? orgUrlName, [FromQuery] int maxResults = 50, CancellationToken ct = default,
-        [FromQuery] bool includeMine = false)
+        [FromQuery] bool includeMine = false, [FromQuery(Name = "query")] string? searchText = null)
     {
         await using var db = await _db.CreateDbContextAsync(ct);
 
@@ -115,6 +115,17 @@ public sealed class PublicEventController : BenControllerBase
             if (org is null) return Ok(Array.Empty<PublicEventListItem>());
 
             query = query.Where(e => e.OrganizationId == org.Id);
+        }
+
+        // Words to look for (event-scenario-gaps: Ben's scenario has people "search for it"): the event's
+        // name, the group running it, its tour, or its town.
+        if (Words(searchText) is { } words)
+        {
+            foreach (var word in words)
+                query = query.Where(e => e.Title.ToLower().Contains(word)
+                                      || e.Organization.Name.ToLower().Contains(word)
+                                      || (e.Tour != null && e.Tour.Name.ToLower().Contains(word))
+                                      || (e.Place != null && e.Place.City != null && e.Place.City.ToLower().Contains(word)));
         }
 
         var events = await query
@@ -587,6 +598,15 @@ public sealed class PublicEventController : BenControllerBase
         return stars.Count == 0
             ? (null, 0)
             : (Math.Round((decimal)stars.Average(), 1, MidpointRounding.AwayFromZero), stars.Count);
+    }
+
+    /// <summary>The words of a search, lower-cased, at most five; null when there are none.</summary>
+    internal static IReadOnlyList<string>? Words(string? text)
+    {
+        var words = (text ?? "").ToLowerInvariant()
+            .Split([' ', ',', ';', '\t'], StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+            .Where(w => w.Length > 0).Distinct().Take(5).ToList();
+        return words.Count == 0 ? null : words;
     }
 
     internal static IQueryable<OrgCalendarEvent> VisibleEvents(BenDataContext db)

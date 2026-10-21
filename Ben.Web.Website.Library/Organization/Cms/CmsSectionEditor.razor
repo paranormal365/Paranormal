@@ -151,7 +151,7 @@ else if (SectionType == CmsSectionType.ImageBanner)
                       OnSelected="@OnBannerImageChosen" />
 }
 else if (SectionType is CmsSectionType.EventProgramme or CmsSectionType.EventBooking
-                     or CmsSectionType.EventGallery or CmsSectionType.EventVenue)
+                     or CmsSectionType.EventGallery or CmsSectionType.EventVenue or CmsSectionType.EventEvidence)
 {
     @* Item 235 phase 11: one of the group's events. Only events on the public site are offered — a page
        showing a draft would publish it — and the section keeps up with the event by itself. *@
@@ -1059,7 +1059,7 @@ else if (SectionType == CmsSectionType.MemberRoster)
         ParseContentJson();
 
         if (SectionType is CmsSectionType.EventProgramme or CmsSectionType.EventBooking
-                        or CmsSectionType.EventGallery or CmsSectionType.EventVenue)
+                        or CmsSectionType.EventGallery or CmsSectionType.EventVenue or CmsSectionType.EventEvidence)
             await LoadEventsAsync();
 
         if (SectionType is CmsSectionType.EmbeddedInvestigations or CmsSectionType.EmbeddedCases
@@ -1122,7 +1122,7 @@ else if (SectionType == CmsSectionType.MemberRoster)
                 ParseCaseMedia(root);
             }
             else if (SectionType is CmsSectionType.EventProgramme or CmsSectionType.EventBooking
-                              or CmsSectionType.EventGallery or CmsSectionType.EventVenue)
+                              or CmsSectionType.EventGallery or CmsSectionType.EventVenue or CmsSectionType.EventEvidence)
             {
                 _eventId = root.TryGetProperty("eventId", out var ev) ? ev.GetString() ?? "" : "";
             }

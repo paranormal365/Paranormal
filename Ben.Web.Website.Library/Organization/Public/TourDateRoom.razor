@@ -1,0 +1,127 @@
+@namespace Ben.Web.Website.Library.Organization.Public
+@using Ben.Service.Models.Entities
+@using Ben.Web.Services
+@using Ben.Web.Services.WebApi
+@using Ben.Web.Website.Library.Kit
+@inject IBenAdminClient AdminClient
+@inject IBenUserState UserState
+
+@* A tour date's room (event-scenario-gaps): the people checked in on the walk and its guides.
+
+   RENDERS NOTHING FOR ANYBODY ELSE. The server answers with nothing (a 204) for anybody who wasn't
+   checked in and isn't running the walk, and the page does not advertise a room they can't enter.
+   A refusal of any other kind is said, never shown as an empty room.
+
+   THE GUIDES STAND OUT. Ben, 10/20/2026: "if there is a leader or organizer or guide, their response
+   or text is given a different color". *@
+
+@if (_room.Failed)
+{
+    <section class="mb-4" id="tour-room">
+        <BenSectionHeading Text="The walk's room" />
+        <div class="alert alert-warning py-2" role="alert" id="tour-room-failed">@(_room.Reason ?? "The walk's room couldn't be read just now.")</div>
+    </section>
+}
+else if (_room.Item is { } room)
+{
+    <section class="mb-4" id="tour-room">
+        <BenSectionHeading Text="The walk's room" />
+        <p class="small text-secondary mb-2">
+            For the people checked in on this walk and its guides, to stay in touch.
+        </p>
+
+        @if (_note is { Length: > 0 })
+        {
+            <div class="alert alert-success py-2" role="status" id="tour-room-note">@_note</div>
+        }
+        @if (_error is { Length: > 0 })
+        {
+            <div class="alert alert-danger py-2" role="alert" id="tour-room-error">@_error</div>
+        }
+
+        @if (room.CanPost)
+        {
+            <div class="mb-3">
+                <label class="form-label small mb-1" for="tour-room-body">Write to everybody on the walk</label>
+                <textarea class="form-control" id="tour-room-body" rows="2" maxlength="1000"
+                          @bind="_body" @bind:event="oninput"></textarea>
+                <button type="button" class="btn btn-primary btn-sm mt-2" id="tour-room-post"
+                        disabled="@(_busy || string.IsNullOrWhiteSpace(_body))" @onclick="PostAsync">
+                    @(_busy ? "Posting…" : "Post")
+                </button>
+            </div>
+        }
+        else if (room.WhyNotPost is { Length: > 0 } why)
+        {
+            <div class="alert alert-secondary py-2 small" id="tour-room-closed">@why</div>
+        }
+
+        @if (room.Messages.Count == 0)
+        {
+            <div class="text-secondary small" id="tour-room-empty">Nothing here yet.</div>
+        }
+        <div class="list-group">
+            @foreach (var message in room.Messages)
+            {
+                var m = message;
+                <div class="list-group-item tour-room-message @(m.AuthorRole is not null ? "border-start border-4 border-primary" : "")"
+                     data-message="@m.Id" data-role="@m.AuthorRole">
+                    <div class="d-flex flex-wrap gap-2 small text-secondary align-items-center">
+                        <strong class="text-body">@m.AuthorName</strong>
+                        @if (m.AuthorRole is { Length: > 0 } role)
+                        {
+                            <span class="badge text-bg-primary" data-testid="tour-room-role">@role</span>
+                        }
+                        <span>@m.PostedUtc.ToViewerLocalTime(UserState).ToDisplayDateTime()</span>
+                        @if (m.IsMine || room.MyRole is not null)
+                        {
+                            <button type="button" class="btn btn-link btn-sm p-0 ms-auto text-nowrap" disabled="@_busy"
+                                    @onclick="() => RemoveAsync(m)">Take down</button>
+                        }
+                    </div>
+                    <div class="mt-1" style="white-space:pre-line;overflow-wrap:anywhere;">@m.Body</div>
+                </div>
+            }
+        </div>
+    </section>
+}
+
+@code {
+    /// <summary>The tour date (an <c>OrgCalendarEvent</c> with a tour).</summary>
+    [Parameter, EditorRequired] public Guid DateId { get; set; }
+
+    private ItemResult<TourRoomRecord> _room;
+    private string? _body, _note, _error;
+    private bool _busy;
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (!firstRender) return;
+        if (!await UserState.WaitUntilAuthReadyAsync(RendererInfo.IsInteractive)) return;
+        if (!UserState.IsAuthenticated) return;
+
+        _room = await AdminClient.GetTourRoomAsync(DateId);
+        StateHasChanged();
+    }
+
+    private async Task PostAsync()
+    {
+        if (string.IsNullOrWhiteSpace(_body)) return;
+        _busy = true; _note = null; _error = null;
+        var (room, error) = await AdminClient.PostTourRoomAsync(DateId, _body.Trim());
+        _busy = false;
+        if (room is null) { _error = error ?? "That couldn't be posted just now."; return; }
+        _room = ItemResult<TourRoomRecord>.Ok(room);
+        _body = null;
+    }
+
+    private async Task RemoveAsync(TourRoomMessageRecord message)
+    {
+        _busy = true; _note = null; _error = null;
+        var (room, error) = await AdminClient.RemoveTourRoomMessageAsync(DateId, message.Id);
+        _busy = false;
+        if (room is null) { _error = error ?? "That couldn't be taken down just now."; return; }
+        _room = ItemResult<TourRoomRecord>.Ok(room);
+        _note = room.Note;
+    }
+}

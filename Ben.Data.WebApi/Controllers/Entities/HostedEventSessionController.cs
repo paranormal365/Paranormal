@@ -157,21 +157,104 @@ public sealed class HostedEventSessionController : OrgCmsControllerBase
         if (userId is null) return Unauthorized();
 
         await using var db = await DbFactory.CreateDbContextAsync(ct);
-        if (!await _access.CanReadBookingsAsync(userId.Value, orgId, eventId, db, ct)) return Forbid();
+        // The door may read it too: it marks who came to a class (event-scenario-gaps), and sees names at the door anyway.
+        if (!await MayMarkAttendanceAsync(userId.Value, orgId, eventId, db, ct)) return Forbid();
 
         var session = await db.HostedEventSessions.AsNoTracking()
             .Include(s => s.SignUps).ThenInclude(u => u.AppUser)
             .FirstOrDefaultAsync(s => s.Id == sessionId && s.HostedEventId == eventId && s.HostedEvent.OrganizationId == orgId, ct);
         if (session is null) return NotFound();
 
-        HostedEventSessionRosterLine Line(HostedEventSessionSignUp u) => new(
-            u.Id, u.AppUser?.DisplayName ?? u.AppUser?.Email ?? "A guest", u.People, u.DateCreated, u.HostedEventBookingId is null);
+        return Ok(RosterOf(session, await MayMarkAttendanceAsync(userId.Value, orgId, eventId, db, ct)));
+    }
 
-        return Ok(new HostedEventSessionRosterRecord(
+    private static HostedEventSessionRosterRecord RosterOf(HostedEventSession session, bool canMark)
+    {
+        HostedEventSessionRosterLine Line(HostedEventSessionSignUp u) => new(
+            u.Id, u.AppUser?.DisplayName ?? u.AppUser?.Email ?? "A guest", u.People, u.DateCreated, u.HostedEventBookingId is null,
+            u.AttendedUtc);
+
+        return new HostedEventSessionRosterRecord(
             session.Id, session.Title,
             [.. session.SignUps.Where(u => u.WaitlistedUtc is null).OrderBy(u => u.DateCreated).Select(Line)],
-            [.. session.SignUps.Where(u => u.WaitlistedUtc is not null).OrderBy(u => u.WaitlistedUtc).ThenBy(u => u.DateCreated).Select(Line)]));
+            [.. session.SignUps.Where(u => u.WaitlistedUtc is not null).OrderBy(u => u.WaitlistedUtc).ThenBy(u => u.DateCreated).Select(Line)],
+            SessionSignUps.PeopleThere(session.SignUps),
+            canMark);
     }
+
+    /// <summary>
+    /// Every class that takes sign-ups, with who has a place, for whoever marks who came: the group and the
+    /// event's door helpers (Ben, 10/21/2026: door helpers get a page and an app screen for it).
+    /// </summary>
+    /// <remarks>
+    /// The door helper can't open the program itself (that's the group's), so this is the one read they
+    /// need: each class's time, where it is, and its roster. Called-off classes are left out.
+    /// </remarks>
+    [HttpGet("attendance")]
+    public async Task<ActionResult<HostedEventClassesRecord>> Classes(Guid orgId, Guid eventId, CancellationToken ct)
+    {
+        var userId = GetCurrentUserId();
+        if (userId is null) return Unauthorized();
+
+        await using var db = await DbFactory.CreateDbContextAsync(ct);
+        if (!await MayMarkAttendanceAsync(userId.Value, orgId, eventId, db, ct)) return Forbid();
+
+        var hosted = await db.HostedEvents.AsNoTracking()
+            .FirstOrDefaultAsync(e => e.Id == eventId && e.OrganizationId == orgId, ct);
+        if (hosted is null) return NotFound();
+
+        var sessions = await db.HostedEventSessions.AsNoTracking()
+            .Include(s => s.SignUps).ThenInclude(u => u.AppUser)
+            .Include(s => s.PlaceRoom)
+            .Where(s => s.HostedEventId == eventId && s.RequiresSignUp && s.CalledOffUtc == null)
+            .OrderBy(s => s.StartsAtUtc).ThenBy(s => s.SortOrder)
+            .ToListAsync(ct);
+
+        return Ok(new HostedEventClassesRecord(
+            hosted.Id, hosted.Name, hosted.TimeZoneId,
+            [.. sessions.Select(s => new HostedEventClassRecord(
+                s.Id, s.Title, s.StartsAtUtc, s.EndsAtUtc, s.PlaceRoom?.Name ?? s.LocationText, s.LedBy, s.Capacity,
+                RosterOf(s, canMark: true)))]));
+    }
+
+    /// <summary>
+    /// Marks somebody as there at a class, or not (event-scenario-gaps: Ben's "classes … with either
+    /// limits on people who could attend and track who attends").
+    /// </summary>
+    /// <remarks>
+    /// The people who read the roster or run the door may mark it; the class's leader is a name on the
+    /// program, not an account. Only somebody with a place in the class can be marked there — a person
+    /// still waiting was never let in.
+    /// </remarks>
+    [HttpPut("{sessionId:guid}/sign-ups/{signUpId:guid}/attended")]
+    public async Task<ActionResult<HostedEventSessionRosterRecord>> SetAttended(
+        Guid orgId, Guid eventId, Guid sessionId, Guid signUpId,
+        [FromBody] SetHostedEventSessionAttendanceRequest request, CancellationToken ct)
+    {
+        var userId = GetCurrentUserId();
+        if (userId is null) return Unauthorized();
+
+        await using (var db = await DbFactory.CreateDbContextAsync(ct))
+        {
+            if (!await MayMarkAttendanceAsync(userId.Value, orgId, eventId, db, ct)) return Forbid();
+
+            var signUp = await db.HostedEventSessionSignUps
+                .FirstOrDefaultAsync(u => u.Id == signUpId && u.HostedEventSessionId == sessionId
+                                       && u.HostedEventSession.HostedEventId == eventId
+                                       && u.HostedEventSession.HostedEvent.OrganizationId == orgId, ct);
+            if (signUp is null) return NotFound();
+            if (SessionSignUps.WhyAttendanceCannotBeMarked(signUp) is { } why) return BadRequest(why);
+
+            SessionSignUps.MarkAttended(signUp, request.Attended, userId.Value, DateTime.UtcNow);
+            await db.SaveChangesAsync(ct);
+        }
+
+        return await Roster(orgId, eventId, sessionId, ct);
+    }
+
+    private async Task<bool> MayMarkAttendanceAsync(Guid userId, Guid orgId, Guid eventId, BenDataContext db, CancellationToken ct)
+        => await _access.CanReadBookingsAsync(userId, orgId, eventId, db, ct)
+        || await _access.CanRunTheDoorAsync(userId, orgId, eventId, db, ct);
 
     /// <summary>Takes somebody off a session, and moves the queue up.</summary>
     [HttpDelete("{sessionId:guid}/sign-ups/{signUpId:guid}")]

@@ -163,6 +163,7 @@
         }
 
         <div class="table-responsive">
+            @if (_consentError is { Length: > 0 }) { <div class="alert alert-danger py-2" role="alert" data-testid="consent-error">@_consentError</div> }
             <table class="table table-sm align-middle">
                 <thead>
                     <tr>
@@ -218,6 +219,19 @@
                                         the group's
                                     </span>
                                 }
+                                @if (row.HostedEventId is not null && row.InvestigationId is null)
+                                {
+                                    @* Shown with the event's results (event-scenario-gaps): only if they agree, as with
+                                       evidence at a public event — and they're told what it means before they do. *@
+                                    var it = row;
+                                    <div class="form-check form-switch d-inline-block ms-2 text-start align-middle"
+                                         title="If the organizers show it with the event's results, anybody can play it, credited to you. Your exact position is never shown.">
+                                        <input class="form-check-input" type="checkbox" id="@($"show-with-results-{it.Id:N}")"
+                                               checked="@(it.EventResultsConsentAtUtc is not null)" disabled="@_consentBusy"
+                                               @onchange="e => ConsentAsync(it, e.Value is true)" />
+                                        <label class="form-check-label small" for="@($"show-with-results-{it.Id:N}")">May be shown with the results</label>
+                                    </div>
+                                }
                             </td>
                         </tr>
                     }
@@ -254,6 +268,21 @@
 
 @code {
     private IReadOnlyList<FieldSessionSummaryRecord>? _rows;
+    private bool _consentBusy;
+    private string? _consentError;
+
+    /// <summary>
+    /// The sender agrees, or stops agreeing, that the event's organizers may show this session with the
+    /// results, publicly and credited to them (event-scenario-gaps). Stopping takes it off at once.
+    /// </summary>
+    private async Task ConsentAsync(FieldSessionSummaryRecord row, bool agree)
+    {
+        _consentBusy = true; _consentError = null;
+        var (done, error) = await AdminClient.SetSessionResultsConsentAsync(row.Id, agree);
+        _consentBusy = false;
+        if (!done) { _consentError = error; return; }
+        _rows = [.. (_rows ?? []).Select(r => r.Id == row.Id ? r with { EventResultsConsentAtUtc = agree ? DateTime.UtcNow : null } : r)];
+    }
     private List<InvestigationMapPin> _pins = [];
     private int     _withoutFix;
     private int     _mapTotal;

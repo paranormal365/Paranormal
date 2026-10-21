@@ -38,6 +38,54 @@ public static class EventMenuPresentation
     public static bool AllIncludedInEvent(EventMenuRecord menu)
         => Entries(menu).Any() && Entries(menu).All(e => e.Pricing == MenuPricing.IncludedInEvent);
 
+    /// <summary>
+    /// What the event's price covers, in words — "Friday breakfast and some of Snack table" — or null
+    /// when no menu has anything covered by it.
+    /// </summary>
+    /// <remarks>
+    /// Ben, 10/13/2026: "If the price is included in the event price, it will be notated in the event
+    /// ticket information." The event page, the confirmation letter and the pass all say this, from here
+    /// (event-scenario-gaps: until then only the event page did).
+    /// </remarks>
+    public static string? IncludedWithTheEvent(IEnumerable<EventMenuRecord> menus)
+    {
+        var covered = menus.Where(m => Entries(m).Any(e => e.Pricing == MenuPricing.IncludedInEvent)).ToList();
+        if (covered.Count == 0) return null;
+        var names = covered.Select(m =>
+        {
+            var what = m.ThroughoutTheEvent ? m.ShownHeading
+                     : m.Meals.Count == 1 ? $"{m.Meals[0].NightDate:dddd} {m.Meals[0].MealTitle.ToLowerInvariant()}"
+                     : m.ShownHeading;
+            return AllIncludedInEvent(m) ? what : $"some of {what}";
+        }).Distinct().ToList();
+        return names.Count switch
+        {
+            1 => names[0],
+            _ => string.Join(", ", names.Take(names.Count - 1)) + " and " + names[^1],
+        };
+    }
+
+    /// <summary>
+    /// The published menus served on one date, as one line for a calendar — "Dinner: Séance supper ·
+    /// Throughout the event: Snack table" — or null when nothing is served that day.
+    /// </summary>
+    /// <remarks>
+    /// Ben's menu rules: "When published, it will appear on the site in the calendar for the event." The
+    /// group's calendar entry and the calendar files say the same thing, from here (event-scenario-gaps).
+    /// </remarks>
+    public static string? OnTheDate(IEnumerable<EventMenuRecord> menus, DateTime date)
+    {
+        var list = menus.ToList();
+        var served = list
+            .SelectMany(m => m.Meals.Where(x => x.NightDate.Date == date.Date).Select(x => (Meal: x, Menu: m)))
+            .OrderBy(p => p.Meal.ServedAtLocal ?? TimeSpan.MaxValue)
+            .Select(p => $"{p.Meal.MealTitle}: {p.Menu.ShownHeading}")
+            .Concat(list.Where(m => m.ThroughoutTheEvent).Select(m => $"Throughout the event: {m.ShownHeading}"))
+            .Distinct()
+            .ToList();
+        return served.Count == 0 ? null : string.Join(" · ", served);
+    }
+
     /// <summary>The line under the heading for a menu the event pays for, or null.</summary>
     public static string? IncludedLine(EventMenuRecord menu)
         => AllIncludedInEvent(menu) ? "Included with the event" : null;
@@ -60,6 +108,7 @@ public static class EventMenuPresentation
         (MenuDietary.Spicy, "S", "spicy"),
         (MenuDietary.Halal, "H", "halal"),
         (MenuDietary.Kosher, "K", "kosher"),
+        (MenuDietary.Alcohol, "21+", "alcohol, 21 and over"),
     ];
 
     private static readonly (MenuAllergen Mark, string Words)[] AllergenWords =

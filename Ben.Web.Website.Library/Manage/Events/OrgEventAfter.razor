@@ -80,7 +80,7 @@
                     </div>
                     <p class="small text-secondary" id="after-send-hint">
                         It is sent automatically the morning after the event ends, to
-                        @(a.GuestsToThank switch { 0 => "every confirmed booking (there are none yet)", 1 => "the one confirmed booking", var n => $"all {n} confirmed bookings" }).
+                        @(a.GuestsToThank switch { 0 => "every confirmed booking (there are none yet)", 1 => "the one confirmed booking", var n => $"all {n} confirmed bookings" })@(a.GuestsMissed is > 0 ? " that were checked in" : "").
                         It includes your note below@(_reviews ? ", a link to leave a review" : "")@(a.HasGallery ? ", a link to the gallery" : ""),
                         and up to three of your upcoming events.
                     </p>
@@ -95,9 +95,152 @@
                     <label class="form-check-label" for="after-allow-reviews">Let attendees leave a review</label>
                 </div>
 
+                @* We missed you (event-scenario-gaps): Ben's "we missed you letters to those who were unable
+                   to attend". Only when the door checked people in, because otherwise nobody knows who came. *@
+                <hr />
+                <div class="form-check form-switch mb-2">
+                    <input class="form-check-input" type="checkbox" id="after-send-missed" @bind="_sendMissed" />
+                    <label class="form-check-label" for="after-send-missed">
+                        Email a "we missed you" letter to people with a place who weren't checked in
+                    </label>
+                </div>
+                <p class="small text-secondary" id="after-missed-hint">
+                    @(a.GuestsMissed switch
+                    {
+                        null => "Nobody was checked in at the door, so everybody with a place gets the thank-you instead.",
+                        0 => "Everybody with a place was checked in, so nobody gets this letter.",
+                        1 => "1 booking with a place wasn't checked in. They get this letter instead of the thank-you.",
+                        var n => $"{n} bookings with a place weren't checked in. They get this letter instead of the thank-you.",
+                    })
+                </p>
+                <label class="form-label small mb-1" for="after-missed-note">Your note (appears at the top of that letter)</label>
+                <textarea class="form-control mb-2" id="after-missed-note" rows="3" maxlength="2000"
+                          placeholder="e.g. We're sorry you couldn't make it. We'd love to see you in the spring."
+                          @bind="_missedNote" @bind:event="oninput"></textarea>
+
+                @if (a.CollectsEvidence)
+                {
+                    @* The evidence window (event-scenario-gaps): Jim "was accepting evidence for three days", and
+                       the letters said the evidence would be ready "in about a week". *@
+                    <hr />
+                    <div class="row g-2">
+                        <div class="col-sm-6">
+                            <label class="form-label small mb-1" for="after-evidence-days">Accept evidence for (days after the event)</label>
+                            <input class="form-control form-control-sm" id="after-evidence-days" type="number" min="1" max="60" step="1"
+                                   placeholder="No deadline" @bind="_evidenceDays" @bind:event="oninput" />
+                        </div>
+                        <div class="col-sm-6">
+                            <label class="form-label small mb-1" for="after-results-days">Results ready in about (days)</label>
+                            <input class="form-control form-control-sm" id="after-results-days" type="number" min="1" max="90" step="1"
+                                   placeholder="Don't say" @bind="_resultsInDays" @bind:event="oninput" />
+                        </div>
+                    </div>
+                    @if (a.EvidenceDeadlineUtc is { } deadline)
+                    {
+                        <p class="small text-secondary mt-1 mb-0" id="after-evidence-deadline">
+                            Evidence is accepted until @deadline.ToViewerLocalTime(UserState).ToString("h:mm tt on MM/dd/yyyy").
+                        </p>
+                    }
+                    <p class="small text-secondary mt-1">Both letters say this, and the event's page shows the deadline.</p>
+
+                    <div class="form-check form-switch mt-2">
+                        <input class="form-check-input" type="checkbox" id="after-asks-votes" @bind="_asksVotes" />
+                        <label class="form-check-label" for="after-asks-votes">Ask people to vote for the best evidence</label>
+                    </div>
+                    <p class="small text-secondary">
+                        The evidence you accept is shown with the most "confirms" votes first, then in the order it was caught.
+                    </p>
+                }
+
                 <button type="button" class="btn btn-primary btn-sm mt-3" id="after-save" disabled="@_busy" @onclick="SaveAsync">
                     @(_busy ? "Saving…" : "Save")
                 </button>
+            </div>
+        </div>
+
+        @* Who came (Ben, 10/21/2026): the organizer marks who came before the letters go. The door's scans
+           start the list; the organizer's mark wins, and the letters go by what this list says. *@
+        @if (a.Guests is { Count: > 0 } guests)
+        {
+            <div class="card mb-3" id="after-who-came">
+                <div class="card-header fw-semibold">Who came</div>
+                <div class="card-body">
+                    <p class="small text-secondary">
+                        The thank-you goes to everyone marked as here, and the we-missed-you letter to the rest.
+                        Ticks start from the door's scans; change any that are wrong before the letters go, the
+                        morning after the event ends.
+                        @if (guests.All(g => !g.CheckedInAtTheDoor) && guests.All(g => g.OrganizerSaysCame is null))
+                        {
+                            <text>Nobody was checked in or marked yet, so for now everyone counts as here.</text>
+                        }
+                    </p>
+                    <ul class="list-group list-group-flush">
+                        @foreach (var guest in guests)
+                        {
+                            var g = guest;
+                            <li class="list-group-item d-flex flex-wrap gap-2 align-items-center justify-content-between px-0" data-booking="@g.BookingId">
+                                <div style="min-width:0;">
+                                    <span class="fw-semibold" style="overflow-wrap:anywhere;">@g.Name</span>
+                                    <span class="small text-secondary">· @(g.PartySize == 1 ? "1 person" : $"{g.PartySize} people")</span>
+                                    @if (g.CheckedInAtTheDoor) { <span class="badge text-bg-secondary ms-1">Checked in at the door</span> }
+                                    @if (g.Lettered) { <span class="badge bg-body-secondary text-body-emphasis ms-1">Letter sent</span> }
+                                </div>
+                                <div class="form-check form-switch mb-0">
+                                    <input class="form-check-input" type="checkbox" id="@($"came-{g.BookingId:N}")" style="min-width:2.5rem;min-height:1.5rem;"
+                                           checked="@g.Came" disabled="@(_busy || g.Lettered)"
+                                           @onchange="e => MarkCameAsync(g, e.Value is true)" />
+                                    <label class="form-check-label" for="@($"came-{g.BookingId:N}")">Here</label>
+                                </div>
+                            </li>
+                        }
+                    </ul>
+                </div>
+            </div>
+        }
+
+        @* The results letter (event-scenario-gaps): Jim "sent a final email to the guests with a link to the
+           evidence page and a QR code to jump there directly if they didn't have the iPhone app". *@
+        <div class="card mb-3" id="after-results">
+            <div class="card-header fw-semibold">The results</div>
+            <div class="card-body">
+                <p class="small text-secondary">
+                    When the evidence is ready, send everybody who had a place a letter with a link and a QR code
+                    to it. @(a.AcceptedEvidence == 1 ? "1 piece of evidence is accepted so far." : $"{a.AcceptedEvidence} pieces of evidence are accepted so far.")
+                </p>
+                <label class="form-label small mb-1" for="after-results-url">Results page</label>
+                <input class="form-control form-control-sm" id="after-results-url" maxlength="500"
+                       placeholder="Leave empty for the event's own page, or a page you built, like /o/your-group/results"
+                       @bind="_resultsUrl" @bind:event="oninput" />
+                <p class="small text-secondary mt-1">
+                    You can build a results page with the page editor: add the section "An event's evidence".
+                    Save before sending if you change this.
+                </p>
+                @if (a.ResultsPath is { Length: > 0 } path)
+                {
+                    <p class="small mb-2">The letter links to <a href="@path" id="after-results-link" target="_blank" rel="noopener">@path</a>.</p>
+                }
+
+                <label class="form-label small mb-1" for="after-results-note">A few words above the link (optional)</label>
+                <textarea class="form-control mb-2" id="after-results-note" rows="3" maxlength="2000"
+                          placeholder="e.g. Thank you for everything you sent. Here's what we caught."
+                          @bind="_resultsNote" @bind:event="oninput"></textarea>
+
+                @if (a.ResultsSentUtc is { } resultsSent)
+                {
+                    <p class="small mb-2" id="after-results-sent">
+                        Sent @resultsSent.ToViewerLocalTime(UserState).ToString("MM/dd/yyyy") to
+                        @(a.GuestsSentResults == 1 ? "1 booking" : $"{a.GuestsSentResults} bookings").
+                        Sending again reaches only people who haven't had it.
+                    </p>
+                }
+                <button type="button" class="btn btn-outline-primary btn-sm" id="after-send-results" disabled="@(_busy || !IsOver(a))"
+                        @onclick="SendResultsAsync">
+                    @(_busy ? "Sending…" : "Send the results letter")
+                </button>
+                @if (!IsOver(a))
+                {
+                    <span class="small text-secondary ms-2" id="after-results-wait">You can send it once the event is over.</span>
+                }
             </div>
         </div>
 
@@ -157,6 +300,12 @@
     private string? _note, _error;
     private bool _send, _reviews;
     private string? _thankYouNote;
+    private bool _sendMissed = true, _asksVotes;
+    private string? _missedNote, _resultsUrl, _resultsNote;
+    private int? _evidenceDays, _resultsInDays;
+
+    private static bool IsOver(HostedEventAfterRecord a)
+        => a.LifecycleState is HostedEventLifecycleState.Ended or HostedEventLifecycleState.Archived;
 
     protected override async Task OnAfterRenderAsync(bool firstRender)
     {
@@ -175,17 +324,51 @@
         _send = after.SendThankYou;
         _reviews = after.AllowReviews;
         _thankYouNote = after.ThankYouNote;
+        _sendMissed = after.SendMissedYou;
+        _missedNote = after.MissedYouNote;
+        _asksVotes = after.AsksForVotes;
+        _resultsUrl = after.ResultsUrl;
+        _evidenceDays = after.EvidenceDays;
+        _resultsInDays = after.ResultsInDays;
     }
 
     private async Task SaveAsync()
     {
         _busy = true; _note = null; _error = null;
         var (saved, error) = await AdminClient.SetHostedEventAfterAsync(OrgId, EventId,
-            new SetHostedEventAfterRequest(_reviews, _send, _thankYouNote));
+            new SetHostedEventAfterRequest(_reviews, _send, _thankYouNote,
+                EvidenceDays: _evidenceDays, ResultsInDays: _resultsInDays, SendMissedYou: _sendMissed,
+                MissedYouNote: _missedNote, AsksForVotes: _asksVotes, ResultsUrl: _resultsUrl, SetsEvidence: true));
         _busy = false;
         if (saved is null) { _error = error ?? "That couldn't be saved just now."; return; }
         Take(saved);
         _note = "Saved.";
+    }
+
+    private async Task MarkCameAsync(HostedEventAfterGuestRecord guest, bool came)
+    {
+        _busy = true; _note = null; _error = null;
+        var (saved, error) = await AdminClient.SetGuestCameAsync(OrgId, EventId, guest.BookingId, came);
+        _busy = false;
+        if (saved is null) { _error = error ?? "That couldn't be marked just now."; return; }
+        Take(saved);
+        _note = came ? $"{guest.Name} is marked as here." : $"{guest.Name} is marked as not here.";
+    }
+
+    private async Task SendResultsAsync()
+    {
+        _busy = true; _note = null; _error = null;
+        var (sent, error) = await AdminClient.SendEventResultsAsync(OrgId, EventId, new SendHostedEventResultsRequest(_resultsNote));
+        _busy = false;
+        if (sent is null) { _error = error ?? "The results letter couldn't be sent just now."; return; }
+        Take(sent.After);
+        _note = sent.Sent switch
+        {
+            0 when sent.AlreadySent > 0 => "Everybody with a place already has the results letter.",
+            0 => "Nobody with a place has an email address to send it to.",
+            1 => "Sent to 1 booking.",
+            var n => $"Sent to {n} bookings.",
+        };
     }
 
     private async Task HideAsync(TourReviewRecord review, bool hide)

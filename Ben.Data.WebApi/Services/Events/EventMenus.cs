@@ -122,8 +122,10 @@ public static class EventMenus
     /// What is wrong with a menu as sent, in a sentence, or null. Checked before anything is
     /// written, so a refused save changes nothing.
     /// </summary>
+    /// <param name="alcoholItems">Items marked alcohol: those must be priced on its own (Ben, 10/21/2026).</param>
     public static string? WhyItCannotBeSaved(
-        SaveEventMenuRequest r, ISet<Guid> usableItems, ISet<Guid> categories, ISet<Guid> meals)
+        SaveEventMenuRequest r, ISet<Guid> usableItems, ISet<Guid> categories, ISet<Guid> meals,
+        ISet<Guid>? alcoholItems = null)
     {
         if (string.IsNullOrWhiteSpace(r.Title)) return "Give the menu a name, so you can tell it from the others.";
         if (r.Title.Trim().Length > 120) return "The menu's name can be at most 120 characters.";
@@ -152,6 +154,8 @@ public static class EventMenus
                 if (!Enum.IsDefined(e.Pricing)) return "Say how each item is paid for.";
                 if (e.Pricing == MenuPricing.PricedSeparately && e.Price is null)
                     return "An item priced on its own needs its price.";
+                if (alcoholItems?.Contains(e.MenuLibraryItemId) == true && e.Pricing != MenuPricing.PricedSeparately)
+                    return "Alcohol is always priced on its own. Set it to \"Priced on its own\" and give its price.";
                 if (e.Price is < 0) return "A price can't be less than zero.";
                 if (e.Note?.Trim().Length > 200) return "A note on an item can be at most 200 characters.";
             }

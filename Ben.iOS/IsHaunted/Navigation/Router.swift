@@ -146,9 +146,17 @@ enum AppRoute: Hashable {
     case eventMenus(UUID)
     case eventDownloads(UUID)
     case eventRoom(UUID, addPhotos: Bool = false)
+    /// The evidence the organizers accepted, ranked, and the results page (event-scenario-gaps).
+    case eventResults(UUID)
+    /// A tour date's room, for the people checked in on the walk and its guides, by the date's id.
+    case tourRoom(UUID)
+    /// Writing to an event's organizers, for somebody with a booking there (event-scenario-gaps).
+    case eventOrganizerThread(UUID)
     /// The events this person may run the door at, and one night's door (item 235 phase 14c).
     case doorDuties
     case door(organizationId: UUID, hostedEventId: UUID)
+    /// Who came to each class, for the door (Ben, 10/21/2026).
+    case classAttendance(organizationId: UUID, hostedEventId: UUID)
     /// One tour, by the addresses its public page uses (item 234).
     ///
     /// Carried as SLUGS rather than as an id because that is what the public endpoint takes, and

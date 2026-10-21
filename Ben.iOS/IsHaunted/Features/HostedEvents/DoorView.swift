@@ -65,6 +65,13 @@ struct DoorView: View {
         .permissionRefusedAlert($refusedPermission)
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
+            // Who came to each class, from the door (Ben, 10/21/2026).
+            ToolbarItem(placement: .secondaryAction) {
+                NavigationLink(value: AppRoute.classAttendance(organizationId: organizationId, hostedEventId: hostedEventId)) {
+                    Label("Who's at the classes", systemImage: "person.crop.rectangle.stack")
+                }
+                .accessibilityIdentifier("door-classes")
+            }
             if let door, door.nights.count > 1 {
                 ToolbarItem(placement: .primaryAction) {
                     Menu {

@@ -492,7 +492,35 @@ public sealed record HostedEventDietaryRecord(
 public sealed record InviteHostedEventGuestRequest(
     string Email,
     string? DisplayName = null,
-    int PartySize = 1);
+    int PartySize = 1,
+    /// <summary>
+    /// A ticket rather than an invitation: the organizer has said yes (they have been paid, or it is
+    /// free), so clicking the link confirms the place and sends the pass (event-scenario-gaps).
+    /// </summary>
+    bool ConfirmsOnAccept = false,
+    /// <summary>The organizer's own few words, at the top of the letter. Plain text.</summary>
+    string? Message = null);
+
+/// <summary>
+/// Inviting a list of people at once (event-scenario-gaps: Jim "has a list of people he is going to ask
+/// to come. He creates email on our site and sends it out").
+/// </summary>
+/// <param name="Emails">Addresses, however they were pasted: one a line, or separated by commas or spaces.</param>
+public sealed record InviteHostedEventGuestsRequest(
+    string Emails,
+    string? Message = null,
+    int PartySize = 1,
+    bool ConfirmsOnAccept = false);
+
+/// <summary>What came of inviting a list.</summary>
+/// <param name="Invited">Addresses a letter was written to.</param>
+/// <param name="AlreadyAccepted">Addresses that had already accepted an earlier invitation.</param>
+/// <param name="NotAddresses">Pieces of the list that were not email addresses, as typed.</param>
+public sealed record HostedEventGuestInvitesRecord(
+    IReadOnlyList<string> Invited,
+    IReadOnlyList<string> AlreadyAccepted,
+    IReadOnlyList<string> NotAddresses,
+    bool Sent);
 
 /// <summary>
 /// What came of asking somebody by email.
@@ -575,7 +603,9 @@ public sealed record HostedEventStaffRecord(
     bool SeesFiles,
     bool Accepted,
     DateTime? DateExpires,
-    DateTime DateCreated);
+    DateTime DateCreated,
+    /// <summary>May start the event's sessions (event-scenario-gaps). Additive, so older apps ignore it.</summary>
+    bool StartsSessions = false);
 
 /// <summary>Everybody helping at one event.</summary>
 public sealed record HostedEventStaffListRecord(
@@ -598,7 +628,8 @@ public sealed record SaveHostedEventStaffRequest(
     bool Decides = false,
     bool RunsTheDoor = false,
     bool SeesMenus = false,
-    bool SeesFiles = false);
+    bool SeesFiles = false,
+    bool StartsSessions = false);
 
 /// <summary>What somebody accepting a staff invitation is told before they accept it.</summary>
 /// <remarks>
@@ -627,7 +658,13 @@ public sealed record HostedEventStaffInviteRecord(
     /// in, which is a different question with the same answer most of the time and the wrong one
     /// exactly when it matters.
     /// </remarks>
-    bool AccountHasNoPassword = false);
+    bool AccountHasNoPassword = false,
+
+    /// <summary>The group running it, so the page can link straight to the event's door (event-scenario-gaps).</summary>
+    Guid? OrganizationId = null,
+
+    /// <summary>Whether they run the door, so the page offers the door rather than "your groups".</summary>
+    bool RunsTheDoor = false);
 
 // ── how often somebody hears about bookings (item 235 phase 8) ─────────────────
 
@@ -714,3 +751,42 @@ public sealed record HostedEventSummaryRecord(
     int ReviewCount,
     int LettersSent,
     int? MinimumGuests);
+
+// ── tickets at the door (event-scenario-gaps, 10/21/2026) ─────────────────────
+
+/// <summary>Turning tickets at the door on or off. Off makes the printed code stop working.</summary>
+public sealed record SetHostedEventDoorTicketsRequest(bool On);
+
+/// <summary>The door's ticket code and who has asked by scanning it.</summary>
+/// <param name="Url">What the QR code opens, absolute; null while off.</param>
+/// <param name="NotSellingSentence">Why the code leads nowhere useful right now, though it is on.</param>
+/// <param name="CanChange">Whether this person may turn it on or off (the door alone may not).</param>
+public sealed record HostedEventDoorTicketsRecord(
+    Guid HostedEventId,
+    bool On,
+    string? Url,
+    string? NotSellingSentence,
+    decimal? DayPassPrice,
+    bool CanChange,
+    IReadOnlyList<HostedEventDoorRequestRecord> Requests);
+
+/// <summary>Somebody who asked for a place by scanning the door's code.</summary>
+public sealed record HostedEventDoorRequestRecord(Guid BookingId, string Name, int PartySize, DateTime AskedUtc, bool IsConfirmed);
+
+/// <summary>What the door's code shows the person who scanned it.</summary>
+/// <param name="NotSellingSentence">Why they can't ask now, or null when they can.</param>
+/// <param name="MyStatus">Their own place at this event, if they have one.</param>
+public sealed record PublicDoorTicketRecord(
+    Guid HostedEventId,
+    string Name,
+    string OrganizationName,
+    string OrganizationUrlName,
+    string UrlName,
+    string DateLine,
+    decimal? DayPassPrice,
+    string? ContactLine,
+    string? NotSellingSentence,
+    Ben.Data.Common.Enums.HostedEventBookingStatus? MyStatus);
+
+/// <summary>Asking for a place at the door: how many, and the contact details any booking asks for.</summary>
+public sealed record AskAtTheDoorRequest(int PartySize = 1, string? FirstName = null, string? LastName = null, string? Phone = null);

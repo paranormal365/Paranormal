@@ -73,4 +73,24 @@ public enum OrgMessageChannel
     /// hashtag, a like — can show it by forgetting to ask who is reading.
     /// </summary>
     FieldLaunchNotice = 7,
+
+    /// <summary>
+    /// A tour date's room: the people checked in on the walk and its guides, talking to each other
+    /// (event-scenario-gaps, Ben 10/20/2026: "stay in touch with people checked in with the event or
+    /// tour if you both are checked in"). Keyed by <c>OrgMessage.OrgCalendarEventId</c>, never by
+    /// the group, for the same reason a hosted event's room is not the group's mail.
+    /// </summary>
+    TourRoom = 8,
+
+    /// <summary>
+    /// A guest writing to the people running a hosted event, and their answers (event-scenario-gaps, Ben's
+    /// scenario: "contact Jim either on our app").
+    /// </summary>
+    /// <remarks>
+    /// One conversation per guest per event: the root carries the event in <c>HostedEventId</c> and the
+    /// guest as its author, and is addressed to everybody who may decide the event's bookings, plus the
+    /// guest for their own read state. Never public, and never the group's mail to the guest: the bell
+    /// counts the guest's unread answers on a row of its own. See <c>EventGuestThreads</c>.
+    /// </remarks>
+    EventGuestThread = 9,
 }

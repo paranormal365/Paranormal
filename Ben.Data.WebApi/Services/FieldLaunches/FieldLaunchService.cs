@@ -229,10 +229,9 @@ public sealed class FieldLaunchService
         db.OrgMessages.Add(post);
         await db.SaveChangesAsync(ct);
 
-        var launcherName = await NameAsync(db, userId, ct);
         var fanOut = await _push.SendAsync(recipients, new PushMessage(
-            Title: $"{candidate.Title} is starting",
-            Body: $"{launcherName} started the group's session. Tap to join it in the Paranormal Platform.",
+            Title: candidate.Title,
+            Body: PushText,
             Data: new Dictionary<string, string> { ["link"] = AppLink(launch.Id), ["launchId"] = launch.Id.ToString() },
             CollapseId: $"launch-{launch.Id:N}",
             ExpiresAt: new DateTimeOffset(DateTime.SpecifyKind(expires, DateTimeKind.Utc))), ct);
@@ -246,11 +245,18 @@ public sealed class FieldLaunchService
             record, fanOut.People, fanOut.PeopleWithTheApp, fanOut.Delivered, fanOut.Configured));
     }
 
+    /// <summary>
+    /// What the notification says under the event's name: plainly, that sessions are being taken
+    /// (Ben, 10/20/2026: "The start of session recordings just needs to give a message that the
+    /// sessions are being accepted for those who are attending the event and registered").
+    /// </summary>
+    public const string PushText = "Sessions are now being accepted for this event. Tap to start yours in the Paranormal Platform.";
+
     /// <summary>What the card says. Plain text, like every feed post.</summary>
     public static string CardText(string title) =>
         // Read on the phone (under a Join button) and on the website (beside "Open in the app"),
         // so it names where to join rather than a button only one of them has.
-        Clip($"{title} is starting now. Join the group's session from the Paranormal Platform in the IsHaunted app — nothing records until you press Start, and every session you take stays on your phone until you send it.", 1000);
+        Clip($"Sessions are now being accepted for {title}. Start yours from the Paranormal Platform in the IsHaunted app — nothing records until you press Start, and every session you take stays on your phone until you send it.", 1000);
 
     // ── Reading launches ─────────────────────────────────────────────────────
 
@@ -616,7 +622,12 @@ public sealed class FieldLaunchService
                            OrganizationSecurityTable.OrgCalendar, OrganizationSecurityAction.Update, ct);
             default:
                 return await _hostedAccess.CanEditEventAsync(userId, c.OrganizationId, ct)
-                    || await _hostedAccess.CanRunTheDoorAsync(userId, c.OrganizationId, c.Id, db, ct);
+                    || await _hostedAccess.CanRunTheDoorAsync(userId, c.OrganizationId, c.Id, db, ct)
+                    // A guide or a lead the organizer asked to start the sessions, who need not be
+                    // on the door (event-scenario-gaps, Ben 10/20/2026: "This can be delegated to
+                    // those who are leading a tour or guide or are the event organizer").
+                    || await db.HostedEventStaff.AsNoTracking().AnyAsync(s => s.HostedEventId == c.Id && s.AppUserId == userId
+                                                                         && s.DateConfirmed != null && s.StartsSessions, ct);
         }
     }
 

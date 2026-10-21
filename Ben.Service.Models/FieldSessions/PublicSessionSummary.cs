@@ -22,3 +22,12 @@ public sealed record PublicSessionSummary(
 
 /// <summary>A file a visitor may be served, by the id the archive's media route takes.</summary>
 public sealed record PublicSessionFile(Guid Id, string RelativePath, string ContentType);
+
+/// <summary>
+/// A session shown with a hosted event's results, for the event's page (event-scenario-gaps). It plays at
+/// <c>/places/{PlaceId}/sessions/{Id}</c>, the archive's own player.
+/// </summary>
+/// <param name="MediaReady">Whether its recordings have been approved to play; until then it plays its readings and marks only.</param>
+public sealed record PublicEventSessionRow(
+    Guid Id, Guid PlaceId, string RecordedBy, string? LocationLabel, DateTime StartedAt, DateTime? EndedAt,
+    int MarkerCount, bool MediaReady);

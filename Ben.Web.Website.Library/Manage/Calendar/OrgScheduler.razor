@@ -127,6 +127,12 @@
 @* ── Custom event edit dialog (intercepts OnEdit) ─────────────────────────── *@
 <BenModal @bind-Visible="@_showEventDialog" Title="@(_isNewEvent ? "New Event" : "Edit Event")" Size="lg">
     <ChildContent>
+        @if (!_isNewEvent && _editingEvent?.HostedEventId is Guid hostedEventId)
+        {
+            @* A hosted event's own date: its published menus, by date (event-scenario-gaps; Ben's menu rules:
+               "When published, it will appear on the site in the calendar for the event"). *@
+            <CalendarEntryMenus HostedEventId="hostedEventId" OrgId="OrgId" />
+        }
         <div class="row g-3">
             <div class="col-12">
                 <label class="form-label fw-semibold" for="orgscheduler-title-d7a1">Title <span class="text-danger">*</span></label>
