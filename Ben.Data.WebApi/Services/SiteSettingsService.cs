@@ -114,10 +114,10 @@ public static class SiteSettingKeys
     /// </remarks>
     public const string GhostWalkEnabled = "tours.ghost-walk-enabled";
 
-    /// <summary>What the Ghost Walk Tour subscription costs each month, in dollars (10/21/2026).</summary>
+    /// <summary>What one tour route costs each month on the Ghost Walk Tour subscription (10/21/2026).</summary>
     /// <remarks>
-    /// No default: until a price is set the subscription is not on sale, whatever the switch says.
-    /// Each period freezes what it was charged, so moving this reaches the next renewal only.
+    /// Ben: "$29/month", per tour route. Unset reads as 29. Each period freezes what it was charged,
+    /// so moving this reaches the next renewal only.
     /// </remarks>
     public const string GhostWalkMonthlyPriceUsd = "tours.ghost-walk-monthly-price-usd";
 
@@ -358,14 +358,16 @@ public static class SiteSettingKeys
             + "number of credits; up to six bundles. Paid subscribers pay their percentage of the "
             + "bundle price too. Leave empty to sell single credits only."),
         (GhostWalkEnabled, "Sell the Ghost Walk Tour subscription",
-            "When on, and a monthly price is set, any group can subscribe to run ghost walk tours "
-            + "with no limit on tours or guests, and adding a tour or a tour date needs the "
-            + "subscription. When off, the subscription is hidden everywhere and tours are not held "
-            + "back by it. Off until you turn it on. Subscriptions already paid run to the end of "
-            + "their month and are not renewed while it is off."),
-        (GhostWalkMonthlyPriceUsd, "Ghost Walk Tour subscription price ($ a month)",
-            "What the Ghost Walk Tour subscription costs each month. Leave empty and it is not on "
-            + "sale. A new price reaches each subscriber at their next renewal."),
+            "When on, any group can subscribe to run ghost walk tours, paying monthly for each tour "
+            + "route, with unlimited walks and guests on each. Adding a route needs a route the "
+            + "subscription pays for, and adding a date needs the subscription. Turning it on also "
+            + "moves groups on the old per-tour plan onto it, once, for the time they have already "
+            + "paid. When off, the subscription is hidden everywhere and tours are not held back by "
+            + "it. Off until you turn it on. Subscriptions already paid run to the end of their month "
+            + "and are not renewed while it is off."),
+        (GhostWalkMonthlyPriceUsd, "Ghost Walk Tour price ($ a month per tour route)",
+            "What one tour route costs each month on the Ghost Walk Tour subscription. Leave empty for "
+            + "the standard $29. A new price reaches each subscriber at their next renewal."),
         (SiteAnnouncement, "Site-wide announcement",
             "A short notice shown across the site — planned maintenance, known issues. Leave empty to show nothing."),
         (PublicContactEmail, "Public contact email",
@@ -487,7 +489,7 @@ public static class SiteSettingKeys
          [EventCreditsEnabled, EventCreditPriceUsd, EventCreditSubscriberPercent, EventCreditBundles]),
 
         ("Ghost Walk Tour subscription",
-         "A monthly subscription of its own, separate from the investigation plans, for running tours.",
+         "A monthly subscription of its own, separate from the investigation plans, priced per tour route.",
          [GhostWalkEnabled, GhostWalkMonthlyPriceUsd]),
 
         ("Default profile pictures",

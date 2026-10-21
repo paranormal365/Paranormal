@@ -140,13 +140,13 @@ public sealed class StripeRenewalJob : IScheduledJob
         var ghostWalkOffer = await Services.Tours.GhostWalkOffer.ReadAsync(db, ct);
         if (!ghostWalkOffer.OnSale) return;
 
+        // Not filtered on a saved card: a month whose route credits cover the whole bill is renewed
+        // for nothing and needs no card. Whether a card is needed is asked once the bill is known.
         var dueGhostWalks = await db.GhostWalkSubscriptions.AsNoTracking()
             .Include(s => s.Organization)
             .Where(s => s.ProviderName == "Stripe"
                      && s.Status == SubscriptionStatus.Active
                      && !s.CancelAtPeriodEnd
-                     && s.ProviderCustomerRef != null
-                     && s.ProviderPaymentMethodRef != null
                      && s.CurrentPeriodEnd != null
                      && s.CurrentPeriodEnd <= now + RenewalWindow)
             .ToListAsync(ct);
@@ -155,7 +155,7 @@ public sealed class StripeRenewalJob : IScheduledJob
         {
             try
             {
-                await RenewGhostWalkAsync(db, walk, ghostWalkOffer.MonthlyPrice, ct);
+                await RenewGhostWalkAsync(db, walk, ghostWalkOffer.MonthlyPrice, now, ct);
             }
             catch (Exception ex)
             {
@@ -166,17 +166,31 @@ public sealed class StripeRenewalJob : IScheduledJob
     }
 
     /// <summary>
-    /// One more month of the Ghost Walk Tour subscription, at today's price.
+    /// One more month of the Ghost Walk Tour subscription: today's price for each route it pays for,
+    /// plus or minus the route changes waiting from last month.
     /// </summary>
     /// <remarks>
-    /// The live price, like every renewal here: what was frozen last month protects last month. The
-    /// idempotency key is stable for the month being renewed, for the reason the class remarks give.
+    /// <para>The live price, like every renewal here: what was frozen last month protects last month.
+    /// The route changes are Stripe's default proration — the days a route was added or given up
+    /// mid-month, settled on this bill rather than charged on the day.</para>
+    ///
+    /// <para>When last month's credits come to more than this bill, nothing is charged, the month
+    /// opens anyway, and what is left is carried to the next bill. The idempotency key is stable for
+    /// the month being renewed, for the reason the class remarks give.</para>
     /// </remarks>
     private async Task RenewGhostWalkAsync(
-        BenDataContext db, Ben.Data.Source.Entities.GhostWalkSubscription walk, decimal price, CancellationToken ct)
+        BenDataContext db, Ben.Data.Source.Entities.GhostWalkSubscription walk, decimal price, DateTime now,
+        CancellationToken ct)
     {
+        var routes = Math.Max(1, walk.Quantity);
+        var pending = (await Services.Tours.GhostWalkRoutes.UnsettledAsync(db, walk.Id, now, ct))
+            .Sum(c => c.ProratedAmount);
+        var bill = Math.Round(price * routes + pending, 2, MidpointRounding.AwayFromZero);
+        var payable = Math.Max(0m, bill);
+        var carry = Math.Min(0m, bill);
+
         var (_, taxRate) = await TaxResolver.ForOrganizationAsync(db, walk.OrganizationId, ct);
-        var tax = TaxResolver.TaxOn(price, taxRate);
+        var tax = TaxResolver.TaxOn(payable, taxRate);
         var periodStart = walk.CurrentPeriodEnd!.Value;
         var inv = System.Globalization.CultureInfo.InvariantCulture;
 
@@ -184,16 +198,36 @@ public sealed class StripeRenewalJob : IScheduledJob
         {
             [StripeFulfillmentService.CheckoutFacts.Keys.GhostWalk] = walk.OrganizationId.ToString(),
             [StripeFulfillmentService.CheckoutFacts.Keys.User] = walk.CreatedByAppUserId.ToString(),
-            [StripeFulfillmentService.CheckoutFacts.Keys.Payable] = price.ToString(inv),
+            [StripeFulfillmentService.CheckoutFacts.Keys.Payable] = payable.ToString(inv),
             [StripeFulfillmentService.CheckoutFacts.Keys.TaxRate] = taxRate.ToString(inv),
             [StripeFulfillmentService.CheckoutFacts.Keys.TaxAmount] = tax.ToString(inv),
             [StripeFulfillmentService.CheckoutFacts.Keys.PeriodStart] = periodStart.ToString("O"),
+            [StripeFulfillmentService.CheckoutFacts.Keys.GhostWalkRoutes] = routes.ToString(inv),
+            [StripeFulfillmentService.CheckoutFacts.Keys.GhostWalkUnit] = price.ToString(inv),
+            [StripeFulfillmentService.CheckoutFacts.Keys.GhostWalkSettleBefore] = now.ToString("O"),
+            [StripeFulfillmentService.CheckoutFacts.Keys.GhostWalkCarry] = carry.ToString(inv),
         };
 
+        if (payable == 0m)
+        {
+            await _fulfillment.FulfillAsync(new StripeCompletedCheckout(
+                $"ghostwalk-free-{walk.Id:N}-{periodStart:yyyyMMdd}", null,
+                walk.ProviderCustomerRef, walk.ProviderPaymentMethodRef, metadata), ct);
+            return;
+        }
+
+        if (walk.ProviderCustomerRef is null || walk.ProviderPaymentMethodRef is null)
+        {
+            // No card to charge: the month runs out, and new routes and dates wait for a subscription.
+            _log.LogWarning("Ghost Walk renewal for organization {OrganizationId} owes ${Payable} and has no card on file.",
+                walk.OrganizationId, payable);
+            return;
+        }
+
         var outcome = await _stripe.ChargeSavedCardAsync(new StripeRenewalCharge(
-            walk.ProviderCustomerRef!, walk.ProviderPaymentMethodRef!,
-            price + tax,
-            $"IsHaunted Ghost Walk Tour subscription renewal — {walk.Organization.Name}",
+            walk.ProviderCustomerRef, walk.ProviderPaymentMethodRef,
+            payable + tax,
+            $"IsHaunted Ghost Walk Tour subscription renewal — {walk.Organization.Name}, {routes} tour {(routes == 1 ? "route" : "routes")}",
             metadata,
             IdempotencyKey: $"ghostwalk-{walk.Id:N}-{periodStart:yyyyMMdd}"), ct);
 

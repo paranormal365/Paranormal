@@ -268,9 +268,11 @@ public sealed class OrganizationCheckoutController : OrgCmsControllerBase
     /// way: a checkout dates its month from now, so buying again mid-month would charge twice and lose
     /// the days already paid for.</para>
     /// </remarks>
+    /// <param name="routes">How many tour routes to pay for. At least the routes the group runs (and at
+    /// least one); when left out, exactly that.</param>
     [HttpPost("ghost-walk")]
     public async Task<ActionResult<StartCheckoutResponse>> StartGhostWalkCheckout(
-        Guid organizationId, CancellationToken ct)
+        Guid organizationId, CancellationToken ct, [FromQuery] int? routes = null)
     {
         var userId = GetCurrentUserId();
         if (userId is null) return Unauthorized();
@@ -296,7 +298,17 @@ public sealed class OrganizationCheckoutController : OrgCmsControllerBase
               + $"{existing.CurrentPeriodEnd:MM/dd/yyyy}, so there is nothing to buy yet."
               + (existing.CancelAtPeriodEnd ? " To keep it going, turn renewal back on." : " It renews on its own."));
 
-        var payable = offer.MonthlyPrice;
+        // Per tour route (Ben, 10/21/2026): every route the group already runs is paid for, so a
+        // checkout can never leave one of its own walks uncovered.
+        var running = Math.Max(1, await Services.Tours.GhostWalkAccess.ActiveRoutesAsync(db, organizationId, ct));
+        var quantity = routes ?? running;
+        if (quantity < running)
+            return BadRequest($"Your group runs {running} tour routes, so the subscription has to pay for at least {running}. "
+                            + "Retire a route first to pay for fewer.");
+        if (quantity > Services.Tours.GhostWalkRoutes.MaximumRoutes)
+            return BadRequest($"A subscription can pay for up to {Services.Tours.GhostWalkRoutes.MaximumRoutes} routes.");
+
+        var payable = Math.Round(offer.MonthlyPrice * quantity, 2, MidpointRounding.AwayFromZero);
         var (_, taxRate) = await TaxResolver.ForOrganizationAsync(db, organizationId, ct);
         var tax = TaxResolver.TaxOn(payable, taxRate);
 
@@ -310,6 +322,8 @@ public sealed class OrganizationCheckoutController : OrgCmsControllerBase
             [StripeFulfillmentService.CheckoutFacts.Keys.GhostWalk] = organizationId.ToString(),
             [StripeFulfillmentService.CheckoutFacts.Keys.User] = userId.Value.ToString(),
             [StripeFulfillmentService.CheckoutFacts.Keys.Payable] = payable.ToString(inv),
+            [StripeFulfillmentService.CheckoutFacts.Keys.GhostWalkRoutes] = quantity.ToString(inv),
+            [StripeFulfillmentService.CheckoutFacts.Keys.GhostWalkUnit] = offer.MonthlyPrice.ToString(inv),
             [StripeFulfillmentService.CheckoutFacts.Keys.TaxRate] = taxRate.ToString(inv),
             [StripeFulfillmentService.CheckoutFacts.Keys.TaxAmount] = tax.ToString(inv),
         };
@@ -325,7 +339,7 @@ public sealed class OrganizationCheckoutController : OrgCmsControllerBase
         var handle = await _stripe.CreateCheckoutSessionAsync(new StripeCheckoutSpec(
             organizationId, org.Name, existing?.ProviderCustomerRef ?? plan?.ProviderCustomerRef,
             payable, tax,
-            "IsHaunted Ghost Walk Tour subscription — one month, no limit on tours or guests",
+            $"IsHaunted Ghost Walk Tour subscription — {quantity} tour {(quantity == 1 ? "route" : "routes")}, one month, unlimited walks and guests",
             SuccessUrl: $"{billingUrl}?ghostwalk=success",
             CancelUrl:  $"{billingUrl}?ghostwalk=cancelled",
             metadata), ct);

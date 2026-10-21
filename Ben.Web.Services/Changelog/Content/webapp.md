@@ -39,9 +39,14 @@ day-by-day account of building it would say nothing to anyone using it now.
 - Anyone can buy event credits: a group on its **Billing** page, or a person for the events they
   organize on **My event credits**. Publishing uses the group's credit first, then one of yours.
 - Event credits can be bought in bundles of several for one price, when they're offered.
-- Ghost walk tours have their own monthly subscription, separate from the plans, with no limit on
-  tours or guests. Subscribe from the **Pricing** page or your group's **Billing** page, and stop
-  renewing at any time.
+- Ghost walk tours have their own monthly subscription, separate from the plans: $29 a month per
+  tour route, with unlimited walks and guests on each. Subscribe from the **Pricing** page or your
+  group's **Billing** page, and stop renewing at any time.
+- Adding a tour route part-way through a month charges only the days left, on your next bill;
+  retiring one takes the unused days off it. When every route you pay for is running, adding a tour
+  asks you to add a route to your subscription first.
+- Groups on the old per-tour plan move onto the Ghost Walk Tour subscription for the time they've
+  already paid for, with the same number of routes and nothing charged twice.
 - The prices on the home page, the **Pricing** page and in the help are the site's current prices.
   Guests still never pay anything through the site.
 - After you pay for your group's subscription, or start one a coupon fully covers, a short page
@@ -168,6 +173,8 @@ day-by-day account of building it would say nothing to anyone using it now.
   ticket sales or an events-at-once limit. Groups whose plan used to include events were given one
   credit for each draft event they were preparing.
 - The ledger shows a person's own credit purchases, marked as personal.
+- The Ghost Walk Tour price is per tour route and reads $29 when left empty. Switching the
+  subscription on moves the per-tour plan's groups onto it once and retires the per-tour tiers.
 - The audit log's CSV export marks any cell that starts like a spreadsheet formula, so opening the
   file in a spreadsheet cannot run it.
 - What's new shows SuperAdmins the work that is not released yet, and the changes to administration

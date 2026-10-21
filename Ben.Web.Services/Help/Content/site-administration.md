@@ -575,18 +575,13 @@ the site is failing.
 
 ## Billing
 
-### A flat price for tour and event businesses
+### Tour businesses: the Ghost Walk Tour subscription
 
-The price bands below set the price of an **investigation group** by the size of its team. A
-**ghost walking tour** or a **public event provider** isn't priced that way. These businesses pay
-one flat price regardless of team size, because guides aren't investigators and counting them
-would price the wrong thing.
-
-To offer that price, add a tier under **Administration → Subscription Tiers** and uncheck
-**banded by members**; the pricing page labels it for tour and event businesses. Every
-business-type group is then quoted, billed and renewed on that tier, and its member count is
-ignored. If no such tier is offered, a business is priced by the bands like any other group, so the
-offer in the tour-business mailing only holds while that tier exists and is active.
+Ghost walk tours aren't priced by a tier any more. They have their own subscription, priced per tour
+route (see [The Ghost Walk Tour subscription](#the-ghost-walk-tour-subscription)). The old per-tour
+tier — a tier with **banded by members** unchecked — is retired the first time the Ghost Walk Tour
+subscription is switched on: every group on it is moved onto the subscription, and the tier is
+switched off. Until then, it works as it always has.
 
 ### Role areas on a price band
 
@@ -722,19 +717,27 @@ credits**. A person always pays the full price.
 
 ### The Ghost Walk Tour subscription
 
-A monthly subscription of its own, separate from the investigation plans, for running ghost walk
-tours with no limit on tours or guests. Under *Ghost Walk Tour subscription* in Site Settings:
+A monthly subscription of its own, separate from the investigation plans, priced **per tour route**:
+one tour on a group's Tours page, with unlimited walks (dates) and guests on it. Under *Ghost Walk
+Tour subscription* in Site Settings:
 
 - **Sell the Ghost Walk Tour subscription** turns it on. It's off until you turn it on.
-- **Ghost Walk Tour subscription price ($ a month)** is its monthly price. With no price set it isn't
-  on sale, whatever the switch says.
+- **Ghost Walk Tour price ($ a month per tour route)** is the price of one route for one month.
+  Leave it empty for $29.
 
-While it's on sale, any group can subscribe from its Billing page or the Pricing page, and adding a
-tour, bringing a retired tour back or putting a new tour date on the calendar needs the
-subscription. Tours and dates already on the calendar keep running, and a group on the per-tour
-business plan stays covered by that plan. While it's off, the subscription isn't mentioned anywhere
-on the site or in the help, and tours aren't held back by it. Months already paid for run out and
-aren't renewed while it's off.
+While it's on sale, any group can subscribe from its Billing page or the Pricing page, paying for
+every route it runs. Adding a route when every paid route is in use asks the group to add a route to
+its subscription; dates on a paid route are unlimited. A route added part-way through a month is
+charged only for the days left, and a retired one is credited for its unused days — both on the
+group's next monthly bill, the way Stripe prorates by default. Tours and dates already on the
+calendar keep running. While it's off, the subscription isn't mentioned anywhere on the site or in
+the help, and tours aren't held back by it. Months already paid for run out and aren't renewed while
+it's off.
+
+**The first time it's switched on**, every group on the old per-tour plan is moved onto it, once:
+the same number of routes as the tours it had paid for, for the rest of the period it had already
+paid for, at no charge and with the same saved card. Its per-tour plan is set not to renew, so its
+next bill is the subscription's and never both. The per-tour tiers are switched off.
 
 ## The storage ceiling
 

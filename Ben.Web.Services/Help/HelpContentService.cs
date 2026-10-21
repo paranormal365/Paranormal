@@ -110,14 +110,16 @@ public sealed class HelpContentService
     /// <summary>
     /// What a value reads as when the live one isn't known: a page whose prices could not be read,
     /// and the printed product documentation, which has no live site behind it. Words, never an old
-    /// number. <c>docs/build-documentation-pdf.py</c> carries the same table.
+    /// number — except the ghost-walk price, which is Ben's own default (10/21/2026) and is only ever
+    /// printed, since the on-screen passages that use it are hidden whenever the offer can't be read.
+    /// <c>docs/build-documentation-pdf.py</c> carries the same table.
     /// </summary>
     public static readonly IReadOnlyDictionary<string, string> Fallbacks = new Dictionary<string, string>(StringComparer.Ordinal)
     {
         [HelpLiveValues.EventCreditPrice]           = "the price shown on the Pricing page",
         [HelpLiveValues.EventCreditSubscriberPrice] = "a share of that price",
         [HelpLiveValues.EventCreditSubscriberPercent] = "the percentage shown on the Pricing page",
-        [HelpLiveValues.GhostWalkMonthlyPrice]      = "the monthly price shown on the Pricing page",
+        [HelpLiveValues.GhostWalkMonthlyPrice]      = "$29",
     };
 
     /// <summary>
@@ -363,6 +365,12 @@ public sealed record HelpLiveValues(IReadOnlyDictionary<string, string> Values, 
     public const string GhostWalkOnSale = "ghost-walk";
 
     /// <summary>
+    /// The passage condition that holds while it is NOT on sale — where the per-tour business plan
+    /// still prices tours (10/21/2026).
+    /// </summary>
+    public const string GhostWalkOffSale = "no-ghost-walk";
+
+    /// <summary>
     /// Builds the values from the price list's extras, the same figures the Pricing page shows.
     /// Null extras gives an empty set, so every value reads as its fallback words and every
     /// conditional passage is left out.
@@ -380,6 +388,10 @@ public sealed record HelpLiveValues(IReadOnlyDictionary<string, string> Values, 
             {
                 values[GhostWalkMonthlyPrice] = money(walk.MonthlyPrice);
                 conditions.Add(GhostWalkOnSale);
+            }
+            else
+            {
+                conditions.Add(GhostWalkOffSale);
             }
         }
         return new HelpLiveValues(values, conditions);

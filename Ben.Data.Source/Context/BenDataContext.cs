@@ -239,6 +239,7 @@ namespace Ben.Data.Source.Context
         public virtual DbSet<FieldSessionShareLinkView> FieldSessionShareLinkViews { get; set; }
         public virtual DbSet<OrganizationSubscription> OrganizationSubscriptions { get; set; }
         public virtual DbSet<GhostWalkSubscription> GhostWalkSubscriptions { get; set; }
+        public virtual DbSet<GhostWalkRouteChange> GhostWalkRouteChanges { get; set; }
         public virtual DbSet<OrganizationBillingContact> OrganizationBillingContacts { get; set; }
         public virtual DbSet<Coupon> Coupons { get; set; }
         public virtual DbSet<CouponCode> CouponCodes { get; set; }
@@ -4667,6 +4668,27 @@ namespace Ben.Data.Source.Context
                 .Property(e => e.ProviderPaymentMethodRef).HasMaxLength(128);
             modelBuilder.Entity<GhostWalkSubscription>()
                 .HasIndex(e => new { e.Status, e.CurrentPeriodEnd });
+            modelBuilder.Entity<GhostWalkSubscription>()
+                .Property(e => e.UnitPriceAtPeriodStart).HasPrecision(18, 2);
+            modelBuilder.Entity<GhostWalkSubscription>()
+                .Property(e => e.Quantity).HasDefaultValue(1);
+
+            // Route changes per month (10/21/2026): what waits for the next bill.
+            modelBuilder.Entity<GhostWalkRouteChange>()
+                .HasOne(e => e.GhostWalkSubscription).WithMany(s => s.RouteChanges)
+                .HasForeignKey(e => e.GhostWalkSubscriptionId).OnDelete(DeleteBehavior.Cascade);
+            modelBuilder.Entity<GhostWalkRouteChange>()
+                .HasOne(e => e.CreatedByAppUser).WithMany()
+                .HasForeignKey(e => e.CreatedByAppUserId).OnDelete(DeleteBehavior.NoAction);
+            modelBuilder.Entity<GhostWalkRouteChange>()
+                .HasOne(e => e.UpdatedByAppUser).WithMany()
+                .HasForeignKey(e => e.UpdatedByAppUserId).IsRequired(false).OnDelete(DeleteBehavior.NoAction);
+            modelBuilder.Entity<GhostWalkRouteChange>()
+                .Property(e => e.ProratedAmount).HasPrecision(18, 2);
+            modelBuilder.Entity<GhostWalkRouteChange>()
+                .Property(e => e.SettledPaymentRef).HasMaxLength(128);
+            modelBuilder.Entity<GhostWalkRouteChange>()
+                .HasIndex(e => new { e.GhostWalkSubscriptionId, e.SettledUtc });
 
             // One nomination per person per organization.
             modelBuilder.Entity<OrganizationBillingContact>()

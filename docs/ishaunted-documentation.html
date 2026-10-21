@@ -5697,22 +5697,29 @@ to tell guests what to bring and what it costs.</p>
 between tours if you run more than one.</p>
 <p><img alt="One tour" src=".print-media/Ben.Web.Services/Help/Media/organization-administration/tour-details.jpg" /></p>
 <h3>Adding a tour, and what it costs</h3>
-<p>Running tours takes a <strong>Ghost Walk Tour subscription</strong>: the monthly price shown on the Pricing page a month, separate
-from your group's plan, with no limit on tours, dates or guests. Any group can take it, on your
-group's <strong>Billing</strong> page under <strong>Ghost Walk Tour subscription</strong>, or from the <strong>Pricing</strong> page.
-Without it you can't add a tour, bring a retired one back, or put a new tour date on the calendar.
-Tours and dates you already have keep running, and guests keep their places. You can stop renewing
-at any time; the month you paid for runs out first.</p>
-<p>If your group is on the per-tour business plan, its tours stay covered by that plan as they always
-have.</p>
-<p><strong>On the per-tour business plan</strong>, the plan covers one tour. Each extra tour is charged for the rest
-of your current billing period, on the card you already have on file, and after that every renewal
-counts the tours you are running. If there is no card on file, you can still run the tour, and it is
-simply counted at your next renewal. The Tours page tells you which of these will happen before you
-press the button.</p>
-<p><strong>Retiring</strong> a tour stops new dates from being added and drops it from your next renewal. It
-doesn't refund anything for the period you have already paid for, and it leaves the tour's past
-dates exactly as they are. <strong>Pausing</strong> — turning off <em>Taking sign-ups</em> — is the lighter option for
+<p>Running tours takes a <strong>Ghost Walk Tour subscription</strong>: $29 a month per tour
+route, with unlimited walks and guests on each. A <strong>tour route</strong> is one tour on this page: the walk
+down Printers Alley is one route however often you run it, and a walk down a different street is a
+second. The subscription is separate from your group's plan, and any group can take it, on your
+group's <strong>Billing</strong> page under <strong>Ghost Walk Tour subscription</strong>, or from the <strong>Pricing</strong> page. When
+you subscribe, it pays for every route you already run.</p>
+<p>Without it you can't add a route, bring a retired one back, or put a new date on the calendar. With
+it, dates are unlimited. Adding a route when every route you pay for is already running asks you to
+add one to your subscription: tick <strong>Add a route to my Ghost Walk Tour subscription</strong>, and the route
+is added. You can also add routes on the Billing page.</p>
+<p><strong>What you see on your bill.</strong> Each route is $29 a month. When you add a route
+part-way through a month, you aren't charged that day: the days left in the month for the new route
+go on your next monthly bill, along with the next month itself. When you retire a route, it comes off
+your subscription and the unused days in the month come off your next bill. Your Billing page shows
+what is waiting for the next bill. You can stop renewing at any time; the month you paid for runs
+out first.</p>
+<p>If your group was on the per-tour business plan, it was moved onto the Ghost Walk Tour subscription
+for the time it had already paid for, with the same number of routes, at no charge. The plan isn't
+renewed, and your next bill is the subscription's.</p>
+<p><strong>Retiring</strong> a tour stops new dates from being added, and leaves the tour's past dates exactly as
+they are. With a Ghost Walk Tour subscription the route comes off your subscription, as above; on
+the per-tour business plan it drops from your next renewal, and nothing is refunded for the period
+already paid for. <strong>Pausing</strong> — turning off <em>Taking sign-ups</em> — is the lighter option for
 an off-season.</p>
 <h3>Guides</h3>
 <p>You don't have to be a guide yourself. Choose the members who actually lead the tour, and each
@@ -7008,9 +7015,10 @@ they're offered. Once you're signed in you can buy one or more right there, for 
 you look after or for yourself; they go to that group's event credits, or to your own, the same as
 buying them on the billing page (see <a href="#buying-event-credits">Buying event credits</a>).</p>
 <p><img alt="Hosted events on the Pricing page: what an event includes, and buying events" src=".print-media/Ben.Web.Services/Help/Media/organization-administration/pricing-hosted-events.jpg" /></p>
-<p>When it's offered, <strong>Ghost Walk Tour subscription</strong> comes after that: the monthly price shown on the Pricing page a
-month for as many tours, dates and guests as you like, separate from the investigation plans. If you
-look after a group's billing, <strong>Subscribe</strong> takes you to Stripe's page for that group.</p>
+<p>When it's offered, <strong>Ghost Walk Tour subscription</strong> comes after that: $29 a
+month per tour route, with unlimited walks and guests, separate from the investigation plans. If you
+look after a group's billing, <strong>Subscribe</strong> takes you to Stripe's page for that group, paying for
+every route it runs.</p>
 <p>Each band on the Pricing page has its own button. If you don't run a group yet, <strong>Start a group on
 this plan</strong> opens the new-group steps with that plan shown at the top; once the group exists, you
 go straight to its billing page to confirm the plan and pay. If you already run a group, <strong>Choose
@@ -7628,16 +7636,12 @@ is about to need can't be wiped out with one click.</p>
 <p>Administrators and SuperAdministrators can both open it, so whoever is on call can always see why
 the site is failing.</p>
 <h2>Billing</h2>
-<h3>A flat price for tour and event businesses</h3>
-<p>The price bands below set the price of an <strong>investigation group</strong> by the size of its team. A
-<strong>ghost walking tour</strong> or a <strong>public event provider</strong> isn't priced that way. These businesses pay
-one flat price regardless of team size, because guides aren't investigators and counting them
-would price the wrong thing.</p>
-<p>To offer that price, add a tier under <strong>Administration → Subscription Tiers</strong> and uncheck
-<strong>banded by members</strong>; the pricing page labels it for tour and event businesses. Every
-business-type group is then quoted, billed and renewed on that tier, and its member count is
-ignored. If no such tier is offered, a business is priced by the bands like any other group, so the
-offer in the tour-business mailing only holds while that tier exists and is active.</p>
+<h3>Tour businesses: the Ghost Walk Tour subscription</h3>
+<p>Ghost walk tours aren't priced by a tier any more. They have their own subscription, priced per tour
+route (see <a href="#the-ghost-walk-tour-subscription">The Ghost Walk Tour subscription</a>). The old per-tour
+tier — a tier with <strong>banded by members</strong> unchecked — is retired the first time the Ghost Walk Tour
+subscription is switched on: every group on it is moved onto the subscription, and the tier is
+switched off. Until then, it works as it always has.</p>
 <h3>Role areas on a price band</h3>
 <p>Each band has a <strong>Role areas</strong> checklist: the parts of the site (Cases, Equipment, Public pages and
 so on) that a group on that band can build custom role permissions for. Every band starts with
@@ -7746,19 +7750,26 @@ percentage over 100 or a bundle line the site can't read, is refused when you sa
 sentence saying why. Anyone can buy credits: a group on its Billing page, or a person on <strong>My event
 credits</strong>. A person always pays the full price.</p>
 <h3>The Ghost Walk Tour subscription</h3>
-<p>A monthly subscription of its own, separate from the investigation plans, for running ghost walk
-tours with no limit on tours or guests. Under <em>Ghost Walk Tour subscription</em> in Site Settings:</p>
+<p>A monthly subscription of its own, separate from the investigation plans, priced <strong>per tour route</strong>:
+one tour on a group's Tours page, with unlimited walks (dates) and guests on it. Under <em>Ghost Walk
+Tour subscription</em> in Site Settings:</p>
 <ul>
 <li><strong>Sell the Ghost Walk Tour subscription</strong> turns it on. It's off until you turn it on.</li>
-<li><strong>Ghost Walk Tour subscription price ($ a month)</strong> is its monthly price. With no price set it isn't
-  on sale, whatever the switch says.</li>
+<li><strong>Ghost Walk Tour price ($ a month per tour route)</strong> is the price of one route for one month.
+  Leave it empty for $29.</li>
 </ul>
-<p>While it's on sale, any group can subscribe from its Billing page or the Pricing page, and adding a
-tour, bringing a retired tour back or putting a new tour date on the calendar needs the
-subscription. Tours and dates already on the calendar keep running, and a group on the per-tour
-business plan stays covered by that plan. While it's off, the subscription isn't mentioned anywhere
-on the site or in the help, and tours aren't held back by it. Months already paid for run out and
-aren't renewed while it's off.</p>
+<p>While it's on sale, any group can subscribe from its Billing page or the Pricing page, paying for
+every route it runs. Adding a route when every paid route is in use asks the group to add a route to
+its subscription; dates on a paid route are unlimited. A route added part-way through a month is
+charged only for the days left, and a retired one is credited for its unused days — both on the
+group's next monthly bill, the way Stripe prorates by default. Tours and dates already on the
+calendar keep running. While it's off, the subscription isn't mentioned anywhere on the site or in
+the help, and tours aren't held back by it. Months already paid for run out and aren't renewed while
+it's off.</p>
+<p><strong>The first time it's switched on</strong>, every group on the old per-tour plan is moved onto it, once:
+the same number of routes as the tours it had paid for, for the rest of the period it had already
+paid for, at no charge and with the same saved card. Its per-tour plan is set not to renew, so its
+next bill is the subscription's and never both. The per-tour tiers are switched off.</p>
 <h2>The storage ceiling</h2>
 <p><strong>Administration → Site Settings → Limits → Free account storage (MB)</strong> sets how much a free account
 can store for itself. Leaving the box empty is safe: there's a built-in default of 2048 MB.</p>

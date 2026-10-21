@@ -138,6 +138,52 @@ public sealed class OrganizationBillingController : Cms.OrgCmsControllerBase
         Guid organizationId, CancellationToken ct)
         => SetGhostWalkRenewalAsync(organizationId, cancel: false, ct);
 
+    /// <summary>
+    /// Adds a tour route to the subscription (10/21/2026). Prorated the way Stripe does by default: the
+    /// days left this month for the new route go on the next monthly bill.
+    /// </summary>
+    [HttpPost("ghost-walk/routes/add")]
+    public Task<ActionResult<Ben.Service.Models.GhostWalkSubscriptionView>> AddGhostWalkRoute(
+        Guid organizationId, CancellationToken ct)
+        => ChangeGhostWalkRoutesAsync(organizationId, +1, ct);
+
+    /// <summary>
+    /// Takes an unused route off the subscription. The unused days this month come off the next bill.
+    /// A route that is still running cannot be taken off: retire it instead.
+    /// </summary>
+    [HttpPost("ghost-walk/routes/remove")]
+    public Task<ActionResult<Ben.Service.Models.GhostWalkSubscriptionView>> RemoveGhostWalkRoute(
+        Guid organizationId, CancellationToken ct)
+        => ChangeGhostWalkRoutesAsync(organizationId, -1, ct);
+
+    private async Task<ActionResult<Ben.Service.Models.GhostWalkSubscriptionView>> ChangeGhostWalkRoutesAsync(
+        Guid organizationId, int delta, CancellationToken ct)
+    {
+        if (GetCurrentUserId() is not { } userId) return Unauthorized();
+        if (!await IsCmsAuthorizedAsync(userId, organizationId,
+                OrganizationSecurityTable.OrganizationSettings, OrganizationSecurityAction.Update, ct))
+            return Forbid();
+
+        await using var db = await _db.CreateDbContextAsync(ct);
+        var sub = await db.GhostWalkSubscriptions.FirstOrDefaultAsync(s => s.OrganizationId == organizationId, ct);
+        var now = DateTime.UtcNow;
+        if (sub is null || !sub.IsStanding(now))
+            return BadRequest("This group has no Ghost Walk Tour subscription running. Subscribe first.");
+
+        var to = sub.Quantity + delta;
+        var running = Math.Max(1, await Services.Tours.GhostWalkAccess.ActiveRoutesAsync(db, organizationId, ct));
+        if (to < running)
+            return BadRequest(running == 1
+                ? "The subscription always pays for at least one route."
+                : $"Your group runs {running} tour routes, so the subscription pays for at least {running}. Retire a route to pay for fewer.");
+        if (to > Services.Tours.GhostWalkRoutes.MaximumRoutes)
+            return BadRequest($"A subscription can pay for up to {Services.Tours.GhostWalkRoutes.MaximumRoutes} routes.");
+
+        Services.Tours.GhostWalkRoutes.Change(db, sub, to, userId, now);
+        await db.SaveChangesAsync(ct);
+        return Ok(await GhostWalkViewAsync(db, organizationId, ct));
+    }
+
     private async Task<ActionResult<Ben.Service.Models.GhostWalkSubscriptionView>> SetGhostWalkRenewalAsync(
         Guid organizationId, bool cancel, CancellationToken ct)
     {
@@ -168,9 +214,18 @@ public sealed class OrganizationBillingController : Cms.OrgCmsControllerBase
         var sub = await db.GhostWalkSubscriptions.AsNoTracking()
             .FirstOrDefaultAsync(s => s.OrganizationId == organizationId, ct);
         var now = DateTime.UtcNow;
+        var running = await Services.Tours.GhostWalkAccess.ActiveRoutesAsync(db, organizationId, ct);
+        var pending = sub is null ? 0m : await db.GhostWalkRouteChanges.AsNoTracking()
+            .Where(c => c.GhostWalkSubscriptionId == sub.Id && c.SettledUtc == null)
+            .SumAsync(c => c.ProratedAmount, ct);
+        var standing = sub?.IsStanding(now) == true;
         return new Ben.Service.Models.GhostWalkSubscriptionView(
-            offer.OnSale, offer.MonthlyPrice, sub?.Status, sub?.IsStanding(now) == true,
-            sub?.CurrentPeriodEnd, sub?.CancelAtPeriodEnd == true, sub?.PriceAtPeriodStart);
+            offer.OnSale, offer.MonthlyPrice, sub?.Status, standing,
+            sub?.CurrentPeriodEnd, sub?.CancelAtPeriodEnd == true, sub?.PriceAtPeriodStart,
+            RoutesPaid: standing ? sub!.Quantity : 0,
+            RoutesRunning: running,
+            PendingOnNextBill: pending,
+            NextRouteCostsThisMonth: standing ? Services.Tours.GhostWalkRoutes.Prorate(sub!, now, +1) : 0m);
     }
 
     /// <summary>

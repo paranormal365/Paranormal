@@ -266,31 +266,68 @@
                 <div class="card-body">
                     <h2 class="h5 card-title">Ghost Walk Tour subscription</h2>
                     <p class="text-secondary small">
-                        A monthly subscription of its own, separate from your plan: as many tours as you
-                        run, as many dates as you put on, and no limit on guests. Guests sign up for free.
+                        A monthly subscription of its own, separate from your plan:
+                        @BenMoney.Format(walk.MonthlyPrice) a month for each tour route, with unlimited walks and
+                        guests on every route it pays for. Guests sign up for free.
                     </p>
                     @if (walk.IsStanding)
                     {
                         <p class="mb-2" data-testid="ghost-walk-status">
                             <span class="badge bg-success me-2">Active</span>
-                            Paid through <strong>@walk.CurrentPeriodEnd?.ToString("MM/dd/yyyy")</strong>.
+                            Pays for <strong data-testid="ghost-walk-routes">@Routes(walk.RoutesPaid)</strong>
+                            (you run @Routes(walk.RoutesRunning)), paid through
+                            <strong>@walk.CurrentPeriodEnd?.ToString("MM/dd/yyyy")</strong>.
                             @(walk.CancelAtPeriodEnd
                                 ? "It won't renew, so it ends then."
-                                : $"It renews monthly at {BenMoney.Format(walk.MonthlyPrice)} plus tax.")
+                                : $"It renews monthly at {BenMoney.Format(walk.MonthlyPrice * walk.RoutesPaid)} plus tax.")
                         </p>
-                        <button type="button" class="btn btn-outline-secondary btn-sm text-nowrap billing-touch"
-                                data-testid="ghost-walk-renewal" disabled="@_walkBusy"
-                                @onclick="() => SetWalkRenewalAsync(!walk.CancelAtPeriodEnd)">
-                            @(_walkBusy ? "Saving…" : walk.CancelAtPeriodEnd ? "Turn renewal back on" : "Stop renewing")
-                        </button>
+                        @if (walk.PendingOnNextBill != 0m)
+                        {
+                            <p class="small mb-2" data-testid="ghost-walk-pending">
+                                @(walk.PendingOnNextBill > 0m
+                                    ? $"Your next bill also has {BenMoney.Format(walk.PendingOnNextBill)} for routes added this month."
+                                    : $"Your next bill is {BenMoney.Format(-walk.PendingOnNextBill)} less for routes given up this month.")
+                            </p>
+                        }
+                        @* Stripe's default proration, said plainly (Ben, 10/21/2026). *@
+                        <p class="text-secondary small mb-2">
+                            Adding a route adds @BenMoney.Format(walk.MonthlyPrice) a month. For the rest of this month only
+                            the days left are charged — @BenMoney.Format(walk.NextRouteCostsThisMonth) today — and that goes on
+                            your next bill. Retiring a route takes it off, and the unused days come off your next bill.
+                        </p>
+                        <div class="d-flex flex-wrap gap-2">
+                            <button type="button" class="btn btn-outline-primary btn-sm text-nowrap billing-touch"
+                                    data-testid="ghost-walk-add-route" disabled="@_walkBusy"
+                                    @onclick="() => ChangeRoutesAsync(add: true)">
+                                Add a route
+                            </button>
+                            @if (walk.RoutesPaid > Math.Max(1, walk.RoutesRunning))
+                            {
+                                <button type="button" class="btn btn-outline-secondary btn-sm text-nowrap billing-touch"
+                                        data-testid="ghost-walk-remove-route" disabled="@_walkBusy"
+                                        @onclick="() => ChangeRoutesAsync(add: false)">
+                                    Take off an unused route
+                                </button>
+                            }
+                            <button type="button" class="btn btn-outline-secondary btn-sm text-nowrap billing-touch"
+                                    data-testid="ghost-walk-renewal" disabled="@_walkBusy"
+                                    @onclick="() => SetWalkRenewalAsync(!walk.CancelAtPeriodEnd)">
+                                @(_walkBusy ? "Saving…" : walk.CancelAtPeriodEnd ? "Turn renewal back on" : "Stop renewing")
+                            </button>
+                        </div>
                     }
                     else
                     {
                         <div class="d-flex flex-wrap gap-3 align-items-end">
                             <div>
-                                <div class="text-secondary small">Each month</div>
+                                <div class="text-secondary small">Each tour route, each month</div>
                                 <strong data-testid="ghost-walk-price">@BenMoney.Format(walk.MonthlyPrice)</strong>
                                 <span class="text-secondary small">plus tax</span>
+                            </div>
+                            <div>
+                                <div class="text-secondary small">You run @Routes(walk.RoutesRunning)</div>
+                                <strong data-testid="ghost-walk-month-total">@BenMoney.Format(walk.MonthlyPrice * Math.Max(1, walk.RoutesRunning))</strong>
+                                <span class="text-secondary small">a month</span>
                             </div>
                             <button type="button" class="btn btn-primary text-nowrap billing-touch" data-testid="ghost-walk-subscribe"
                                     disabled="@_walkBusy" @onclick="SubscribeWalkAsync">
@@ -557,6 +594,21 @@
             var (result, error) = await AdminClient.StartGhostWalkCheckoutAsync(OrgId);
             if (result is null) { _walkError = error ?? "Couldn't start checkout — try again."; return; }
             Nav.NavigateTo(result.RedirectUrl, forceLoad: true);
+        }
+        finally { _walkBusy = false; }
+    }
+
+    private static string Routes(int n) => n == 1 ? "1 tour route" : $"{n} tour routes";
+
+    private async Task ChangeRoutesAsync(bool add)
+    {
+        _walkBusy = true;
+        _walkError = null;
+        try
+        {
+            var (view, error) = await AdminClient.ChangeGhostWalkRoutesAsync(OrgId, add);
+            if (view is null) { _walkError = error ?? "Couldn't change that — try again."; return; }
+            _ghostWalk = ItemResult<GhostWalkSubscriptionView>.Ok(view);
         }
         finally { _walkBusy = false; }
     }

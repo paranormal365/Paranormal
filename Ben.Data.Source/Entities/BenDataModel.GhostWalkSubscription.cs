@@ -4,7 +4,8 @@ using Ben.Data.Common.Interfaces;
 namespace Ben.Data.Source.Entities
 {
     /// <summary>
-    /// A group's Ghost Walk Tour subscription: one flat monthly price, no limit on tours or guests.
+    /// A group's Ghost Walk Tour subscription: a monthly price per tour route, with unlimited dates and
+    /// guests on every route it pays for.
     /// </summary>
     /// <remarks>
     /// <para><b>Ben's rule, 10/21/2026:</b> "Ghost Walk tours are their own individual subscription."
@@ -30,7 +31,30 @@ namespace Ben.Data.Source.Entities
         public SubscriptionStatus Status { get; set; }
 
         /// <summary>What this period was charged, before tax, frozen at the moment it opened.</summary>
+        /// <remarks>
+        /// Includes any route changes settled at that renewal, so it is what the card was charged,
+        /// not routes × price. Zero for a period carried over from the per-tour plan.
+        /// </remarks>
         public decimal PriceAtPeriodStart { get; set; }
+
+        /// <summary>
+        /// How many tour routes the subscription pays for (Ben, 10/21/2026: "$29 a month per tour
+        /// route"). A route is a <see cref="Tour"/>; its dates and guests are unlimited.
+        /// </summary>
+        /// <remarks>
+        /// Never below one while the subscription stands, the way a business with no tours yet still
+        /// pays for the one it is about to define. Adding a route past this asks the group to raise
+        /// it; retiring one lowers it. Each change is a <see cref="GhostWalkRouteChange"/>.
+        /// </remarks>
+        public int Quantity { get; set; } = 1;
+
+        /// <summary>One route for the current period at the price it opened at — a month, except for a
+        /// period carried over from the per-tour plan, which may be longer.</summary>
+        /// <remarks>What a mid-period route change is prorated at, so a price change in the settings
+        /// never reaches a period already running.</remarks>
+        public decimal UnitPriceAtPeriodStart { get; set; }
+
+        public virtual ICollection<GhostWalkRouteChange> RouteChanges { get; set; } = new List<GhostWalkRouteChange>();
 
         public DateTime? CurrentPeriodStart { get; set; }
         public DateTime? CurrentPeriodEnd { get; set; }

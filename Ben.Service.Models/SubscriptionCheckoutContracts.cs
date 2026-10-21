@@ -93,7 +93,8 @@ public record PublicPricingExtras(
     PublicGhostWalkOffer? GhostWalk = null);
 
 /// <summary>The Ghost Walk Tour subscription as a visitor reads it (10/21/2026). Only sent while on sale.</summary>
-/// <param name="MonthlyPrice">One month, before tax.</param>
+/// <param name="MonthlyPrice">One tour route for one month, before tax. Walks and guests on a route
+/// are unlimited (10/21/2026).</param>
 public record PublicGhostWalkOffer(decimal MonthlyPrice);
 
 /// <summary>One bundle of event credits as a buyer reads it.</summary>
@@ -176,6 +177,12 @@ public record StartCheckoutResponse(string RedirectUrl, bool PaidWithoutCharge);
 /// <param name="CurrentPeriodEnd">When the paid month ends.</param>
 /// <param name="CancelAtPeriodEnd">The group has said not to renew.</param>
 /// <param name="PricePaid">What the current month was charged.</param>
+/// <param name="RoutesPaid">Tour routes the running month pays for (10/21/2026).</param>
+/// <param name="RoutesRunning">Routes the group runs: tours not retired.</param>
+/// <param name="PendingOnNextBill">Route changes waiting for the next bill: positive is owed, negative
+/// a credit.</param>
+/// <param name="NextRouteCostsThisMonth">What adding a route now puts on the next bill for the days left.</param>
 public record GhostWalkSubscriptionView(
     bool OnSale, decimal MonthlyPrice, SubscriptionStatus? Status, bool IsStanding,
-    DateTime? CurrentPeriodEnd, bool CancelAtPeriodEnd, decimal? PricePaid);
+    DateTime? CurrentPeriodEnd, bool CancelAtPeriodEnd, decimal? PricePaid,
+    int RoutesPaid = 0, int RoutesRunning = 0, decimal PendingOnNextBill = 0m, decimal NextRouteCostsThisMonth = 0m);

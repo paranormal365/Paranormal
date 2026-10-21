@@ -551,8 +551,10 @@ public interface IBenOrganizationClient
         Guid orgId, Guid? tourId, UpsertTourRequest request, CancellationToken token = default);
 
     /// <summary>Stops or restarts a tour. Retiring never refunds; restoring may charge.</summary>
+    /// <param name="addRoute">Restoring only: the group's yes to adding a route to its Ghost Walk Tour
+    /// subscription when every route it pays for is running (10/21/2026).</param>
     Task<(TourRecord? Result, string? Error)> SetTourRetiredAsync(
-        Guid orgId, Guid tourId, bool retired, CancellationToken token = default);
+        Guid orgId, Guid tourId, bool retired, CancellationToken token = default, bool addRoute = false);
 
     /// <summary>Replaces who guides a tour. Everybody named must be an active member.</summary>
     Task<(TourRecord? Result, string? Error)> SetTourGuidesAsync(

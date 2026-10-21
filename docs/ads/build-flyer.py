@@ -408,8 +408,8 @@ def build():
       <div class="words">
         <div class="big">Free to <em>explore</em>. Pay only for what you run.</div>
         <div class="small">Enthusiasts: free, with the Paranormal Platform and 2&nbsp;GB of your own files · Groups from
-          $19.99 a month · Ghost walks $29 a month per tour · Hosted events $99 each, however many
-          nights · Investigations of public places stay free on every plan.</div>
+          $19.99 a month · Ghost walks $29 a month per tour route · Hosted events $99 each ($19.80 with a paid plan), however
+          many nights · Investigations of public places stay free on every plan.</div>
       </div>
       <div class="url"><b>ishaunted.com</b><span>Have a look tonight</span></div>
     </div>

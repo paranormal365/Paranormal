@@ -235,7 +235,7 @@ ADS = [
                ("Find your people", "Follow the feed, join a group or book an event near you."),
                ("Bring your night", "Start a group, list a tour, or host an event of your own.")],
         offer="Free to <em>explore</em>.",
-        offer_small="Groups from $19.99 a month · ghost walks $29 a month per tour · hosted events $99 each",
+        offer_small="Groups from $19.99 a month · ghost walks $29 a month per tour route · hosted events $99 each ($19.80 with a paid plan)",
         url_small="Web · iPhone & iPad app", fine=FINE,
     ),
     dict(
@@ -319,7 +319,7 @@ ADS = [
             ("camera", "Guests become marketing", "Last night's best photo in your slideshow by breakfast — you approve it."),
         ],
         cta="List your tour at ishaunted.com", cta_small="Unlimited dates and guides",
-        price="$29", price_small="a month per tour",
+        price="$29", price_small="a month per tour route",
         back_headline="More walkers. <em>Fewer</em> no-shows.",
         strip=["w2-cobblestone-night.jpg", "w3-foggy-graveyard.jpg", "i1-flashlight-silhouette.jpg"],
         cards=[
@@ -332,12 +332,12 @@ ADS = [
         ],
         screen=WALK + "41-public-tour.png", shot_focus="top center",
         quote="“One extra ticket a month pays for the listing.”",
-        quote_who="Priced per tour, not per guide",
+        quote_who="Priced per tour route, not per guide",
         steps=[("Create your tour", "Choose ghost walking tour when you start your group."),
                ("Open dates", "Run it twice a year or four nights a week."),
                ("Welcome guests", "They arrive knowing where, when and who.")],
-        offer="<em>$29</em> a month per tour.",
-        offer_small="Or $290 a year. Every guide and every date included — ask about three months free for new tour businesses.",
+        offer="<em>$29</em> a month per tour route.",
+        offer_small="Unlimited walks and guests on every route, and every guide included. Add or retire a route any month.",
         url_small="Your page is public from day one", fine=FINE,
     ),
     dict(
@@ -407,7 +407,7 @@ ADS = [
                ("Publish", "One event credit per event. It's live in minutes."),
                ("Open the door", "Scan passes, even with no signal, from any phone.")],
         offer="<em>$99</em> an event.",
-        offer_small="However many nights. No ticket fees: guests pay you. Credits last a year and come back if you cancel 48+ hours ahead.",
+        offer_small="$19.80 with a paid plan. However many nights. No ticket fees: guests pay you. Credits last a year and come back if you cancel 48+ hours ahead.",
         url_small="Web · iPhone & iPad app", fine=FINE,
     ),
 ]
@@ -531,7 +531,7 @@ def brochure(mails):
   <div class="facts">
     <div class="fact"><b>Rooms or seats</b><span>Guests ask for a room or pick their seats on your plan.</span></div>
     <div class="fact"><b>No signal, no problem</b><span>Passes and the door keep working in the cellar.</span></div>
-    <div class="fact"><b>$99 an event</b><span>However many nights. Guests pay you directly.</span></div>
+    <div class="fact"><b>$99 an event</b><span>$19.80 with a paid plan. However many nights. Guests pay you directly.</span></div>
   </div>
 </section>""")
 
@@ -644,7 +644,7 @@ def brochure(mails):
   <div class="price"><div>
     <div class="big"><em>$99</em> an event</div>
     <ul><li>However many nights: one credit, good for a year</li><li>The credit comes back if you call it off 48+ hours ahead</li>
-    <li>Business plans host as many events as they like</li><li>Guests pay you directly, with no ticket fees</li></ul></div>
+    <li>$19.80 an event for a group with a paid plan</li><li>Guests pay you directly, with no ticket fees</li></ul></div>
     <div class="go"><b>ishaunted.com</b><span>Host your first event</span><span class="soon">iPhone &amp; iPad app on the App Store</span></div></div>
 </div>{folio(8)}</section>""")
 
