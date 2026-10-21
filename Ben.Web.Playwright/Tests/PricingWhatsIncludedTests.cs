@@ -100,10 +100,6 @@ public class PricingWhatsIncludedTests : BenTestBase
             Assert.Ignore("Events are switched off on this site, so the pricing page has no events section.");
 
         var offer = (await ApiAsync("/api/public/pricing/extras")).GetProperty("events");
-        var tiers = await ApiAsync("/api/public/pricing");
-        var anyBuy = tiers.EnumerateArray().Any(t =>
-            t.GetProperty("includedCapabilities") is { ValueKind: JsonValueKind.Array } caps
-            && caps.EnumerateArray().All(c => c.GetInt32() != 4));
 
         await OpenAsync();
 
@@ -112,18 +108,14 @@ public class PricingWhatsIncludedTests : BenTestBase
         await Expect(section.Locator("[data-testid='pricing-event-features']")).ToContainTextAsync("Menus for each night");
         await Expect(section.Locator("[data-testid='pricing-event-features']")).ToContainTextAsync("dining tables");
 
+        // No plan includes events (Ben, 10/21/2026): the card always sells them one at a time, at the
+        // price in the settings, and never says a plan covers them.
         var card = section.Locator("[data-testid='pricing-event-offer']");
-        if (anyBuy)
-        {
-            var price = offer.GetProperty("unitPrice").GetDecimal();
-            await Expect(card).ToContainTextAsync("per event");
-            await Expect(card).ToContainTextAsync($"${price:0}");
-            await Expect(card.GetByRole(AriaRole.Link, new() { Name = "Sign in to buy events" })).ToBeVisibleAsync();
-        }
-        else
-        {
-            await Expect(card).ToContainTextAsync("Every plan includes hosted events");
-        }
+        var price = offer.GetProperty("unitPrice").GetDecimal();
+        await Expect(card).ToContainTextAsync("per event");
+        await Expect(card).ToContainTextAsync($"${price:0}");
+        await Expect(card).Not.ToContainTextAsync("Every plan includes hosted events");
+        await Expect(card.GetByRole(AriaRole.Link, new() { Name = "Sign in to buy events" })).ToBeVisibleAsync();
     }
 
     [Test]

@@ -370,6 +370,9 @@ namespace Ben.Data.Source.Migrations
                     b.Property<Guid?>("OrganizationId")
                         .HasColumnType("uniqueidentifier");
 
+                    b.Property<Guid?>("PayerAppUserId")
+                        .HasColumnType("uniqueidentifier");
+
                     b.Property<string>("PaymentReference")
                         .HasMaxLength(128)
                         .HasColumnType("nvarchar(128)");
@@ -400,6 +403,8 @@ namespace Ben.Data.Source.Migrations
                     b.HasKey("Id");
 
                     b.HasIndex("CreatedByAppUserId");
+
+                    b.HasIndex("PayerAppUserId");
 
                     b.HasIndex("ReceiptNumber")
                         .IsUnique()
@@ -4103,6 +4108,73 @@ namespace Ben.Data.Source.Migrations
                         .IsUnique();
 
                     b.ToTable("FieldSessionUploadFiles");
+                });
+
+            modelBuilder.Entity("Ben.Data.Source.Entities.GhostWalkSubscription", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<bool>("CancelAtPeriodEnd")
+                        .HasColumnType("bit");
+
+                    b.Property<Guid>("CreatedByAppUserId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<DateTime?>("CurrentPeriodEnd")
+                        .HasColumnType("datetime2");
+
+                    b.Property<DateTime?>("CurrentPeriodStart")
+                        .HasColumnType("datetime2");
+
+                    b.Property<DateTime>("DateCreated")
+                        .HasColumnType("datetime2");
+
+                    b.Property<DateTime?>("DateUpdated")
+                        .HasColumnType("datetime2");
+
+                    b.Property<Guid>("OrganizationId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<decimal>("PriceAtPeriodStart")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("decimal(18,2)");
+
+                    b.Property<string>("ProviderCustomerRef")
+                        .HasMaxLength(128)
+                        .HasColumnType("nvarchar(128)");
+
+                    b.Property<string>("ProviderName")
+                        .HasMaxLength(32)
+                        .HasColumnType("nvarchar(32)");
+
+                    b.Property<string>("ProviderPaymentMethodRef")
+                        .HasMaxLength(128)
+                        .HasColumnType("nvarchar(128)");
+
+                    b.Property<string>("ProviderSubscriptionRef")
+                        .HasMaxLength(128)
+                        .HasColumnType("nvarchar(128)");
+
+                    b.Property<int>("Status")
+                        .HasColumnType("int");
+
+                    b.Property<Guid?>("UpdatedByAppUserId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("CreatedByAppUserId");
+
+                    b.HasIndex("OrganizationId")
+                        .IsUnique();
+
+                    b.HasIndex("UpdatedByAppUserId");
+
+                    b.HasIndex("Status", "CurrentPeriodEnd");
+
+                    b.ToTable("GhostWalkSubscriptions");
                 });
 
             modelBuilder.Entity("Ben.Data.Source.Entities.HostedEvent", b =>
@@ -14999,6 +15071,11 @@ namespace Ben.Data.Source.Migrations
                         .HasForeignKey("OrganizationId")
                         .OnDelete(DeleteBehavior.Restrict);
 
+                    b.HasOne("Ben.Data.Source.Entities.AppUser", "PayerAppUser")
+                        .WithMany()
+                        .HasForeignKey("PayerAppUserId")
+                        .OnDelete(DeleteBehavior.NoAction);
+
                     b.HasOne("Ben.Data.Source.Entities.AppUser", "ReferrerAppUser")
                         .WithMany()
                         .HasForeignKey("ReferrerAppUserId")
@@ -15012,6 +15089,8 @@ namespace Ben.Data.Source.Migrations
                     b.Navigation("CreatedByAppUser");
 
                     b.Navigation("Organization");
+
+                    b.Navigation("PayerAppUser");
 
                     b.Navigation("ReferrerAppUser");
 
@@ -17007,6 +17086,32 @@ namespace Ben.Data.Source.Migrations
                     b.Navigation("UpdatedByAppUser");
 
                     b.Navigation("UploadFile");
+                });
+
+            modelBuilder.Entity("Ben.Data.Source.Entities.GhostWalkSubscription", b =>
+                {
+                    b.HasOne("Ben.Data.Source.Entities.AppUser", "CreatedByAppUser")
+                        .WithMany()
+                        .HasForeignKey("CreatedByAppUserId")
+                        .OnDelete(DeleteBehavior.NoAction)
+                        .IsRequired();
+
+                    b.HasOne("Ben.Data.Source.Entities.Organization", "Organization")
+                        .WithMany()
+                        .HasForeignKey("OrganizationId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("Ben.Data.Source.Entities.AppUser", "UpdatedByAppUser")
+                        .WithMany()
+                        .HasForeignKey("UpdatedByAppUserId")
+                        .OnDelete(DeleteBehavior.NoAction);
+
+                    b.Navigation("CreatedByAppUser");
+
+                    b.Navigation("Organization");
+
+                    b.Navigation("UpdatedByAppUser");
                 });
 
             modelBuilder.Entity("Ben.Data.Source.Entities.HostedEvent", b =>

@@ -130,6 +130,84 @@ public sealed class StripeRenewalJob : IScheduledJob
                 _log.LogError(ex, "Seat renewal failed unexpectedly for seat {SeatId}.", seat.Id);
             }
         }
+
+        // ── Ghost Walk Tour subscriptions (10/21/2026), same window, the group's saved card ──
+        //
+        // Renewed only while the subscription is on sale. Ben's rule is that turning it off hides
+        // it and says nothing about it; charging a card every month for something the group can no
+        // longer see on its billing page would be the opposite. The month already paid runs out,
+        // and while it is off, tours are not held back by it, so nothing is lost.
+        var ghostWalkOffer = await Services.Tours.GhostWalkOffer.ReadAsync(db, ct);
+        if (!ghostWalkOffer.OnSale) return;
+
+        var dueGhostWalks = await db.GhostWalkSubscriptions.AsNoTracking()
+            .Include(s => s.Organization)
+            .Where(s => s.ProviderName == "Stripe"
+                     && s.Status == SubscriptionStatus.Active
+                     && !s.CancelAtPeriodEnd
+                     && s.ProviderCustomerRef != null
+                     && s.ProviderPaymentMethodRef != null
+                     && s.CurrentPeriodEnd != null
+                     && s.CurrentPeriodEnd <= now + RenewalWindow)
+            .ToListAsync(ct);
+
+        foreach (var walk in dueGhostWalks)
+        {
+            try
+            {
+                await RenewGhostWalkAsync(db, walk, ghostWalkOffer.MonthlyPrice, ct);
+            }
+            catch (Exception ex)
+            {
+                _log.LogError(ex, "Ghost Walk renewal failed unexpectedly for organization {OrganizationId}.",
+                    walk.OrganizationId);
+            }
+        }
+    }
+
+    /// <summary>
+    /// One more month of the Ghost Walk Tour subscription, at today's price.
+    /// </summary>
+    /// <remarks>
+    /// The live price, like every renewal here: what was frozen last month protects last month. The
+    /// idempotency key is stable for the month being renewed, for the reason the class remarks give.
+    /// </remarks>
+    private async Task RenewGhostWalkAsync(
+        BenDataContext db, Ben.Data.Source.Entities.GhostWalkSubscription walk, decimal price, CancellationToken ct)
+    {
+        var (_, taxRate) = await TaxResolver.ForOrganizationAsync(db, walk.OrganizationId, ct);
+        var tax = TaxResolver.TaxOn(price, taxRate);
+        var periodStart = walk.CurrentPeriodEnd!.Value;
+        var inv = System.Globalization.CultureInfo.InvariantCulture;
+
+        var metadata = new Dictionary<string, string>
+        {
+            [StripeFulfillmentService.CheckoutFacts.Keys.GhostWalk] = walk.OrganizationId.ToString(),
+            [StripeFulfillmentService.CheckoutFacts.Keys.User] = walk.CreatedByAppUserId.ToString(),
+            [StripeFulfillmentService.CheckoutFacts.Keys.Payable] = price.ToString(inv),
+            [StripeFulfillmentService.CheckoutFacts.Keys.TaxRate] = taxRate.ToString(inv),
+            [StripeFulfillmentService.CheckoutFacts.Keys.TaxAmount] = tax.ToString(inv),
+            [StripeFulfillmentService.CheckoutFacts.Keys.PeriodStart] = periodStart.ToString("O"),
+        };
+
+        var outcome = await _stripe.ChargeSavedCardAsync(new StripeRenewalCharge(
+            walk.ProviderCustomerRef!, walk.ProviderPaymentMethodRef!,
+            price + tax,
+            $"IsHaunted Ghost Walk Tour subscription renewal — {walk.Organization.Name}",
+            metadata,
+            IdempotencyKey: $"ghostwalk-{walk.Id:N}-{periodStart:yyyyMMdd}"), ct);
+
+        if (!outcome.Succeeded)
+        {
+            _log.LogWarning(
+                "Ghost Walk renewal declined for organization {OrganizationId}: {Reason} (intent {Intent}). Tomorrow retries.",
+                walk.OrganizationId, outcome.FailureReason, outcome.PaymentIntentRef);
+            return;
+        }
+
+        await _fulfillment.FulfillAsync(new StripeCompletedCheckout(
+            outcome.PaymentIntentRef, outcome.PaymentIntentRef,
+            walk.ProviderCustomerRef, walk.ProviderPaymentMethodRef, metadata), ct);
     }
 
     private async Task RenewSeatAsync(

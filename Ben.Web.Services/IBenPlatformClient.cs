@@ -317,6 +317,13 @@ public interface IBenPlatformClient
     Task<SiteSettingRecord?> SetSiteSettingAsync(
         string key, SetSiteSettingRequest request, CancellationToken token = default);
 
+    /// <summary>
+    /// Sets one sitewide setting and, when the server refuses the value, says why (10/21/2026):
+    /// a price, percentage or bundle the site cannot use is refused with a sentence the page shows.
+    /// </summary>
+    Task<(SiteSettingRecord? Result, string? Error)> SetSiteSettingWithReasonAsync(
+        string key, SetSiteSettingRequest request, CancellationToken token = default);
+
     /// <summary>The caller's public-facing alias for a case, plus what the public sees today.</summary>
     Task<CaseDisplayAliasRecord?> GetCaseDisplayAliasAsync(Guid caseId, CancellationToken token = default);
 

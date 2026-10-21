@@ -510,6 +510,10 @@ builder.Services.AddScoped<Ben.Data.WebApi.Services.Access.HostedEventAccess>(sp
 // unspent credit past its date is gone by the clock, so there is no state for a job to get wrong.
 builder.Services.AddScoped<Ben.Data.WebApi.Services.Scheduling.IScheduledJob,
                            Ben.Data.WebApi.Services.Scheduling.EventCreditExpiryJob>();
+// 10/21/2026: plans stopped including events. Once, after the deploy, this hands a credit to each
+// group whose plan covered a draft event it was already preparing; then it never acts again.
+builder.Services.AddScoped<Ben.Data.WebApi.Services.Scheduling.IScheduledJob,
+                           Ben.Data.WebApi.Services.Scheduling.EventPlanTransitionJob>();
 // Item 235 phase 3: moves an event from published to on-now to over to filed away, on the venue's
 // own clock, so no screen has to work it out from two dates and a time zone.
 builder.Services.AddScoped<Ben.Data.WebApi.Services.Scheduling.IScheduledJob,

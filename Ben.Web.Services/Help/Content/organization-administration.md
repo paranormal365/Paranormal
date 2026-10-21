@@ -791,7 +791,7 @@ image links work the same way — a link copied from the page stops working at t
 
 ## Tours
 
-If you run ghost walks, a **tour** is what you sell and what your plan is priced on. The walk down
+If you run ghost walks, a **tour** is what you sell. The walk down
 Printers Alley is one tour whether you run it twice a year or four nights a week; a walk down a
 different street is a second tour. You'll find them under **Administration → Tours**, and each one
 has its own page.
@@ -814,10 +814,23 @@ between tours if you run more than one.
 
 ### Adding a tour, and what it costs
 
-Your plan covers one tour. Each extra tour is charged for the rest of your current billing period,
-on the card you already have on file, and after that every renewal counts the tours you are
-running. If there is no card on file, you can still run the tour, and it is simply counted at your
-next renewal. The Tours page tells you which of these will happen before you press the button.
+{{#if ghost-walk}}
+Running tours takes a **Ghost Walk Tour subscription**: {{price.ghost-walk-month}} a month, separate
+from your group's plan, with no limit on tours, dates or guests. Any group can take it, on your
+group's **Billing** page under **Ghost Walk Tour subscription**, or from the **Pricing** page.
+Without it you can't add a tour, bring a retired one back, or put a new tour date on the calendar.
+Tours and dates you already have keep running, and guests keep their places. You can stop renewing
+at any time; the month you paid for runs out first.
+
+If your group is on the per-tour business plan, its tours stay covered by that plan as they always
+have.
+
+{{/if}}
+**On the per-tour business plan**, the plan covers one tour. Each extra tour is charged for the rest
+of your current billing period, on the card you already have on file, and after that every renewal
+counts the tours you are running. If there is no card on file, you can still run the tour, and it is
+simply counted at your next renewal. The Tours page tells you which of these will happen before you
+press the button.
 
 **Retiring** a tour stops new dates from being added and drops it from your next renewal. It
 doesn't refund anything for the period you have already paid for, and it leaves the tour's past
@@ -839,7 +852,7 @@ whether to publish one. A guide without a public photo is just named.
 
 A date is one run of the tour, and it goes on the **calendar** like any other event. Pick the tour
 and set the time; the meeting point, length and group size come from the tour unless you change
-them. Scheduling more dates costs nothing, because the plan counts tours, not nights.
+them. Scheduling more dates costs nothing extra: tours are counted, not nights.
 
 For a tour business, every public date must be linked to a tour. Without one, there is nothing to
 tell guests where to meet or who they are meeting, so the calendar won't save it and explains why.
@@ -1078,20 +1091,34 @@ Publishing puts the event on your public page, on the site-wide **What's on** li
 apps, and opens it for bookings. This is when any charge applies, and the page tells you what it
 will be before you press the button.
 
-If your plan includes running events, publishing uses one of your plan's event slots. If it
-doesn't, publishing uses an **event credit**: $99, one credit per event, covering that event from
-the day you publish it. Before you press the button, you can see how many credits you have and what
-the button will do.
+Publishing uses one **event credit**. No plan includes events, the largest included: every event is
+bought on its own. One credit covers one event, however many days in a row it runs. A credit is
+**{{price.event-credit}}**, and a group with a paid plan pays {{percent.event-credit-subscriber}} of that:
+**{{price.event-credit-subscriber}}**. Before you press the button, you can see how many credits you
+have and what the button will do.
+
+Your group's own credits are used first. If the group has none, publishing uses one of **your own**
+credits, if you hold any (see [Buying event credits](#buying-event-credits)).
 
 **An event is only ever charged once.** You can unpublish it and publish it again as often as you
 need. The first publish pays for it, and there is no second charge for the life of that event.
 
 ### Buying event credits
 
-You buy credits on your group's **Billing** page, under **Event credits**. When the Events page
-tells you that you need one, that message links straight there. Buy one or several at a time.
-Payment happens on Stripe's secure page, and the receipt appears in your billing history like any
-other.
+Anyone can buy event credits: a group for itself, or a person for the events they organize.
+
+- **For your group:** on your group's **Billing** page, under **Event credits**. When the Events
+  page tells you that you need one, that message links straight there. A group with a paid plan
+  pays {{percent.event-credit-subscriber}} of the price, and the card shows the lower price.
+- **For yourself:** on **My event credits** (there's a link on the Events page and the Pricing
+  page). Credits you hold are yours, and you pay the full price.
+
+Buy one or several at a time, or a **bundle** when the Pricing page offers one — several credits for
+one price. Payment happens on Stripe's secure page, and the receipt appears in the billing history
+(or, for your own credits, under **Payments** on My event credits).
+
+Your guests never pay through the site. If you charge for your event, you collect that money
+yourself.
 
 A credit lasts **a year from the day you buy it**. When you use it, two things must be true: the
 credit hasn't expired, and the event's first date falls within that year. So you can't use a
@@ -1199,7 +1226,7 @@ wheelchair can decide for themselves whether a flight of stairs to the bedrooms 
 ### Before you publish
 
 A draft costs nothing and isn't visible to anyone outside your group. Publishing puts the event on
-your public page, opens it for bookings, and uses a slot or an event credit. So the page shows a
+your public page, opens it for bookings, and uses an event credit. So the page shows a
 checklist of anything that still needs doing, and each item links to where you fix it.
 
 There are four items. **At least one date**, because nobody can come to an event without a date.
@@ -2482,12 +2509,20 @@ site, so a part of the site that's turned off isn't offered on any plan.
 Below that, **Hosted events** says what an event includes: the rooms or seats plan, bookings and the
 booking board, the program, menus, dining tables and the dietary sheet, passes and the door, staff,
 the event's page, files, the guests' room, and the thank-you afterwards. It also says what an event
-costs on a plan that doesn't include hosting. If you look after a group's billing, you can buy one
-or more events for it right there; they go to your group's event credits, the same as buying them on
-the billing page (see [Buying event credits](#buying-event-credits)).
+costs. No plan includes events, so every event is bought on its own: **{{price.event-credit}}**, or
+**{{price.event-credit-subscriber}}** for a group with a paid plan, with bundles of several events when
+they're offered. Once you're signed in you can buy one or more right there, for a group whose billing
+you look after or for yourself; they go to that group's event credits, or to your own, the same as
+buying them on the billing page (see [Buying event credits](#buying-event-credits)).
 
 ![Hosted events on the Pricing page: what an event includes, and buying events](help-media:organization-administration/pricing-hosted-events.png)
 
+{{#if ghost-walk}}
+When it's offered, **Ghost Walk Tour subscription** comes after that: {{price.ghost-walk-month}} a
+month for as many tours, dates and guests as you like, separate from the investigation plans. If you
+look after a group's billing, **Subscribe** takes you to Stripe's page for that group.
+
+{{/if}}
 Each band on the Pricing page has its own button. If you don't run a group yet, **Start a group on
 this plan** opens the new-group steps with that plan shown at the top; once the group exists, you
 go straight to its billing page to confirm the plan and pay. If you already run a group, **Choose

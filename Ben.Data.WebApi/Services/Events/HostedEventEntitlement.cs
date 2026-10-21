@@ -11,42 +11,43 @@ namespace Ben.Data.WebApi.Services.Events;
 /// Whether this organization may put another event live, and what it will cost them (item 235).
 /// </summary>
 /// <remarks>
-/// <para><b>One place asks the question</b>, because there are two quite different answers and a
-/// screen that guessed which applied would be wrong for half the site's customers.</para>
+/// <para><b>Every event is bought (Ben, 10/21/2026).</b> "Events are not part of subscriptions.
+/// Investigations are part of subscriptions. Events are their own beast and not included in any of
+/// them." Before this date a plan carrying the <see cref="TierCapability.HostEvents"/> capability —
+/// which, capabilities being exclusions, was every paid plan — published events against a cap
+/// instead of a credit. That path is gone: no plan, the top band included, publishes an event. A
+/// subscription buys a lower price for a credit (<see cref="EventCreditOffer"/>), never the event.</para>
 ///
-/// <para><b>A business that runs events for a living</b> — a haunted property, an events company —
-/// is on the flat business plan and its events are governed by a cap on the tier
-/// (<see cref="SubscriptionLimit.ActiveHostedEvents"/>). No row means no cap, which is the
-/// fail-open default every limit here uses: a forgotten row must never close a door.</para>
-///
-/// <para><b>Everybody else buys a credit.</b> Ben, 2026-09-11: "one credit buys one event… they have
-/// a year to have hosted the event otherwise they lose the credit." Metering an occasional weekend
-/// monthly would have priced a hotel weekend as a walk round a block, and would have reached none of
-/// the groups that run one fundraiser a year.</para>
+/// <para><b>Anyone can hold the credit.</b> "Events may be purchased by anyone": a group buys credits
+/// for itself, and a person can buy them for the events they organize. Publishing spends the group's
+/// own credit first and, when it has none, one held by the person pressing the button.</para>
 ///
 /// <para><b>Publishing is the moment</b>, not creating. A draft has no page, takes no bookings and
 /// sends no confirmations, so it costs nothing and can be abandoned freely; publishing is the act
 /// that lets other people's answers start arriving. And an event that has been published once is
 /// paid for for ever — taking it down and putting it back up must not charge twice, which is what
-/// <see cref="Ben.Data.Source.Entities.HostedEvent.FirstPublishedUtc"/> is for.</para>
+/// <see cref="Ben.Data.Source.Entities.HostedEvent.FirstPublishedUtc"/> is for. That is also what keeps
+/// every event published under a plan before 10/21/2026 live and free to put back up.</para>
 /// </remarks>
 public sealed class HostedEventEntitlement
 {
-    private readonly SubscriptionLimitGuard _limits;
-
-    public HostedEventEntitlement(SubscriptionLimitGuard limits) => _limits = limits;
+    /// <param name="limits">
+    /// No longer asked: the plan's event cap went with plans that included events. Kept so the
+    /// container and the fixtures that build this need not change.
+    /// </param>
+    public HostedEventEntitlement(SubscriptionLimitGuard limits) => _ = limits;
 
     /// <summary>
     /// How an organization's next event will be paid for, and whether it can be.
     /// </summary>
-    /// <param name="Kind">Which of the two answers applies.</param>
+    /// <param name="Kind">Always <see cref="EntitlementKind.Credit"/> now; kept so the shape is stable.</param>
     /// <param name="Refusal">
     /// The sentence to show, or null when publishing may go ahead. Always a sentence a person can
     /// act on — what is in the way, and what would clear it.
     /// </param>
-    /// <param name="LiveNow">Events already live and counting.</param>
-    /// <param name="Ceiling">The cap, when there is one. Null means no cap.</param>
-    /// <param name="CreditsAvailable">Unspent, unexpired credits held.</param>
+    /// <param name="LiveNow">Events already live.</param>
+    /// <param name="Ceiling">Always null: there is no plan cap any more.</param>
+    /// <param name="CreditsAvailable">Unspent, unexpired credits the group holds, plus the asker's own.</param>
     public sealed record Verdict(
         EntitlementKind Kind,
         string? Refusal,
@@ -58,24 +59,17 @@ public sealed class HostedEventEntitlement
         public bool MayPublish => Refusal is null;
 
         /// <summary>Whether going live will consume one of the credits held.</summary>
-        public bool SpendsACredit => Kind == EntitlementKind.Credit && Refusal is null;
+        public bool SpendsACredit => Refusal is null;
     }
 
-    /// <summary>Which way this organization pays for an event.</summary>
+    /// <summary>Which way an event is paid for.</summary>
     public enum EntitlementKind
     {
-        /// <summary>On the flat business plan: events are capped, not bought one at a time.</summary>
-        Plan = 0,
-
-        /// <summary>Not on a plan that includes hosting: one credit, one event.</summary>
+        /// <summary>One credit, one event. Value 1 kept from when a plan was the other answer.</summary>
         Credit = 1,
     }
 
-    /// <summary>Events already live for this organization — the number a cap is measured against.</summary>
-    /// <remarks>
-    /// Live, not merely existing: on the public site. A draft costs nothing, a called-off event
-    /// costs nothing, and one that was filed away last spring costs nothing.
-    /// </remarks>
+    /// <summary>Events already live for this organization.</summary>
     public static Task<int> LiveEventsAsync(BenDataContext db, Guid organizationId, CancellationToken ct)
         => db.HostedEvents.CountAsync(
             e => e.OrganizationId == organizationId
@@ -84,40 +78,27 @@ public sealed class HostedEventEntitlement
     /// <summary>
     /// Asks the question for one organization, without changing anything.
     /// </summary>
-    /// <param name="excludingEventId">
-    /// An event already published and being re-checked, so it is not counted against its own cap.
+    /// <param name="excludingEventId">An event already published and being re-checked.</param>
+    /// <param name="appUserId">
+    /// The person asking, whose own credits can also pay. Null counts only the group's.
     /// </param>
     public async Task<Verdict> DescribeAsync(
         BenDataContext db, Guid organizationId, Guid? excludingEventId = null,
-        CancellationToken ct = default)
+        CancellationToken ct = default, Guid? appUserId = null)
     {
         var live = await db.HostedEvents.CountAsync(
             e => e.OrganizationId == organizationId
               && HostedEventStates.CountingAgainstTheBand.Contains(e.LifecycleState)
               && (excludingEventId == null || e.Id != excludingEventId), ct);
 
-        var (onAPlan, _) = await TierAreaResolution.HasCapabilityAsync(
-            db, organizationId, TierCapability.HostEvents, ct);
-
-        if (onAPlan)
-        {
-            // The cap and its wording both come from the guard, so an event's refusal reads like
-            // every other refusal on the site and names the tier and the number.
-            var refusal = await _limits.WhyNotOneMoreAsync(
-                organizationId, SubscriptionLimit.ActiveHostedEvents, live, ct);
-
-            var ceiling = await _limits.ValueOfAsync(
-                organizationId, SubscriptionLimit.ActiveHostedEvents, ct);
-
-            return new Verdict(EntitlementKind.Plan, refusal, live, ceiling, 0);
-        }
-
-        var credits = await EventCredits.SpendableCountAsync(
-            db, organizationId, appUserId: null, DateTime.UtcNow, ct);
+        var now = DateTime.UtcNow;
+        var credits = await EventCredits.SpendableCountAsync(db, organizationId, appUserId: null, now, ct);
+        if (appUserId is { } person)
+            credits += await EventCredits.SpendableCountAsync(db, organizationId: null, person, now, ct);
 
         return new Verdict(
             EntitlementKind.Credit,
-            credits > 0 ? null : NoCreditSentence,
+            credits > 0 ? null : await NoCreditSentenceAsync(db, ct),
             live,
             Ceiling: null,
             CreditsAvailable: credits);
@@ -131,32 +112,21 @@ public sealed class HostedEventEntitlement
     /// spend one credit twice — and so a credit can never go missing without an event going live
     /// for it.</para>
     ///
+    /// <para><b>The group's credit first, then the publisher's own.</b> A credit the group bought is
+    /// the group's money already set aside for this; a person's credit is theirs, and is only reached
+    /// for when the group has nothing to spend.</para>
+    ///
     /// <para>Returns the credit rather than saving it, because the caller owns the transaction.</para>
     /// </remarks>
     public async Task<(EventCredit? Spent, string? Refusal)> TakeForAsync(
         BenDataContext db, HostedEvent hostedEvent, Guid userId, CancellationToken ct)
     {
-        var (onAPlan, _) = await TierAreaResolution.HasCapabilityAsync(
-            db, hostedEvent.OrganizationId, TierCapability.HostEvents, ct);
-
-        if (onAPlan)
-        {
-            var live = await db.HostedEvents.CountAsync(
-                e => e.OrganizationId == hostedEvent.OrganizationId
-                  && HostedEventStates.CountingAgainstTheBand.Contains(e.LifecycleState)
-                  && e.Id != hostedEvent.Id, ct);
-
-            var refusal = await _limits.WhyNotOneMoreAsync(
-                hostedEvent.OrganizationId, SubscriptionLimit.ActiveHostedEvents, live, ct);
-
-            return (null, refusal);
-        }
-
         var now = DateTime.UtcNow;
         var credit = await EventCredits.NextToSpendAsync(
-            db, hostedEvent.OrganizationId, appUserId: null, now, ct);
+                         db, hostedEvent.OrganizationId, appUserId: null, now, ct)
+                  ?? await EventCredits.NextToSpendAsync(db, organizationId: null, userId, now, ct);
 
-        if (credit is null) return (null, NoCreditSentence);
+        if (credit is null) return (null, await NoCreditSentenceAsync(db, ct));
 
         if (EventCredits.WhyItCannotCover(credit, hostedEvent, now) is { } why)
             return (null, why);
@@ -166,15 +136,20 @@ public sealed class HostedEventEntitlement
     }
 
     /// <summary>
-    /// What somebody without a plan and without a credit is told.
+    /// What somebody without a credit is told, with today's price in it.
     /// </summary>
     /// <remarks>
     /// It names the price, because a refusal that does not is a refusal somebody has to go and
-    /// research. Nothing they have built is lost: the event stays a draft with its dates, its
-    /// programme and its page intact, and publishing is the only thing waiting.
+    /// research — and it reads the price from the settings, so it is never a number the site no
+    /// longer charges. Nothing they have built is lost: the event stays a draft.
     /// </remarks>
-    public const string NoCreditSentence =
-        "Publishing an event needs an event credit, and your group has none. "
-      + "A credit is $99 and covers one event from the day you publish it — everything you have "
-      + "built here stays exactly as it is until then.";
+    public static async Task<string> NoCreditSentenceAsync(BenDataContext db, CancellationToken ct)
+        => NoCreditSentence(await EventCreditOffer.ReadAsync(db, ct));
+
+    /// <summary>The no-credit sentence for a given offer.</summary>
+    public static string NoCreditSentence(EventCreditOffer offer)
+        => "Publishing an event uses one event credit, and none is ready to use. "
+         + $"A credit is ${offer.UnitPrice:0.00} (${offer.SubscriberUnitPrice:0.00} for a group with a "
+         + "paid plan) and covers one event, however many days in a row it runs. Buy one on the "
+         + "Billing page; everything you have built here stays as it is until then.";
 }

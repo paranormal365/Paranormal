@@ -99,7 +99,8 @@ public sealed class HostedEventController : OrgCmsControllerBase
             return Forbid();
 
         await using var db = await DbFactory.CreateDbContextAsync(ct);
-        return Ok(ToPlan(await _entitlement.DescribeAsync(db, orgId, null, ct)));
+        // The asker's own credits count too: publishing can spend one when the group has none.
+        return Ok(ToPlan(await _entitlement.DescribeAsync(db, orgId, null, ct, appUserId: userId.Value)));
     }
 
     // ── writing ──────────────────────────────────────────────────────────────
@@ -357,14 +358,14 @@ public sealed class HostedEventController : OrgCmsControllerBase
 
             if (spent is not null)
             {
-                var left = await EventCredits.SpendableCountAsync(
-                    db, orgId, appUserId: null, DateTime.UtcNow, ct);
+                var personal = spent.OwnerAppUserId is not null;
+                var left = personal
+                    ? await EventCredits.SpendableCountAsync(db, organizationId: null, userId.Value, DateTime.UtcNow, ct)
+                    : await EventCredits.SpendableCountAsync(db, orgId, appUserId: null, DateTime.UtcNow, ct);
                 // Minus the one being spent in this same save, which the count above cannot see.
-                note = $"One event credit spent — {Math.Max(0, left - 1)} left.";
-            }
-            else
-            {
-                note = "It's live. Nothing extra was charged.";
+                note = personal
+                    ? $"One of your own event credits spent — {Math.Max(0, left - 1)} left."
+                    : $"One event credit spent — {Math.Max(0, left - 1)} left.";
             }
         }
 
@@ -1524,7 +1525,7 @@ public sealed class HostedEventController : OrgCmsControllerBase
 
     private static HostedEventPlanRecord ToPlan(HostedEventEntitlement.Verdict v)
         => new(
-            v.Kind == HostedEventEntitlement.EntitlementKind.Plan ? "plan" : "credit",
+            "credit",
             v.Refusal,
             PlanSentence(v),
             v.LiveNow, v.Ceiling, v.CreditsAvailable,
@@ -1535,16 +1536,10 @@ public sealed class HostedEventController : OrgCmsControllerBase
     {
         if (v.Refusal is { } refusal) return refusal;
 
-        if (v.Kind == HostedEventEntitlement.EntitlementKind.Plan)
-        {
-            return v.Ceiling is { } cap
-                ? $"Your plan covers {cap} event(s) running at once, and {v.LiveNow} of them are live."
-                : "Your plan covers as many events as you want to run at once.";
-        }
-
-        return $"Publishing spends one of your {v.CreditsAvailable} event credit(s). "
-             + "It covers this event from the day you publish it, and is not returned if you "
-             + "take the event down.";
+        // No plan includes events (Ben, 10/21/2026), so there is only one thing to say.
+        return $"Publishing uses one of the {v.CreditsAvailable} event credit(s) ready to use. "
+             + "It covers this event, however many days in a row it runs, and putting the event "
+             + "back up after taking it down never uses another.";
     }
 
     /// <summary>

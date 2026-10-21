@@ -23,11 +23,22 @@ namespace Ben.Data.Source.Entities
 
         public BillingLedgerKind Kind { get; set; }
 
-        /// <summary>The group this row bills or credits. Null only for referral payouts.</summary>
+        /// <summary>The group this row bills or credits. Null for referral payouts and for a person's own purchase (see <see cref="PayerAppUserId"/>).</summary>
         public Guid? OrganizationId { get; set; }
 
         /// <summary>Who the payout went to. Set only for referral payouts.</summary>
         public Guid? ReferrerAppUserId { get; set; }
+
+        /// <summary>
+        /// The person who paid, when a person bought something in their own right rather than for a
+        /// group — an event credit they hold themselves (10/21/2026). Null for every group row.
+        /// </summary>
+        /// <remarks>
+        /// Ben's rule: event credits are bought "by anyone", a group or a person. A person's purchase
+        /// is still a sale and still needs its charge, its payment and its receipt number, so it lands
+        /// here with no group and this set.
+        /// </remarks>
+        public Guid? PayerAppUserId { get; set; }
 
         /// <summary>Pre-tax amount, always positive. Direction comes from <see cref="Kind"/>;
         /// adjustments carry <see cref="AdjustmentIsCredit"/> to say which way they cut.</summary>
@@ -65,6 +76,7 @@ namespace Ben.Data.Source.Entities
 
         public virtual Organization? Organization { get; set; }
         public virtual AppUser? ReferrerAppUser { get; set; }
+        public virtual AppUser? PayerAppUser { get; set; }
         public virtual AppUser CreatedByAppUser { get; set; } = null!;
         public virtual AppUser? UpdatedByAppUser { get; set; }
     }

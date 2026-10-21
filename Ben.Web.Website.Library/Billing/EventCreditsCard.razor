@@ -1,0 +1,204 @@
+@namespace Ben.Web.Website.Library.Billing
+@using Ben.Service.Models
+@using Ben.Service.Models.Admin
+@using Ben.Web.Services
+@using Ben.Web.Website.Library.Kit
+@inject NavigationManager Nav
+
+@*
+    The event credits card: what a credit costs this buyer, the bundles, a Buy control, and every
+    credit held. One component for the two places a holder sees their credits — a group's billing
+    page and a person's own event credits page (10/21/2026) — so the price and the wording cannot
+    differ between them. Every number comes from the API, which reads the site's settings; nothing
+    here is a price typed into the page.
+*@
+
+<div class="card mb-4" id="event-credits" data-testid="event-credits-card">
+    <div class="card-body">
+        <h2 class="h5 card-title">Event credits</h2>
+        <p class="text-secondary small">
+            Every event uses one credit when it's first published — no plan includes events. One credit
+            covers one event, however many days in a row it runs. A credit is good for a year from the
+            day you buy it, and putting an event back up after taking it down never uses another.
+        </p>
+
+        @if (Credits.Failed)
+        {
+            @*  A card that says "no credits" when the truth is "we couldn't ask" tells
+                somebody they have nothing when they may be holding hundreds of dollars.  *@
+            <div class="alert alert-warning mb-0" role="alert">
+                @(Credits.Reason ?? "Your credits couldn't be loaded just now.")
+            </div>
+        }
+        else if (Credits.Item is { } view)
+        {
+            <p class="mb-3">
+                @if (view.Spendable == 0)
+                {
+                    <text>@HolderPhrase holds <strong>no credits</strong> ready to use.</text>
+                }
+                else
+                {
+                    <text><strong>@view.Spendable</strong> ready to use@(NextExpiry(view) is { } next
+                        ? $", the next expiring {next:MM/dd/yyyy}" : "").</text>
+                }
+            </p>
+
+            @if (view.OnSale)
+            {
+                @if (view.PaysSubscriberPrice)
+                {
+                    <p class="small text-success mb-2" data-testid="event-credits-subscriber-note">
+                        Your group has a paid plan, so it pays @view.SubscriberPercent.ToString("0.##")% of the
+                        price: @BenMoney.Format(view.UnitPrice) a credit instead of @BenMoney.Format(view.FullUnitPrice).
+                    </p>
+                }
+                <div class="row g-2 align-items-end mb-3" style="max-width:640px;">
+                    @if (Bundles(view).Count > 0)
+                    {
+                        <div class="col-12 col-sm-auto">
+                            <label class="form-label small" for="credit-bundle">Buy</label>
+                            <select id="credit-bundle" class="form-select" data-testid="event-credits-bundle"
+                                    @onchange="@(e => _bundle = int.TryParse(e.Value?.ToString(), out var q) ? q : null)">
+                                <option value="" selected="@(_bundle is null)">Single credits</option>
+                                @foreach (var b in Bundles(view))
+                                {
+                                    <option value="@b.Quantity" selected="@(_bundle == b.Quantity)">
+                                        Bundle of @b.Quantity — @BenMoney.Format(b.Price)
+                                    </option>
+                                }
+                            </select>
+                        </div>
+                    }
+                    @if (_bundle is null)
+                    {
+                        <div class="col-auto">
+                            <label class="form-label small" for="credit-quantity">How many</label>
+                            <input id="credit-quantity" type="number" class="form-control" style="width:6rem;"
+                                   min="1" max="@view.MaximumPerPurchase" @bind="_quantity" data-testid="event-credits-quantity" />
+                        </div>
+                        <div class="col-auto">
+                            <div class="text-secondary small">Each</div>
+                            <strong>@BenMoney.Format(view.UnitPrice)</strong>
+                        </div>
+                    }
+                    <div class="col-auto">
+                        <div class="text-secondary small">Total</div>
+                        <strong data-testid="event-credits-total">@BenMoney.Format(Total(view))</strong>
+                        <span class="text-secondary small">plus tax</span>
+                    </div>
+                    <div class="col-auto">
+                        <button type="button" class="btn btn-primary text-nowrap" id="buy-event-credits"
+                                @onclick="BuyAsync" disabled="@_buying">
+                            @(_buying ? "Opening…" : "Buy credits")
+                        </button>
+                    </div>
+                </div>
+            }
+            else
+            {
+                <div class="alert alert-secondary">
+                    Event credits aren't on sale at the moment. Credits already held still work.
+                </div>
+            }
+
+            @if (_error is not null)
+            {
+                <div class="alert alert-danger" role="alert">@_error</div>
+            }
+
+            @if (view.Credits.Count > 0)
+            {
+                <div class="table-responsive">
+                    <table class="table table-sm align-middle mb-0">
+                        <thead><tr>
+                            <th>Bought</th><th>Good until</th><th>Status</th>
+                            <th class="text-end">Paid</th><th>Receipt</th>
+                        </tr></thead>
+                        <tbody>
+                        @foreach (var c in view.Credits)
+                        {
+                            <tr>
+                                <td class="text-nowrap">@c.PurchasedUtc.ToString("MM/dd/yyyy")</td>
+                                <td class="text-nowrap">@c.ExpiresUtc.ToString("MM/dd/yyyy")</td>
+                                <td>
+                                    <span class="badge @CreditBadge(c) me-2">@CreditState(c)</span>
+                                    @if (c.SpentOnEventName is { } name)
+                                    {
+                                        <span>@name</span>
+                                    }
+                                </td>
+                                <td class="text-end text-nowrap">
+                                    @*  Nobody paid for a granted one, and "$0.00" in a money column
+                                        reads as a mistake rather than a gift.  *@
+                                    @(c.GrantedReason is null ? $"${c.PriceAtPurchase:0.00}" : "Given to you")
+                                </td>
+                                <td class="text-nowrap">@(c.ReceiptNumber ?? "—")</td>
+                            </tr>
+                        }
+                        </tbody>
+                    </table>
+                </div>
+            }
+        }
+    </div>
+</div>
+
+@code {
+    /// <summary>The credits and their price, as the API sent them.</summary>
+    [Parameter, EditorRequired] public ItemResult<OrgEventCreditsView> Credits { get; set; }
+
+    /// <summary>"This group" or "You" — who holds the credits, for the no-credits sentence.</summary>
+    [Parameter] public string HolderPhrase { get; set; } = "This group";
+
+    /// <summary>Starts the checkout for a quantity, or for a bundle's quantity when one is chosen.</summary>
+    [Parameter, EditorRequired] public Func<int, int?, Task<(StartCheckoutResponse? Result, string? Error)>> StartCheckout { get; set; } = default!;
+
+    private int _quantity = 1;
+    private int? _bundle;
+    private bool _buying;
+    private string? _error;
+
+    private static IReadOnlyList<EventCreditBundleOffer> Bundles(OrgEventCreditsView view) => view.Bundles ?? [];
+
+    private decimal Total(OrgEventCreditsView view)
+        => _bundle is { } q && Bundles(view).FirstOrDefault(b => b.Quantity == q) is { } bundle
+            ? bundle.Price
+            : view.UnitPrice * Math.Clamp(_quantity, 1, view.MaximumPerPurchase);
+
+    private async Task BuyAsync()
+    {
+        _buying = true;
+        _error = null;
+        try
+        {
+            var max = Credits.Item?.MaximumPerPurchase ?? 1;
+            var (result, error) = await StartCheckout(Math.Clamp(_quantity, 1, max), _bundle);
+            if (result is null) { _error = error ?? "Couldn't start checkout — try again."; return; }
+
+            // forceLoad: Stripe's page is not a Blazor route, and SPA navigation would 404 in the app.
+            Nav.NavigateTo(result.RedirectUrl, forceLoad: true);
+        }
+        finally { _buying = false; }
+    }
+
+    /// <summary>When the next usable credit lapses, so the card can say it without arithmetic.</summary>
+    private static DateTime? NextExpiry(OrgEventCreditsView view)
+        => view.Credits
+            .Where(c => c.SpentUtc is null && c.RefundedUtc is null && c.ExpiresUtc > DateTime.UtcNow)
+            .OrderBy(c => c.ExpiresUtc)
+            .Select(c => (DateTime?)c.ExpiresUtc)
+            .FirstOrDefault();
+
+    private static string CreditState(OrgEventCreditRecord c)
+        => c.RefundedUtc is not null ? "Refunded"
+         : c.SpentUtc is not null ? "Spent on"
+         : c.ExpiresUtc <= DateTime.UtcNow ? "Expired"
+         : "Ready";
+
+    private static string CreditBadge(OrgEventCreditRecord c)
+        => c.RefundedUtc is not null ? "bg-secondary"
+         : c.SpentUtc is not null ? "bg-info"
+         : c.ExpiresUtc <= DateTime.UtcNow ? "bg-warning text-dark"
+         : "bg-success";
+}

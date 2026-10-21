@@ -1,4 +1,4 @@
-﻿using Ben.Data.Common.Enums;
+using Ben.Data.Common.Enums;
 
 namespace Ben.Service.Models;
 
@@ -86,7 +86,25 @@ public record PublicSubscriptionTier(
 /// </remarks>
 /// <param name="FreeAccountStorageMegabytes">How much one person may keep without a paid plan.
 /// Members of a group on a paid plan aren't capped.</param>
-public record PublicPricingExtras(int FreeAccountStorageMegabytes, PublicEventOffer Events);
+public record PublicPricingExtras(
+    int FreeAccountStorageMegabytes, PublicEventOffer Events,
+    // 10/21/2026: the Ghost Walk Tour subscription. Null when it is not on sale, so a page that has
+    // it in hand has a price to show and a page without it says nothing at all.
+    PublicGhostWalkOffer? GhostWalk = null);
+
+/// <summary>The Ghost Walk Tour subscription as a visitor reads it (10/21/2026). Only sent while on sale.</summary>
+/// <param name="MonthlyPrice">One month, before tax.</param>
+public record PublicGhostWalkOffer(decimal MonthlyPrice);
+
+/// <summary>One bundle of event credits as a buyer reads it.</summary>
+/// <param name="Quantity">How many credits.</param>
+/// <param name="FullPrice">The bundle's price as the settings say it.</param>
+/// <param name="Price">What THIS reader pays for it — the subscriber percentage of the full price
+/// for a group with a paid plan, otherwise the full price. On the public price list it is the full
+/// price.</param>
+/// <param name="SubscriberPrice">The paid-subscriber price for the bundle, for the price list to show
+/// beside the full one.</param>
+public record EventCreditBundleOffer(int Quantity, decimal FullPrice, decimal Price, decimal SubscriberPrice);
 
 /// <summary>One hosted event bought on its own (an event credit), as a visitor reads it.</summary>
 /// <param name="OnSale">Whether events can be bought at the moment.</param>
@@ -97,9 +115,15 @@ public record PublicPricingExtras(int FreeAccountStorageMegabytes, PublicEventOf
 /// gives the event back.</param>
 /// <param name="StorageMegabytes">Room for each event's files, gallery and photos.</param>
 /// <param name="FilesKeptDays">How long an event's files are kept after its last date.</param>
+/// <param name="SubscriberPercent">What a group with a paid plan pays, as a percentage of the full
+/// price (10/21/2026).</param>
+/// <param name="SubscriberUnitPrice">One event at that percentage.</param>
+/// <param name="Bundles">Several events for one price, smallest first.</param>
 public record PublicEventOffer(
     bool OnSale, decimal UnitPrice, int LifeDays, int MaximumPerPurchase,
-    int CancellationWindowHours, int StorageMegabytes, int FilesKeptDays);
+    int CancellationWindowHours, int StorageMegabytes, int FilesKeptDays,
+    decimal SubscriberPercent = 20m, decimal SubscriberUnitPrice = 0m,
+    IReadOnlyList<EventCreditBundleOffer>? Bundles = null);
 
 /// <summary>One cap as it actually binds a group right now.</summary>
 /// <param name="FromContract">
@@ -140,3 +164,18 @@ public record StartCheckoutRequest(BillingInterval Interval, string? CouponCode)
 /// <param name="PaidWithoutCharge">True on the free-coupon path, so the screen can say
 /// "you're subscribed" instead of "redirecting to payment…".</param>
 public record StartCheckoutResponse(string RedirectUrl, bool PaidWithoutCharge);
+
+/// <summary>
+/// A group's Ghost Walk Tour subscription as its billing page shows it (10/21/2026).
+/// </summary>
+/// <param name="OnSale">Whether it can be bought. False hides the card, unless the group already
+/// holds a period that is still running.</param>
+/// <param name="MonthlyPrice">Today's price for one month, before tax.</param>
+/// <param name="Status">The row's status, or null when the group has never subscribed.</param>
+/// <param name="IsStanding">Paid through right now, so tours are unlocked.</param>
+/// <param name="CurrentPeriodEnd">When the paid month ends.</param>
+/// <param name="CancelAtPeriodEnd">The group has said not to renew.</param>
+/// <param name="PricePaid">What the current month was charged.</param>
+public record GhostWalkSubscriptionView(
+    bool OnSale, decimal MonthlyPrice, SubscriptionStatus? Status, bool IsStanding,
+    DateTime? CurrentPeriodEnd, bool CancelAtPeriodEnd, decimal? PricePaid);

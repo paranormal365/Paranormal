@@ -1,0 +1,135 @@
+@page "/my-event-credits"
+@namespace Ben.Web.Website.Library.Billing
+@using Ben.Data.Common.Enums
+@using Ben.Service.Models
+@using Ben.Service.Models.Admin
+@using Ben.Web.Services
+@using Ben.Web.Services.WebApi
+@using Ben.Web.Website.Library.Kit
+@inject IBenAdminClient AdminClient
+@inject IBenUserState UserState
+@inject IJSRuntime JS
+@inject NavigationManager Nav
+
+@*
+    A person's own event credits (10/21/2026). Ben: "Events may be purchased by anyone" — a group buys
+    them on its billing page; a person who organizes events buys them here and holds them, and
+    publishing one of their group's events spends theirs when the group has none. A page rather than a
+    window: it is where the receipts live.
+*@
+
+<PageTitle>My event credits</PageTitle>
+
+<div class="container-fluid px-3 py-4" style="max-width:1000px; margin:0 auto;">
+    <h1 class="mb-1">My event credits</h1>
+    <p class="text-secondary mb-4">
+        Credits you hold yourself, for the events you organize. Publishing an event uses your group's
+        credit first, and one of yours when the group has none. A group with a paid plan pays less for
+        credits on its own Billing page.
+    </p>
+
+    @if (_banner is not null)
+    {
+        <div class="alert @(_banner.Value.Css) d-flex justify-content-between align-items-center" role="status">
+            <span>@_banner.Value.Text</span>
+            <button type="button" class="btn-close" aria-label="Close" @onclick="() => _banner = null"></button>
+        </div>
+    }
+
+    @if (_loading)
+    {
+        <BenLoaderOverlay Visible="true" Text="Loading your credits…" />
+    }
+    else if (!_signedIn)
+    {
+        <div class="alert alert-secondary">
+            <a href="@SignInLink.For("my-event-credits")">Sign in</a> to see and buy your own event credits.
+        </div>
+    }
+    else
+    {
+        <EventCreditsCard Credits="@_credits" HolderPhrase="You" StartCheckout="@StartAsync" />
+
+        <div class="card mb-4">
+            <div class="card-body">
+                <h2 class="h5 card-title">Payments</h2>
+                <BenListState TItem="OrgBillingHistoryRecord" Result="@_history" EmptyText="Nothing bought yet"
+                              OnRetry="@LoadHistoryAsync">
+                    <div class="table-responsive">
+                        <table class="table table-sm align-middle mb-0">
+                            <thead><tr><th>Date</th><th>What</th><th class="text-end">Amount</th><th class="text-end">Tax</th><th></th></tr></thead>
+                            <tbody>
+                                @foreach (var row in _history.Items)
+                                {
+                                    <tr>
+                                        <td class="text-nowrap">@row.DateCreated.ToString("MM/dd/yyyy")</td>
+                                        <td>@row.Description</td>
+                                        <td class="text-end text-nowrap">@($"${row.Amount:0.00}")</td>
+                                        <td class="text-end text-nowrap">@(row.TaxAmount > 0 ? $"${row.TaxAmount:0.00}" : "—")</td>
+                                        <td class="text-end">
+                                            @if (row.ReceiptNumber is { } n)
+                                            {
+                                                <button type="button" class="btn btn-outline-primary btn-sm text-nowrap"
+                                                        @onclick="@(() => DownloadReceiptAsync(row.Id))">
+                                                    Receipt R-@n.ToString("00000")
+                                                </button>
+                                            }
+                                        </td>
+                                    </tr>
+                                }
+                            </tbody>
+                        </table>
+                    </div>
+                </BenListState>
+                @if (_receiptError is not null)
+                {
+                    <div class="alert alert-warning mt-2 mb-0" role="alert">@_receiptError</div>
+                }
+            </div>
+        </div>
+    }
+</div>
+
+@code {
+    private bool _loading = true;
+    private bool _signedIn;
+    private ItemResult<OrgEventCreditsView> _credits;
+    private LoadResult<OrgBillingHistoryRecord> _history;
+    private (string Css, string Text)? _banner;
+    private string? _receiptError;
+
+    protected override async Task OnInitializedAsync()
+    {
+        // Reachable directly, so the first render must not ask without a token (the AuthReady rule).
+        if (!await UserState.WaitUntilAuthReadyAsync(RendererInfo.IsInteractive)) return;
+        _signedIn = UserState.IsAuthenticated;
+
+        var query = new Uri(Nav.Uri).Query;
+        if (query.Contains("credits=success"))
+            _banner = ("alert-success", "Payment received — your event credits are below, and the receipt is under Payments.");
+        else if (query.Contains("credits=cancelled"))
+            _banner = ("alert-secondary", "Checkout was canceled. No credits were bought.");
+
+        if (_signedIn)
+        {
+            _credits = await AdminClient.GetMyEventCreditsAsync();
+            await LoadHistoryAsync();
+        }
+        _loading = false;
+    }
+
+    private async Task LoadHistoryAsync()
+        => _history = await AdminClient.GetMyEventCreditHistoryAsync();
+
+    private Task<(StartCheckoutResponse? Result, string? Error)> StartAsync(int quantity, int? bundle)
+        => AdminClient.StartMyEventCreditCheckoutAsync(quantity, bundle);
+
+    private async Task DownloadReceiptAsync(Guid entryId)
+    {
+        _receiptError = null;
+        var receipt = await AdminClient.DownloadMyEventCreditReceiptAsync(entryId);
+        if (receipt is null) { _receiptError = "That receipt couldn't be downloaded just now. Try again."; return; }
+        await JS.InvokeVoidAsync("downloadFileFromBase64",
+            Convert.ToBase64String(receipt.Value.Data), "text/html", receipt.Value.FileName);
+    }
+}

@@ -79,6 +79,49 @@ public static class SiteSettingKeys
     public const string EventCreditPriceUsd = "events.credit-price-usd";
 
     /// <summary>
+    /// What a group with an active paid subscription pays for an event credit, as a percentage of
+    /// the full price (10/21/2026).
+    /// </summary>
+    /// <remarks>
+    /// Ben: "A paid subscription for an organization should let them purchase events for a reduced
+    /// price... like 20%. So, if it is $99 to purchase an event, a paid subscriber could get it for
+    /// $20." The percentage is what they PAY, not the discount: 20 makes $99 into $19.80. It applies
+    /// to bundles too. Unset reads as 20; anything outside 1 to 100 is refused when it is saved.
+    /// </remarks>
+    public const string EventCreditSubscriberPercent = "events.credit-subscriber-percent";
+
+    /// <summary>
+    /// Bundle offers for event credits: several credits for one price (10/21/2026).
+    /// </summary>
+    /// <remarks>
+    /// One offer per line, written as quantity = price, e.g. <c>3 = 249</c>. Empty means no bundles,
+    /// only single credits. Parsed and checked by <c>EventCreditPricing.ParseBundles</c>, which the
+    /// settings page, checkout and the price list all share, so a bundle cannot be shown at one
+    /// price and charged at another.
+    /// </remarks>
+    public const string EventCreditBundles = "events.credit-bundles";
+
+    /// <summary>
+    /// Whether the Ghost Walk Tour subscription is on sale (10/21/2026).
+    /// </summary>
+    /// <remarks>
+    /// <para>Ben: "It is just monthly and either enabled or disabled by a setting configured by the
+    /// administrator." Off hides the subscription everywhere and says nothing about it, and tours are
+    /// not held back by it: a gate nobody can buy their way through would be a closed door with no
+    /// sign on it.</para>
+    /// <para><b>Unset reads as OFF</b>, unlike the other switches here. It is a new product with no
+    /// price until one is set, and turning it on is what starts asking tour groups to pay.</para>
+    /// </remarks>
+    public const string GhostWalkEnabled = "tours.ghost-walk-enabled";
+
+    /// <summary>What the Ghost Walk Tour subscription costs each month, in dollars (10/21/2026).</summary>
+    /// <remarks>
+    /// No default: until a price is set the subscription is not on sale, whatever the switch says.
+    /// Each period freezes what it was charged, so moving this reaches the next renewal only.
+    /// </remarks>
+    public const string GhostWalkMonthlyPriceUsd = "tours.ghost-walk-monthly-price-usd";
+
+    /// <summary>
     /// How long before an event starts a cancellation still returns its credit, in hours.
     /// </summary>
     /// <remarks>
@@ -293,16 +336,36 @@ public static class SiteSettingKeys
             + "tour business already signed up carries on exactly as it is: its tours, dates, "
             + "sign-ups and billing are untouched. Paranormal events businesses are not affected."),
         (EventCreditsEnabled, "Sell event credits",
-            "When on, a group whose plan does not include hosting events can buy a credit to publish "
-            + "one. One credit covers one event, and it lapses a year after it is bought. Turning "
-            + "this off stops new purchases; credits already held are unaffected."),
+            "When on, anyone can buy event credits — a group for itself, or a person for the events "
+            + "they organize. No plan includes events: publishing an event always uses one credit. One "
+            + "credit covers one event, however many days in a row it runs, and lapses a year after it "
+            + "is bought. Turning this off stops new purchases; credits already held are unaffected."),
         (PlanPurchasesEnabled, "Sell plans and seats",
             "When on, groups can subscribe to a plan and extra members can pay for their seats. When off, "
             + "prices stay on the pricing page but the buttons to buy are removed, and nobody can start a "
             + "payment for a plan or a seat. Plans already paid for carry on; event credits have their own switch."),
         (EventCreditPriceUsd, "Event credit price ($)",
             "What one event credit costs. Leave empty for the standard $99. Changing it never "
-            + "affects a credit somebody already bought — each one remembers what was paid."),
+            + "affects a credit somebody already bought — each one remembers what was paid. The "
+            + "home page, the Pricing page, the billing pages and the help all show this price."),
+        (EventCreditSubscriberPercent, "Paid-subscriber price (% of the full price)",
+            "What a group with an active paid subscription pays for an event credit or a bundle, as a "
+            + "percentage of the full price. 20 means a $99 credit costs them $19.80. Leave empty for "
+            + "20. Any whole or decimal number from 1 to 100."),
+        (EventCreditBundles, "Event credit bundles",
+            "Several credits for one price. One offer per line, written as how many = price, for "
+            + "example \"3 = 249\". A bundle must be for 2 to 20 credits and each line a different "
+            + "number of credits; up to six bundles. Paid subscribers pay their percentage of the "
+            + "bundle price too. Leave empty to sell single credits only."),
+        (GhostWalkEnabled, "Sell the Ghost Walk Tour subscription",
+            "When on, and a monthly price is set, any group can subscribe to run ghost walk tours "
+            + "with no limit on tours or guests, and adding a tour or a tour date needs the "
+            + "subscription. When off, the subscription is hidden everywhere and tours are not held "
+            + "back by it. Off until you turn it on. Subscriptions already paid run to the end of "
+            + "their month and are not renewed while it is off."),
+        (GhostWalkMonthlyPriceUsd, "Ghost Walk Tour subscription price ($ a month)",
+            "What the Ghost Walk Tour subscription costs each month. Leave empty and it is not on "
+            + "sale. A new price reaches each subscriber at their next renewal."),
         (SiteAnnouncement, "Site-wide announcement",
             "A short notice shown across the site — planned maintenance, known issues. Leave empty to show nothing."),
         (PublicContactEmail, "Public contact email",
@@ -420,8 +483,12 @@ public static class SiteSettingKeys
          [PlanPurchasesEnabled]),
 
         ("Events",
-         "What it costs a group to put an event on, when their plan does not already include it.",
-         [EventCreditsEnabled, EventCreditPriceUsd]),
+         "What it costs to put an event on. No plan includes events, so every event uses one credit.",
+         [EventCreditsEnabled, EventCreditPriceUsd, EventCreditSubscriberPercent, EventCreditBundles]),
+
+        ("Ghost Walk Tour subscription",
+         "A monthly subscription of its own, separate from the investigation plans, for running tours.",
+         [GhostWalkEnabled, GhostWalkMonthlyPriceUsd]),
 
         ("Default profile pictures",
          "Shown when somebody has no photo the viewer is allowed to see.",
@@ -484,7 +551,7 @@ public static class SiteSettingKeys
     /// a set here rather than a fourth tuple field so the seed stays readable.
     /// </remarks>
     public static readonly IReadOnlySet<string> MultiLineKeys =
-        new HashSet<string> { ContactPostalAddress, SiteAnnouncement };
+        new HashSet<string> { ContactPostalAddress, SiteAnnouncement, EventCreditBundles };
 
     /// <summary>
     /// The feature switches, paired with what each reads when no-one has ever set it.
@@ -539,6 +606,7 @@ public static class SiteSettingKeys
                 .Append(AllowOrganizationSelfRegistration)
                 .Append(AllowTourBusinessSignUps)
                 .Append(EventCreditsEnabled)
+                .Append(GhostWalkEnabled)
                 .Append(PlanPurchasesEnabled)
                 .Append(StoreCheckoutEnabled)
                 .Append(StoreLinkEnabled),

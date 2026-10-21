@@ -241,6 +241,8 @@ public sealed class HostedEventControllerTests
     public async Task Publishing_makes_the_umbrella_public_and_stamps_when()
     {
         var f = await SeedAsync();
+        // No plan includes events (10/21/2026): publishing always needs a credit in hand.
+        await GiveCreditAsync(f);
         var controller = Build(f);
         var record = Created(await controller.Create(OrgId, Weekend(), default));
 
@@ -258,6 +260,8 @@ public sealed class HostedEventControllerTests
     public async Task Taking_it_down_and_putting_it_back_up_never_charges_twice()
     {
         var f = await SeedAsync();
+        // No plan includes events (10/21/2026): publishing always needs a credit in hand.
+        await GiveCreditAsync(f);
         var controller = Build(f);
         var record = Created(await controller.Create(OrgId, Weekend(), default));
 
@@ -300,6 +304,8 @@ public sealed class HostedEventControllerTests
     {
         // Audit finding A3: a dispute about who called a weekend off had no history.
         var f = await SeedAsync();
+        // No plan includes events (10/21/2026): publishing always needs a credit in hand.
+        await GiveCreditAsync(f);
         var controller = Build(f);
         var audit = new Mock<Ben.Service.RepositoryService.GenericInterfaces.IAuditLogService>();
         var services = new Microsoft.Extensions.DependencyInjection.ServiceCollection();
@@ -511,6 +517,14 @@ public sealed class HostedEventControllerTests
         // And it was not taken for an event it could not cover.
         await using var after = await f.CreateDbContextAsync();
         Assert.Equal(0, await after.EventCredits.CountAsync(c => c.SpentUtc != null));
+    }
+
+    /// <summary>Puts one usable credit in the group's hands, for tests about what publishing does.</summary>
+    private static async Task GiveCreditAsync(IDbContextFactory<BenDataContext> f)
+    {
+        await using var db = await f.CreateDbContextAsync();
+        db.EventCredits.Add(NewCredit(DateTime.UtcNow.AddDays(-1), DateTime.UtcNow.AddDays(364)));
+        await db.SaveChangesAsync();
     }
 
     private static EventCredit NewCredit(DateTime purchased, DateTime expires)
@@ -1227,6 +1241,8 @@ public sealed class HostedEventControllerTests
         // finalized." Without this the endpoint would take an ended event to Draft, and since its
         // credit never came back it would then publish again for nothing: one credit, two events.
         var f = await SeedAsync();
+        // No plan includes events (10/21/2026): publishing always needs a credit in hand.
+        await GiveCreditAsync(f);
         var controller = Build(f);
         var record = Created(await controller.Create(OrgId, Weekend(), default));
 

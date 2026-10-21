@@ -899,19 +899,6 @@ internal static class HostedEventDemoSeeder
     {
         var verdict = await entitlement.DescribeAsync(db, hosted.OrganizationId, hosted.Id);
 
-        if (verdict.Kind is not HostedEventEntitlement.EntitlementKind.Credit)
-        {
-            // On a plan. Anything standing in the way is a cap somebody configured, and inventing
-            // room under it is not the seeder's to do — it says so and leaves the draft alone.
-            if (verdict.Refusal is not null)
-            {
-                Console.WriteLine(
-                    $"[HostedEventDemoSeeder] Left \"{hosted.Name}\" a draft — {verdict.Refusal}");
-                return false;
-            }
-            return true;
-        }
-
         if (verdict.CreditsAvailable > 0) return true;
 
         var now = DateTime.UtcNow;

@@ -22,8 +22,26 @@ AUDIENCE_LABEL = {
 }
 
 
+# Live values (10/21/2026). The in-app help fills {{price.event-credit}} and the others from the
+# site's settings and shows {{#if ...}} passages only while they apply; printed, there is no live
+# site, so every passage is kept and each value reads as words. The same table as
+# HelpContentService.Fallbacks in Ben.Web.Services/Help/HelpContentService.cs.
+LIVE_FALLBACKS = {
+    "price.event-credit": "the price shown on the Pricing page",
+    "price.event-credit-subscriber": "a share of that price",
+    "percent.event-credit-subscriber": "the percentage shown on the Pricing page",
+    "price.ghost-walk-month": "the monthly price shown on the Pricing page",
+}
+
+
+def apply_live_fallbacks(body):
+    body = re.sub(r"^[ \t]*\{\{#if [a-z][a-z0-9.-]*\}\}[ \t]*\n", "", body, flags=re.M)
+    body = re.sub(r"^[ \t]*\{\{/if\}\}[ \t]*\n?", "", body, flags=re.M)
+    return re.sub(r"\{\{([a-z][a-z0-9.-]*)\}\}", lambda m: LIVE_FALLBACKS.get(m.group(1), m.group(0)), body)
+
+
 def parse(path):
-    raw = path.read_text().replace("\r\n", "\n")
+    raw = apply_live_fallbacks(path.read_text().replace("\r\n", "\n"))
     if not raw.startswith("---\n"):
         return None
     end = raw.index("\n---", 4)

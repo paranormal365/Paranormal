@@ -13,8 +13,8 @@ namespace Ben.Web.Playwright.Tests;
 /// nowhere.</para>
 ///
 /// <para>A fresh group is registered through the same endpoint the Start a Group wizard uses, then
-/// deleted whatever happened — a group with a plan already on it would prove nothing about the
-/// credit path, which only opens for groups whose plan does not include hosting.</para>
+/// deleted whatever happened. Every group pays for an event with a credit; no plan includes events
+/// (10/21/2026).</para>
 ///
 /// <para><b>What this does not do:</b> it never completes a Stripe payment. Checkout is proved as
 /// far as the session Stripe hands back, which exercises permission, price, tax and the metadata
@@ -72,10 +72,8 @@ public class EventCreditTests : BenTestBase
 
         try
         {
-            // How this group pays for an event. With no tier on the site excluding HostEvents,
-            // every capability fail-opens and this group is on the plan path — which is correct
-            // behaviour for a half-configured price list, and means there is no credit refusal to
-            // look at. That is a configuration fact, not a defect.
+            // How this group pays for an event. Since 10/21/2026 no plan includes events, so this
+            // is always "credit"; the guard stays so an older server reads as skipped, not failed.
             var plan = await api.GetAsync($"/api/organizations/{orgId}/events/plan", new() { Headers = headers });
             Assert.That(plan.Ok, Is.True, await plan.TextAsync());
             var paysWith = (await plan.JsonAsync())!.Value.GetProperty("paysWith").GetString();

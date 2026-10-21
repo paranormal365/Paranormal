@@ -624,6 +624,7 @@ public sealed class OrganizationPurge
             await db.OrganizationPages.Where(x => x.OrganizationId == organizationId).ExecuteDeleteAsync(ct);
             await db.OrganizationPhones.Where(x => x.OrganizationId == organizationId).ExecuteDeleteAsync(ct);
             await db.OrganizationSubscriptions.Where(x => x.OrganizationId == organizationId).ExecuteDeleteAsync(ct);
+            await db.GhostWalkSubscriptions.Where(x => x.OrganizationId == organizationId).ExecuteDeleteAsync(ct);
             await db.OrganizationUrlNameAliases.Where(x => x.OrganizationId == organizationId).ExecuteDeleteAsync(ct);
             // A session at another group's event can be in one of this group's rooms, when this group
             // was the venue and lent them (item 235 phase 10). The session stays; it loses the room.

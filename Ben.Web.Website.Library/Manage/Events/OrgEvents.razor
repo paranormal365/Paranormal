@@ -53,6 +53,8 @@
                    href="@($"/organizations/{OrgId}/billing#event-credits")">
                     @(_plan.MayPublish ? "See your credits" : "Buy an event credit")
                 </a>
+                @* A person can hold credits of their own too (10/21/2026). *@
+                <a class="ms-2" id="events-my-credits" href="/my-event-credits">Your own credits</a>
             }
         </div>
     }

@@ -63,6 +63,11 @@ public sealed class AdminSiteSettingController : BenControllerBase
         if (key.StartsWith(SiteSettingKeys.StorePrefix, StringComparison.Ordinal))
             return BadRequest(StoreSettingsElsewhere);
 
+        // Money settings are checked here, where they are saved, so a mistyped price or bundle is
+        // refused with a sentence on the settings page instead of quietly read as the default.
+        if (WhyNotValid(key, request.Value) is { } invalid)
+            return BadRequest(invalid);
+
         var before = (await _settings.GetAllAsync(ct)).First(s => s.Key == key);
         var beforeSnapshot = new SiteSetting { Id = before.Id, Key = before.Key, Value = before.Value };
 
@@ -75,6 +80,21 @@ public sealed class AdminSiteSettingController : BenControllerBase
 
         return Ok(ToRecord(row));
     }
+
+    /// <summary>
+    /// What is wrong with a value for one of the price settings, or null when it may be saved.
+    /// Empty always may: it clears the setting back to its default.
+    /// </summary>
+    public static string? WhyNotValid(string key, string? value) => key switch
+    {
+        SiteSettingKeys.EventCreditPriceUsd => Services.Tours.GhostWalkOffer.WhyNotAPrice(value) is null
+            ? null
+            : "Write the event credit price as a number above zero, without the dollar sign — for example 99.",
+        SiteSettingKeys.EventCreditSubscriberPercent => Services.Events.EventCreditPricing.WhyNotAPercent(value),
+        SiteSettingKeys.EventCreditBundles => Services.Events.EventCreditPricing.WhyNotBundles(value),
+        SiteSettingKeys.GhostWalkMonthlyPriceUsd => Services.Tours.GhostWalkOffer.WhyNotAPrice(value),
+        _ => null,
+    };
 
     /// <summary>The refusal for a store key sent to this door.</summary>
     public const string StoreSettingsElsewhere = "Store settings are edited on the store settings page.";

@@ -40,25 +40,21 @@ public enum TierCapability
 
 
     /// <summary>
-    /// Running hosted events at all — multi-night events with rooms, a programme and a door
-    /// (item 235).
+    /// RETIRED 10/21/2026. Once: a plan that published hosted events without a credit (item 235).
     /// </summary>
     /// <remarks>
-    /// A business kind pays per active event the way it pays per tour, so this capability is for
-    /// the OTHER case: a group on the member ladder that wants to hold one. Withholding it is how
-    /// the free lane stays the free lane.
+    /// Ben: "Events are not part of subscriptions." Nothing reads this any more — every event is
+    /// published against an event credit. The value is kept because rows carry it; see
+    /// <see cref="TierCapabilities"/> for the capabilities a plan can actually be sold with.
     /// </remarks>
     HostEvents = 4,
 
     /// <summary>
-    /// Buying event credits: one credit buys one event, for a group whose plan does not otherwise
-    /// include hosting.
+    /// RETIRED 10/21/2026. Buying event credits is not a plan's to give or withhold.
     /// </summary>
     /// <remarks>
-    /// Ben's rule, 2026-09-11: a credit is a single event a member or group may schedule and host,
-    /// it expires a year after it is bought, and three events need three credits. Declared now so
-    /// the tier page lists it and the entitlement code has something real to point at; the purchase
-    /// itself is recorded and deliberately unbuilt.
+    /// Ben: event credits "may be purchased by anyone", a group or a person. Nothing reads this; the
+    /// value is kept because rows may carry it.
     /// </remarks>
     EventCredits = 5,
 

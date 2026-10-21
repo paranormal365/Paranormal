@@ -1,4 +1,4 @@
-﻿using Ben.Data.Common.Enums;
+using Ben.Data.Common.Enums;
 using Ben.Data.Source.Context;
 using Ben.Service.Models.Admin;
 using Microsoft.AspNetCore.Authorization;
@@ -105,35 +105,72 @@ public sealed class OrganizationBillingController : Cms.OrgCmsControllerBase
 
         await using var db = await _db.CreateDbContextAsync(ct);
 
-        var credits = await db.EventCredits.AsNoTracking()
-            .Where(c => c.OwnerOrganizationId == organizationId)
-            .OrderByDescending(c => c.PurchasedUtc)
-            .Select(c => new OrgEventCreditRecord(
-                c.Id, c.PriceAtPurchase, c.Currency, c.PurchasedUtc, c.ExpiresUtc,
-                c.SpentUtc, c.SpentOnHostedEventId,
-                c.SpentOnHostedEvent != null ? c.SpentOnHostedEvent.Name : null,
-                c.RefundedUtc, c.ReceiptNumber, c.GrantedReason))
-            .ToListAsync(ct);
+        // Priced the way checkout prices it: the paid-subscriber percentage for a group with a
+        // standing paid plan, and the bundles from the settings (10/21/2026).
+        return Ok(await Services.Events.EventCreditViews.BuildAsync(
+            db, organizationId, appUserId: null, DateTime.UtcNow, ct));
+    }
 
-        var settings = HttpContext.RequestServices.GetRequiredService<Services.SiteSettingsService>();
-        var onSale = await settings.GetBoolAsync(
-            Services.SiteSettingKeys.EventCreditsEnabled, whenUnset: true, ct);
-        var price = await settings.GetDecimalAsync(
-            Services.SiteSettingKeys.EventCreditPriceUsd,
-            Services.Events.EventCredits.DefaultPriceUsd, ct);
+    // ── Ghost Walk Tour subscription (10/21/2026) ─────────────────────────────
 
+    /// <summary>
+    /// The group's Ghost Walk Tour subscription and today's price. Read with the billing key.
+    /// </summary>
+    [HttpGet("ghost-walk")]
+    public async Task<ActionResult<Ben.Service.Models.GhostWalkSubscriptionView>> GetGhostWalk(
+        Guid organizationId, CancellationToken ct)
+    {
+        if (!await MayReadAsync(organizationId, ct)) return Forbid();
+
+        await using var db = await _db.CreateDbContextAsync(ct);
+        return Ok(await GhostWalkViewAsync(db, organizationId, ct));
+    }
+
+    /// <summary>Stops the subscription renewing. The month already paid for still runs out.</summary>
+    [HttpPost("ghost-walk/cancel")]
+    public Task<ActionResult<Ben.Service.Models.GhostWalkSubscriptionView>> CancelGhostWalk(
+        Guid organizationId, CancellationToken ct)
+        => SetGhostWalkRenewalAsync(organizationId, cancel: true, ct);
+
+    /// <summary>Takes back a cancellation before the paid month ends.</summary>
+    [HttpPost("ghost-walk/resume")]
+    public Task<ActionResult<Ben.Service.Models.GhostWalkSubscriptionView>> ResumeGhostWalk(
+        Guid organizationId, CancellationToken ct)
+        => SetGhostWalkRenewalAsync(organizationId, cancel: false, ct);
+
+    private async Task<ActionResult<Ben.Service.Models.GhostWalkSubscriptionView>> SetGhostWalkRenewalAsync(
+        Guid organizationId, bool cancel, CancellationToken ct)
+    {
+        if (GetCurrentUserId() is not { } userId) return Unauthorized();
+        // Changing what the group will be charged is an act on its money: the settings key to change.
+        if (!await IsCmsAuthorizedAsync(userId, organizationId,
+                OrganizationSecurityTable.OrganizationSettings, OrganizationSecurityAction.Update, ct))
+            return Forbid();
+
+        await using var db = await _db.CreateDbContextAsync(ct);
+        var sub = await db.GhostWalkSubscriptions.FirstOrDefaultAsync(s => s.OrganizationId == organizationId, ct);
         var now = DateTime.UtcNow;
-        return Ok(new OrgEventCreditsView(
-            // The price test cannot fire today — GetDecimalAsync already refuses anything at or
-            // below zero and falls back to the $99 default — and it is kept because the checkout
-            // endpoint keeps the same one. If that fallback is ever loosened, the button that
-            // spends money and the card that offers it must go dark together, not one of them.
-            OnSale: onSale && price > 0m,
-            UnitPrice: price,
-            Currency: "USD",
-            MaximumPerPurchase: Services.Events.EventCredits.MaximumPerPurchase,
-            Spendable: credits.Count(c => c.SpentUtc is null && c.RefundedUtc is null && c.ExpiresUtc > now),
-            Credits: credits));
+        if (sub is null || !sub.IsStanding(now))
+            return BadRequest("This group has no Ghost Walk Tour subscription running, so there is nothing to change.");
+
+        sub.CancelAtPeriodEnd = cancel;
+        sub.DateUpdated = now;
+        sub.UpdatedByAppUserId = userId;
+        await db.SaveChangesAsync(ct);
+
+        return Ok(await GhostWalkViewAsync(db, organizationId, ct));
+    }
+
+    internal static async Task<Ben.Service.Models.GhostWalkSubscriptionView> GhostWalkViewAsync(
+        BenDataContext db, Guid organizationId, CancellationToken ct)
+    {
+        var offer = await Services.Tours.GhostWalkOffer.ReadAsync(db, ct);
+        var sub = await db.GhostWalkSubscriptions.AsNoTracking()
+            .FirstOrDefaultAsync(s => s.OrganizationId == organizationId, ct);
+        var now = DateTime.UtcNow;
+        return new Ben.Service.Models.GhostWalkSubscriptionView(
+            offer.OnSale, offer.MonthlyPrice, sub?.Status, sub?.IsStanding(now) == true,
+            sub?.CurrentPeriodEnd, sub?.CancelAtPeriodEnd == true, sub?.PriceAtPeriodStart);
     }
 
     /// <summary>
@@ -171,6 +208,22 @@ public sealed class OrganizationBillingController : Cms.OrgCmsControllerBase
             .Select(a => new { a.StreetAddress1, a.City, a.State, a.ZipCode })
             .FirstOrDefaultAsync(ct);
 
+        var html = ReceiptHtml(e, e.Organization!.Name, contact,
+            address is null ? null : $"{address.StreetAddress1}, {address.City}, {address.State} {address.ZipCode}",
+            "your group's billing history");
+
+        return File(Encoding.UTF8.GetBytes(html), "text/html",
+            $"receipt-R-{e.ReceiptNumber:00000}.html");
+    }
+
+    /// <summary>
+    /// A receipt as a self-contained HTML document, from the frozen ledger row. Shared by the group's
+    /// billing page and a person's own event-credit page, so the two can never print it differently.
+    /// </summary>
+    internal static string ReceiptHtml(
+        Ben.Data.Source.Entities.BillingLedgerEntry e, string billedTo, string? contact, string? addressLine,
+        string whereKept)
+    {
         var total = e.Amount + e.TaxAmount;
         var html = new StringBuilder();
         html.Append($$"""
@@ -188,11 +241,11 @@ public sealed class OrganizationBillingController : Cms.OrgCmsControllerBase
             <h1>IsHaunted.com — Receipt R-{{e.ReceiptNumber:00000}}</h1>
             <p class="meta">
               Date: {{e.DateCreated:MM/dd/yyyy}}<br>
-              Billed to: {{System.Net.WebUtility.HtmlEncode(e.Organization!.Name)}}{{(contact is null ? "" : $"<br>Billing contact: {System.Net.WebUtility.HtmlEncode(contact)}")}}
+              Billed to: {{System.Net.WebUtility.HtmlEncode(billedTo)}}{{(contact is null ? "" : $"<br>Billing contact: {System.Net.WebUtility.HtmlEncode(contact)}")}}
             """);
-        if (address is not null)
+        if (addressLine is not null)
         {
-            html.Append($"<br>{System.Net.WebUtility.HtmlEncode($"{address.StreetAddress1}, {address.City}, {address.State} {address.ZipCode}")}");
+            html.Append($"<br>{System.Net.WebUtility.HtmlEncode(addressLine)}");
         }
         if (!string.IsNullOrWhiteSpace(e.PaymentReference))
         {
@@ -208,11 +261,10 @@ public sealed class OrganizationBillingController : Cms.OrgCmsControllerBase
               <tr class="total"><td>Total paid</td><td class="num">${{total:0.00}}</td></tr>
             </table>
             <p class="meta">This receipt was generated from the payment record and can be
-            re-downloaded at any time from your group's billing history.</p>
+            re-downloaded at any time from {{whereKept}}.</p>
             </body></html>
             """);
 
-        return File(Encoding.UTF8.GetBytes(html.ToString()), "text/html",
-            $"receipt-R-{e.ReceiptNumber:00000}.html");
+        return html.ToString();
     }
 }

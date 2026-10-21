@@ -112,6 +112,10 @@ public sealed class TourController : OrgCmsControllerBase
         if (await ValidateAsync(db, orgId, request, null, ct) is string refusal)
             return BadRequest(refusal);
 
+        // 10/21/2026: a new tour needs the Ghost Walk Tour subscription while it is on sale.
+        if (await Services.Tours.GhostWalkAccess.WhyNotAsync(db, orgId, DateTime.UtcNow, ct) is string closed)
+            return BadRequest(closed);
+
         var now = DateTime.UtcNow;
         var name = request.Name.Trim();
         var tour = new Tour
@@ -218,6 +222,12 @@ public sealed class TourController : OrgCmsControllerBase
         if (org is null) return NotFound();
         var tour = await db.Tours.FirstOrDefaultAsync(t => t.Id == tourId && t.OrganizationId == orgId, ct);
         if (tour is null) return NotFound();
+
+        // Bringing a retired tour back is starting it again, so it asks what a new tour asks.
+        // Retiring is never refused: a group must always be able to stop.
+        if (!retired && tour.RetiredAtUtc is not null
+            && await Services.Tours.GhostWalkAccess.WhyNotAsync(db, orgId, DateTime.UtcNow, ct) is string closed)
+            return BadRequest(closed);
 
         var now = DateTime.UtcNow;
         tour.RetiredAtUtc = retired ? now : null;

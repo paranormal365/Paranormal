@@ -410,8 +410,10 @@
         _savingKey = key; _error = null; _savedKey = null;
         try
         {
-            var updated = await AdminClient.SetSiteSettingAsync(key, new SetSiteSettingRequest(_drafts[key]));
-            if (updated is null) { _error = "Couldn't save that setting."; return; }
+            // The server checks money settings and says what is wrong with a value it refuses
+            // (10/21/2026); that sentence is what the SuperAdmin sees, not a generic failure.
+            var (updated, refusal) = await AdminClient.SetSiteSettingWithReasonAsync(key, new SetSiteSettingRequest(_drafts[key]));
+            if (updated is null) { _error = refusal ?? "Couldn't save that setting."; return; }
 
             var idx = _settings!.FindIndex(s => s.Key == key);
             if (idx >= 0) _settings[idx] = updated;

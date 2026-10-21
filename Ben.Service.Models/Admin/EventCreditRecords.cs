@@ -32,13 +32,23 @@ public record OrgEventCreditRecord(
 /// from either half alone — a Buy control with no price is a guess, and a list with no price says
 /// nothing to a group holding none. One call, one refusal, one thing to render.
 /// </remarks>
+/// <param name="UnitPrice">What ONE credit costs this buyer: the paid-subscriber price for a group with
+/// a paid plan, otherwise the full price (10/21/2026).</param>
+/// <param name="FullUnitPrice">One credit at the full price, so the card can say what was taken off.</param>
+/// <param name="PaysSubscriberPrice">True when <paramref name="UnitPrice"/> is the subscriber price.</param>
+/// <param name="SubscriberPercent">The percentage a paid subscriber pays.</param>
+/// <param name="Bundles">Bundle offers, priced for this buyer.</param>
 public record OrgEventCreditsView(
     bool OnSale,
     decimal UnitPrice,
     string Currency,
     int MaximumPerPurchase,
     int Spendable,
-    IReadOnlyList<OrgEventCreditRecord> Credits);
+    IReadOnlyList<OrgEventCreditRecord> Credits,
+    decimal FullUnitPrice = 0m,
+    bool PaysSubscriberPrice = false,
+    decimal SubscriberPercent = 20m,
+    IReadOnlyList<Ben.Service.Models.EventCreditBundleOffer>? Bundles = null);
 
 /// <summary>A credit as a SuperAdmin sees it: whose it is, and who bought it.</summary>
 public record AdminEventCreditRecord(
