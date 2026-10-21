@@ -158,6 +158,46 @@
             </div>
         </div>
 
+        @* Who came (Ben, 10/21/2026): the organizer marks who came before the letters go. The door's scans
+           start the list; the organizer's mark wins, and the letters go by what this list says. *@
+        @if (a.Guests is { Count: > 0 } guests)
+        {
+            <div class="card mb-3" id="after-who-came">
+                <div class="card-header fw-semibold">Who came</div>
+                <div class="card-body">
+                    <p class="small text-secondary">
+                        The thank-you goes to everyone marked as here, and the we-missed-you letter to the rest.
+                        Ticks start from the door's scans; change any that are wrong before the letters go, the
+                        morning after the event ends.
+                        @if (guests.All(g => !g.CheckedInAtTheDoor) && guests.All(g => g.OrganizerSaysCame is null))
+                        {
+                            <text>Nobody was checked in or marked yet, so for now everyone counts as here.</text>
+                        }
+                    </p>
+                    <ul class="list-group list-group-flush">
+                        @foreach (var guest in guests)
+                        {
+                            var g = guest;
+                            <li class="list-group-item d-flex flex-wrap gap-2 align-items-center justify-content-between px-0" data-booking="@g.BookingId">
+                                <div style="min-width:0;">
+                                    <span class="fw-semibold" style="overflow-wrap:anywhere;">@g.Name</span>
+                                    <span class="small text-secondary">· @(g.PartySize == 1 ? "1 person" : $"{g.PartySize} people")</span>
+                                    @if (g.CheckedInAtTheDoor) { <span class="badge text-bg-secondary ms-1">Checked in at the door</span> }
+                                    @if (g.Lettered) { <span class="badge text-bg-light ms-1">Letter sent</span> }
+                                </div>
+                                <div class="form-check form-switch mb-0">
+                                    <input class="form-check-input" type="checkbox" id="@($"came-{g.BookingId:N}")" style="min-width:2.5rem;min-height:1.5rem;"
+                                           checked="@g.Came" disabled="@(_busy || g.Lettered)"
+                                           @onchange="e => MarkCameAsync(g, e.Value is true)" />
+                                    <label class="form-check-label" for="@($"came-{g.BookingId:N}")">Here</label>
+                                </div>
+                            </li>
+                        }
+                    </ul>
+                </div>
+            </div>
+        }
+
         @* The results letter (event-scenario-gaps): Jim "sent a final email to the guests with a link to the
            evidence page and a QR code to jump there directly if they didn't have the iPhone app". *@
         <div class="card mb-3" id="after-results">
@@ -303,6 +343,16 @@
         if (saved is null) { _error = error ?? "That couldn't be saved just now."; return; }
         Take(saved);
         _note = "Saved.";
+    }
+
+    private async Task MarkCameAsync(HostedEventAfterGuestRecord guest, bool came)
+    {
+        _busy = true; _note = null; _error = null;
+        var (saved, error) = await AdminClient.SetGuestCameAsync(OrgId, EventId, guest.BookingId, came);
+        _busy = false;
+        if (saved is null) { _error = error ?? "That couldn't be marked just now."; return; }
+        Take(saved);
+        _note = came ? $"{guest.Name} is marked as here." : $"{guest.Name} is marked as not here.";
     }
 
     private async Task SendResultsAsync()

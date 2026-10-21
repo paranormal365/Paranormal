@@ -19,6 +19,10 @@ public interface IBenEventScenarioClient
     Task<(HostedEventGuestInvitesRecord? Result, string? Error)> InviteEventGuestsAsync(
         Guid orgId, Guid eventId, InviteHostedEventGuestsRequest request, CancellationToken token = default);
 
+    /// <summary>Says whether a party came, after the event: true, false, or null for what the door recorded.</summary>
+    Task<(HostedEventAfterRecord? Result, string? Error)> SetGuestCameAsync(
+        Guid orgId, Guid eventId, Guid bookingId, bool? came, CancellationToken token = default);
+
     /// <summary>Sends "the results are ready", with a link and a QR code, to everybody with a place.</summary>
     Task<(HostedEventResultsSentRecord? Result, string? Error)> SendEventResultsAsync(
         Guid orgId, Guid eventId, SendHostedEventResultsRequest request, CancellationToken token = default);

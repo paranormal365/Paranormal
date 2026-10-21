@@ -20,6 +20,12 @@ public sealed partial class BenAdminClientAdapter
         => _api.SendExpectingReasonAsync<InviteHostedEventGuestsRequest, HostedEventGuestInvitesRecord>(
                HttpMethod.Post, $"/api/organizations/{orgId}/events/{eventId}/bookings/on-behalf/invite-many", request, token);
 
+    public Task<(HostedEventAfterRecord? Result, string? Error)> SetGuestCameAsync(
+        Guid orgId, Guid eventId, Guid bookingId, bool? came, CancellationToken token = default)
+        => _api.SendExpectingReasonAsync<SetHostedEventGuestCameRequest, HostedEventAfterRecord>(
+               HttpMethod.Put, $"/api/organizations/{orgId}/events/{eventId}/after/guests/{bookingId}/came",
+               new SetHostedEventGuestCameRequest(came), token);
+
     public Task<(HostedEventResultsSentRecord? Result, string? Error)> SendEventResultsAsync(
         Guid orgId, Guid eventId, SendHostedEventResultsRequest request, CancellationToken token = default)
         => _api.SendExpectingReasonAsync<SendHostedEventResultsRequest, HostedEventResultsSentRecord>(

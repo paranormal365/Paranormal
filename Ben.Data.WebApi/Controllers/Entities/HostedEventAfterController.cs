@@ -344,9 +344,61 @@ public sealed class HostedEventAfterController : OrgCmsControllerBase
             ResultsSentUtc = ev.ResultsSentUtc,
             GuestsSentResults = await db.HostedEventBookings.CountAsync(b => b.HostedEventId == ev.Id && b.ResultsSentUtc != null, ct),
             GuestsMissed = came is null ? null : confirmed.Count(id => !came.Contains(id)),
+            Guests = await ChecklistAsync(db, ev.Id, came, ct),
             AcceptedEvidence = await db.EventEvidenceSubmissions.CountAsync(s => s.OrgCalendarEvent.HostedEventId == ev.Id
                                                                               && s.Status == EvidenceSubmissionStatus.Accepted, ct),
         };
+    }
+
+    /// <summary>The confirmed parties, and whether each came, for the checklist.</summary>
+    private static async Task<List<HostedEventAfterGuestRecord>> ChecklistAsync(
+        BenDataContext db, Guid eventId, HashSet<Guid>? came, CancellationToken ct)
+    {
+        var door = await HostedEventEvidence.AtTheDoorAsync(db, eventId, ct);
+        var rows = await db.HostedEventBookings.AsNoTracking()
+            .Where(b => b.HostedEventId == eventId && b.Status == HostedEventBookingStatus.Confirmed)
+            .Select(b => new
+            {
+                b.Id, b.PartySize, b.OrganizerSaysCame, b.ThankedUtc,
+                Name = (b.LeadAppUser.FirstName != null && b.LeadAppUser.LastName != null
+                    ? b.LeadAppUser.FirstName + " " + b.LeadAppUser.LastName
+                    : b.LeadAppUser.DisplayName ?? b.LeadAppUser.UserName) ?? "A guest",
+            })
+            .ToListAsync(ct);
+        return [.. rows.OrderBy(r => r.Name, StringComparer.OrdinalIgnoreCase)
+            .Select(r => new HostedEventAfterGuestRecord(r.Id, r.Name, r.PartySize, door.Contains(r.Id), r.OrganizerSaysCame,
+                // With nobody marked anywhere, everybody counts as having come — the letters say so too.
+                came is null || came.Contains(r.Id), r.ThankedUtc != null))];
+    }
+
+    /// <summary>
+    /// Says whether a party came, after the event, before the letters go (Ben, 10/21/2026). Null goes back
+    /// to what the door recorded.
+    /// </summary>
+    [HttpPut("after/guests/{bookingId:guid}/came")]
+    public async Task<ActionResult<HostedEventAfterRecord>> SetCame(
+        Guid orgId, Guid eventId, Guid bookingId, [FromBody] SetHostedEventGuestCameRequest request, CancellationToken ct)
+    {
+        var userId = GetCurrentUserId();
+        if (userId is null) return Unauthorized();
+        if (!await _access.CanEditEventAsync(userId.Value, orgId, ct)) return Forbid();
+
+        await using var db = await DbFactory.CreateDbContextAsync(ct);
+        var booking = await db.HostedEventBookings.Include(b => b.HostedEvent)
+            .FirstOrDefaultAsync(b => b.Id == bookingId && b.HostedEventId == eventId && b.HostedEvent.OrganizationId == orgId, ct);
+        if (booking is null) return NotFound();
+        if (booking.Status != HostedEventBookingStatus.Confirmed)
+            return BadRequest("Only a party with a confirmed place can be marked as there.");
+        if (booking.ThankedUtc is not null)
+            return BadRequest("Their letter after the event has already gone, so marking them now changes nothing they'll get.");
+
+        booking.OrganizerSaysCame = request.Came;
+        booking.OrganizerMarkedUtc = request.Came is null ? null : DateTime.UtcNow;
+        booking.DateUpdated = DateTime.UtcNow;
+        booking.UpdatedByAppUserId = userId;
+        await db.SaveChangesAsync(ct);
+
+        return Ok(await AfterAsync(db, booking.HostedEvent, ct));
     }
 
     // ── what the venue remembers ─────────────────────────────────────────────

@@ -156,6 +156,38 @@ public sealed class AfterTheEventTests
         Assert.All(letters.Sent, l => Assert.StartsWith("Thank you for coming", l.Subject));
     }
 
+    /// <summary>
+    /// Ben, 10/21/2026: the organizer marks who came afterward, and the letters use the door's scans plus
+    /// those marks. The organizer's word wins over a scan.
+    /// </summary>
+    [Fact]
+    public async Task The_organizers_marks_after_the_event_decide_the_letters_over_the_door()
+    {
+        await using var w = await ScenarioWorld.CreateAsync(checkedIn: false);
+        var after = After(w, ScenarioWorld.Jim);
+
+        // Nobody scanned: Jim says Missed came and Came didn't.
+        Assert.IsType<OkObjectResult>((await after.SetCame(w.OrgId, w.EventId, w.MissedBookingId, new(true), default)).Result);
+        var saved = Assert.IsType<HostedEventAfterRecord>(Assert.IsType<OkObjectResult>(
+            (await after.SetCame(w.OrgId, w.EventId, w.CameBookingId, new(false), default)).Result).Value);
+        Assert.Equal(1, saved.GuestsMissed);
+        Assert.False(saved.Guests!.Single(g => g.BookingId == w.CameBookingId).Came);
+
+        // Somebody still asking can't be marked.
+        Assert.IsType<BadRequestObjectResult>((await after.SetCame(w.OrgId, w.EventId, w.AskedBookingId, new(true), default)).Result);
+        // Nor by somebody who can't change the event.
+        Assert.IsType<ForbidResult>((await After(w, ScenarioWorld.Nephew).SetCame(w.OrgId, w.EventId, w.CameBookingId, new(true), default)).Result);
+
+        var letters = new ScenarioWorld.Letters();
+        await Job(w, letters).RunAtAsync(ScenarioWorld.EndsUtc.AddHours(13), default);
+        Assert.StartsWith("Thank you for coming", Assert.Single(letters.Sent, l => l.To == "missed@example.test").Subject);
+        Assert.StartsWith("We missed you", Assert.Single(letters.Sent, l => l.To == "came@example.test").Subject);
+
+        // Once the letter has gone, marking them again is refused in words.
+        var late = Assert.IsType<BadRequestObjectResult>((await after.SetCame(w.OrgId, w.EventId, w.CameBookingId, new(true), default)).Result);
+        Assert.StartsWith("Their letter after the event has already gone", (string)late.Value!);
+    }
+
     [Fact]
     public async Task Turning_off_the_missed_you_letter_leaves_the_no_show_alone_and_still_thanks_who_came()
     {

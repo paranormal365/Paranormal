@@ -213,6 +213,16 @@ namespace Ben.Data.Source.Entities
         /// <summary>When this party was sent the thank-you (phase 12). One letter per party, however often the job runs.</summary>
         public DateTime? ThankedUtc { get; set; }
 
+        /// <summary>
+        /// What the organizer said after the event: true, they came; false, they didn't; null, not said
+        /// (Ben, 10/21/2026: "the organizer can mark who came afterward … Letters use door scans plus those
+        /// marks"). The organizer's word beats the door's, which can scan the wrong pass.
+        /// </summary>
+        public bool? OrganizerSaysCame { get; set; }
+
+        /// <summary>When the organizer last said it.</summary>
+        public DateTime? OrganizerMarkedUtc { get; set; }
+
         /// <summary>When somebody asked for this place by scanning the door's ticket code. Null otherwise.</summary>
         /// <remarks>
         /// The door may confirm these (once paid), as well as the people who decide bookings: selling

@@ -764,7 +764,20 @@ public sealed record HostedEventAfterRecord(
     /// <summary>Confirmed parties the door never saw arrive; null when the door recorded nobody at all.</summary>
     int? GuestsMissed = null,
     /// <summary>Accepted evidence so far.</summary>
-    int AcceptedEvidence = 0);
+    int AcceptedEvidence = 0,
+    /// <summary>Every confirmed party, and whether it came, for the organizer's checklist.</summary>
+    IReadOnlyList<HostedEventAfterGuestRecord>? Guests = null);
+
+/// <summary>One confirmed party on the after-event checklist (Ben, 10/21/2026).</summary>
+/// <param name="CheckedInAtTheDoor">The door scanned them in on some night.</param>
+/// <param name="OrganizerSaysCame">The organizer's own mark, which wins; null when they haven't said.</param>
+/// <param name="Came">What the letters will treat them as.</param>
+/// <param name="Lettered">Their after-event letter has already gone.</param>
+public sealed record HostedEventAfterGuestRecord(
+    Guid BookingId, string Name, int PartySize, bool CheckedInAtTheDoor, bool? OrganizerSaysCame, bool Came, bool Lettered);
+
+/// <summary>Marking whether a party came: true, false, or null to go back to what the door said.</summary>
+public sealed record SetHostedEventGuestCameRequest(bool? Came);
 
 /// <summary>Changing the thank-you and whether reviews are taken.</summary>
 /// <remarks>The fields after the first three were added later; left out, they keep what the event has.</remarks>

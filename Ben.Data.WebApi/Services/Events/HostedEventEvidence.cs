@@ -89,9 +89,27 @@ public static class HostedEventEvidence
                                              && (b.LeadAppUserId == userId || b.Guests.Any(g => g.AppUserId == userId)), ct);
 
     /// <summary>
-    /// The confirmed bookings the door saw arrive, or null when the door recorded nobody at all.
+    /// The bookings that came: the door's scans, corrected by the organizer's own marks after the event
+    /// (the organizer's word wins). Null when neither the door nor the organizer said anything at all.
     /// </summary>
     public static async Task<HashSet<Guid>?> CameAsync(BenDataContext db, Guid hostedEventId, CancellationToken ct)
+    {
+        var atTheDoor = await AtTheDoorAsync(db, hostedEventId, ct);
+        var marks = await db.HostedEventBookings.AsNoTracking()
+            .Where(b => b.HostedEventId == hostedEventId && b.OrganizerSaysCame != null)
+            .Select(b => new { b.Id, Came = b.OrganizerSaysCame!.Value })
+            .ToListAsync(ct);
+
+        if (atTheDoor.Count == 0 && marks.Count == 0) return null;
+
+        var came = atTheDoor;
+        foreach (var mark in marks)
+            if (mark.Came) came.Add(mark.Id); else came.Remove(mark.Id);
+        return came;
+    }
+
+    /// <summary>The bookings the door checked in on any night.</summary>
+    public static async Task<HashSet<Guid>> AtTheDoorAsync(BenDataContext db, Guid hostedEventId, CancellationToken ct)
     {
         var checkedIn = await db.HostedEventCheckIns.AsNoTracking()
             .Where(c => c.HostedEventBooking.HostedEventId == hostedEventId)
@@ -99,9 +117,7 @@ public static class HostedEventEvidence
         var passed = await db.HostedEventPasses.AsNoTracking()
             .Where(p => p.HostedEventBooking.HostedEventId == hostedEventId && p.CheckedInUtc != null)
             .Select(p => p.HostedEventBookingId).Distinct().ToListAsync(ct);
-
-        var came = checkedIn.Concat(passed).ToHashSet();
-        return came.Count == 0 ? null : came;
+        return checkedIn.Concat(passed).ToHashSet();
     }
 
     /// <summary>
