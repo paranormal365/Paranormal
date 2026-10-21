@@ -201,12 +201,16 @@ public class EventCreditsAndToursTests : Oct16TestBase
         {
             await Page.SetViewportSizeAsync(width, height);
 
+            // The circuit replaces the prerendered page when it connects, so a line found before then
+            // can be gone by the time it is scrolled to ("Element is not attached to the DOM").
             await Page.GotoAsync(BaseUrl);
+            await WaitForTheCircuitAsync();
             var line = Page.Locator("[data-testid='home-join-ghost-walk']");
             await Expect(line).ToContainTextAsync("$34", new() { Timeout = 30_000 });
             problems.AddRange(await LookAtAsync(line, "home-ghost-walk-line", theme));
 
             await Page.GotoAsync($"{BaseUrl}/pricing");
+            await WaitForTheCircuitAsync();
             var offer = Page.Locator("[data-testid='pricing-ghost-walk-offer']");
             await Expect(Page.Locator("[data-testid='pricing-ghost-walk-price']")).ToHaveTextAsync("$34", new() { Timeout = 30_000 });
             problems.AddRange(await LookAtAsync(offer, "pricing-ghost-walk-offer", theme));
@@ -300,7 +304,10 @@ public class EventCreditsAndToursTests : Oct16TestBase
 
             var card = Page.Locator("[data-testid='event-credits-card']");
             await Expect(card).ToBeVisibleAsync(new() { Timeout = 30_000 });
-            await Expect(Page.Locator("body")).Not.ToContainTextAsync("An unhandled error has occurred");
+            // Blazor's error bar is always in the page, hidden, with "An unhandled error has occurred"
+            // in it, so the body's text always contains the words; whether the bar is SHOWN is the test.
+            await Expect(Page.Locator("#blazor-error-ui")).ToBeHiddenAsync();
+            await Expect(card).Not.ToContainTextAsync("You holds");
             problems.AddRange(await LookAtAsync(card, "my-event-credits", theme));
         }
         NothingWrong(problems);
