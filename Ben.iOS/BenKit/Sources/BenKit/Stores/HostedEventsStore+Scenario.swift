@@ -19,6 +19,29 @@ extension HostedEventsStore {
         }
     }
 
+    // ── who came to the classes ──────────────────────────────────────────────
+
+    /// The classes, with their rosters, for somebody on the door or in the group. Refused for anybody else.
+    public func loadClasses(organizationId: UUID, hostedEventId: UUID) async -> LoadResult<HostedEventClasses> {
+        await api.load(Endpoint(.get, "\(Self.sessionsPath(organizationId, hostedEventId))/attendance"), as: HostedEventClasses.self)
+    }
+
+    /// Marks somebody there at a class, or takes the mark off. Answers the class's roster.
+    public func setAttended(organizationId: UUID, hostedEventId: UUID, sessionId: UUID, signUpId: UUID,
+                            here: Bool) async -> LoadResult<ClassRoster> {
+        guard let endpoint = try? Endpoint.json(
+            .put, "\(Self.sessionsPath(organizationId, hostedEventId))/\(Self.lower(sessionId))/sign-ups/\(Self.lower(signUpId))/attended",
+            payload: AttendedPost(attended: here))
+        else { return .failed(reason: nil) }
+        return await api.load(endpoint, as: ClassRoster.self)
+    }
+
+    private struct AttendedPost: Encodable { let attended: Bool }
+
+    static func sessionsPath(_ organizationId: UUID, _ hostedEventId: UUID) -> String {
+        "api/organizations/\(lower(organizationId))/events/\(lower(hostedEventId))/sessions"
+    }
+
     // ── a tour date's room ───────────────────────────────────────────────────
 
     /// Nil when this reader isn't in the room (the server answers 204) or the date isn't a tour date (404).

@@ -116,6 +116,49 @@ struct EventScenarioTests {
         #expect(reason == closed)
     }
 
+    // ── who came to the classes ──────────────────────────────────────────────
+
+    private static let orgId = UUID(uuidString: "30000000-0000-0000-0000-000000000003")!
+
+    @Test func theClassesDecodeWithWhoIsHereAndWhoIsWaiting() throws {
+        let classes = try BenJSON.decoder.decode(HostedEventClasses.self, from: fixture("hosted-classes"))
+        #expect(classes.timeZone.identifier == "America/Chicago")
+        let ovilus = try #require(classes.classes.first)
+        #expect(ovilus.where == "The loading dock")
+        #expect(ovilus.roster.in.map(\.isHere) == [true, false])
+        #expect(ovilus.roster.peopleIn == 3)
+        #expect(ovilus.roster.peopleThere == 2)
+        #expect(ovilus.roster.waiting.count == 1)
+    }
+
+    @Test func markingSomebodyHereSendsTheSwitchAndKeepsTheServersRefusal() async throws {
+        let classes = try BenJSON.decoder.decode(HostedEventClasses.self, from: fixture("hosted-classes"))
+        let roster = try BenJSON.encoder.encode(classes.classes[0].roster)
+        let ok = MockTransport(status: 200, body: roster)
+        let session = classes.classes[0].sessionId, signUp = classes.classes[0].roster.in[1].signUpId
+        guard case .ok = await Self.store(ok).setAttended(organizationId: Self.orgId, hostedEventId: Self.eventId,
+                                                          sessionId: session, signUpId: signUp, here: true) else {
+            Issue.record("the mark should land"); return
+        }
+        let request = try #require(ok.requests.last)
+        #expect(request.httpMethod == "PUT")
+        #expect(request.url?.path.hasSuffix("/sessions/\(session.uuidString.lowercased())/sign-ups/\(signUp.uuidString.lowercased())/attended") == true)
+        #expect(String(decoding: request.httpBody ?? Data(), as: UTF8.self).contains(#""attended":true"#))
+
+        let waiting = "They're still waiting for a place, so they weren't let in. Give them a place first."
+        let refused = MockTransport(status: 400, body: Data(waiting.utf8), headers: ["Content-Type": "text/plain"])
+        guard case .failed(let reason, 400) = await Self.store(refused).setAttended(
+            organizationId: Self.orgId, hostedEventId: Self.eventId, sessionId: session, signUpId: signUp, here: true) else {
+            Issue.record("expected the refusal"); return
+        }
+        #expect(reason == waiting)
+    }
+
+    @Test func theMenuCreditAndTheAlcoholMarkReadAsBenAsked() {
+        #expect(EventMenuWording.credit(year: 2026) == "IsHaunted.com © 2026 ISHAUNTED LLC")
+        #expect(MenuDietary.alcohol.rawValue == 256)
+    }
+
     // ── the event's room ─────────────────────────────────────────────────────
 
     @Test func anOlderRoomWithNoRolesStillDecodesAndANewOneCarriesThem() throws {

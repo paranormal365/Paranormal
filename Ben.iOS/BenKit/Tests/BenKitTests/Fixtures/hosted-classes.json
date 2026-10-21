@@ -1,0 +1,29 @@
+{
+  "hostedEventId": "40000002-0000-0000-0000-000000000002",
+  "eventName": "Overnight at The Factory",
+  "timeZoneId": "America/Chicago",
+  "classes": [
+    {
+      "sessionId": "7c1d2e3f-4a5b-4c6d-8e7f-9a0b1c2d3e4f",
+      "title": "Operating the Ovilus",
+      "startsAtUtc": "2026-10-31T02:00:00",
+      "endsAtUtc": "2026-10-31T03:00:00",
+      "where": "The loading dock",
+      "ledBy": "Marcy",
+      "capacity": 15,
+      "roster": {
+        "sessionId": "7c1d2e3f-4a5b-4c6d-8e7f-9a0b1c2d3e4f",
+        "title": "Operating the Ovilus",
+        "in": [
+          { "signUpId": "11111111-2222-4333-8444-555555555555", "name": "Daniel Park", "people": 2, "signedUpUtc": "2026-10-20T15:00:00", "isHelping": false, "attendedUtc": "2026-10-31T02:04:00" },
+          { "signUpId": "66666666-7777-4888-9999-000000000000", "name": "Sam Ortiz", "people": 1, "signedUpUtc": "2026-10-21T15:00:00", "isHelping": false, "attendedUtc": null }
+        ],
+        "waiting": [
+          { "signUpId": "aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee", "name": "Pat Lee", "people": 1, "signedUpUtc": "2026-10-22T15:00:00", "isHelping": false, "attendedUtc": null }
+        ],
+        "peopleThere": 2,
+        "canMarkAttendance": true
+      }
+    }
+  ]
+}

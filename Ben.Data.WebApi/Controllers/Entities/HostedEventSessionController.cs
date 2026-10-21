@@ -165,16 +165,56 @@ public sealed class HostedEventSessionController : OrgCmsControllerBase
             .FirstOrDefaultAsync(s => s.Id == sessionId && s.HostedEventId == eventId && s.HostedEvent.OrganizationId == orgId, ct);
         if (session is null) return NotFound();
 
+        return Ok(RosterOf(session, await MayMarkAttendanceAsync(userId.Value, orgId, eventId, db, ct)));
+    }
+
+    private static HostedEventSessionRosterRecord RosterOf(HostedEventSession session, bool canMark)
+    {
         HostedEventSessionRosterLine Line(HostedEventSessionSignUp u) => new(
             u.Id, u.AppUser?.DisplayName ?? u.AppUser?.Email ?? "A guest", u.People, u.DateCreated, u.HostedEventBookingId is null,
             u.AttendedUtc);
 
-        return Ok(new HostedEventSessionRosterRecord(
+        return new HostedEventSessionRosterRecord(
             session.Id, session.Title,
             [.. session.SignUps.Where(u => u.WaitlistedUtc is null).OrderBy(u => u.DateCreated).Select(Line)],
             [.. session.SignUps.Where(u => u.WaitlistedUtc is not null).OrderBy(u => u.WaitlistedUtc).ThenBy(u => u.DateCreated).Select(Line)],
             SessionSignUps.PeopleThere(session.SignUps),
-            await MayMarkAttendanceAsync(userId.Value, orgId, eventId, db, ct)));
+            canMark);
+    }
+
+    /// <summary>
+    /// Every class that takes sign-ups, with who has a place, for whoever marks who came: the group and the
+    /// event's door helpers (Ben, 10/21/2026: door helpers get a page and an app screen for it).
+    /// </summary>
+    /// <remarks>
+    /// The door helper can't open the program itself (that's the group's), so this is the one read they
+    /// need: each class's time, where it is, and its roster. Called-off classes are left out.
+    /// </remarks>
+    [HttpGet("attendance")]
+    public async Task<ActionResult<HostedEventClassesRecord>> Classes(Guid orgId, Guid eventId, CancellationToken ct)
+    {
+        var userId = GetCurrentUserId();
+        if (userId is null) return Unauthorized();
+
+        await using var db = await DbFactory.CreateDbContextAsync(ct);
+        if (!await MayMarkAttendanceAsync(userId.Value, orgId, eventId, db, ct)) return Forbid();
+
+        var hosted = await db.HostedEvents.AsNoTracking()
+            .FirstOrDefaultAsync(e => e.Id == eventId && e.OrganizationId == orgId, ct);
+        if (hosted is null) return NotFound();
+
+        var sessions = await db.HostedEventSessions.AsNoTracking()
+            .Include(s => s.SignUps).ThenInclude(u => u.AppUser)
+            .Include(s => s.PlaceRoom)
+            .Where(s => s.HostedEventId == eventId && s.RequiresSignUp && s.CalledOffUtc == null)
+            .OrderBy(s => s.StartsAtUtc).ThenBy(s => s.SortOrder)
+            .ToListAsync(ct);
+
+        return Ok(new HostedEventClassesRecord(
+            hosted.Id, hosted.Name, hosted.TimeZoneId,
+            [.. sessions.Select(s => new HostedEventClassRecord(
+                s.Id, s.Title, s.StartsAtUtc, s.EndsAtUtc, s.PlaceRoom?.Name ?? s.LocationText, s.LedBy, s.Capacity,
+                RosterOf(s, canMark: true)))]));
     }
 
     /// <summary>

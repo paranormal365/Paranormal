@@ -304,6 +304,12 @@
                 </div>
             </div>
 
+            @* Who came to each class, for the door as for the group (Ben, 10/21/2026). *@
+            <p class="d-print-none mb-3">
+                <a class="btn btn-outline-secondary" style="min-height:44px;" id="door-classes-link"
+                   href="@($"/organizations/{OrgId}/events/{EventId}/door/classes")">Who's at the classes</a>
+            </p>
+
             @* Selling at the door, and starting the sessions (event-scenario-gaps). *@
             <DoorTicketsCard OrgId="OrgId" EventId="EventId" />
             <StartSessionsCard HostedEventId="EventId" />

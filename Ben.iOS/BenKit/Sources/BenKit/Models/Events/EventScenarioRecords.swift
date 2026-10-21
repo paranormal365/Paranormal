@@ -64,6 +64,59 @@ public enum EventResultsWording {
     }
 }
 
+// ── who came to the classes ──────────────────────────────────────────────────
+
+/// `GET api/organizations/{org}/events/{id}/sessions/attendance`: every class that takes sign-ups, with its
+/// roster, for the door (Ben, 10/21/2026: door helpers get an app screen to mark class attendance).
+public struct HostedEventClasses: Sendable, Codable, Equatable {
+    public var hostedEventId: UUID
+    public var eventName: String
+    public var timeZoneId: String
+    public var classes: [HostedEventClass]
+
+    public var timeZone: TimeZone { TimeZone(identifier: timeZoneId) ?? .current }
+}
+
+public struct HostedEventClass: Sendable, Codable, Equatable, Identifiable {
+    public var sessionId: UUID
+    public var title: String
+    public var startsAtUtc: Date
+    public var endsAtUtc: Date
+    public var `where`: String?
+    public var ledBy: String?
+    public var capacity: Int?
+    public var roster: ClassRoster
+
+    public var id: UUID { sessionId }
+}
+
+/// Who has a place in a class, and who is waiting.
+public struct ClassRoster: Sendable, Codable, Equatable {
+    public var sessionId: UUID
+    public var title: String
+    public var `in`: [ClassRosterLine]
+    public var waiting: [ClassRosterLine]
+    /// People marked there, counting each party.
+    public var peopleThere: Int
+    public var canMarkAttendance: Bool
+
+    /// Everybody with a place, counting each party.
+    public var peopleIn: Int { `in`.reduce(0) { $0 + max(1, $1.people) } }
+}
+
+public struct ClassRosterLine: Sendable, Codable, Equatable, Identifiable {
+    public var signUpId: UUID
+    public var name: String
+    public var people: Int
+    public var signedUpUtc: Date
+    public var isHelping: Bool
+    /// When they were marked there; nil when not.
+    public var attendedUtc: Date?
+
+    public var id: UUID { signUpId }
+    public var isHere: Bool { attendedUtc != nil }
+}
+
 // ── a tour date's room ───────────────────────────────────────────────────────
 
 /// `GET api/public/tour-dates/{dateId}/room`: the people checked in on a walk and its guides, staying in touch.

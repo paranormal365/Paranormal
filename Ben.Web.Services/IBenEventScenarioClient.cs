@@ -48,6 +48,9 @@ public interface IBenEventScenarioClient
     Task<(PublicDoorTicketRecord? Result, string? Error)> AskAtTheDoorAsync(
         string doorToken, AskAtTheDoorRequest request, CancellationToken token = default);
 
+    /// <summary>The classes that take sign-ups, with their rosters, for the door or the group.</summary>
+    Task<ItemResult<HostedEventClassesRecord>> GetClassAttendanceAsync(Guid orgId, Guid eventId, CancellationToken token = default);
+
     /// <summary>Marks somebody there at a class, or takes the mark off.</summary>
     Task<(HostedEventSessionRosterRecord? Result, string? Error)> SetSessionAttendanceAsync(
         Guid orgId, Guid eventId, Guid sessionId, Guid signUpId, bool attended, CancellationToken token = default);

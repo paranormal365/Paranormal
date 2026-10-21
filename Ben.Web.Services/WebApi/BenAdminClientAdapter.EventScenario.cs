@@ -55,6 +55,9 @@ public sealed partial class BenAdminClientAdapter
         => _api.SendExpectingReasonAsync<AskAtTheDoorRequest, PublicDoorTicketRecord>(
                HttpMethod.Post, PublicDoorTicketUrl(doorToken), request, token);
 
+    public Task<ItemResult<HostedEventClassesRecord>> GetClassAttendanceAsync(Guid orgId, Guid eventId, CancellationToken token = default)
+        => _api.GetItemAsync<HostedEventClassesRecord>($"/api/organizations/{orgId}/events/{eventId}/sessions/attendance", token);
+
     public Task<(HostedEventSessionRosterRecord? Result, string? Error)> SetSessionAttendanceAsync(
         Guid orgId, Guid eventId, Guid sessionId, Guid signUpId, bool attended, CancellationToken token = default)
         => _api.SendExpectingReasonAsync<SetHostedEventSessionAttendanceRequest, HostedEventSessionRosterRecord>(

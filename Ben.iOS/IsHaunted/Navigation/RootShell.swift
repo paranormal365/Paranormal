@@ -286,6 +286,8 @@ struct RootShell: View {
             DoorDutiesView()
         case .door(let organizationId, let hostedEventId):
             DoorView(organizationId: organizationId, hostedEventId: hostedEventId)
+        case .classAttendance(let organizationId, let hostedEventId):
+            ClassAttendanceView(organizationId: organizationId, hostedEventId: hostedEventId)
         case .myEvidence:
             MyEvidenceView()
         case .developerSettings:

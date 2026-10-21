@@ -862,6 +862,15 @@ public sealed record PublicHostedEventResultItem(
     DateTime CaughtUtc,
     string FileUrl);
 
+/// <summary>The classes that take sign-ups, for whoever marks who came to them (Ben, 10/21/2026).</summary>
+public sealed record HostedEventClassesRecord(
+    Guid HostedEventId, string EventName, string TimeZoneId, IReadOnlyList<HostedEventClassRecord> Classes);
+
+/// <summary>One class: when, where, who leads it, its limit, and its roster.</summary>
+public sealed record HostedEventClassRecord(
+    Guid SessionId, string Title, DateTime StartsAtUtc, DateTime EndsAtUtc, string? Where, string? LedBy, int? Capacity,
+    HostedEventSessionRosterRecord Roster);
+
 /// <summary>Marking somebody as there at a class, or taking the mark off (event-scenario-gaps).</summary>
 public sealed record SetHostedEventSessionAttendanceRequest(bool Attended);
 

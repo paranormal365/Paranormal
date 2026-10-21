@@ -1,0 +1,122 @@
+@page "/organizations/{OrgId:guid}/events/{EventId:guid}/door/classes"
+@namespace Ben.Web.Website.Library.Manage.Events
+@using Ben.Service.Models.Entities
+@using Ben.Web.Services
+@using Ben.Web.Services.WebApi
+@using Ben.Web.Website.Library.Kit
+@inject IBenAdminClient AdminClient
+@inject IBenUserState UserState
+
+@* Who came to each class (Ben, 10/21/2026: door helpers get a page to mark class attendance).
+
+   FOR THE DOOR AS MUCH AS THE GROUP. A helper trusted with the door can't open the program, which is the
+   group's, so this page is all they need: each class, when and where, and a switch per person with a
+   place. Somebody still waiting was never let in and can't be marked. Sized for a phone at the door. *@
+
+<PageTitle>@(_classes.Item?.EventName is { Length: > 0 } n ? $"Classes — {n}" : "Classes")</PageTitle>
+
+<div class="container-fluid py-3" style="max-width:820px;">
+    <div class="text-secondary small">
+        <a href="@($"/organizations/{OrgId}/events/{EventId}/door")">Back to the door</a>
+    </div>
+    <h1 class="h4 mb-2">Who's at the classes</h1>
+
+    @if (_note is { Length: > 0 }) { <div class="alert alert-success py-2" role="status" id="classes-note">@_note</div> }
+    @if (_error is { Length: > 0 }) { <div class="alert alert-danger py-2" role="alert" id="classes-error">@_error</div> }
+
+    <BenItemState TItem="HostedEventClassesRecord" Result="@_classes" Loading="@_loading" OnRetry="@LoadAsync">
+        <ChildContent>
+            @if (_classes.Item is { } all)
+            {
+                @if (all.Classes.Count == 0)
+                {
+                    <p class="text-secondary" id="classes-none">No classes at this event take sign-ups, so there's nobody to mark.</p>
+                }
+                @foreach (var c in all.Classes)
+                {
+                    var session = c;
+                    <div class="card mb-3 door-class" data-session="@session.SessionId">
+                        <div class="card-header d-flex flex-wrap justify-content-between gap-2">
+                            <span class="fw-semibold" style="overflow-wrap:anywhere;">@session.Title</span>
+                            <span class="small text-secondary text-nowrap" data-testid="class-there">
+                                @session.Roster.PeopleThere of @session.Roster.In.Sum(l => Math.Max(1, l.People)) here
+                            </span>
+                        </div>
+                        <div class="card-body py-2">
+                            <p class="small text-secondary mb-2">
+                                @EventClock.At(session.StartsAtUtc, all.TimeZoneId).ToString("ddd MM/dd h:mm tt")–@EventClock.At(session.EndsAtUtc, all.TimeZoneId).ToString("h:mm tt")
+                                @(session.Where is { Length: > 0 } where ? $" · {where}" : "")
+                                @(session.LedBy is { Length: > 0 } led ? $" · with {led}" : "")
+                            </p>
+                            @if (session.Roster.In.Count == 0)
+                            {
+                                <p class="small text-secondary mb-0">Nobody has a place yet.</p>
+                            }
+                            <ul class="list-group list-group-flush">
+                                @foreach (var person in session.Roster.In)
+                                {
+                                    var line = person;
+                                    <li class="list-group-item d-flex justify-content-between align-items-center gap-2 px-0">
+                                        <span style="overflow-wrap:anywhere;">
+                                            @line.Name @(line.People > 1 ? $"× {line.People}" : "") @(line.IsHelping ? "(helping)" : "")
+                                        </span>
+                                        <span class="form-check form-switch mb-0">
+                                            <input class="form-check-input" type="checkbox" style="min-width:2.75rem;min-height:1.6rem;"
+                                                   id="@($"class-here-{line.SignUpId:N}")" checked="@(line.AttendedUtc is not null)"
+                                                   disabled="@_busy" @onchange="e => MarkAsync(session, line, e.Value is true)" />
+                                            <label class="form-check-label" for="@($"class-here-{line.SignUpId:N}")">Here</label>
+                                        </span>
+                                    </li>
+                                }
+                            </ul>
+                            @if (session.Roster.Waiting.Count > 0)
+                            {
+                                <p class="small text-secondary mt-2 mb-0">
+                                    Waiting for a place: @string.Join(", ", session.Roster.Waiting.Select(w => w.Name)). They can't be marked until they have one.
+                                </p>
+                            }
+                        </div>
+                    </div>
+                }
+            }
+        </ChildContent>
+    </BenItemState>
+</div>
+
+@code {
+    [Parameter] public Guid OrgId { get; set; }
+    [Parameter] public Guid EventId { get; set; }
+
+    private ItemResult<HostedEventClassesRecord> _classes;
+    private bool _loading = true, _busy;
+    private string? _note, _error;
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (!firstRender) return;
+        if (!await UserState.WaitUntilAuthReadyAsync(RendererInfo.IsInteractive)) return;
+        await LoadAsync();
+        StateHasChanged();
+    }
+
+    private async Task LoadAsync()
+    {
+        _loading = true;
+        _classes = await AdminClient.GetClassAttendanceAsync(OrgId, EventId);
+        _loading = false;
+    }
+
+    private async Task MarkAsync(HostedEventClassRecord session, HostedEventSessionRosterLine line, bool here)
+    {
+        _busy = true; _note = null; _error = null;
+        var (roster, error) = await AdminClient.SetSessionAttendanceAsync(OrgId, EventId, session.SessionId, line.SignUpId, here);
+        _busy = false;
+        if (roster is null) { _error = error ?? "That couldn't be marked just now."; return; }
+        if (_classes.Item is { } all)
+            _classes = ItemResult<HostedEventClassesRecord>.Ok(all with
+            {
+                Classes = [.. all.Classes.Select(c => c.SessionId == session.SessionId ? c with { Roster = roster } : c)],
+            });
+        _note = here ? $"{line.Name} is marked here for {session.Title}." : $"{line.Name} is no longer marked here for {session.Title}.";
+    }
+}

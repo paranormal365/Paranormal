@@ -80,6 +80,29 @@ public sealed class DuringTheEventTests
         Assert.IsType<ForbidResult>((await Sessions(w, ScenarioWorld.Came).SetAttended(w.OrgId, w.EventId, sessionId, inId, new(true), default)).Result);
     }
 
+    /// <summary>
+    /// Ben, 10/21/2026: door helpers get a page and an app screen to mark class attendance. The door can't
+    /// read the program (the group's), so it gets the classes with their rosters on their own.
+    /// </summary>
+    [Fact]
+    public async Task The_door_reads_every_class_that_takes_sign_ups_with_its_roster()
+    {
+        await using var w = await ScenarioWorld.CreateAsync(HostedEventLifecycleState.Live);
+        var (sessionId, inId, _) = await ClassAsync(w);
+
+        Assert.IsType<ForbidResult>((await Sessions(w, ScenarioWorld.Nephew).Get(w.OrgId, w.EventId, default)).Result);
+
+        var classes = Assert.IsType<HostedEventClassesRecord>(Assert.IsType<OkObjectResult>(
+            (await Sessions(w, ScenarioWorld.Nephew).Classes(w.OrgId, w.EventId, default)).Result).Value);
+        var ovilus = Assert.Single(classes.Classes);
+        Assert.Equal((sessionId, "Operating the Ovilus", 1), (ovilus.SessionId, ovilus.Title, ovilus.Capacity));
+        Assert.Equal(inId, Assert.Single(ovilus.Roster.In).SignUpId);
+        Assert.Single(ovilus.Roster.Waiting);
+        Assert.True(ovilus.Roster.CanMarkAttendance);
+
+        Assert.IsType<ForbidResult>((await Sessions(w, ScenarioWorld.Came).Classes(w.OrgId, w.EventId, default)).Result);
+    }
+
     [Fact]
     public void Marking_someone_there_twice_keeps_the_first_time()
     {
