@@ -29,6 +29,13 @@ it is hidden from everybody else, but still takes its number. No other sub-headi
 
 ## Unreleased
 
+- An event shows its **Results**: the evidence the organizers accepted, the most positive votes
+  first, and a link to the results page.
+- A ghost walk you were checked in on has **The walk's room**, for keeping in touch with the others
+  and your guides.
+- In an event's room, posts from the organizers, guides and venue carry a badge.
+- The notice when a session starts now says, plainly, that sessions are being accepted for the event.
+- A menu's credit carries the small IsHaunted mark.
 - The magnetic field and sound readings never show "-0": a reading at the base level reads 0, and
   VoiceOver says "at base".
 - The sound reading follows the room. It used to stop at -60 dB, which is about where an ordinary

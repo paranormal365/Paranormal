@@ -215,13 +215,30 @@ The organizers can choose to allow photos only from the event's own team; you ca
 the room when they do. The room stops taking new posts a week after the last night, but stays
 available so you can look back through it.
 
+Posts from the people running the event have a colored edge and a badge — *Organizer*, *Guide*,
+*Venue* — so you can tell them from other guests.
+
+**On a ghost walk**, once the guide has checked you in, the walk's page and the app show **The walk's
+room**, where you and the others on the walk, and your guides, can keep in touch. It's words only,
+and it stays open for a week after the walk.
+
 ## When the organizer starts the group's session
 
-At some events, the organizer or whoever is running the door starts a Paranormal Platform session for
-everyone at once. If you have the IsHaunted app, you'll get a notification, and you can join from
-it, from the card in your feed, or from **Happening now** in the Paranormal Platform. Nothing records until you
-press Start, and you can send what you recorded that night or days later. See
+When it's time to investigate, the organizer, a guide or whoever is running the door starts the
+sessions. Everyone with a place gets a plain notice: *Sessions are now being accepted for this
+event.* If you have the IsHaunted app, it arrives as a notification, and you can start yours from it,
+from the card in your feed, or from **Happening now** in the Paranormal Platform. Nothing records
+until you press Start, and you can send what you recorded that night or days later. See
 [The iPhone and iPad Apps](/help/the-mobile-apps).
+
+## A ticket at the door
+
+Some organizers sell places at the door. Scan the QR code by the door with your phone's camera, sign
+in or make an account, and ask for your place. Pay them however they take it — nothing is paid
+through this site. When they confirm you, your pass appears on the same screen, ready to scan in.
+
+If an organizer has already been paid by you, they may send you a **ticket** by email instead.
+Opening its link confirms your place straight away and sends you your pass.
 
 ## Your pass
 
@@ -326,9 +343,18 @@ password right away instead of leaving you to find out later.
 
 ## After the event
 
-The morning after the last night, the organizer may send a **thank-you** to everyone who had a
-confirmed place: a personal note, a link to the photos if they've added any, a link to say how it
-was, and what they have coming up next.
+The morning after the last night, the organizer may send a **thank-you** to everyone who was
+there: a personal note, a link to the photos if they've added any, a link to say how it was, and
+what they have coming up next. If you had a place but weren't checked in, you may get a **we missed
+you** letter instead.
+
+**Evidence.** At an event that takes evidence, either letter may say how long the organizer is
+accepting it — for example, *for three days* — and when the results should be ready. Offer what you
+caught under **Were you there?** on the event's page before the deadline the page shows. When the
+results are ready, the organizer may email everyone who had a place, with a link and a QR code to the
+results page. The evidence they accepted is listed with the most *confirms* votes first, then in the
+order it was caught, and if they ask, you can vote for the best. With the IsHaunted app, the
+results are also under **Results** on the event.
 
 **Saying how it was** is open to anyone who had a confirmed place — the person who booked, and any
 guests they named who have an account — for two months after the event ends. It's one to five stars

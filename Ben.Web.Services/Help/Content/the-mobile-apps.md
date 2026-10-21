@@ -557,8 +557,9 @@ Location is only needed for *near you*; searching by name works with location of
 ## When the group's session starts
 
 A guide, an event's organizer or the lead of an investigation can start the night for everyone at
-once from the app. When they do, nobody's phone is taken over: you're notified, and you join when
-you're ready.
+once from the app or the website. When they do, everyone registered gets a plain notice — *Sessions
+are now being accepted for this event* — and nobody's phone is taken over: you join when you're
+ready.
 
 ### Joining
 
@@ -612,7 +613,8 @@ A visit to someone's home, or a private client case, never has a code.
 ### Starting it, if you lead
 
 The Paranormal Platform shows **Launch a session for your group** whenever something you lead is on — a tour date
-you guide, an event you organize or run the door at, an investigation you lead or manage. It appears
+you guide, an event you organize, run the door at or were asked to start the sessions for, an
+investigation you lead or manage. It appears
 three hours before the start and stays until the end. Tap **Launch** and confirm. The card goes into
 the feed — for anyone if it's public, or only for the people registered if it isn't — and everyone
 registered who has the app is notified. The next page tells you how many people that reached.
@@ -721,6 +723,10 @@ If a seat is turned down, or you cancel a walk, its reminders are removed too.
 
 **Payment is arranged with the business.** Nothing is charged through the app.
 
+**The walk's room.** Once the guide has checked you in, the night's page shows **The walk's room**:
+the people on the walk and the guides, keeping in touch. Your guides' posts carry a *Guide* badge.
+Words only; it stays open for a week after the walk.
+
 ## An event you've booked
 
 Some events are run through this site by a venue or a group — a séance weekend at a hotel, a dinner
@@ -784,7 +790,11 @@ under **Getting in and getting around**.
   post, with your words on the first. The first photo you add at an event asks you to agree, in the
   organizers' words, to it being shown in the room and on their photo wall. **Also send to…** sends
   the organizers a copy. Press and hold your own post to send it on later or take it down; press and
-  hold someone else's to report it. Your photos stay yours whichever you choose.
+  hold someone else's to report it. Your photos stay yours whichever you choose. Posts from the
+  people running the event carry a badge — *Organizer*, *Guide*, *Venue* — so they stand out.
+- **Results** — once the organizers have accepted evidence from the night, the event shows what
+  people caught, with the most *confirms* votes first, then in the order it was caught. Tap a piece to
+  play or view it, or open the results page on the website.
 
 ![The program, with a place signed up for and a party waiting](/help/media/the-mobile-apps/iphone-event-programme.png)
 

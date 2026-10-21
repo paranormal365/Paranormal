@@ -33,6 +33,39 @@ day-by-day account of building it would say nothing to anyone using it now.
 
 ## Unreleased
 
+- Hosted events: **Invite people by email** takes a whole pasted list and your own message, and hands
+  back anything that isn't an email address.
+- On the bookings board, **Send somebody a ticket** emails a person who has paid you a link that
+  confirms their place and sends them their pass. It replaces **Book somebody in**, which couldn't
+  book anyone.
+- A booking an organizer confirms on the spot now comes with its pass, and the guest is sent it.
+- You can sell tickets at the door: the door page gives you a QR code to print or put on a screen.
+  People scan it, ask for a day pass on their phone, pay you your usual way, and the door confirms
+  them. Nothing is paid through the site.
+- The event page and the door on the website have **Start the sessions**, as the app does.
+  Everyone with a place is told, plainly, that sessions are now being accepted for the event. A guide
+  can be given this without the door.
+- In the program, **There** marks who came to each class, and the list counts them.
+- In an event's room, posts from the organizers, the guides and the venue carry a badge and a
+  colored edge.
+- A ghost walk has a room for the people checked in on the walk and its guides.
+- After an event, people who had a place but weren't checked in get a **we missed you** letter
+  instead of the thank-you.
+- Organizers can say how many days they're accepting evidence for and when the results should be
+  ready. Both letters say it, the event's page shows the deadline, and evidence is refused after it.
+- Guests who booked through an event's page can offer their evidence. Before, they were told they
+  hadn't attended.
+- Accepted evidence is listed with the most positive votes first, then in the order it was caught,
+  and an organizer can ask people to vote.
+- After an event, **Send the results letter** emails everyone who had a place a link and a QR code
+  to the results. A group page can show an event's evidence with the new **An event's evidence**
+  section.
+- Menus: one-tap price rows for adults, children, seniors, first responders and military; the
+  credit at the foot of every menu carries the small IsHaunted mark; and a menu's own working title
+  is no longer sent to guests.
+- What an event's price includes is now in the confirmation email too.
+- Confirming a party with several seats or rooms on one night keeps them all.
+- A helper who runs the door is taken straight to the event's door after accepting.
 - Plans cover investigations. Hosted events are not part of any plan: every event uses one event
   credit, which covers it however many days in a row it runs. A group with a paid plan pays a share
   of the credit price, shown on the **Pricing** page and on its **Billing** page.
