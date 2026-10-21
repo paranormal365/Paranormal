@@ -397,6 +397,7 @@ else
             @if (_isAuthenticated)
             {
                 <HostedEventRoom HostedEventId="withProgramme.Id" />
+                <HostedEventOrganizerThread HostedEventId="withProgramme.Id" />
             }
         }
         else if (_isAuthenticated && _event.TourName is not null)

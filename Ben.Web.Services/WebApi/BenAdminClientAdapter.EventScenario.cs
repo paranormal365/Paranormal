@@ -104,4 +104,24 @@ public sealed partial class BenAdminClientAdapter
     public Task<(TourRoomRecord? Result, string? Error)> RemoveTourRoomMessageAsync(Guid dateId, Guid messageId, CancellationToken token = default)
         => _api.SendExpectingReasonAsync<object, TourRoomRecord>(
                HttpMethod.Delete, $"{TourRoomUrl(dateId)}/messages/{messageId}", null, token);
+
+    private static string GuestMessagesUrl(Guid orgId, Guid eventId)
+        => $"/api/organizations/{orgId}/events/{eventId}/guest-messages";
+
+    public Task<ItemResult<EventGuestThreadRecord>> GetOrganizerThreadAsync(Guid hostedEventId, CancellationToken token = default)
+        => _api.GetItemAsync<EventGuestThreadRecord>($"/api/public/hosted-events/{hostedEventId}/organizer-thread", token);
+
+    public Task<(EventGuestThreadRecord? Result, string? Error)> WriteToOrganizersAsync(Guid hostedEventId, string body, CancellationToken token = default)
+        => _api.SendExpectingReasonAsync<PostEventGuestThreadRequest, EventGuestThreadRecord>(
+               HttpMethod.Post, $"/api/public/hosted-events/{hostedEventId}/organizer-thread", new PostEventGuestThreadRequest(body), token);
+
+    public Task<LoadResult<EventGuestThreadSummaryRecord>> GetGuestThreadsAsync(Guid orgId, Guid eventId, CancellationToken token = default)
+        => _api.GetListAsync<EventGuestThreadSummaryRecord>(GuestMessagesUrl(orgId, eventId), token);
+
+    public Task<ItemResult<EventGuestThreadRecord>> GetGuestThreadAsync(Guid orgId, Guid eventId, Guid guestId, CancellationToken token = default)
+        => _api.GetItemAsync<EventGuestThreadRecord>($"{GuestMessagesUrl(orgId, eventId)}/{guestId}", token);
+
+    public Task<(EventGuestThreadRecord? Result, string? Error)> AnswerGuestAsync(Guid orgId, Guid eventId, Guid guestId, string body, CancellationToken token = default)
+        => _api.SendExpectingReasonAsync<PostEventGuestThreadRequest, EventGuestThreadRecord>(
+               HttpMethod.Post, $"{GuestMessagesUrl(orgId, eventId)}/{guestId}", new PostEventGuestThreadRequest(body), token);
 }

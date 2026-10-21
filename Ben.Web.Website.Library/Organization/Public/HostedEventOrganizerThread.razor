@@ -1,0 +1,74 @@
+@namespace Ben.Web.Website.Library.Organization.Public
+@using Ben.Service.Models.Entities
+@using Ben.Web.Services
+@using Ben.Web.Services.WebApi
+@using Ben.Web.Website.Library.Kit
+@inject IBenAdminClient AdminClient
+
+@* Writing to the people running the event (event-scenario-gaps; Ben's scenario: "contact Jim either on our
+   app").
+
+   FOR ITS GUESTS ONLY. Anybody with a booking here, whatever became of it, as its lead or named on it.
+   The server tells anybody else nothing, and the page draws nothing for them. The same conversation is in
+   the app, under the event. *@
+
+@if (_thread.Failed)
+{
+    <section class="mb-4" id="event-organizer-thread">
+        <BenSectionHeading Text="Write to the organizers" />
+        <BenItemState TItem="EventGuestThreadRecord" Result="@_thread" Loading="false" OnRetry="@LoadAsync" />
+    </section>
+}
+else if (_thread.Item is { } thread)
+{
+    <section class="mb-4" id="event-organizer-thread">
+        <BenSectionHeading Text="Write to the organizers" />
+        <p class="small text-secondary mb-2">
+            Only @thread.OrganizerName and the people running this event see what you write here. They answer here and in the app.
+        </p>
+        @if (_note is { Length: > 0 }) { <div class="alert alert-success py-2" role="status" id="organizer-thread-note">@_note</div> }
+        @if (_error is { Length: > 0 }) { <div class="alert alert-danger py-2" role="alert" id="organizer-thread-error">@_error</div> }
+
+        @if (thread.Messages.Count > 0)
+        {
+            <div class="mb-3"><EventGuestThreadMessages Messages="@thread.Messages" /></div>
+        }
+
+        @if (thread.CanWrite)
+        {
+            <label class="visually-hidden" for="organizer-thread-body">Your message</label>
+            <textarea class="form-control mb-2" id="organizer-thread-body" rows="3" maxlength="2000"
+                      placeholder="A question about the event, your booking, or anything else" @bind="_body" @bind:event="oninput"></textarea>
+            <button type="button" class="btn btn-primary btn-sm" id="organizer-thread-send"
+                    disabled="@(_busy || string.IsNullOrWhiteSpace(_body))" @onclick="SendAsync">Send</button>
+        }
+        else if (thread.WhyNotWrite is { Length: > 0 } why)
+        {
+            <p class="small text-secondary mb-0" id="organizer-thread-closed">@why</p>
+        }
+    </section>
+}
+
+@code {
+    [Parameter, EditorRequired] public Guid HostedEventId { get; set; }
+
+    private ItemResult<EventGuestThreadRecord> _thread;
+    private bool _busy;
+    private string? _body, _note, _error;
+
+    protected override Task OnParametersSetAsync() => LoadAsync();
+
+    private async Task LoadAsync() => _thread = await AdminClient.GetOrganizerThreadAsync(HostedEventId);
+
+    private async Task SendAsync()
+    {
+        if (string.IsNullOrWhiteSpace(_body)) return;
+        _busy = true; _note = null; _error = null;
+        var (thread, error) = await AdminClient.WriteToOrganizersAsync(HostedEventId, _body);
+        _busy = false;
+        if (thread is null) { _error = error ?? "That couldn't be sent just now."; return; }
+        _thread = ItemResult<EventGuestThreadRecord>.Ok(thread);
+        _note = thread.Note;
+        _body = null;
+    }
+}

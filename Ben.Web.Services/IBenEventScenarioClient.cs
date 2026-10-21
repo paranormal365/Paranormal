@@ -79,4 +79,19 @@ public interface IBenEventScenarioClient
 
     /// <summary>Takes a post down from a tour date's room.</summary>
     Task<(TourRoomRecord? Result, string? Error)> RemoveTourRoomMessageAsync(Guid dateId, Guid messageId, CancellationToken token = default);
+
+    /// <summary>The reader's own conversation with an event's organizers; empty for somebody with no booking there.</summary>
+    Task<ItemResult<EventGuestThreadRecord>> GetOrganizerThreadAsync(Guid hostedEventId, CancellationToken token = default);
+
+    /// <summary>A guest writes to an event's organizers.</summary>
+    Task<(EventGuestThreadRecord? Result, string? Error)> WriteToOrganizersAsync(Guid hostedEventId, string body, CancellationToken token = default);
+
+    /// <summary>Every guest's conversation about an event, for its organizers, newest first.</summary>
+    Task<LoadResult<EventGuestThreadSummaryRecord>> GetGuestThreadsAsync(Guid orgId, Guid eventId, CancellationToken token = default);
+
+    /// <summary>One guest's conversation, for the organizers.</summary>
+    Task<ItemResult<EventGuestThreadRecord>> GetGuestThreadAsync(Guid orgId, Guid eventId, Guid guestId, CancellationToken token = default);
+
+    /// <summary>The organizers answer a guest.</summary>
+    Task<(EventGuestThreadRecord? Result, string? Error)> AnswerGuestAsync(Guid orgId, Guid eventId, Guid guestId, string body, CancellationToken token = default);
 }

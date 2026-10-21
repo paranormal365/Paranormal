@@ -138,6 +138,19 @@ public final class NotificationsStore {
                 destination: .events))
         }
 
+        // The organizers of an event answered this guest (event-scenario-gaps). Opens what they're going to,
+        // where the event's own screen has the conversation.
+        if let answered = summary.eventOrganizerReplies, answered.count > 0 {
+            rows.append(NotificationRow(
+                id: "event-organizer-replies",
+                title: "The organizers answered you",
+                detail: "A reply about an event you wrote to them about · "
+                      + NotificationText.describeAge(answered.oldestUnreadUtc),
+                systemImage: "bubble.left.and.text.bubble.right",
+                bucket: answered,
+                destination: .myEvents))
+        }
+
         if summary.feedMentions.count > 0 {
             rows.append(NotificationRow(
                 id: "feed-mentions",

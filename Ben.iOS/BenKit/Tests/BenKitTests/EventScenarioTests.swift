@@ -159,6 +159,57 @@ struct EventScenarioTests {
         #expect(MenuDietary.alcohol.rawValue == 256)
     }
 
+    // ── writing to the organizers ────────────────────────────────────────────
+
+    @Test func theOrganizerThreadDecodesOldestFirstWithTheAnswersMarked() throws {
+        let thread = try BenJSON.decoder.decode(EventGuestThread.self, from: fixture("hosted-organizer-thread"))
+        #expect(thread.hostedEventId == Self.eventId)
+        #expect(thread.canWrite)
+        #expect(thread.messages.map(\.fromOrganizer) == [false, true])
+        #expect(thread.messages[0].isMine)
+        #expect(thread.messages[1].authorName == "Jim for Jim's Investigations")
+    }
+
+    @Test func somebodyWithNoBookingHasNoThreadAndAWriteKeepsTheServersRefusal() async throws {
+        guard case .ok(nil) = await Self.store(MockTransport(status: 204)).loadOrganizerThread(Self.eventId) else {
+            Issue.record("a 204 should read as no conversation"); return
+        }
+        guard case .failed = await Self.store(MockTransport { _ in throw URLError(.timedOut) }).loadOrganizerThread(Self.eventId) else {
+            Issue.record("an unreachable server is a failure"); return
+        }
+
+        let ok = MockTransport(status: 200, body: try fixture("hosted-organizer-thread"))
+        guard case .ok(let thread) = await Self.store(ok).writeToOrganizers(Self.eventId, body: "Is there parking?") else {
+            Issue.record("the message should land"); return
+        }
+        #expect(thread.messages.count == 2)
+        let request = try #require(ok.requests.last)
+        #expect(request.httpMethod == "POST")
+        #expect(request.url?.path.hasSuffix("/hosted-events/\(Self.eventId.uuidString.lowercased())/organizer-thread") == true)
+        #expect(String(decoding: request.httpBody ?? Data(), as: UTF8.self).contains(#""body":"Is there parking?""#))
+
+        let closed = "This event isn't on the site any more, so it can't take messages."
+        let refused = MockTransport(status: 409, body: Data(closed.utf8), headers: ["Content-Type": "text/plain"])
+        guard case .failed(let reason, 409) = await Self.store(refused).writeToOrganizers(Self.eventId, body: "Hello?") else {
+            Issue.record("expected the refusal"); return
+        }
+        #expect(reason == closed)
+    }
+
+    @Test func anAnswerFromTheOrganizersIsOnTheBellAndAnOlderServerStillDecodes() throws {
+        let json = #"""
+        {"orgMessages":{"count":0},"caseMessagesAsOrgMember":{"count":0},"caseMessagesAsClient":{"count":0},
+         "systemMessages":{"count":0},"pendingPermissionRequests":{"count":0},"investigationInvites":{"count":0},
+         "equipmentCheckouts":{"count":0},"feedMentions":{"count":0},"eventOrganizerReplies":{"count":1,"oldestUnreadUtc":"2026-10-20T19:30:00Z"}}
+        """#
+        let summary = try BenJSON.decoder.decode(NotificationSummary.self, from: Data(json.utf8))
+        #expect(summary.eventOrganizerReplies?.count == 1)
+        #expect(summary.totalCount == 1)
+
+        let older = json.replacingOccurrences(of: #","eventOrganizerReplies":{"count":1,"oldestUnreadUtc":"2026-10-20T19:30:00Z"}"#, with: "")
+        #expect(try BenJSON.decoder.decode(NotificationSummary.self, from: Data(older.utf8)).totalCount == 0)
+    }
+
     // ── the event's room ─────────────────────────────────────────────────────
 
     @Test func anOlderRoomWithNoRolesStillDecodesAndANewOneCarriesThem() throws {

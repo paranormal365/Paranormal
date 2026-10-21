@@ -65,17 +65,20 @@ public struct NotificationSummary: Sendable, Codable, Equatable {
     /// This person's own seats, decided and not yet acknowledged.
     public var myTourSeats: NotificationBucket?
 
+    /// The organizers of an event answered this guest (event-scenario-gaps). Optional for older servers.
+    public var eventOrganizerReplies: NotificationBucket?
+
     public static let empty = NotificationSummary(
         orgMessages: .empty, caseMessagesAsOrgMember: .empty, caseMessagesAsClient: .empty,
         systemMessages: .empty, pendingPermissionRequests: .empty, investigationInvites: .empty,
         equipmentCheckouts: .empty, feedMentions: .empty,
         orgMessagesByOrg: nil, caseMessagesAsOrgMemberByCase: nil,
-        tourSeatsToDecide: nil, myTourSeats: nil)
+        tourSeatsToDecide: nil, myTourSeats: nil, eventOrganizerReplies: nil)
 
     public var allBuckets: [NotificationBucket] {
         [orgMessages, caseMessagesAsOrgMember, caseMessagesAsClient, systemMessages,
          pendingPermissionRequests, investigationInvites, equipmentCheckouts, feedMentions,
-         tourSeatsToDecide ?? .empty, myTourSeats ?? .empty]
+         tourSeatsToDecide ?? .empty, myTourSeats ?? .empty, eventOrganizerReplies ?? .empty]
     }
 
     /// The number on the tab badge.

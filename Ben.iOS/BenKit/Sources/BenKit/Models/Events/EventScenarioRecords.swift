@@ -143,3 +143,31 @@ public struct TourRoomMessage: Sendable, Codable, Equatable, Identifiable {
     /// "Guide" or "Organizer" for the people running the walk; nil for a guest. Shown so their posts stand out.
     public var authorRole: String?
 }
+
+// ── writing to the organizers (event-scenario-gaps, 10/21/2026) ──────────────
+
+/// A guest's conversation with the people running an event, oldest first. Port of `EventGuestThreadRecord`.
+public struct EventGuestThread: Sendable, Codable, Equatable {
+    public var hostedEventId: UUID
+    /// Nil before the guest's first message.
+    public var threadId: UUID?
+    public var guestId: UUID
+    public var guestName: String
+    public var eventName: String
+    public var organizerName: String
+    public var canWrite: Bool
+    public var whyNotWrite: String?
+    public var messages: [EventGuestThreadMessage]
+    public var note: String?
+}
+
+/// One message: plain words.
+public struct EventGuestThreadMessage: Sendable, Codable, Equatable, Identifiable {
+    public var id: UUID
+    public var authorName: String
+    public var body: String
+    public var postedUtc: Date
+    /// An answer from the people running the event; shown so it stands out.
+    public var fromOrganizer: Bool
+    public var isMine: Bool
+}

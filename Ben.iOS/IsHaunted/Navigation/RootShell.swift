@@ -282,6 +282,8 @@ struct RootShell: View {
             EventResultsView(hostedEventId: id)
         case .tourRoom(let id):
             TourRoomView(dateId: id)
+        case .eventOrganizerThread(let id):
+            OrganizerThreadView(hostedEventId: id)
         case .doorDuties:
             DoorDutiesView()
         case .door(let organizationId, let hostedEventId):

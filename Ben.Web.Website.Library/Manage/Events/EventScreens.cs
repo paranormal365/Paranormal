@@ -26,6 +26,7 @@ public static class EventScreens
         new("The event", ""),
         new("Plan", "/layout"),
         new("Bookings", "/bookings"),
+        new("Guest messages", "/guest-messages"),
         new("Meals", "/menus"),
         new("Menus", "/menu-builder"),
         new("Dining tables", "/dining"),

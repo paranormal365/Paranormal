@@ -158,6 +158,12 @@ public static class NotificationRows
                 $"A session at an event you're going to has moved or been canceled · {NotificationBadge.DescribeAge(changed.OldestUnreadUtc)}",
                 "calendar", "/my-events", changed));
 
+        // The people running an event answered this guest (event-scenario-gaps).
+        if (s.EventOrganizerReplies is { Count: > 0 } answered)
+            rows.Add(new("The organizers answered you",
+                $"A reply about an event you wrote to them about · {NotificationBadge.DescribeAge(answered.OldestUnreadUtc)}",
+                "message-circle", answered.Where ?? "/my-events", answered));
+
         if (s.MyEventHoldLapsing is { Count: > 0 } myHold)
             rows.Add(new("Your hold is running out",
                 $"The venue has not confirmed it yet, and it lapses within a day · {NotificationBadge.DescribeAge(myHold.OldestUnreadUtc)}",

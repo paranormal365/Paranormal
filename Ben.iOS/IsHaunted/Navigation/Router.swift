@@ -150,6 +150,8 @@ enum AppRoute: Hashable {
     case eventResults(UUID)
     /// A tour date's room, for the people checked in on the walk and its guides, by the date's id.
     case tourRoom(UUID)
+    /// Writing to an event's organizers, for somebody with a booking there (event-scenario-gaps).
+    case eventOrganizerThread(UUID)
     /// The events this person may run the door at, and one night's door (item 235 phase 14c).
     case doorDuties
     case door(organizationId: UUID, hostedEventId: UUID)

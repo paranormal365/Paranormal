@@ -69,6 +69,13 @@ struct EventHubView: View {
                         }
                         .accessibilityIdentifier("hub-room")
                     }
+                    if booking != nil {
+                        // Ben's scenario: "contact Jim either on our app".
+                        NavigationLink(value: AppRoute.eventOrganizerThread(hostedEventId)) {
+                            row("Write to the organizers", detail: "Ask about the event or your booking", icon: "envelope")
+                        }
+                        .accessibilityIdentifier("hub-organizer-thread")
+                    }
                     if let results, results.hasSomething {
                         // The event's results (event-scenario-gaps): "They could see the event results in the app."
                         NavigationLink(value: AppRoute.eventResults(hostedEventId)) {

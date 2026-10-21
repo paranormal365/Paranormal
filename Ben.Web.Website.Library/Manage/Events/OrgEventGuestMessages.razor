@@ -1,0 +1,152 @@
+@page "/organizations/{OrgId:guid}/events/{EventId:guid}/guest-messages"
+@namespace Ben.Web.Website.Library.Manage.Events
+@using Ben.Service.Models.Entities
+@using Ben.Web.Services
+@using Ben.Web.Services.WebApi
+@using Ben.Web.Website.Library.Kit
+@using Ben.Web.Website.Library.Organization.Public
+@inject IBenAdminClient AdminClient
+@inject IBenUserState UserState
+@inject NavigationManager Nav
+
+@* Guests writing to the people running the event (event-scenario-gaps; Ben's scenario: "contact Jim either
+   on our app").
+
+   ONE CONVERSATION PER GUEST. The list is everybody who has written, the newest first, with the ones
+   waiting on an answer marked; choosing one opens it beside the list (below it on a phone) with a box to
+   answer. The guest reads the answer on the event's page and in the app, and their bell says so. *@
+
+<PageTitle>Guest messages</PageTitle>
+
+<div class="container-fluid py-3" style="max-width:1100px;">
+    <div class="text-secondary small">
+        <a href="@($"/organizations/{OrgId}/events/{EventId}")">Back to the event</a>
+    </div>
+    <h1 class="h4 mb-1">Guest messages</h1>
+    <p class="text-secondary small mb-3">
+        What guests with a booking have written to you about this event. Your answer goes to them on the event's page and in the app.
+    </p>
+
+    @if (_note is { Length: > 0 }) { <div class="alert alert-success py-2" role="status" id="guest-messages-note">@_note</div> }
+    @if (_error is { Length: > 0 }) { <div class="alert alert-danger py-2" role="alert" id="guest-messages-error">@_error</div> }
+
+    <div class="row g-3">
+        <div class="col-12 col-lg-4">
+            <BenListState TItem="EventGuestThreadSummaryRecord" Result="@_threads" Loading="@_loading"
+                          LoadingText="Loading the messages…" EmptyText="No guest has written yet.">
+                <div class="list-group" id="guest-messages-list">
+                    @foreach (var t in _threads.Items)
+                    {
+                        var thread = t;
+                        <button type="button" class="list-group-item list-group-item-action text-start @(thread.GuestId == _guestId ? "active" : "")"
+                                data-guest="@thread.GuestId" @onclick="() => OpenAsync(thread.GuestId)">
+                            <div class="d-flex justify-content-between gap-2">
+                                <strong style="overflow-wrap:anywhere;">@thread.GuestName</strong>
+                                @if (thread.WaitingOnUs)
+                                {
+                                    <span class="badge text-bg-warning flex-shrink-0" data-testid="waiting-on-us">Waiting on you</span>
+                                }
+                            </div>
+                            <div class="small text-truncate">@thread.LastBody</div>
+                            <div class="small opacity-75">@thread.LastUtc.ToViewerLocalTime(UserState).ToDisplayDateTime()</div>
+                        </button>
+                    }
+                </div>
+            </BenListState>
+        </div>
+
+        <div class="col-12 col-lg-8">
+            @if (_guestId is null)
+            {
+                @if (_threads.Items.Count > 0)
+                {
+                    <p class="text-secondary" id="guest-message-choose">Choose a guest to read what they wrote and answer.</p>
+                }
+            }
+            else
+            {
+                <BenItemState TItem="EventGuestThreadRecord" Result="@_thread" Loading="@_threadLoading" OnRetry="@ReloadThreadAsync">
+                    <ChildContent>
+                        @if (_thread.Item is { } open)
+                        {
+                            <div class="card" id="guest-message-thread">
+                                <div class="card-header fw-semibold" style="overflow-wrap:anywhere;">@open.GuestName</div>
+                                <div class="card-body">
+                                    <EventGuestThreadMessages Messages="@open.Messages" />
+                                    @if (open.CanWrite)
+                                    {
+                                        <label class="form-label small mt-3" for="guest-message-answer">Your answer</label>
+                                        <textarea class="form-control mb-2" id="guest-message-answer" rows="3" maxlength="2000"
+                                                  @bind="_answer" @bind:event="oninput"></textarea>
+                                        <button type="button" class="btn btn-primary btn-sm" id="guest-message-send"
+                                                disabled="@(_busy || string.IsNullOrWhiteSpace(_answer))" @onclick="AnswerAsync">Send</button>
+                                    }
+                                    else if (open.WhyNotWrite is { Length: > 0 } why)
+                                    {
+                                        <p class="small text-secondary mt-3 mb-0" id="guest-message-closed">@why</p>
+                                    }
+                                </div>
+                            </div>
+                        }
+                    </ChildContent>
+                </BenItemState>
+            }
+        </div>
+    </div>
+</div>
+
+@code {
+    [Parameter] public Guid OrgId { get; set; }
+    [Parameter] public Guid EventId { get; set; }
+    [SupplyParameterFromQuery(Name = "guest")] public Guid? Guest { get; set; }
+
+    private LoadResult<EventGuestThreadSummaryRecord> _threads = LoadResult<EventGuestThreadSummaryRecord>.Ok([]);
+    private ItemResult<EventGuestThreadRecord> _thread;
+    private Guid? _guestId;
+    private bool _loading = true, _threadLoading, _busy;
+    private string? _answer, _note, _error;
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (!firstRender) return;
+        if (!await UserState.WaitUntilAuthReadyAsync(RendererInfo.IsInteractive)) return;
+        await LoadListAsync();
+        if (Guest is { } guest) await OpenAsync(guest);
+        StateHasChanged();
+    }
+
+    private async Task LoadListAsync()
+    {
+        _loading = true;
+        _threads = await AdminClient.GetGuestThreadsAsync(OrgId, EventId);
+        _loading = false;
+    }
+
+    private async Task OpenAsync(Guid guestId)
+    {
+        _guestId = guestId;
+        _note = null; _error = null; _answer = null;
+        await ReloadThreadAsync();
+    }
+
+    private async Task ReloadThreadAsync()
+    {
+        if (_guestId is not { } guestId) return;
+        _threadLoading = true;
+        _thread = await AdminClient.GetGuestThreadAsync(OrgId, EventId, guestId);
+        _threadLoading = false;
+    }
+
+    private async Task AnswerAsync()
+    {
+        if (_guestId is not { } guestId || string.IsNullOrWhiteSpace(_answer)) return;
+        _busy = true; _note = null; _error = null;
+        var (thread, error) = await AdminClient.AnswerGuestAsync(OrgId, EventId, guestId, _answer);
+        _busy = false;
+        if (thread is null) { _error = error ?? "That couldn't be sent just now."; return; }
+        _thread = ItemResult<EventGuestThreadRecord>.Ok(thread);
+        _note = thread.Note;
+        _answer = null;
+        await LoadListAsync();
+    }
+}

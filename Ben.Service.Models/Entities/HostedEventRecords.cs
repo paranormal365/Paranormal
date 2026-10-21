@@ -894,3 +894,33 @@ public sealed record TourRoomMessageRecord(
 
 /// <summary>A post in a tour date's room. Words only.</summary>
 public sealed record PostTourRoomMessageRequest(string? Body);
+
+// ── a guest writing to the organizers (event-scenario-gaps, 10/21/2026) ───────
+
+/// <summary>A guest's conversation with the people running an event, as either side reads it, oldest first.</summary>
+/// <param name="ThreadId">Null before the guest's first message.</param>
+/// <param name="CanWrite">False once the event is off the site or a month past its end.</param>
+public sealed record EventGuestThreadRecord(
+    Guid HostedEventId,
+    Guid? ThreadId,
+    Guid GuestId,
+    string GuestName,
+    string EventName,
+    string OrganizerName,
+    bool CanWrite,
+    string? WhyNotWrite,
+    IReadOnlyList<EventGuestThreadMessageRecord> Messages,
+    string? Note = null);
+
+/// <summary>One message: plain words, never markup.</summary>
+/// <param name="FromOrganizer">True for an answer from the people running the event.</param>
+public sealed record EventGuestThreadMessageRecord(
+    Guid Id, string AuthorName, string Body, DateTime PostedUtc, bool FromOrganizer, bool IsMine);
+
+/// <summary>One guest's conversation in the organizers' list, newest first.</summary>
+/// <param name="WaitingOnUs">The guest wrote last.</param>
+public sealed record EventGuestThreadSummaryRecord(
+    Guid ThreadId, Guid GuestId, string GuestName, string LastBody, DateTime LastUtc, bool WaitingOnUs, int Count);
+
+/// <summary>A message to (or from) the organizers. Words only.</summary>
+public sealed record PostEventGuestThreadRequest(string? Body);

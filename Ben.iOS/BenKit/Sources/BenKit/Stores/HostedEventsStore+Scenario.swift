@@ -73,6 +73,36 @@ extension HostedEventsStore {
 
     private struct TourRoomPost: Encodable { let body: String }
 
+    // ── writing to the organizers (event-scenario-gaps, 10/21/2026) ──────────
+
+    /// The reader's conversation with an event's organizers. `.ok(nil)` for somebody with no booking there
+    /// (the server answers 204), which is not a failure: the hub simply doesn't offer it.
+    public func loadOrganizerThread(_ hostedEventId: UUID) async -> LoadResult<EventGuestThread?> {
+        switch await api.loadData(Endpoint(.get, Self.organizerThreadPath(hostedEventId))) {
+        case .ok(let data):
+            if data.isEmpty { return .ok(nil) }
+            do { return .ok(try BenJSON.decoder.decode(EventGuestThread.self, from: data)) }
+            catch { return .failed(reason: nil) }
+        case .failed(_, let status?) where status == 404: return .ok(nil)
+        case .failed(let reason, let status): return .failed(reason: reason, statusCode: status)
+        case .sessionEnded: return .sessionEnded
+        case .rateLimited(let after): return .rateLimited(retryAfter: after)
+        }
+    }
+
+    /// Writes to the organizers; keeps the server's sentence when it refuses.
+    public func writeToOrganizers(_ hostedEventId: UUID, body: String) async -> LoadResult<EventGuestThread> {
+        guard let endpoint = try? Endpoint.json(.post, Self.organizerThreadPath(hostedEventId), payload: OrganizerThreadPost(body: body))
+        else { return .failed(reason: nil) }
+        return await api.load(endpoint, as: EventGuestThread.self)
+    }
+
+    private struct OrganizerThreadPost: Encodable { let body: String }
+
+    static func organizerThreadPath(_ hostedEventId: UUID) -> String {
+        "api/public/hosted-events/\(lower(hostedEventId))/organizer-thread"
+    }
+
     static func tourRoomPath(_ dateId: UUID) -> String { "api/public/tour-dates/\(lower(dateId))/room" }
     private static func lower(_ id: UUID) -> String { id.uuidString.lowercased() }
 }
