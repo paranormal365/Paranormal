@@ -126,10 +126,10 @@ public sealed class EventGuestMailer
 
         // What the price covers, from the published menus (Ben's menu rules: "If the price is included
         // in the event price, it will be notated in the event ticket information").
-        var included = confirmed && ev is not null
-            ? Ben.Service.Models.Entities.EventMenuPresentation.IncludedWithTheEvent(
-                await Controllers.Public.PublicEventMenuController.PublishedAsync(db, ev.Id, ct))
-            : null;
+        var menus = confirmed && ev is not null
+            ? await Controllers.Public.PublicEventMenuController.PublishedAsync(db, ev.Id, ct)
+            : [];
+        var included = Ben.Service.Models.Entities.EventMenuPresentation.IncludedWithTheEvent(menus);
 
         var (subject, body) = booking.Status switch
         {
@@ -139,7 +139,7 @@ public sealed class EventGuestMailer
         };
 
         var attachments = new List<EmailAttachment>();
-        if (confirmed && CalendarFor(booking, ev) is { Length: > 0 } calendar)
+        if (confirmed && CalendarFor(booking, ev, menus) is { Length: > 0 } calendar)
             attachments.Add(new EmailAttachment("event.ics", IcsBuilder.ContentType, calendar));
 
         // The pass travels in the letter; a template of this kind is promised it as PassImage and
@@ -1086,8 +1086,12 @@ public sealed class EventGuestMailer
     /// plus sixteen hours: on the weekend the clocks go back, the Saturday night is an hour longer
     /// and a fixed span would have put the Sunday check-out at nine.</para>
     /// </remarks>
-    private byte[] CalendarFor(HostedEventBooking booking, HostedEvent? ev)
+    /// <param name="menus">The event's published menus: each night's entry says what is served
+    /// (Ben's menu rules: published menus appear "in the calendar for the event").</param>
+    private byte[] CalendarFor(HostedEventBooking booking, HostedEvent? ev,
+        IReadOnlyList<Ben.Service.Models.Entities.EventMenuRecord>? menus = null)
     {
+        menus ??= [];
         if (ev is null) return [];
 
         var zone = HostedEventCalendarSync.ZoneOf(ev.TimeZoneId);
@@ -1109,7 +1113,8 @@ public sealed class EventGuestMailer
                 StartUtc: AtVenueUtc(n.HostedEventNight.Date, NightBegins, zone),
                 EndUtc: AtVenueUtc(n.HostedEventNight.Date.AddDays(1), NightEnds, zone),
                 Summary: $"{ev.Name} — {EventCapacity.NameOf(n, booking.Kind)}",
-                Description: null,
+                Description: Ben.Service.Models.Entities.EventMenuPresentation.OnTheDate(menus, n.HostedEventNight.Date) is { } served
+                    ? $"Menus: {served}" : null,
                 Location: venue,
                 Url: absolute,
                 OrganizerName: ev.Organization?.Name,
@@ -1119,7 +1124,8 @@ public sealed class EventGuestMailer
                 StartUtc: AtVenueUtc(ev.StartsOn, NightBegins, zone),
                 EndUtc: AtVenueUtc(ev.EndsOn.AddDays(1), DayPassEnds, zone),
                 Summary: ev.Name,
-                Description: null,
+                Description: menus.Count == 0 ? null
+                    : "Menus: " + string.Join(" · ", menus.Select(m => m.ShownHeading).Distinct()),
                 Location: venue,
                 Url: absolute,
                 OrganizerName: ev.Organization?.Name,

@@ -65,6 +65,27 @@ public static class EventMenuPresentation
         };
     }
 
+    /// <summary>
+    /// The published menus served on one date, as one line for a calendar — "Dinner: Séance supper ·
+    /// Throughout the event: Snack table" — or null when nothing is served that day.
+    /// </summary>
+    /// <remarks>
+    /// Ben's menu rules: "When published, it will appear on the site in the calendar for the event." The
+    /// group's calendar entry and the calendar files say the same thing, from here (event-scenario-gaps).
+    /// </remarks>
+    public static string? OnTheDate(IEnumerable<EventMenuRecord> menus, DateTime date)
+    {
+        var list = menus.ToList();
+        var served = list
+            .SelectMany(m => m.Meals.Where(x => x.NightDate.Date == date.Date).Select(x => (Meal: x, Menu: m)))
+            .OrderBy(p => p.Meal.ServedAtLocal ?? TimeSpan.MaxValue)
+            .Select(p => $"{p.Meal.MealTitle}: {p.Menu.ShownHeading}")
+            .Concat(list.Where(m => m.ThroughoutTheEvent).Select(m => $"Throughout the event: {m.ShownHeading}"))
+            .Distinct()
+            .ToList();
+        return served.Count == 0 ? null : string.Join(" · ", served);
+    }
+
     /// <summary>The line under the heading for a menu the event pays for, or null.</summary>
     public static string? IncludedLine(EventMenuRecord menu)
         => AllIncludedInEvent(menu) ? "Included with the event" : null;

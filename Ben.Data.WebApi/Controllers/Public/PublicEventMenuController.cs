@@ -85,6 +85,37 @@ public sealed class PublicEventMenuController : BenControllerBase
         return File(bytes, "font/ttf");
     }
 
+    /// <summary>
+    /// The event's dates as a calendar file, each date carrying the menus served on it (event-scenario-gaps;
+    /// Ben's menu rules: published menus "appear on the site in the calendar for the event").
+    /// </summary>
+    /// <remarks>Anonymous, like the event's page: a calendar app following the link carries no session.</remarks>
+    [HttpGet("hosted-events/{eventId:guid}/calendar.ics")]
+    public async Task<IActionResult> Calendar(Guid eventId, [FromServices] Microsoft.Extensions.Options.IOptions<Ben.Data.Common.SiteIdentity> site, CancellationToken ct)
+    {
+        await using var db = await _db.CreateDbContextAsync(ct);
+        var ev = await db.HostedEvents.AsNoTracking().Include(e => e.Nights).Include(e => e.Organization).Include(e => e.Place)
+            .FirstOrDefaultAsync(e => e.Id == eventId && HostedEventStates.OnThePublicSite.Contains(e.LifecycleState), ct);
+        if (ev is null) return NotFound();
+
+        var menus = await PublishedAsync(db, eventId, ct);
+        var url = site.Value.AbsoluteUrl($"/o/{ev.Organization.UrlName}/events/{ev.UrlName}");
+        var entries = ev.Nights.OrderBy(n => n.Date).Select(n =>
+        {
+            var (start, end) = HostedEventCalendarSync.Window(ev, [n]);
+            return new Ben.Data.Common.Helpers.IcsBuilder.IcsEvent(
+                Uid: $"{ev.Id}-{n.Id}@ishaunted.com", StartUtc: start, EndUtc: end,
+                Summary: n.Title is { Length: > 0 } title ? $"{ev.Name} — {title}" : ev.Name,
+                Description: EventMenuPresentation.OnTheDate(menus, n.Date) is { } served ? $"Menus: {served}" : null,
+                Location: ev.HideExactLocation ? ev.Place?.City : ev.Place?.Name,
+                Url: url.StartsWith("http", StringComparison.OrdinalIgnoreCase) ? url : null,
+                OrganizerName: ev.Organization.Name, OrganizerEmail: ev.Organization.PublicEmail,
+                Sequence: (int)((ev.DateUpdated ?? ev.DateCreated).Ticks / TimeSpan.TicksPerMinute % int.MaxValue));
+        }).ToList();
+
+        return File(Ben.Data.Common.Helpers.IcsBuilder.BuildBytes(entries), Ben.Data.Common.Helpers.IcsBuilder.ContentType, "event.ics");
+    }
+
     /// <summary>The published menus of an event that is on the public site, as guests read them.</summary>
     public static async Task<IReadOnlyList<EventMenuRecord>> PublishedAsync(BenDataContext db, Guid eventId, CancellationToken ct)
     {

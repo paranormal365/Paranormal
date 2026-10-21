@@ -135,6 +135,10 @@ else
                         </div>
                     }
                 </div>
+                @* The dates for a calendar app, each with what's served on it (event-scenario-gaps). *@
+                <p class="small mt-2 mb-0">
+                    <a href="@($"/calendar/hosted-events/{hosted.Id}.ics")" id="event-calendar-file" download>Add the dates to your calendar</a>
+                </p>
                 @if (hosted.DatesAreSeparate)
                 {
                     <p class="text-secondary small mt-2">

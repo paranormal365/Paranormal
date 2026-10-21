@@ -243,6 +243,32 @@ public sealed class EventMenuRulesTests
         }
     }
 
+    /// <summary>
+    /// Ben's menu rules: a published menu "will appear on the site in the calendar for the event". The
+    /// event's calendar file names, on each date, what is served; a draft is never in it.
+    /// </summary>
+    [Fact]
+    public async Task The_events_calendar_file_names_the_menus_served_on_each_date()
+    {
+        await using var sqlite = await SqliteTestDb.CreateAsync();
+        var f = await MenuFixture.SeedAsync(sqlite);
+        await TwoMenusAsync(sqlite, f);
+
+        var controller = new PublicEventMenuController(sqlite.Factory, new Moq.Mock<Ben.Data.Common.Interfaces.IFileStorageService>().Object);
+        var file = Assert.IsType<Microsoft.AspNetCore.Mvc.FileContentResult>(await controller.Calendar(f.EventId,
+            Microsoft.Extensions.Options.Options.Create(new Ben.Data.Common.SiteIdentity { BaseUrl = "https://example.test" }), default));
+        var ics = System.Text.Encoding.UTF8.GetString(file.FileContents);
+
+        await using var db = await sqlite.NewContextAsync();
+        var menus = await PublicEventMenuController.PublishedAsync(db, f.EventId, default);
+        var friday = EventMenuPresentation.OnTheDate(menus, MenuFixture.Friday);
+        Assert.NotNull(friday);
+        Assert.StartsWith("Dinner: ", friday);
+        Assert.Contains("DESCRIPTION:Menus: Dinner: ", ics.Replace("\r\n ", ""));
+        Assert.Equal(2, ics.Split("BEGIN:VEVENT").Length - 1);
+        Assert.Null(EventMenuPresentation.OnTheDate(menus, MenuFixture.Friday.AddDays(5)));
+    }
+
     [Fact]
     public async Task The_phone_app_gets_one_row_per_meal_in_the_shape_it_already_reads()
     {

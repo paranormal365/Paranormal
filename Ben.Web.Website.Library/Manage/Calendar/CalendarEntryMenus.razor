@@ -1,0 +1,55 @@
+@namespace Ben.Web.Website.Library.Manage.Calendar
+@using Ben.Service.Models.Entities
+@using Ben.Web.Services
+@using Ben.Web.Services.WebApi
+@inject IBenAdminClient AdminClient
+
+@* A hosted event's published menus, date by date, on its entry in the group's calendar (event-scenario-gaps).
+   Ben's menu rules: "When published, it will appear on the site in the calendar for the event." Nothing shows
+   when the event has no published menus; a menu list that couldn't be read says so. *@
+
+@if (_menus.Failed)
+{
+    <div class="alert alert-warning py-2 small" role="alert" id="calendar-entry-menus-failed">
+        The event's menus couldn't be read just now.
+    </div>
+}
+else if (_lines.Count > 0)
+{
+    <div class="card mb-3" id="calendar-entry-menus">
+        <div class="card-header fw-semibold small">Menus</div>
+        <ul class="list-group list-group-flush small">
+            @foreach (var (when, line) in _lines)
+            {
+                <li class="list-group-item d-flex flex-wrap gap-2" data-testid="calendar-entry-menu">
+                    <span class="fw-semibold text-nowrap">@when</span>
+                    <span style="overflow-wrap:anywhere;">@line</span>
+                </li>
+            }
+        </ul>
+        <div class="card-body py-2 small">
+            <a href="@($"/organizations/{OrgId}/events/{HostedEventId}/menu-builder")">Change the menus</a>
+        </div>
+    </div>
+}
+
+@code {
+    [Parameter, EditorRequired] public Guid HostedEventId { get; set; }
+    [Parameter, EditorRequired] public Guid OrgId { get; set; }
+
+    private LoadResult<EventMenuRecord> _menus;
+    private List<(string When, string Line)> _lines = [];
+    private Guid? _loadedFor;
+
+    protected override async Task OnParametersSetAsync()
+    {
+        if (_loadedFor == HostedEventId) return;
+        _loadedFor = HostedEventId;
+        _menus = await AdminClient.GetPublishedEventMenusAsync(HostedEventId);
+        var dates = _menus.Items.SelectMany(m => m.Meals.Select(x => x.NightDate.Date)).Distinct().Order().ToList();
+        _lines = [.. dates.Select(d => (When: d.ToString("ddd MM/dd/yyyy"), Line: EventMenuPresentation.OnTheDate(_menus.Items, d)))
+                         .Where(p => p.Line is not null).Select(p => (p.When, p.Line!))];
+        if (_lines.Count == 0 && _menus.Items.Any(m => m.ThroughoutTheEvent))
+            _lines = [("Every day", string.Join(" · ", _menus.Items.Where(m => m.ThroughoutTheEvent).Select(m => m.ShownHeading)))];
+    }
+}
