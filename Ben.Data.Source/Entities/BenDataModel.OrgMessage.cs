@@ -45,6 +45,9 @@ namespace Ben.Data.Source.Entities
         /// </remarks>
         public Guid? HostedEventId { get; set; }
 
+        /// <summary>The tour date whose room this message was posted in (<c>TourRoom</c> only).</summary>
+        public Guid? OrgCalendarEventId { get; set; }
+
         /// <summary>Total view count — incremented each time a recipient opens the message.</summary>
         public int ViewCount { get; set; }
 

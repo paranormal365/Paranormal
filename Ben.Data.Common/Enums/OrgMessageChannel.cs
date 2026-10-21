@@ -73,4 +73,12 @@ public enum OrgMessageChannel
     /// hashtag, a like — can show it by forgetting to ask who is reading.
     /// </summary>
     FieldLaunchNotice = 7,
+
+    /// <summary>
+    /// A tour date's room: the people checked in on the walk and its guides, talking to each other
+    /// (event-scenario-gaps, Ben 10/20/2026: "stay in touch with people checked in with the event or
+    /// tour if you both are checked in"). Keyed by <c>OrgMessage.OrgCalendarEventId</c>, never by
+    /// the group, for the same reason a hosted event's room is not the group's mail.
+    /// </summary>
+    TourRoom = 8,
 }

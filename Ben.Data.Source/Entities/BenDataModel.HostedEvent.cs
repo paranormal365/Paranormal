@@ -387,6 +387,52 @@ namespace Ben.Data.Source.Entities
         /// <summary>When every thank-you went. Null until then, so a pass that failed half way finishes the rest.</summary>
         public DateTime? ThankYouSentUtc { get; set; }
 
+        // ── after the event: the evidence window, the letters and the results (event-scenario-gaps) ──
+
+        /// <summary>How many days after the last night guests may still offer evidence. Null: no deadline.</summary>
+        /// <remarks>
+        /// Jim's letter (Ben's scenario, 10/21/2026): "he was accepting evidence for three days". The
+        /// thank-you and the we-missed-you letters say so, the event page says until when, and the
+        /// evidence door refuses afterwards in words.
+        /// </remarks>
+        public int? EvidenceDays { get; set; }
+
+        /// <summary>Roughly how many days after the last night the results should be ready. Null: not said.</summary>
+        /// <remarks>Only words in the letters ("the results in about a week"); nothing waits on it.</remarks>
+        public int? ResultsInDays { get; set; }
+
+        /// <summary>Whether a "we missed you" letter goes to confirmed guests nobody checked in.</summary>
+        /// <remarks>
+        /// Only when the door recorded arrivals at all: an event that never scanned anybody cannot tell
+        /// who came, so everybody with a place gets the thank-you, as before. True for existing rows by
+        /// the migration, by hand, for the same reason <see cref="SendThankYou"/> has no model default.
+        /// </remarks>
+        public bool SendMissedYou { get; set; } = true;
+
+        /// <summary>The organizer's own words at the top of the we-missed-you letter. Plain text.</summary>
+        public string? MissedYouNote { get; set; }
+
+        /// <summary>Whether the event page asks people to vote on the evidence it shows.</summary>
+        public bool AsksForVotes { get; set; }
+
+        /// <summary>
+        /// Where the results are: a page the organizer built, or null for the event's own page.
+        /// </summary>
+        /// <remarks>A path on this site ("/o/group/p/results") or a full https address.</remarks>
+        public string? ResultsUrl { get; set; }
+
+        /// <summary>When the results letter last finished going to everybody. Null until it has.</summary>
+        public DateTime? ResultsSentUtc { get; set; }
+
+        /// <summary>
+        /// The secret in the "tickets at the door" QR code, or null while the door is not selling.
+        /// </summary>
+        /// <remarks>
+        /// Printed on a poster, so it says nothing about anybody. Turning door tickets off and on
+        /// again makes a new one, and the old poster stops working.
+        /// </remarks>
+        public string? DoorTicketToken { get; set; }
+
         /// <summary>When the organizer was told the files go in 30 days, and in 7 (phase 12). Once each.</summary>
         public DateTime? RetentionWarnedMonthUtc { get; set; }
         public DateTime? RetentionWarnedWeekUtc { get; set; }

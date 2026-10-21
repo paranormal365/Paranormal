@@ -1357,6 +1357,13 @@ namespace Ben.Data.Source.Context
             modelBuilder.Entity<OrgMessage>()
                 .HasIndex(m => new { m.HostedEventId, m.DateCreated })
                 .HasFilter("[HostedEventId] IS NOT NULL");
+            // A tour date's room (event-scenario-gaps). No navigation: the message is found by the date.
+            modelBuilder.Entity<OrgMessage>()
+                .HasOne<OrgCalendarEvent>().WithMany()
+                .HasForeignKey(m => m.OrgCalendarEventId).IsRequired(false).OnDelete(DeleteBehavior.NoAction);
+            modelBuilder.Entity<OrgMessage>()
+                .HasIndex(m => new { m.OrgCalendarEventId, m.DateCreated })
+                .HasFilter("[OrgCalendarEventId] IS NOT NULL");
 
             // ── the event's public gallery (phase 11) ──────────────────────────────
             modelBuilder.Entity<HostedEventGalleryImage>()
@@ -1504,6 +1511,13 @@ namespace Ben.Data.Source.Context
             // No HasDefaultValue(true) on the two switches: EF would then omit a false on insert and the
             // database would store true. The migration gives existing rows true by hand instead.
             modelBuilder.Entity<HostedEvent>().Property(e => e.ThankYouNote).HasMaxLength(2000);
+            // After the event (event-scenario-gaps): the missed-you note, where the results are, and the
+            // door's ticket code. SendMissedYou is true for existing rows by hand in the migration.
+            modelBuilder.Entity<HostedEvent>().Property(e => e.MissedYouNote).HasMaxLength(2000);
+            modelBuilder.Entity<HostedEvent>().Property(e => e.ResultsUrl).HasMaxLength(500);
+            modelBuilder.Entity<HostedEvent>().Property(e => e.DoorTicketToken).HasMaxLength(64);
+            modelBuilder.Entity<HostedEvent>().HasIndex(e => e.DoorTicketToken)
+                .IsUnique().HasFilter("[DoorTicketToken] IS NOT NULL");
             modelBuilder.Entity<HostedEventReview>()
                 .HasOne(r => r.HostedEvent).WithMany()
                 .HasForeignKey(r => r.HostedEventId).OnDelete(DeleteBehavior.Cascade);

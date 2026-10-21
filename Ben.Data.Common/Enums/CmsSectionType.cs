@@ -74,5 +74,12 @@ public enum CmsSectionType
     /// can be revoked (item 235 phase 8). A snapshot would keep showing a building's story after
     /// its owner took the loan back.
     /// </remarks>
-    EventVenue = 13
+    EventVenue = 13,
+
+    /// <summary>
+    /// The evidence an event accepted, ranked by positive votes and then by when it was caught —
+    /// the "evidence collected" page an organizer builds after the event (event-scenario-gaps).
+    /// </summary>
+    /// <remarks>Resolved on every read: a vote cast this morning moves the ranking this afternoon.</remarks>
+    EventEvidence = 14
 }

@@ -213,6 +213,16 @@ namespace Ben.Data.Source.Entities
         /// <summary>When this party was sent the thank-you (phase 12). One letter per party, however often the job runs.</summary>
         public DateTime? ThankedUtc { get; set; }
 
+        /// <summary>When somebody asked for this place by scanning the door's ticket code. Null otherwise.</summary>
+        /// <remarks>
+        /// The door may confirm these (once paid), as well as the people who decide bookings: selling
+        /// a ticket at the door is the door's job.
+        /// </remarks>
+        public DateTime? AskedAtTheDoorUtc { get; set; }
+
+        /// <summary>When this party was sent the results letter. Null until then.</summary>
+        public DateTime? ResultsSentUtc { get; set; }
+
         /// <summary>What the guest said when asking — arrival time, a request, an explanation.</summary>
         public string? Note { get; set; }
 

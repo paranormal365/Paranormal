@@ -362,6 +362,13 @@ public sealed class OrganizationPurge
             // somebody's writing, not the group's; it loses its case link and stays.
             await db.OrgMessages.Where(x => x.CaseId != null && caseIds.Contains(x.CaseId.Value))
                 .ExecuteUpdateAsync(u => u.SetProperty(x => x.CaseId, (Guid?)null), ct);
+
+            // A tour date's room (event-scenario-gaps) lives outside the group like the event room —
+            // OrganizationId is null — and exists only because the date did, so it goes with the dates.
+            await db.OrgMessages
+                .Where(x => x.OrgCalendarEventId != null && x.ChannelType == OrgMessageChannel.TourRoom
+                         && db.OrgCalendarEvents.Any(e => e.Id == x.OrgCalendarEventId && e.OrganizationId == organizationId))
+                .ExecuteDeleteAsync(ct);
             // ── depth 1: everything hanging directly off the group ───────────
             // A case's timeline can point at the investigation an entry came from; the entries
             // themselves cascade with the case, but the case goes AFTER the investigation, so the

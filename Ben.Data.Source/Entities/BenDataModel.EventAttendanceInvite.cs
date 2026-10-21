@@ -84,6 +84,16 @@ namespace Ben.Data.Source.Entities
         /// </remarks>
         public Guid? InvitedByAppUserId { get; set; }
 
+        /// <summary>
+        /// A ticket rather than an invitation: the organizer already said yes, so clicking the link
+        /// confirms the place and hands over the pass instead of asking.
+        /// </summary>
+        /// <remarks>
+        /// Hosted events only, and only from the organizer's own "Send somebody a ticket". The account
+        /// is still made only at the click, because an address somebody typed proves nothing.
+        /// </remarks>
+        public bool ConfirmsOnAccept { get; set; }
+
         public DateTime DateCreated { get; set; }
         public DateTime? DateUpdated { get; set; }
         public Guid CreatedByAppUserId { get; set; }
