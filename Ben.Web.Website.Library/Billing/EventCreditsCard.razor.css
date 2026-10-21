@@ -1,0 +1,13 @@
+/*
+    The event credits card's controls (10/21/2026).
+
+    At least 44px to touch on phones and tablets (up to 991px, which covers an iPad portrait and an
+    open folding phone), and anywhere the pointer is a finger: Buy credits, how many and the bundle
+    choice sit in one row, so they grow together and stay level.
+*/
+
+@media (max-width: 991.98px), (pointer: coarse) {
+    .event-credits-touch {
+        min-height: 44px;
+    }
+}

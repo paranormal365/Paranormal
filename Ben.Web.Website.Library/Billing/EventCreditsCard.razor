@@ -35,7 +35,7 @@
             <p class="mb-3">
                 @if (view.Spendable == 0)
                 {
-                    <text>@HolderPhrase holds <strong>no credits</strong> ready to use.</text>
+                    <text>@HolderPhrase @HoldsWord <strong>no credits</strong> ready to use.</text>
                 }
                 else
                 {
@@ -58,7 +58,7 @@
                     {
                         <div class="col-12 col-sm-auto">
                             <label class="form-label small" for="credit-bundle">Buy</label>
-                            <select id="credit-bundle" class="form-select" data-testid="event-credits-bundle"
+                            <select id="credit-bundle" class="form-select event-credits-touch" data-testid="event-credits-bundle"
                                     @onchange="@(e => _bundle = int.TryParse(e.Value?.ToString(), out var q) ? q : null)">
                                 <option value="" selected="@(_bundle is null)">Single credits</option>
                                 @foreach (var b in Bundles(view))
@@ -74,7 +74,7 @@
                     {
                         <div class="col-auto">
                             <label class="form-label small" for="credit-quantity">How many</label>
-                            <input id="credit-quantity" type="number" class="form-control" style="width:6rem;"
+                            <input id="credit-quantity" type="number" class="form-control event-credits-touch" style="width:6rem;"
                                    min="1" max="@view.MaximumPerPurchase" @bind="_quantity" data-testid="event-credits-quantity" />
                         </div>
                         <div class="col-auto">
@@ -88,7 +88,7 @@
                         <span class="text-secondary small">plus tax</span>
                     </div>
                     <div class="col-auto">
-                        <button type="button" class="btn btn-primary text-nowrap" id="buy-event-credits"
+                        <button type="button" class="btn btn-primary text-nowrap event-credits-touch" id="buy-event-credits"
                                 @onclick="BuyAsync" disabled="@_buying">
                             @(_buying ? "Opening…" : "Buy credits")
                         </button>
@@ -150,6 +150,9 @@
 
     /// <summary>"This group" or "You" — who holds the credits, for the no-credits sentence.</summary>
     [Parameter] public string HolderPhrase { get; set; } = "This group";
+
+    /// <summary>"You hold", but "This group holds".</summary>
+    private string HoldsWord => string.Equals(HolderPhrase, "You", StringComparison.Ordinal) ? "hold" : "holds";
 
     /// <summary>Starts the checkout for a quantity, or for a bundle's quantity when one is chosen.</summary>
     [Parameter, EditorRequired] public Func<int, int?, Task<(StartCheckoutResponse? Result, string? Error)>> StartCheckout { get; set; } = default!;
