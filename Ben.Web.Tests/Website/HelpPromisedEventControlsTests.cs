@@ -46,9 +46,15 @@ public sealed class HelpPromisedEventControlsTests
         => File.ReadAllText(Path.Combine(
             RepoRoot().FullName, "Ben.Web.Services", "Help", "Content", "organization-administration.md"));
 
+    /// <remarks>
+    /// "Book somebody in" became "Send somebody a ticket" (event-scenario-gaps): it never worked — the board
+    /// sent no account and the server refused every one — so it goes through the invitation door now, marked
+    /// as a ticket, and a list goes through the many-at-once door.
+    /// </remarks>
     [Theory]
     [InlineData("InviteEventGuestAsync")]
-    [InlineData("CreateEventBookingOnBehalfAsync")]
+    [InlineData("InviteEventGuestsAsync")]
+    [InlineData("ConfirmsOnAccept: true")]
     public void The_bookings_board_calls_the_client_method(string method)
         => Assert.Contains(method, Board());
 

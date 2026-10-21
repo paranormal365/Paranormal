@@ -198,6 +198,11 @@ public sealed class EventMenuRulesTests
         await using var sqlite = await SqliteTestDb.CreateAsync();
         var f = await MenuFixture.SeedAsync(sqlite);
         var (published, _) = await TwoMenusAsync(sqlite, f);
+        await using (var db = await sqlite.NewContextAsync())
+        {
+            (await db.EventMenus.SingleAsync(m => m.Id == published)).Title = "Jim's dinner, third go";
+            await db.SaveChangesAsync();
+        }
 
         await using (var db = await sqlite.NewContextAsync())
         {
@@ -205,6 +210,10 @@ public sealed class EventMenuRulesTests
             var menu = Assert.Single(menus);
             Assert.Equal(published, menu.Id);
             Assert.Equal(2, menu.Meals.Count);
+            // The planner's own title is the planner's: guests are sent the heading in its place
+            // (event-scenario-gaps; Ben's menu rules: titles are "so the event manager will know").
+            Assert.Equal(menu.ShownHeading, menu.Title);
+            Assert.NotEqual("Jim's dinner, third go", menu.Title);
             Assert.All(menu.Sections.SelectMany(s => s.Entries), e => Assert.False(e.Item.CanEdit));
         }
 
