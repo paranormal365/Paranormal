@@ -43,7 +43,7 @@ public static class MessageChannelDisplay
         OrgMessageChannel.EventStaffRoom => "text-bg-dark",
         OrgMessageChannel.FieldLaunchNotice => "bg-success",
         OrgMessageChannel.TourRoom      => "bg-secondary",
-        OrgMessageChannel.EventGuestThread => "bg-info text-dark",
+        OrgMessageChannel.EventGuestThread => "bg-info",
         _                               => "bg-secondary",
     };
 
