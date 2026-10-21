@@ -278,7 +278,7 @@
                                 ? "It won't renew, so it ends then."
                                 : $"It renews monthly at {BenMoney.Format(walk.MonthlyPrice)} plus tax.")
                         </p>
-                        <button type="button" class="btn btn-outline-secondary btn-sm text-nowrap"
+                        <button type="button" class="btn btn-outline-secondary btn-sm text-nowrap billing-touch"
                                 data-testid="ghost-walk-renewal" disabled="@_walkBusy"
                                 @onclick="() => SetWalkRenewalAsync(!walk.CancelAtPeriodEnd)">
                             @(_walkBusy ? "Saving…" : walk.CancelAtPeriodEnd ? "Turn renewal back on" : "Stop renewing")
@@ -292,7 +292,7 @@
                                 <strong data-testid="ghost-walk-price">@BenMoney.Format(walk.MonthlyPrice)</strong>
                                 <span class="text-secondary small">plus tax</span>
                             </div>
-                            <button type="button" class="btn btn-primary text-nowrap" data-testid="ghost-walk-subscribe"
+                            <button type="button" class="btn btn-primary text-nowrap billing-touch" data-testid="ghost-walk-subscribe"
                                     disabled="@_walkBusy" @onclick="SubscribeWalkAsync">
                                 @(_walkBusy ? "Opening…" : "Subscribe")
                             </button>
