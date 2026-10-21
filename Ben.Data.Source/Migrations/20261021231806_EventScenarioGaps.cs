@@ -99,9 +99,39 @@ namespace Ben.Data.Source.Migrations
                 nullable: true);
 
             migrationBuilder.AddColumn<DateTime>(
+                name: "OrganizerMarkedUtc",
+                table: "HostedEventBookings",
+                type: "datetime2",
+                nullable: true);
+
+            migrationBuilder.AddColumn<bool>(
+                name: "OrganizerSaysCame",
+                table: "HostedEventBookings",
+                type: "bit",
+                nullable: true);
+
+            migrationBuilder.AddColumn<DateTime>(
                 name: "ResultsSentUtc",
                 table: "HostedEventBookings",
                 type: "datetime2",
+                nullable: true);
+
+            migrationBuilder.AddColumn<DateTime>(
+                name: "EventResultsConsentAtUtc",
+                table: "FieldSessionUploads",
+                type: "datetime2",
+                nullable: true);
+
+            migrationBuilder.AddColumn<DateTime>(
+                name: "ShownWithEventResultsAtUtc",
+                table: "FieldSessionUploads",
+                type: "datetime2",
+                nullable: true);
+
+            migrationBuilder.AddColumn<Guid>(
+                name: "ShownWithEventResultsByAppUserId",
+                table: "FieldSessionUploads",
+                type: "uniqueidentifier",
                 nullable: true);
 
             migrationBuilder.AddColumn<bool>(
@@ -200,8 +230,28 @@ namespace Ben.Data.Source.Migrations
                 table: "HostedEventBookings");
 
             migrationBuilder.DropColumn(
+                name: "OrganizerMarkedUtc",
+                table: "HostedEventBookings");
+
+            migrationBuilder.DropColumn(
+                name: "OrganizerSaysCame",
+                table: "HostedEventBookings");
+
+            migrationBuilder.DropColumn(
                 name: "ResultsSentUtc",
                 table: "HostedEventBookings");
+
+            migrationBuilder.DropColumn(
+                name: "EventResultsConsentAtUtc",
+                table: "FieldSessionUploads");
+
+            migrationBuilder.DropColumn(
+                name: "ShownWithEventResultsAtUtc",
+                table: "FieldSessionUploads");
+
+            migrationBuilder.DropColumn(
+                name: "ShownWithEventResultsByAppUserId",
+                table: "FieldSessionUploads");
 
             migrationBuilder.DropColumn(
                 name: "ConfirmsOnAccept",

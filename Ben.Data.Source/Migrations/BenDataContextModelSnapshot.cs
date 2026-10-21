@@ -3951,6 +3951,9 @@ namespace Ben.Data.Source.Migrations
                     b.Property<DateTime?>("EndedAt")
                         .HasColumnType("datetime2");
 
+                    b.Property<DateTime?>("EventResultsConsentAtUtc")
+                        .HasColumnType("datetime2");
+
                     b.Property<Guid?>("FieldLaunchId")
                         .HasColumnType("uniqueidentifier");
 
@@ -4012,6 +4015,12 @@ namespace Ben.Data.Source.Migrations
                     b.Property<string>("RecordedByName")
                         .HasMaxLength(200)
                         .HasColumnType("nvarchar(200)");
+
+                    b.Property<DateTime?>("ShownWithEventResultsAtUtc")
+                        .HasColumnType("datetime2");
+
+                    b.Property<Guid?>("ShownWithEventResultsByAppUserId")
+                        .HasColumnType("uniqueidentifier");
 
                     b.Property<DateTime>("StartedAt")
                         .HasColumnType("datetime2");
@@ -4619,6 +4628,12 @@ namespace Ben.Data.Source.Migrations
                     b.Property<string>("Note")
                         .HasMaxLength(2000)
                         .HasColumnType("nvarchar(2000)");
+
+                    b.Property<DateTime?>("OrganizerMarkedUtc")
+                        .HasColumnType("datetime2");
+
+                    b.Property<bool?>("OrganizerSaysCame")
+                        .HasColumnType("bit");
 
                     b.Property<int>("PartySize")
                         .HasColumnType("int");
