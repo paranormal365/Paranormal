@@ -1,6 +1,6 @@
 # feature/event-credits-ghost-walk-plan: events are bought, tours have their own subscription
 
-Branched from `develop` at ea4febeb ("Merge branch 'fix/ios-negative-zero-mg' into develop"),
+Branched from `develop` at 2da70820 ("Cookie banner buttons are finger-sized on phones and tablets"),
 10/21/2026. From Ben's notes of 10/20/2026 (*IsHaunted.com AI Errors*, Website → Events, and
 "Define an Event") and his rules of 10/21/2026.
 
