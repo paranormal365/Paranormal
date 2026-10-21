@@ -373,7 +373,7 @@ ADS = [
                ("Approve organizers", "Say yes to the nights and what you'll lend."),
                ("Open the doors", "Guests arrive with a pass; your staff check them in.")],
         offer="Your venue page, <em>free</em>.",
-        offer_small="Publish your own event with a $99 credit, good for a year — or host as many as you like on a business plan.",
+        offer_small="Publish your own event with an event credit, good for a year — less with a paid plan, and cheaper in bundles.",
         url_small="Claim your building", fine=FINE,
     ),
     dict(
@@ -404,7 +404,7 @@ ADS = [
         quote="“The parking lot moved. Everybody knew by lunchtime.”",
         quote_who="Write to every guest at once",
         steps=[("Create the event", "Nights, venue, rooms or seats — a draft costs nothing."),
-               ("Publish", "One credit, or your business plan. It's live in minutes."),
+               ("Publish", "One event credit per event. It's live in minutes."),
                ("Open the door", "Scan passes, even with no signal, from any phone.")],
         offer="<em>$99</em> an event.",
         offer_small="However many nights. No ticket fees: guests pay you. Credits last a year and come back if you cancel 48+ hours ahead.",
