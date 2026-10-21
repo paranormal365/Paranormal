@@ -3,7 +3,7 @@ import BenKit
 
 /// A segmented sound-level meter, the way a mixing desk draws one.
 ///
-/// Scale is dBFS — decibels relative to full scale — so silence is around −60 and 0 is the
+/// Scale is dBFS — decibels relative to full scale — so a quiet room is around −80 and 0 is the
 /// loudest the hardware can represent. The base level and the report level are drawn on the
 /// scale, because "is that loud?" is only answerable against what the room was doing before.
 struct AudioLevelMeter: View {
@@ -12,7 +12,10 @@ struct AudioLevelMeter: View {
     var baselineDbfs: Double?
     var reportAtDb: Double
 
-    private let floor: Double = -60
+    /// Where the bar starts. It started at -60 until 10/21/2026; with the microphone's own gain off
+    /// (see `SoundLevel`) an ordinary voice across a room barely reached that, so the bar sat empty
+    /// while people talked. A quiet room now reads around -80.
+    private let floor: Double = -90
 
     var body: some View {
         VStack(alignment: .leading, spacing: 6) {
@@ -62,7 +65,7 @@ struct AudioLevelMeter: View {
         }
         .accessibilityElement(children: .ignore)
         .accessibilityLabel("Sound level")
-        .accessibilityValue(dbfs.map { String(format: "%.0f decibels", $0) } ?? "no reading")
+        .accessibilityValue(dbfs.map { "\(ReadingText.whole($0)) decibels" } ?? "no reading")
     }
 
     private var barColour: Color {

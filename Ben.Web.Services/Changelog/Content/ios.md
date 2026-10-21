@@ -31,6 +31,19 @@ it is hidden from everybody else, but still takes its number. No other sub-headi
 
 - The magnetic field and sound readings never show "-0": a reading at the base level reads 0, and
   VoiceOver says "at base".
+- The sound reading follows the room. It used to stop at -60 dB, which is about where an ordinary
+  voice sits, so it hardly moved; a quiet room now reads around -80.
+- Sound keeps recording while video records and while a question is being written down. Before,
+  the camera or dictation could stop the microphone, and the recording came back empty.
+- A recording's length in the review is the sound it holds, and a stretch where the microphone
+  stopped is kept as silence, so what you hear lines up with the readings.
+- Asking a question is now one button in three steps: **Ask a question**, then **Done asking —
+  listening** when you've finished, then **Ask the next question**. The screen shows whether you
+  are asking or listening the whole time, along with the live magnetic field and sound readings.
+- You can type the question while you ask it, or cancel a question you didn't ask after all.
+- With Watch for Motion on, the camera shows **Motion photos on** and how many it has taken, and
+  flashes with **Photo taken** each time it takes one.
+- Photos no longer make the shutter sound, wherever the law allows it to be turned off.
 
 ## 1.1.4 · 2026-10-14
 

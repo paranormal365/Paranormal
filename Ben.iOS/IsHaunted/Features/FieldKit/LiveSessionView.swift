@@ -43,7 +43,7 @@ struct LiveSessionView: View {
     @State private var errorMessage: String?
     /// The investigation's controls are in the side column (the iPhone Duo opened).
     @Environment(\.investigationRail) private var rail
-    @State private var call = CallAndResponse()
+    @State private var call = AskAndListen()
     @State private var flashlight = Flashlight()
     @State private var notice = RailNotice()
     /// Typing the question while it is asked, where the phone can do it with no connection.
@@ -67,7 +67,9 @@ struct LiveSessionView: View {
         // that ends a recording. A stack cannot get this wrong.
         VStack(spacing: 0) {
             if let active, active.sessionId == sessionId {
-                CallAndResponseBanner(call: call, session: active)
+                CallAndResponseBanner(call: call, session: active) {
+                    Task { await call.press(session: active, dictation: dictation, typeQuestions: typeQuestions) }
+                }
                     .padding(.horizontal, 16)
                     .padding(.top, 8)
             }
@@ -291,11 +293,11 @@ struct LiveSessionView: View {
                 Button {
                     Task { await call.press(session: active, dictation: dictation, typeQuestions: typeQuestions) }
                 } label: {
-                    Image(systemName: call.phase == .asking ? "mic.fill" : call.phase == .listening ? "ear" : "mic")
-                        .foregroundStyle(call.phase == .asking ? Theme.danger : Theme.ecto)
+                    Image(systemName: call.phase == .asking ? "mic.fill" : call.phase == .listening ? "ear.fill" : "mic")
+                        .foregroundStyle(call.phase == .ready ? Theme.ecto : AskListenWords.color(call.phase))
                 }
-                .accessibilityLabel(call.phase == .asking ? "Done asking, listen for an answer"
-                                    : call.phase == .listening ? "Ask the next question" : "Ask a question")
+                .accessibilityLabel(call.primaryTitle)
+                .accessibilityHint(call.primaryHint)
                 .accessibilityIdentifier("rail-ask")
             }
             ToolbarItem(placement: .primaryAction) {
@@ -333,7 +335,9 @@ struct LiveSessionView: View {
 
     @ViewBuilder
     private var evpSheet: some View {
-        if let active { EVPModeView(session: active) }
+        if let active {
+            EVPModeView(session: active, call: call, dictation: dictation, typeQuestions: typeQuestions)
+        }
     }
 
     @ViewBuilder
@@ -404,6 +408,9 @@ struct LiveSessionView: View {
                 CameraPreview(session: camera.session)
                     .frame(height: 200)
                     .clipShape(RoundedRectangle(cornerRadius: 12))
+                    // A camera's flash when Watch for Motion takes a photo, so it is plain that
+                    // it did (Ben, 10/20/2026).
+                    .overlay { MotionPhotoFlash(session: active).clipShape(RoundedRectangle(cornerRadius: 12)) }
                     .overlay {
                         // The frame lights up while the camera is seeing motion, as it does on
                         // the replay.
@@ -429,7 +436,9 @@ struct LiveSessionView: View {
                         }
                         .accessibilityIdentifier("video-recording")
                     }
-                    if active.watchForMotion || active.sentry?.watchSceneMotion == true {
+                    // "Motion photos on", and "Photo taken" for a moment after each one.
+                    MotionPhotoBadge(session: active)
+                    if !active.watchForMotion, active.sentry?.watchSceneMotion == true {
                         Label("watching", systemImage: "eye")
                             .font(.caption2.bold())
                             .padding(.horizontal, 8).padding(.vertical, 4)
@@ -469,7 +478,7 @@ struct LiveSessionView: View {
             ) {
                 VStack(alignment: .leading, spacing: 1) {
                     Label("Watch for motion", systemImage: "figure.walk.motion")
-                    Text("While the phone is still, movement in view is marked and photographed. The video keeps recording.")
+                    Text("While the phone is still, movement in view is marked and photographed, with no shutter sound. The video keeps recording.")
                         .font(.caption2).foregroundStyle(Theme.fog)
                 }
             }

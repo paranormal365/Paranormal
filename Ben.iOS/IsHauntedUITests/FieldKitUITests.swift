@@ -455,7 +455,8 @@ final class FieldKitUITests: XCTestCase {
                       "a five-hour vigil needs a speed control")
     }
 
-    /// Question, silence, question — and the wait bracketed at both ends.
+    /// Ask, then listen, then the next question — the button says which step comes next, the
+    /// state is on screen the whole time, and so are the readings (Ben, 10/20/2026).
     func testAskingAnEVPQuestionAndClosingTheWait() throws {
         app.terminate()
         let fresh = XCUIApplication()
@@ -471,40 +472,109 @@ final class FieldKitUITests: XCTestCase {
         fresh.buttons["start-recording"].tap()
 
         let openEVP = fresh.buttons["open-evp"]
-        XCTAssertTrue(openEVP.waitForExistence(timeout: 20))
+        XCTAssertTrue(fresh.buttons["stop-field-session"].waitForExistence(timeout: 20))
+        if !openEVP.waitForExistence(timeout: 5) {
+            // An iPad or the iPhone Duo opened: the controls are in the side column, and asking
+            // and listening run from its microphone button and the strip across the page.
+            try askAndListenFromTheSideColumn(fresh)
+            return
+        }
         openEVP.tap()
 
         let primary = fresh.buttons["evp-primary"]
         XCTAssertTrue(primary.waitForExistence(timeout: 15))
-        // One control, and it says which half of the cycle you are in — there is no reading a
-        // subtitle in the dark.
+        // The readings stay on this screen the whole time.
+        XCTAssertTrue(fresh.descendants(matching: .any)["live-emf"].waitForExistence(timeout: 10),
+                      "the magnetic reading should be on the EVP screen")
+        XCTAssertTrue(fresh.descendants(matching: .any)["live-sound"].exists,
+                      "the sound reading should be on the EVP screen")
+
+        let phase = fresh.staticTexts["evp-phase"]
         XCTAssertEqual(primary.label, "Ask a question")
+        XCTAssertEqual(phase.label, "Ready")
+
+        // Asking: nothing is marked yet, and the button says how to start listening.
         primary.tap()
-
-        // Asking starts the wait, and the same control now ends it.
-        let deadline = Date().addingTimeInterval(10)
-        while primary.label != "Stop waiting" && Date() < deadline {
-            _ = fresh.wait(for: .runningForeground, timeout: 0.5)
+        XCTAssertTrue(waitForLabel(primary, "Done asking — listening"),
+                      "asking should offer the way to start listening")
+        XCTAssertEqual(phase.label, "Asking")
+        let field = fresh.textFields["evp-question-text"]
+        if field.waitForExistence(timeout: 3) {
+            field.tap()
+            field.typeText("Is anyone here with us?")
         }
-        XCTAssertEqual(primary.label, "Stop waiting",
-                       "asking should start the wait, on the same button")
 
-        XCTAssertTrue(fresh.otherElements.matching(identifier: "evp-question-row").firstMatch.exists
-                      || fresh.staticTexts["Question"].exists,
-                      "the question should be listed while it is being waited on")
+        // Done asking: the answer window opens, and stays obvious.
+        primary.tap()
+        XCTAssertTrue(waitForLabel(primary, "Ask the next question"),
+                      "done asking should start listening")
+        XCTAssertEqual(phase.label, "Listening for an answer")
+        XCTAssertTrue(fresh.descendants(matching: .any)["evp-question-row"].firstMatch.waitForExistence(timeout: 5),
+                      "the question should be listed while the room has the floor")
+        XCTAssertTrue(fresh.descendants(matching: .any)["live-sound"].exists,
+                      "the readings stay up while listening")
 
         sleep(2)
+        // The next question ends the wait at once, and asking starts again.
         primary.tap()
+        XCTAssertTrue(waitForLabel(primary, "Done asking — listening"))
+        primary.tap()
+        XCTAssertTrue(waitForLabel(primary, "Ask the next question"))
 
-        let closed = Date().addingTimeInterval(10)
-        while primary.label != "Ask a question" && Date() < closed {
-            _ = fresh.wait(for: .runningForeground, timeout: 0.5)
-        }
-        XCTAssertEqual(primary.label, "Ask a question", "stopping the wait should free it up")
+        // Stop listening, without another question.
+        let stop = fresh.buttons["evp-stop-listening"]
+        XCTAssertTrue(stop.waitForExistence(timeout: 5))
+        stop.tap()
+        XCTAssertTrue(waitForLabel(primary, "Ask a question"), "stopping should free the button")
+        XCTAssertEqual(fresh.descendants(matching: .any).matching(identifier: "evp-question-row").count, 2)
 
         fresh.buttons["Done"].tap()
         XCTAssertTrue(fresh.buttons["stop-field-session"].waitForExistence(timeout: 15),
                       "leaving EVP should return to the session, still running")
+    }
+
+    /// The same cycle where the controls are in the side column (iPad, iPhone Duo opened).
+    private func askAndListenFromTheSideColumn(_ app: XCUIApplication) throws {
+        let ask = app.buttons["rail-ask"].firstMatch
+        XCTAssertTrue(ask.waitForExistence(timeout: 10), "Ask should be in the side column")
+        XCTAssertEqual(ask.label, "Ask a question")
+        ask.tap()
+
+        let next = app.buttons["call-next-step"]
+        XCTAssertTrue(next.waitForExistence(timeout: 10), "asking should show the next step on the page")
+        XCTAssertTrue(waitForLabel(next, "Done asking — listening"))
+        XCTAssertTrue(app.descendants(matching: .any)["live-emf"].exists, "the readings stay on the page")
+        XCTAssertTrue(app.descendants(matching: .any)["live-sound"].exists)
+        let field = app.textFields["call-question-text"]
+        if field.waitForExistence(timeout: 3) {
+            field.tap()
+            field.typeText("Is anyone here with us?")
+        }
+
+        next.tap()
+        XCTAssertTrue(waitForLabel(next, "Ask the next question"), "done asking should start listening")
+        XCTAssertTrue(app.staticTexts["Listening for an answer"].exists)
+        XCTAssertTrue(waitForLabel(ask, "Ask the next question"), "the column's button agrees")
+
+        next.tap()
+        XCTAssertTrue(waitForLabel(next, "Done asking — listening"))
+        next.tap()
+        XCTAssertTrue(waitForLabel(next, "Ask the next question"))
+
+        let done = app.buttons["done-listening"]
+        XCTAssertTrue(done.waitForExistence(timeout: 5))
+        done.tap()
+        XCTAssertTrue(waitForLabel(ask, "Ask a question"), "stopping should free the button")
+        XCTAssertFalse(app.descendants(matching: .any)["call-and-response"].exists)
+    }
+
+    /// Polls a button's label: SwiftUI updates it a beat after the tap.
+    private func waitForLabel(_ element: XCUIElement, _ label: String, timeout: TimeInterval = 10) -> Bool {
+        let deadline = Date().addingTimeInterval(timeout)
+        while element.label != label && Date() < deadline {
+            RunLoop.current.run(until: Date().addingTimeInterval(0.25))
+        }
+        return element.label == label
     }
 
     /// Building a bundle to hand over, from a finished session.
