@@ -19,6 +19,7 @@ struct EventHubView: View {
     @State private var menus: [EventMenu] = []
     @State private var files: [HostedEventFile] = []
     @State private var room: EventRoom?
+    @State private var results: HostedEventResults?
     @State private var loaded = false
     @State private var unreachable = false
     @State private var openOnWebsite: URL?
@@ -67,6 +68,14 @@ struct EventHubView: View {
                                 : "Posts from the people at the event", icon: "bubble.left.and.bubble.right")
                         }
                         .accessibilityIdentifier("hub-room")
+                    }
+                    if let results, results.hasSomething {
+                        // The event's results (event-scenario-gaps): "They could see the event results in the app."
+                        NavigationLink(value: AppRoute.eventResults(hostedEventId)) {
+                            row("Results", detail: results.items.count == 1 ? "1 piece of evidence" : "\(results.items.count) pieces of evidence",
+                                icon: "sparkles")
+                        }
+                        .accessibilityIdentifier("hub-results")
                     }
                 } footer: {
                     if unreachable {
@@ -158,6 +167,7 @@ struct EventHubView: View {
         async let menusRead = store.loadPublishedMenus(hostedEventId)
         async let filesRead = store.loadFiles(hostedEventId)
         async let roomRead = store.loadRoom(hostedEventId)
+        async let resultsRead = store.loadResults(hostedEventId)
 
         var missed = false
         switch await eventRead { case .ok(let value): event = value; default: missed = true }
@@ -166,6 +176,7 @@ struct EventHubView: View {
         switch await menusRead { case .ok(let value): menus = value; default: missed = true }
         switch await filesRead { case .ok(let value): files = value; default: missed = true }
         switch await roomRead { case .ok(let value): room = value; default: missed = true }
+        switch await resultsRead { case .ok(let value): results = value; default: missed = true }
         unreachable = missed
         loaded = true
     }

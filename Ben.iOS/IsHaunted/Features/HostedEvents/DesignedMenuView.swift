@@ -72,10 +72,16 @@ struct DesignedMenuView: View {
                 Text(key).font(body(size: 11)).foregroundStyle(muted).multilineTextAlignment(.center)
                     .padding(.top, 16)
             }
-            Text(EventMenuWording.credit(year: Calendar.current.component(.year, from: .now)))
-                .font(.system(size: 9))
-                .foregroundStyle(muted.opacity(0.85))
-                .padding(.top, 18)
+            // The small site mark beside the credit, as the website and the PDF draw it (event-scenario-gaps).
+            HStack(spacing: 4) {
+                Image("MenuMark").resizable().frame(width: 9, height: 9)
+                    .clipShape(RoundedRectangle(cornerRadius: 2))
+                    .accessibilityHidden(true)
+                Text(EventMenuWording.credit(year: Calendar.current.component(.year, from: .now)))
+                    .font(.system(size: 9))
+                    .foregroundStyle(muted.opacity(0.85))
+            }
+            .padding(.top, 18)
         }
         .padding(.horizontal, 22)
         .padding(.vertical, 26)

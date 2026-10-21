@@ -69,6 +69,10 @@ struct EventDetailView: View {
                     HostedEventMenusLink(hostedEventId: hostedEventId)
                 } else {
                     seatPanel(event)
+                    if event.tourName != nil && dependencies.session.me != nil {
+                        // The walk's room, for the people checked in on it and its guides (event-scenario-gaps).
+                        TourRoomLink(dateId: event.id)
+                    }
                 }
                 meetingPoint(event)
                 guides(event)
@@ -372,6 +376,35 @@ private struct HostedEventMenusLink: View {
         .task(id: hostedEventId) {
             if case .ok(let value) = await HostedEventsStore(api: dependencies.api).loadPublishedMenus(hostedEventId) {
                 menus = value
+            }
+        }
+    }
+}
+
+/// The walk's room, offered only to somebody in it: checked in on the walk, or running it (event-scenario-gaps).
+private struct TourRoomLink: View {
+    let dateId: UUID
+
+    @Environment(AppDependencies.self) private var dependencies
+    @State private var room: TourRoom?
+
+    var body: some View {
+        Group {
+            if let room {
+                NavigationLink(value: AppRoute.tourRoom(dateId)) {
+                    Label(room.messages.isEmpty ? "The walk's room" : "The walk's room · \(room.messages.count)",
+                          systemImage: "bubble.left.and.bubble.right")
+                }
+                .buttonStyle(.bordered)
+                .accessibilityIdentifier("tour-room-link")
+            } else {
+                // Something must be on screen for `.task` to run; an empty Group never appears.
+                Color.clear.frame(height: 0)
+            }
+        }
+        .task(id: dateId) {
+            if case .ok(let value) = await HostedEventsStore(api: dependencies.api).loadTourRoom(dateId) {
+                room = value
             }
         }
     }

@@ -1,0 +1,33 @@
+{
+  "hostedEventId": "40000002-0000-0000-0000-000000000002",
+  "name": "Overnight at The Factory",
+  "collectsEvidence": true,
+  "resultsUrl": "https://ishaunted.com/o/jims-group/events/overnight-at-the-factory#event-evidence",
+  "asksForVotes": true,
+  "evidenceSentence": "We're accepting evidence for three days, until 11:00 PM on 11/02/2026. The event's evidence will be ready to see in about a week.",
+  "resultsSentUtc": "2026-11-06T15:04:05.123456",
+  "items": [
+    {
+      "submissionId": "6b1c1f0e-9a6d-4c55-b0a1-1d2f3e4a5b6c",
+      "uploadFileId": "0d9e8f7a-6b5c-4d3e-8f2a-1b0c9d8e7f6a",
+      "fileName": "Stairwell whisper.m4a",
+      "contentType": "audio/mp4",
+      "by": "Daniel Park",
+      "note": "Second floor, just after two.",
+      "positiveVotes": 4,
+      "caughtUtc": "2026-10-31T07:12:00",
+      "fileUrl": "https://api.ishaunted.com/api/events/7a6b5c4d-3e2f-1a0b-9c8d-7e6f5a4b3c2d/evidence/6b1c1f0e-9a6d-4c55-b0a1-1d2f3e4a5b6c/file"
+    },
+    {
+      "submissionId": "1a2b3c4d-5e6f-4a1b-8c2d-3e4f5a6b7c8d",
+      "uploadFileId": "8c7b6a5d-4e3f-4a2b-9c1d-0e9f8a7b6c5d",
+      "fileName": "Loading dock.jpg",
+      "contentType": "image/jpeg",
+      "by": "Sam Ortiz",
+      "note": null,
+      "positiveVotes": 0,
+      "caughtUtc": "2026-10-31T05:40:00",
+      "fileUrl": "https://api.ishaunted.com/api/events/7a6b5c4d-3e2f-1a0b-9c8d-7e6f5a4b3c2d/evidence/1a2b3c4d-5e6f-4a1b-8c2d-3e4f5a6b7c8d/file"
+    }
+  ]
+}

@@ -32,7 +32,7 @@ struct LaunchForGroupView: View {
                             row(item)
                         }
                     } footer: {
-                        Text("Launch puts a card in the feed of everybody registered, and notifies those with the app. They tap Join to start their own session — nobody is started automatically.")
+                        Text("Launch tells everybody registered that sessions are now being accepted: a card in their feed, and a notification for those with the app. They tap Join to start their own session — nobody is started automatically.")
                     }
                 }
             } else {

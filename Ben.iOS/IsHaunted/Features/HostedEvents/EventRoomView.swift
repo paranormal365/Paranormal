@@ -189,6 +189,11 @@ struct EventRoomView: View {
         VStack(alignment: .leading, spacing: 6) {
             HStack(alignment: .firstTextBaseline) {
                 Text(message.isMine ? "You" : message.authorName).font(.subheadline.weight(.semibold))
+                if let role = message.authorRole {
+                    // The people running the event stand out (Ben, 10/20/2026).
+                    StatusBadge(text: role, colour: Theme.ecto)
+                        .accessibilityIdentifier("room-role")
+                }
                 Spacer()
                 Text(message.postedUtc.formatted(.relative(presentation: .named))).font(.caption).foregroundStyle(Theme.fog)
             }
