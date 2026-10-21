@@ -153,6 +153,23 @@ namespace Ben.Data.Source.Entities
         public DateTime? PublishedAtUtc { get; set; }
 
         /// <summary>
+        /// When the person who sent this to a hosted event agreed it may be shown with the event's results,
+        /// publicly and credited to them (event-scenario-gaps). Null: not agreed — they were told only the
+        /// group would see it, so nothing public happens without this.
+        /// </summary>
+        public DateTime? EventResultsConsentAtUtc { get; set; }
+
+        /// <summary>
+        /// When the event's organizer chose to show it with the results (Ben's scenario: "all the sessions
+        /// will run in the session player"). Public only with the sender's agreement as well, while the
+        /// event is on the public site, takes evidence, and is at a public place.
+        /// </summary>
+        public DateTime? ShownWithEventResultsAtUtc { get; set; }
+
+        /// <summary>Who chose to show it.</summary>
+        public Guid? ShownWithEventResultsByAppUserId { get; set; }
+
+        /// <summary>
         /// The first GPS fix in the session, copied out of the document so a map can be drawn
         /// from SQL alone.
         /// </summary>

@@ -1106,7 +1106,9 @@ public sealed partial class FieldSessionUploadController : BenControllerBase
                 .ToList(),
             session.IsBundle,
             session.OrgCalendarEventId,
-            session.HostedEventId);
+            session.HostedEventId,
+            session.EventResultsConsentAtUtc,
+            session.ShownWithEventResultsAtUtc);
 }
 
 /// <summary>The few facts read out of a session document so sessions can be listed without
@@ -1222,7 +1224,11 @@ public sealed record FieldSessionRecord(
     bool IsBundle = false,
     // The tour date or event, or hosted event, it went to (item 252). Trailing and defaulted.
     Guid? OrgCalendarEventId = null,
-    Guid? HostedEventId = null);
+    Guid? HostedEventId = null,
+    // The sender's agreement to show it with a hosted event's results, and the organizer's choice to
+    // (event-scenario-gaps). Trailing and defaulted.
+    DateTime? EventResultsConsentAtUtc = null,
+    DateTime? ShownWithEventResultsAtUtc = null);
 
 /// <summary>A session and its document, for playing back.</summary>
 public sealed record FieldSessionDetail(FieldSessionRecord Session, string Document);

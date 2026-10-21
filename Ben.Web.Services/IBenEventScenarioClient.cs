@@ -15,6 +15,15 @@ namespace Ben.Web.Services;
 /// </remarks>
 public interface IBenEventScenarioClient
 {
+    /// <summary>The sender agrees (or withdraws agreeing) that their session may be shown with an event's results.</summary>
+    Task<(bool Done, string? Error)> SetSessionResultsConsentAsync(Guid sessionId, bool agree, CancellationToken token = default);
+
+    /// <summary>The organizer shows a sent session with the event's results, or stops.</summary>
+    Task<(bool Done, string? Error)> SetSessionShownWithResultsAsync(Guid sessionId, bool show, CancellationToken token = default);
+
+    /// <summary>The sessions shown with a hosted event's results, for its public page.</summary>
+    Task<LoadResult<Ben.Service.Models.FieldSessions.PublicEventSessionRow>> GetEventResultSessionsAsync(Guid hostedEventId, CancellationToken token = default);
+
     /// <summary>Upcoming public hosted events for the home map, at approximate points.</summary>
     Task<LoadResult<PublicHostedEventMapPin>> GetHostedEventMapPinsAsync(CancellationToken token = default);
 

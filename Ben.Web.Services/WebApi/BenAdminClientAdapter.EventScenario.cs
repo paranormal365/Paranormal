@@ -15,6 +15,23 @@ public sealed partial class BenAdminClientAdapter
     private static string TourRoomUrl(Guid dateId)
         => $"/api/public/tour-dates/{dateId}/room";
 
+    public Task<(bool Done, string? Error)> SetSessionResultsConsentAsync(Guid sessionId, bool agree, CancellationToken token = default)
+        => SendNoBodyAsync(agree ? HttpMethod.Post : HttpMethod.Delete, $"/api/field-sessions/{sessionId}/event-results-consent", token);
+
+    public Task<(bool Done, string? Error)> SetSessionShownWithResultsAsync(Guid sessionId, bool show, CancellationToken token = default)
+        => SendNoBodyAsync(show ? HttpMethod.Post : HttpMethod.Delete, $"/api/field-sessions/{sessionId}/event-results", token);
+
+    public Task<LoadResult<Ben.Service.Models.FieldSessions.PublicEventSessionRow>> GetEventResultSessionsAsync(Guid hostedEventId, CancellationToken token = default)
+        => _api.GetAnonymousListAsync<Ben.Service.Models.FieldSessions.PublicEventSessionRow>(
+               $"/api/public/field-sessions/for-hosted-event/{hostedEventId}", token);
+
+    /// <summary>A write that answers 204, told apart from a refusal by its status rather than by a body.</summary>
+    private async Task<(bool Done, string? Error)> SendNoBodyAsync(HttpMethod method, string url, CancellationToken token)
+    {
+        var (_, error, status) = await _api.SendWithStatusAsync<object, object>(method, url, new { }, token);
+        return status is >= 200 and < 300 ? (true, null) : (false, error ?? "That couldn't be done just now.");
+    }
+
     public Task<LoadResult<PublicHostedEventMapPin>> GetHostedEventMapPinsAsync(CancellationToken token = default)
         => _api.GetAnonymousListAsync<PublicHostedEventMapPin>("/api/public/hosted-events/map?maxResults=500", token);
 

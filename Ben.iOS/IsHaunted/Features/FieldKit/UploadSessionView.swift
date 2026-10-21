@@ -19,6 +19,8 @@ struct UploadSessionView: View {
     /// Joined from a lead's launch, or recorded at a tour date or event (item 252): send it there.
     /// On unless the person turns it off — the way out when they are not registered for it.
     @State private var sendToEvent = true
+    /// Whether the organizers may show it with the event's results (event-scenario-gaps). Off unless chosen.
+    @State private var showWithResults = false
     @State private var captures: [CaptureMark] = []
     @State private var chosen: Set<UUID> = []
     @State private var progress: [UUID: FileState] = [:]
@@ -109,11 +111,17 @@ struct UploadSessionView: View {
             Section {
                 Toggle("Send to \(joinedTitle)", isOn: $sendToEvent)
                     .accessibilityIdentifier("upload-send-to-event")
+                if sendToEvent && summary?.hostedEventId != nil {
+                    Toggle("May be shown with the results", isOn: $showWithResults)
+                        .accessibilityIdentifier("upload-show-with-results")
+                }
             } header: {
                 Text("Where it belongs")
             } footer: {
                 Text(sendToEvent
-                     ? "The group that ran it will see it. You can send it now, or days from now — it stays on this phone until you do."
+                     ? (showWithResults
+                        ? "The group that ran it will see it, and may show it with the event's results, where anybody can play it, credited to you. Your exact position is never shown. You can change your mind on the website."
+                        : "The group that ran it will see it. You can send it now, or days from now — it stays on this phone until you do.")
                      : "Kept against your account only.")
             }
         } else {
@@ -700,7 +708,8 @@ struct UploadSessionView: View {
                 recordedByName: nil,
                 orgCalendarEventId: toEvent && launchId == nil ? summary?.orgCalendarEventId : nil,
                 hostedEventId: toEvent && launchId == nil ? summary?.hostedEventId : nil,
-                fieldLaunchId: launchId)
+                fieldLaunchId: launchId,
+                showWithResults: toEvent && showWithResults && summary?.hostedEventId != nil)
 
             guard case .success(let server) = result else {
                 if case .failure(let error) = result { errorMessage = error.message }

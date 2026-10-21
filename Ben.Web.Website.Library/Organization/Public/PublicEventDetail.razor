@@ -482,6 +482,29 @@ else
             </div>
         }
 
+        @* Sessions from the night (event-scenario-gaps; Ben's scenario: "all the sessions will run in the
+           session player. Any EVPs will be displayed"). Each plays in the archive's player, with its marks —
+           the questions asked for EVP among them — and its recordings once they've been checked. *@
+        @if (_resultSessions.Items.Count > 0)
+        {
+            <BenSectionHeading Text="Sessions from the night" />
+            <div class="list-group mb-4" data-testid="event-result-sessions">
+                @foreach (var s in _resultSessions.Items)
+                {
+                    <a class="list-group-item list-group-item-action d-flex flex-wrap justify-content-between gap-2"
+                       href="@($"/places/{s.PlaceId}/sessions/{s.Id}")" data-testid="event-result-session">
+                        <span style="min-width:0;overflow-wrap:anywhere;">
+                            <span class="fw-semibold">@s.RecordedBy</span>
+                            <span class="text-secondary small">· @Local(s.StartedAt).ToString("ddd MM/dd h:mm tt")@(s.LocationLabel is { Length: > 0 } where ? $" · {where}" : "")</span>
+                        </span>
+                        <span class="small text-secondary text-nowrap">
+                            @(s.MarkerCount == 1 ? "1 mark" : $"{s.MarkerCount} marks")@(s.MediaReady ? "" : " · readings only for now")
+                        </span>
+                    </a>
+                }
+            </div>
+        }
+
         @* On an ordinary public event this has always been offered, and stays so. On a hosted event
            it is the host's switch (item 235): most events are not ghost hunts, and a venue running
            a play does not want an evidence queue on its page. *@
@@ -997,6 +1020,8 @@ else
     }
 
     private Ben.Web.Services.WebApi.LoadResult<EventEvidenceRecord> _acceptedEvidence;
+    /// <summary>Sessions the organizers show with the results, which anybody can play (event-scenario-gaps).</summary>
+    private Ben.Web.Services.WebApi.LoadResult<Ben.Service.Models.FieldSessions.PublicEventSessionRow> _resultSessions;
     private Ben.Web.Services.WebApi.LoadResult<EventEvidenceRecord> _myEvidence;
     private IBrowserFile? _evidenceFile;
     private string _evidenceNote = "";
@@ -1085,6 +1110,8 @@ else
                 : [];
 
             _acceptedEvidence = await AdminClient.GetAcceptedEventEvidenceAsync(_event.Id);
+            if (_hosted is { } shownFor)
+                _resultSessions = await AdminClient.GetEventResultSessionsAsync(shownFor.Id);
             if (_isAuthenticated)
                 _myEvidence = await AdminClient.GetMyEventEvidenceAsync(_event.Id);
         }
