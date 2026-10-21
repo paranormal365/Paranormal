@@ -32,7 +32,7 @@
         </a>
     </div>
 
-    @if (_plan is { IsPerTour: true })
+    @if (_plan is { IsPerTour: true, GhostWalkStanding: false })
     {
         <div class="alert alert-secondary d-flex flex-wrap gap-3 align-items-center" id="tours-plan-note">
             <div>
@@ -52,9 +52,28 @@
         </div>
     }
 
+    @if (_plan is { GhostWalkOnSale: true } walk)
+    {
+        @* The Ghost Walk Tour subscription, per tour route (10/21/2026). Said only while it is on sale. *@
+        <div class="alert alert-secondary" id="tours-ghost-walk-note">
+            @if (walk.GhostWalkStanding)
+            {
+                <text>Your Ghost Walk Tour subscription pays for <strong>@Count(walk.RoutesPaid, "tour route")</strong>
+                    at @($"{walk.RoutePrice:C}") a month each, with unlimited walks and guests. You run
+                    @Count(walk.ActiveTours, "route").</text>
+            }
+            else
+            {
+                <text>Running tours needs a Ghost Walk Tour subscription: @($"{walk.RoutePrice:C}") a month per
+                    tour route, with unlimited walks and guests on each.
+                    <a href="@($"/organizations/{OrgId}/billing#ghost-walk")">Subscribe on the Billing page</a>.</text>
+            }
+        </div>
+    }
+
     @if (_error is not null)
     {
-        <div class="alert alert-danger" id="tours-error">@_error</div>
+        <div class="alert alert-danger" id="tours-error" role="alert">@_error</div>
     }
 
     <div class="card mb-3">
@@ -118,11 +137,26 @@
                            @bind="@_form.DefaultCapacity" @bind:event="oninput" />
                     <div class="form-text">A date can take a different number.</div>
                 </div>
+                @if (RoutesFull)
+                {
+                    @* Every route the subscription pays for is running: adding one more is a yes to a
+                       bigger subscription, so it is asked before the button does anything. *@
+                    <div class="col-12">
+                        <div class="form-check">
+                            <input class="form-check-input" type="checkbox" id="tour-add-route" @bind="_addRoute" />
+                            <label class="form-check-label" for="tour-add-route">
+                                Add a route to my Ghost Walk Tour subscription: @($"{_plan!.RoutePrice:C}") a month.
+                                For the rest of this month only the days left are charged,
+                                @($"{_plan.NextRouteCostsThisMonth:C}"), on your next bill.
+                            </label>
+                        </div>
+                    </div>
+                }
                 <div class="col-12">
                     <button type="button" class="btn btn-primary" id="tour-add"
-                            disabled="@(_saving || string.IsNullOrWhiteSpace(_form.Name) || _form.StartOrganizationAddressId is null)"
+                            disabled="@(_saving || string.IsNullOrWhiteSpace(_form.Name) || _form.StartOrganizationAddressId is null || (RoutesFull && !_addRoute))"
                             @onclick="CreateAsync">
-                        @(_saving ? "Adding…" : "Add this tour")
+                        @(_saving ? "Adding…" : RoutesFull ? "Add this tour and a route" : "Add this tour")
                     </button>
                 </div>
             </div>
@@ -250,7 +284,8 @@
         _error = null;
         var (created, error) = await AdminClient.SaveTourAsync(OrgId, null, new UpsertTourRequest(
             _form.Name.Trim(), null, addressId,
-            _form.DurationMinutes, _form.DefaultCapacity, _form.TimeZoneId));
+            _form.DurationMinutes, _form.DefaultCapacity, _form.TimeZoneId,
+            AddRouteToSubscription: RoutesFull && _addRoute));
         _saving = false;
 
         if (created is null)
@@ -265,6 +300,11 @@
     }
 
     private static string Count(int n, string noun) => $"{n} {noun}{(n == 1 ? "" : "s")}";
+
+    private bool _addRoute;
+
+    /// <summary>Every route the Ghost Walk Tour subscription pays for is running.</summary>
+    private bool RoutesFull => _plan is { GhostWalkOnSale: true, GhostWalkStanding: true } p && p.ActiveTours >= p.RoutesPaid;
 
     private static string Cadence(Ben.Data.Common.Enums.BillingInterval interval) => interval switch
     {

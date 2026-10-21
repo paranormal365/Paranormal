@@ -85,7 +85,20 @@
         }
         @if (_error is not null)
         {
-            <div class="alert alert-danger" id="tour-error">@_error</div>
+            <div class="alert alert-danger" id="tour-error" role="alert">
+                @_error
+                @if (_routeOffer is { } offer)
+                {
+                    @* Every route the Ghost Walk Tour subscription pays for is running (10/21/2026):
+                       the refusal carries the yes, so it is not a dead end. *@
+                    <div class="mt-2">
+                        <button type="button" class="btn btn-primary btn-sm text-nowrap" id="tour-restore-add-route"
+                                disabled="@_saving" @onclick="@(() => SetRetiredAsync(false, addRoute: true))">
+                            Add a route (@($"{offer.RoutePrice:C}") a month) and bring it back
+                        </button>
+                    </div>
+                }
+            </div>
         }
 
         @* ── Details ─────────────────────────────────────────────────────── *@
@@ -740,13 +753,24 @@
         await LoadAsync();
     }
 
-    private async Task SetRetiredAsync(bool retired)
+    // Set when bringing a route back was refused only because every paid route is running.
+    private TourPlanRecord? _routeOffer;
+
+    private async Task SetRetiredAsync(bool retired, bool addRoute = false)
     {
-        _saving = true; _error = null; _notice = null;
-        var (saved, error) = await AdminClient.SetTourRetiredAsync(OrgId, TourId, retired);
+        _saving = true; _error = null; _notice = null; _routeOffer = null;
+        var (saved, error) = await AdminClient.SetTourRetiredAsync(OrgId, TourId, retired, addRoute: addRoute);
         _saving = false;
 
-        if (saved is null) { _error = error ?? "That could not be changed."; return; }
+        if (saved is null)
+        {
+            _error = error ?? "That could not be changed.";
+            if (!retired && !addRoute
+                && await AdminClient.GetTourPlanAsync(OrgId) is { GhostWalkOnSale: true, GhostWalkStanding: true } plan
+                && plan.ActiveTours >= plan.RoutesPaid)
+                _routeOffer = plan;
+            return;
+        }
         _notice = saved.PlanNote;
         await LoadAsync();
     }

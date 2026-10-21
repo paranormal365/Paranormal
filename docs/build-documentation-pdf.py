@@ -30,11 +30,19 @@ LIVE_FALLBACKS = {
     "price.event-credit": "the price shown on the Pricing page",
     "price.event-credit-subscriber": "a share of that price",
     "percent.event-credit-subscriber": "the percentage shown on the Pricing page",
-    "price.ghost-walk-month": "the monthly price shown on the Pricing page",
+    "price.ghost-walk-month": "$29",
 }
 
 
+# Printed as the site is meant to run: with the Ghost Walk Tour subscription on sale (Ben, 10/21/2026),
+# so the passages for the retired per-tour plan are left out.
+PRINT_WITHOUT = ("no-ghost-walk",)
+
+
 def apply_live_fallbacks(body):
+    for name in PRINT_WITHOUT:
+        body = re.sub(r"^[ \t]*\{\{#if " + re.escape(name) + r"\}\}[ \t]*\n.*?^[ \t]*\{\{/if\}\}[ \t]*\n?",
+                      "", body, flags=re.M | re.S)
     body = re.sub(r"^[ \t]*\{\{#if [a-z][a-z0-9.-]*\}\}[ \t]*\n", "", body, flags=re.M)
     body = re.sub(r"^[ \t]*\{\{/if\}\}[ \t]*\n?", "", body, flags=re.M)
     return re.sub(r"\{\{([a-z][a-z0-9.-]*)\}\}", lambda m: LIVE_FALLBACKS.get(m.group(1), m.group(0)), body)

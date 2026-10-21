@@ -75,7 +75,12 @@ public sealed record UpsertTourRequest(
     /// The whole list, replacing whatever was there. Null leaves the existing links alone, so an
     /// older client that has never heard of them cannot wipe them by saving a tour.
     /// </summary>
-    IReadOnlyList<TourSocialLinkRecord>? SocialLinks = null);
+    IReadOnlyList<TourSocialLinkRecord>? SocialLinks = null,
+    /// <summary>
+    /// The group's yes to adding a route to its Ghost Walk Tour subscription when every route it pays
+    /// for is already running (10/21/2026). Ignored on an update, and when there is room.
+    /// </summary>
+    bool AddRouteToSubscription = false);
 
 /// <summary>Who guides a tour, replacing the whole list.</summary>
 public sealed record SetTourGuidesRequest(IReadOnlyList<Guid> AppUserIds);
@@ -98,7 +103,14 @@ public sealed record TourPlanRecord(
     int ActiveTours,
     decimal? NextTourCostsToday,
     DateTime? CurrentPeriodEndUtc,
-    bool HasCardOnFile);
+    bool HasCardOnFile,
+    // The Ghost Walk Tour subscription (10/21/2026), appended because this record is positional.
+    // GhostWalkOnSale false means none of the rest is said anywhere.
+    bool GhostWalkOnSale = false,
+    bool GhostWalkStanding = false,
+    int RoutesPaid = 0,
+    decimal RoutePrice = 0m,
+    decimal NextRouteCostsThisMonth = 0m);
 
 /// <summary>One picture on a tour's page.</summary>
 /// <param name="FromAGuest">

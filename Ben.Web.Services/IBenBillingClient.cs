@@ -196,8 +196,13 @@ public interface IBenBillingClient
     Task<ItemResult<GhostWalkSubscriptionView>> GetGhostWalkAsync(Guid organizationId, CancellationToken token = default);
 
     /// <summary>Opens a Stripe Checkout page for a month of the Ghost Walk Tour subscription.</summary>
+    /// <param name="routes">Tour routes to pay for; null pays for the routes the group runs.</param>
     Task<(StartCheckoutResponse? Result, string? Error)> StartGhostWalkCheckoutAsync(
-        Guid organizationId, CancellationToken token = default);
+        Guid organizationId, CancellationToken token = default, int? routes = null);
+
+    /// <summary>Adds a tour route to the subscription, or takes an unused one off (10/21/2026).</summary>
+    Task<(GhostWalkSubscriptionView? Result, string? Error)> ChangeGhostWalkRoutesAsync(
+        Guid organizationId, bool add, CancellationToken token = default);
 
     /// <summary>Stops (<paramref name="cancel"/> true) or restarts the subscription's renewal.</summary>
     Task<(GhostWalkSubscriptionView? Result, string? Error)> SetGhostWalkRenewalAsync(

@@ -89,8 +89,16 @@ public sealed class TourController : OrgCmsControllerBase
         if (org is null) return NotFound();
 
         var d = await TourAddOnService.DescribeAsync(db, org, ct);
+        var now = DateTime.UtcNow;
+        var walk = await Services.Tours.GhostWalkAccess.ForOneMoreRouteAsync(db, orgId, now, ct);
+        var sub = walk.Subscription;
         return Ok(new TourPlanRecord(d.IsPerTour, d.TierName, d.UnitPrice, d.Interval,
-            d.Covered, d.Active, d.NextCostsToday, d.PeriodEnd, d.HasCard));
+            d.Covered, d.Active, d.NextCostsToday, d.PeriodEnd, d.HasCard,
+            GhostWalkOnSale: walk.Offer.OnSale,
+            GhostWalkStanding: sub is not null,
+            RoutesPaid: sub?.Quantity ?? 0,
+            RoutePrice: walk.Offer.MonthlyPrice,
+            NextRouteCostsThisMonth: sub is null ? 0m : Services.Tours.GhostWalkRoutes.Prorate(sub, now, +1)));
     }
 
     // ── writing ──────────────────────────────────────────────────────────────
@@ -112,8 +120,10 @@ public sealed class TourController : OrgCmsControllerBase
         if (await ValidateAsync(db, orgId, request, null, ct) is string refusal)
             return BadRequest(refusal);
 
-        // 10/21/2026: a new tour needs the Ghost Walk Tour subscription while it is on sale.
-        if (await Services.Tours.GhostWalkAccess.WhyNotAsync(db, orgId, DateTime.UtcNow, ct) is string closed)
+        // 10/21/2026: a new route needs a route the Ghost Walk Tour subscription pays for. When every
+        // paid route is running, the group is asked; its yes adds a route, prorated onto the next bill.
+        var walk = await Services.Tours.GhostWalkAccess.ForOneMoreRouteAsync(db, orgId, DateTime.UtcNow, ct);
+        if (walk.Refusal is string closed && !(walk.NeedsARoute && request.AddRouteToSubscription))
             return BadRequest(closed);
 
         var now = DateTime.UtcNow;
@@ -146,9 +156,9 @@ public sealed class TourController : OrgCmsControllerBase
 
         // The money, after the tour exists: a payment problem must never be why a business cannot
         // define its own product. The note is the sentence the page shows them.
-        var outcome = await _addOn.ChargeRemainderAsync(db, org, userId.Value, ct);
+        var note = await PayForTheRouteAsync(db, org, walk, userId.Value, ct);
 
-        var record = (await LoadAsync(db, orgId, tour.Id, ct)).First() with { PlanNote = outcome.Note };
+        var record = (await LoadAsync(db, orgId, tour.Id, ct)).First() with { PlanNote = note };
         return CreatedAtAction(nameof(GetOne), new { orgId, tourId = tour.Id }, record);
     }
 
@@ -204,12 +214,36 @@ public sealed class TourController : OrgCmsControllerBase
     public async Task<ActionResult<TourRecord>> Retire(Guid orgId, Guid tourId, CancellationToken ct)
         => await SetRetiredAsync(orgId, tourId, retired: true, ct);
 
+    /// <param name="addRoute">The group's yes to adding a route to its Ghost Walk Tour subscription,
+    /// when every route it pays for is already running.</param>
     [HttpPost("{tourId:guid}/restore")]
-    public async Task<ActionResult<TourRecord>> Restore(Guid orgId, Guid tourId, CancellationToken ct)
-        => await SetRetiredAsync(orgId, tourId, retired: false, ct);
+    public async Task<ActionResult<TourRecord>> Restore(
+        Guid orgId, Guid tourId, CancellationToken ct, [FromQuery] bool addRoute = false)
+        => await SetRetiredAsync(orgId, tourId, retired: false, ct, addRoute);
+
+    /// <summary>
+    /// Pays for one more running route: a route added to the Ghost Walk Tour subscription when the
+    /// group said yes, nothing when a paid route was free, and the per-tour plan's add-on charge for a
+    /// group that has no Ghost Walk Tour subscription. Saves its own changes.
+    /// </summary>
+    private async Task<string?> PayForTheRouteAsync(
+        BenDataContext db, Organization org, Services.Tours.GhostWalkAccess.RouteVerdict walk, Guid userId,
+        CancellationToken ct)
+    {
+        if (walk.Subscription is not { } sub)
+            return (await _addOn.ChargeRemainderAsync(db, org, userId, ct)).Note;
+
+        if (!walk.NeedsARoute)
+            return "Covered by a route your Ghost Walk Tour subscription already pays for.";
+
+        var tracked = await db.GhostWalkSubscriptions.FirstAsync(s => s.Id == sub.Id, ct);
+        var note = Services.Tours.GhostWalkRoutes.Change(db, tracked, tracked.Quantity + 1, userId, DateTime.UtcNow);
+        await db.SaveChangesAsync(ct);
+        return note;
+    }
 
     private async Task<ActionResult<TourRecord>> SetRetiredAsync(
-        Guid orgId, Guid tourId, bool retired, CancellationToken ct)
+        Guid orgId, Guid tourId, bool retired, CancellationToken ct, bool addRoute = false)
     {
         var userId = GetCurrentUserId();
         if (userId is null) return Unauthorized();
@@ -223,10 +257,12 @@ public sealed class TourController : OrgCmsControllerBase
         var tour = await db.Tours.FirstOrDefaultAsync(t => t.Id == tourId && t.OrganizationId == orgId, ct);
         if (tour is null) return NotFound();
 
-        // Bringing a retired tour back is starting it again, so it asks what a new tour asks.
+        // Bringing a retired route back is starting it again, so it asks what a new route asks.
         // Retiring is never refused: a group must always be able to stop.
-        if (!retired && tour.RetiredAtUtc is not null
-            && await Services.Tours.GhostWalkAccess.WhyNotAsync(db, orgId, DateTime.UtcNow, ct) is string closed)
+        var walk = !retired && tour.RetiredAtUtc is not null
+            ? await Services.Tours.GhostWalkAccess.ForOneMoreRouteAsync(db, orgId, DateTime.UtcNow, ct)
+            : null;
+        if (walk?.Refusal is string closed && !(walk.NeedsARoute && addRoute))
             return BadRequest(closed);
 
         var now = DateTime.UtcNow;
@@ -235,11 +271,29 @@ public sealed class TourController : OrgCmsControllerBase
         tour.UpdatedByAppUserId = userId.Value;
         await db.SaveChangesAsync(ct);
 
-        // Retiring never refunds — the period is paid for — but restoring can owe money again.
-        var note = retired
-            ? "Retired. Dates already on the calendar stand; your next renewal counts one tour "
-              + "fewer."
-            : (await _addOn.ChargeRemainderAsync(db, org, userId.Value, ct)).Note;
+        string? note;
+        if (retired)
+        {
+            // A Ghost Walk Tour subscription pays for one route fewer, the unused days credited to
+            // the next bill (10/21/2026). Otherwise the per-tour plan's rule: nothing refunded, the
+            // next renewal counts one tour fewer.
+            note = await Services.Tours.GhostWalkRoutes.AfterRetiringAsync(db, orgId, userId.Value, now, ct);
+            if (note is not null)
+            {
+                await db.SaveChangesAsync(ct);
+                note = "Retired. Dates already on the calendar stand. " + note;
+            }
+            else
+            {
+                note = "Retired. Dates already on the calendar stand; your next renewal counts one tour fewer.";
+            }
+        }
+        else
+        {
+            note = walk is null
+                ? (await _addOn.ChargeRemainderAsync(db, org, userId.Value, ct)).Note
+                : await PayForTheRouteAsync(db, org, walk, userId.Value, ct);
+        }
 
         return Ok((await LoadAsync(db, orgId, tourId, ct)).First() with { PlanNote = note });
     }

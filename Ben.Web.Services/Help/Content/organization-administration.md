@@ -815,26 +815,42 @@ between tours if you run more than one.
 ### Adding a tour, and what it costs
 
 {{#if ghost-walk}}
-Running tours takes a **Ghost Walk Tour subscription**: {{price.ghost-walk-month}} a month, separate
-from your group's plan, with no limit on tours, dates or guests. Any group can take it, on your
-group's **Billing** page under **Ghost Walk Tour subscription**, or from the **Pricing** page.
-Without it you can't add a tour, bring a retired one back, or put a new tour date on the calendar.
-Tours and dates you already have keep running, and guests keep their places. You can stop renewing
-at any time; the month you paid for runs out first.
+Running tours takes a **Ghost Walk Tour subscription**: {{price.ghost-walk-month}} a month per tour
+route, with unlimited walks and guests on each. A **tour route** is one tour on this page: the walk
+down Printers Alley is one route however often you run it, and a walk down a different street is a
+second. The subscription is separate from your group's plan, and any group can take it, on your
+group's **Billing** page under **Ghost Walk Tour subscription**, or from the **Pricing** page. When
+you subscribe, it pays for every route you already run.
 
-If your group is on the per-tour business plan, its tours stay covered by that plan as they always
-have.
+Without it you can't add a route, bring a retired one back, or put a new date on the calendar. With
+it, dates are unlimited. Adding a route when every route you pay for is already running asks you to
+add one to your subscription: tick **Add a route to my Ghost Walk Tour subscription**, and the route
+is added. You can also add routes on the Billing page.
+
+**What you see on your bill.** Each route is {{price.ghost-walk-month}} a month. When you add a route
+part-way through a month, you aren't charged that day: the days left in the month for the new route
+go on your next monthly bill, along with the next month itself. When you retire a route, it comes off
+your subscription and the unused days in the month come off your next bill. Your Billing page shows
+what is waiting for the next bill. You can stop renewing at any time; the month you paid for runs
+out first.
+
+If your group was on the per-tour business plan, it was moved onto the Ghost Walk Tour subscription
+for the time it had already paid for, with the same number of routes, at no charge. The plan isn't
+renewed, and your next bill is the subscription's.
 
 {{/if}}
+{{#if no-ghost-walk}}
 **On the per-tour business plan**, the plan covers one tour. Each extra tour is charged for the rest
 of your current billing period, on the card you already have on file, and after that every renewal
 counts the tours you are running. If there is no card on file, you can still run the tour, and it is
 simply counted at your next renewal. The Tours page tells you which of these will happen before you
 press the button.
 
-**Retiring** a tour stops new dates from being added and drops it from your next renewal. It
-doesn't refund anything for the period you have already paid for, and it leaves the tour's past
-dates exactly as they are. **Pausing** — turning off *Taking sign-ups* — is the lighter option for
+{{/if}}
+**Retiring** a tour stops new dates from being added, and leaves the tour's past dates exactly as
+they are. With a Ghost Walk Tour subscription the route comes off your subscription, as above; on
+the per-tour business plan it drops from your next renewal, and nothing is refunded for the period
+already paid for. **Pausing** — turning off *Taking sign-ups* — is the lighter option for
 an off-season.
 
 ### Guides
@@ -2519,8 +2535,9 @@ buying them on the billing page (see [Buying event credits](#buying-event-credit
 
 {{#if ghost-walk}}
 When it's offered, **Ghost Walk Tour subscription** comes after that: {{price.ghost-walk-month}} a
-month for as many tours, dates and guests as you like, separate from the investigation plans. If you
-look after a group's billing, **Subscribe** takes you to Stripe's page for that group.
+month per tour route, with unlimited walks and guests, separate from the investigation plans. If you
+look after a group's billing, **Subscribe** takes you to Stripe's page for that group, paying for
+every route it runs.
 
 {{/if}}
 Each band on the Pricing page has its own button. If you don't run a group yet, **Start a group on

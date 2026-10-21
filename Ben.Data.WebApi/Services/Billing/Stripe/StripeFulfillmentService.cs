@@ -105,6 +105,18 @@ public sealed class StripeFulfillmentService
             /// (10/21/2026): the group it is for. Fulfilled down its own path, like a seat.
             /// </summary>
             public const string GhostWalk = "ih_ghost_walk";
+
+            /// <summary>How many tour routes the Ghost Walk month pays for.</summary>
+            public const string GhostWalkRoutes = "ih_gw_routes";
+
+            /// <summary>One route for one month at the price charged.</summary>
+            public const string GhostWalkUnit = "ih_gw_unit";
+
+            /// <summary>Route changes made up to this moment are on this bill and are settled by it.</summary>
+            public const string GhostWalkSettleBefore = "ih_gw_settle_before";
+
+            /// <summary>A credit left over after this bill, carried to the next one (negative).</summary>
+            public const string GhostWalkCarry = "ih_gw_carry";
         }
 
         public Dictionary<string, string> ToMetadata() => new()
@@ -773,6 +785,16 @@ public sealed class StripeFulfillmentService
             periodStart = ps;
         var periodEnd = periodStart.AddMonths(1);
 
+        // Per route (Ben, 10/21/2026). A session from before the key existed paid for one route.
+        var routes = 1;
+        if (checkout.Metadata.TryGetValue(CheckoutFacts.Keys.GhostWalkRoutes, out var routesRaw)
+            && int.TryParse(routesRaw, out var parsedRoutes) && parsedRoutes > 0)
+            routes = parsedRoutes;
+        var unit = decimal.Round(payable / routes, 2, MidpointRounding.AwayFromZero);
+        if (checkout.Metadata.TryGetValue(CheckoutFacts.Keys.GhostWalkUnit, out var unitRaw)
+            && decimal.TryParse(unitRaw, System.Globalization.NumberStyles.Number, inv, out var parsedUnit) && parsedUnit > 0m)
+            unit = parsedUnit;
+
         var sub = await db.GhostWalkSubscriptions.FirstOrDefaultAsync(s => s.OrganizationId == organizationId, ct);
         if (sub is null)
         {
@@ -791,6 +813,8 @@ public sealed class StripeFulfillmentService
 
         sub.Status = SubscriptionStatus.Active;
         sub.PriceAtPeriodStart = payable;
+        sub.Quantity = routes;
+        sub.UnitPriceAtPeriodStart = unit;
         sub.CurrentPeriodStart = periodStart;
         sub.CurrentPeriodEnd = periodEnd;
         sub.CancelAtPeriodEnd = false;
@@ -799,7 +823,37 @@ public sealed class StripeFulfillmentService
         sub.ProviderCustomerRef = checkout.CustomerRef ?? sub.ProviderCustomerRef;
         sub.ProviderPaymentMethodRef = checkout.PaymentMethodRef ?? sub.ProviderPaymentMethodRef;
 
-        const string description = "Ghost Walk Tour subscription — monthly";
+        // The route changes this bill settles — Stripe's default proration, which puts the days a
+        // route was added or given up mid-month on the next invoice rather than charging on the spot.
+        var settled = 0m;
+        if (checkout.Metadata.TryGetValue(CheckoutFacts.Keys.GhostWalkSettleBefore, out var beforeRaw)
+            && DateTime.TryParse(beforeRaw, inv, System.Globalization.DateTimeStyles.RoundtripKind, out var before))
+        {
+            foreach (var change in await Services.Tours.GhostWalkRoutes.UnsettledAsync(db, sub.Id, before, ct))
+            {
+                change.SettledUtc = now;
+                change.SettledPaymentRef = reference;
+                change.DateUpdated = now;
+                settled += change.ProratedAmount;
+            }
+        }
+
+        // A month whose credits came to more than its bill: the rest waits for the next one.
+        if (checkout.Metadata.TryGetValue(CheckoutFacts.Keys.GhostWalkCarry, out var carryRaw)
+            && decimal.TryParse(carryRaw, System.Globalization.NumberStyles.Number, inv, out var carry) && carry < 0m)
+        {
+            db.GhostWalkRouteChanges.Add(new GhostWalkRouteChange
+            {
+                Id = Guid.NewGuid(), GhostWalkSubscriptionId = sub.Id, ChangedUtc = now,
+                FromQuantity = routes, ToQuantity = routes, ProratedAmount = carry,
+                DateCreated = now, CreatedByAppUserId = buyerId,
+            });
+        }
+
+        var description = $"Ghost Walk Tour subscription — {routes} tour {(routes == 1 ? "route" : "routes")} × ${unit:0.00}, monthly"
+            + (settled == 0m ? "" : settled > 0m
+                ? $", plus ${settled:0.00} for routes added last month"
+                : $", less ${-settled:0.00} for routes given up last month");
         db.BillingLedgerEntries.Add(new BillingLedgerEntry
         {
             Id = Guid.NewGuid(), Kind = BillingLedgerKind.Charge,
@@ -809,6 +863,15 @@ public sealed class StripeFulfillmentService
             PeriodStart = periodStart, PeriodEnd = periodEnd,
             DateCreated = now, CreatedByAppUserId = buyerId,
         });
+
+        // Credits covered the whole month: nothing was paid, so there is no payment and no receipt —
+        // the charge of nothing is the record, as for a 100%-off plan period.
+        if (checkout.PaymentIntentRef is null && payable == 0m)
+        {
+            await db.SaveChangesAsync(ct);
+            return;
+        }
+
         var payment = new BillingLedgerEntry
         {
             Id = Guid.NewGuid(), Kind = BillingLedgerKind.Payment,

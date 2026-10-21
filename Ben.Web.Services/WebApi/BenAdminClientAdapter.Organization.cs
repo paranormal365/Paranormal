@@ -355,10 +355,11 @@ public sealed partial class BenAdminClientAdapter
                request, token);
 
     public Task<(TourRecord? Result, string? Error)> SetTourRetiredAsync(
-        Guid orgId, Guid tourId, bool retired, CancellationToken token = default)
+        Guid orgId, Guid tourId, bool retired, CancellationToken token = default, bool addRoute = false)
         => _api.SendExpectingReasonAsync<object, TourRecord>(
                HttpMethod.Post,
-               $"/api/organizations/{orgId}/tours/{tourId}/{(retired ? "retire" : "restore")}",
+               $"/api/organizations/{orgId}/tours/{tourId}/{(retired ? "retire" : "restore")}"
+                   + (!retired && addRoute ? "?addRoute=true" : ""),
                new { }, token);
 
     public Task<(TourRecord? Result, string? Error)> SetTourGuidesAsync(

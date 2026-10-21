@@ -464,11 +464,13 @@ public sealed class EventCreditsAndGhostWalkTests
     }
 
     [Fact]
-    public async Task On_but_with_no_price_it_is_not_on_sale_so_nothing_is_gated()
+    public async Task On_with_no_price_set_it_sells_at_Ben_s_29_dollars_and_gates_tours()
     {
+        // Ben, 10/21/2026: "$29/month". An unset price is that price, so the switch alone puts it on sale.
         var w = await SeedAsync(kind: OrganizationKind.GhostWalkingTour, settings: [(SiteSettingKeys.GhostWalkEnabled, "true")]);
 
-        Assert.IsType<CreatedAtActionResult>((await Tours(w, w.OwnerId).Create(w.OrgId, Tour(w), default)).Result);
+        var refused = Assert.IsType<BadRequestObjectResult>((await Tours(w, w.OwnerId).Create(w.OrgId, Tour(w), default)).Result);
+        Assert.Contains("$29.00 a month per tour route", Assert.IsType<string>(refused.Value));
     }
 
     [Fact]
@@ -496,15 +498,6 @@ public sealed class EventCreditsAndGhostWalkTests
         }
 
         Assert.IsType<BadRequestObjectResult>((await Tours(w, w.OwnerId).Create(w.OrgId, Tour(w, "Second walk"), default)).Result);
-    }
-
-    [Fact]
-    public async Task A_group_already_on_the_per_tour_business_plan_keeps_its_tours_covered()
-    {
-        var w = await SeedAsync(paidPlan: true, kind: OrganizationKind.GhostWalkingTour,
-            tierBandedByMembers: false, settings: GhostWalkOn);
-
-        Assert.IsType<CreatedAtActionResult>((await Tours(w, w.OwnerId).Create(w.OrgId, Tour(w), default)).Result);
     }
 
     [Fact]

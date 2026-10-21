@@ -31,7 +31,7 @@
                ghost walk line is there only while that subscription is on sale. *@
             @if (_extras?.GhostWalk is { } walk)
             {
-                <li data-testid="home-join-ghost-walk"><b>@BenMoney.Format(walk.MonthlyPrice)</b><span>a month for a Ghost Walk Tour subscription — no limit on tours or guests</span></li>
+                <li data-testid="home-join-ghost-walk"><b>@BenMoney.Format(walk.MonthlyPrice)</b><span>a month per tour route — unlimited walks and guests</span></li>
             }
             @if (_extras?.Events is { OnSale: true } events)
             {

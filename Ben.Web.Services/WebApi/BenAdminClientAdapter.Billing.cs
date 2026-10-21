@@ -155,9 +155,18 @@ public sealed partial class BenAdminClientAdapter
 
     /// <inheritdoc />
     public Task<(StartCheckoutResponse? Result, string? Error)> StartGhostWalkCheckoutAsync(
-        Guid organizationId, CancellationToken token = default)
+        Guid organizationId, CancellationToken token = default, int? routes = null)
         => _api.SendExpectingReasonAsync<object, StartCheckoutResponse>(
-            HttpMethod.Post, $"/api/organizations/{organizationId}/subscription/checkout/ghost-walk",
+            HttpMethod.Post, $"/api/organizations/{organizationId}/subscription/checkout/ghost-walk"
+                + (routes is { } r ? $"?routes={r}" : ""),
+            new { }, token);
+
+    /// <inheritdoc />
+    public Task<(GhostWalkSubscriptionView? Result, string? Error)> ChangeGhostWalkRoutesAsync(
+        Guid organizationId, bool add, CancellationToken token = default)
+        => _api.SendExpectingReasonAsync<object, GhostWalkSubscriptionView>(
+            HttpMethod.Post,
+            $"/api/organizations/{organizationId}/billing/ghost-walk/routes/{(add ? "add" : "remove")}",
             new { }, token);
 
     /// <inheritdoc />

@@ -4110,6 +4110,58 @@ namespace Ben.Data.Source.Migrations
                     b.ToTable("FieldSessionUploadFiles");
                 });
 
+            modelBuilder.Entity("Ben.Data.Source.Entities.GhostWalkRouteChange", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<DateTime>("ChangedUtc")
+                        .HasColumnType("datetime2");
+
+                    b.Property<Guid>("CreatedByAppUserId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<DateTime>("DateCreated")
+                        .HasColumnType("datetime2");
+
+                    b.Property<DateTime?>("DateUpdated")
+                        .HasColumnType("datetime2");
+
+                    b.Property<int>("FromQuantity")
+                        .HasColumnType("int");
+
+                    b.Property<Guid>("GhostWalkSubscriptionId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<decimal>("ProratedAmount")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("decimal(18,2)");
+
+                    b.Property<string>("SettledPaymentRef")
+                        .HasMaxLength(128)
+                        .HasColumnType("nvarchar(128)");
+
+                    b.Property<DateTime?>("SettledUtc")
+                        .HasColumnType("datetime2");
+
+                    b.Property<int>("ToQuantity")
+                        .HasColumnType("int");
+
+                    b.Property<Guid?>("UpdatedByAppUserId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("CreatedByAppUserId");
+
+                    b.HasIndex("UpdatedByAppUserId");
+
+                    b.HasIndex("GhostWalkSubscriptionId", "SettledUtc");
+
+                    b.ToTable("GhostWalkRouteChanges");
+                });
+
             modelBuilder.Entity("Ben.Data.Source.Entities.GhostWalkSubscription", b =>
                 {
                     b.Property<Guid>("Id")
@@ -4157,8 +4209,17 @@ namespace Ben.Data.Source.Migrations
                         .HasMaxLength(128)
                         .HasColumnType("nvarchar(128)");
 
+                    b.Property<int>("Quantity")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int")
+                        .HasDefaultValue(1);
+
                     b.Property<int>("Status")
                         .HasColumnType("int");
+
+                    b.Property<decimal>("UnitPriceAtPeriodStart")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("decimal(18,2)");
 
                     b.Property<Guid?>("UpdatedByAppUserId")
                         .HasColumnType("uniqueidentifier");
@@ -17088,6 +17149,32 @@ namespace Ben.Data.Source.Migrations
                     b.Navigation("UploadFile");
                 });
 
+            modelBuilder.Entity("Ben.Data.Source.Entities.GhostWalkRouteChange", b =>
+                {
+                    b.HasOne("Ben.Data.Source.Entities.AppUser", "CreatedByAppUser")
+                        .WithMany()
+                        .HasForeignKey("CreatedByAppUserId")
+                        .OnDelete(DeleteBehavior.NoAction)
+                        .IsRequired();
+
+                    b.HasOne("Ben.Data.Source.Entities.GhostWalkSubscription", "GhostWalkSubscription")
+                        .WithMany("RouteChanges")
+                        .HasForeignKey("GhostWalkSubscriptionId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("Ben.Data.Source.Entities.AppUser", "UpdatedByAppUser")
+                        .WithMany()
+                        .HasForeignKey("UpdatedByAppUserId")
+                        .OnDelete(DeleteBehavior.NoAction);
+
+                    b.Navigation("CreatedByAppUser");
+
+                    b.Navigation("GhostWalkSubscription");
+
+                    b.Navigation("UpdatedByAppUser");
+                });
+
             modelBuilder.Entity("Ben.Data.Source.Entities.GhostWalkSubscription", b =>
                 {
                     b.HasOne("Ben.Data.Source.Entities.AppUser", "CreatedByAppUser")
@@ -22373,6 +22460,11 @@ namespace Ben.Data.Source.Migrations
             modelBuilder.Entity("Ben.Data.Source.Entities.FieldSessionUpload", b =>
                 {
                     b.Navigation("Files");
+                });
+
+            modelBuilder.Entity("Ben.Data.Source.Entities.GhostWalkSubscription", b =>
+                {
+                    b.Navigation("RouteChanges");
                 });
 
             modelBuilder.Entity("Ben.Data.Source.Entities.HostedEvent", b =>

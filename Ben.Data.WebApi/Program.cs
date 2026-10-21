@@ -514,6 +514,11 @@ builder.Services.AddScoped<Ben.Data.WebApi.Services.Scheduling.IScheduledJob,
 // group whose plan covered a draft event it was already preparing; then it never acts again.
 builder.Services.AddScoped<Ben.Data.WebApi.Services.Scheduling.IScheduledJob,
                            Ben.Data.WebApi.Services.Scheduling.EventPlanTransitionJob>();
+// 10/21/2026: the per-tour plan and the Ghost Walk Tour subscription become one. Once the
+// subscription is on sale, this moves each per-tour group onto it for the time already paid, sets
+// the plan not to renew, and retires the per-tour tiers; then it never acts again.
+builder.Services.AddScoped<Ben.Data.WebApi.Services.Scheduling.IScheduledJob,
+                           Ben.Data.WebApi.Services.Scheduling.GhostWalkTierTransitionJob>();
 // Item 235 phase 3: moves an event from published to on-now to over to filed away, on the venue's
 // own clock, so no screen has to work it out from two dates and a time zone.
 builder.Services.AddScoped<Ben.Data.WebApi.Services.Scheduling.IScheduledJob,
