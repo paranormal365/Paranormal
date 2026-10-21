@@ -130,6 +130,7 @@ public sealed class PublicHostedEventStaffController : BenControllerBase
             already.RunsTheDoor |= staff.RunsTheDoor;
             already.SeesMenus |= staff.SeesMenus;
             already.SeesFiles |= staff.SeesFiles;
+            already.StartsSessions |= staff.StartsSessions;
             already.RoleLabel ??= staff.RoleLabel;
             already.DateUpdated = DateTime.UtcNow;
 
@@ -181,5 +182,7 @@ public sealed class PublicHostedEventStaffController : BenControllerBase
             staff.RoleLabel,
             EventGuestMailer.WhatTheyCanDo(staff),
             AlreadyAccepted: alreadyAccepted || staff.DateConfirmed is not null,
-            AccountHasNoPassword: accountHasNoPassword);
+            AccountHasNoPassword: accountHasNoPassword,
+            OrganizationId: staff.HostedEvent?.OrganizationId,
+            RunsTheDoor: staff.RunsTheDoor);
 }

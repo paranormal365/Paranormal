@@ -27,6 +27,7 @@
        draws PDFs with them and the website serves them to the page, from one copy. -->
   <ItemGroup>
     <EmbeddedResource Include="Menus\Fonts\*.ttf" LogicalName="MenuFont.%(Filename)%(Extension)" />
+    <EmbeddedResource Include="Menus\site-mark.jpg" LogicalName="MenuMark.site-mark.jpg" />
   </ItemGroup>
 
 </Project>

@@ -235,13 +235,20 @@ public static class EventMenuPdf
         private void Footers()
         {
             var credit = MenuDesigns.Credit(_year);
+            // The small site mark beside the credit, at the credit's own height.
+            var mark = new ImageSource(new MemoryStream(MenuDesigns.CreditMarkJpeg()));
+            const double markSize = 7, gap = 3;
             foreach (var page in _doc.Pages)
             {
                 var editor = new FixedContentEditor(page);
-                var block = MakeBlock(credit, _regular, 6, _muted, HorizontalAlignment.Center);
-                var size = block.Measure(new Size(PageWidth - 2 * Margin, double.PositiveInfinity), CancellationToken.None);
-                editor.Position = At(Margin, PageHeight - FrameInset - 14);
-                editor.DrawBlock(block, new Size(PageWidth - 2 * Margin, size.Height));
+                var block = MakeBlock(credit, _regular, 6, _muted, HorizontalAlignment.Left);
+                var size = block.Measure(new Size(double.PositiveInfinity, double.PositiveInfinity), CancellationToken.None);
+                var left = (PageWidth - (markSize + gap + size.Width)) / 2;
+                var top = PageHeight - FrameInset - 14;
+                editor.Position = At(left, top + (size.Height - markSize) / 2);
+                editor.DrawImage(mark, markSize, markSize);
+                editor.Position = At(left + markSize + gap, top);
+                editor.DrawBlock(block, new Size(size.Width + 1, size.Height));
             }
         }
 

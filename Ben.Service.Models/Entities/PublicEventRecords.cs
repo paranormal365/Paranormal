@@ -237,7 +237,13 @@ public sealed record EventAttendanceConfirmation(
     bool AwaitsApproval = false,
 
     /// <summary>The event's own clock (2026-09-28); null reads on the house clock.</summary>
-    string? TimeZoneId = null);
+    string? TimeZoneId = null,
+
+    /// <summary>
+    /// A ticket the organizer sent: the click confirmed the place and the pass is on its way
+    /// (event-scenario-gaps). False for every other link.
+    /// </summary>
+    bool IsConfirmed = false);
 
 
 // ── Published investigations (backlog item #89) ──────────────────────────────
@@ -312,7 +318,11 @@ public sealed record EventEvidenceRecord(
     /// <summary>Whether the business has kept it for good.</summary>
     bool IsKept = false,
     /// <summary>Whether the event is at a public place, so there is an archive to contribute to.</summary>
-    bool PlaceAcceptsArchive = false);
+    bool PlaceAcceptsArchive = false,
+    /// <summary>"Confirms" votes on it; the public list is ranked by these (event-scenario-gaps).</summary>
+    int PositiveVotes = 0,
+    /// <summary>When it was caught, from the file itself; null when the file does not say.</summary>
+    DateTime? CaughtAtUtc = null);
 
 // ── Tours (item 233) ─────────────────────────────────────────────────────────
 // Ben, 2026-09-10: "Tours are public so, they show up on the map and are searchable." A tour is

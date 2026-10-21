@@ -299,6 +299,20 @@ public static class MailStarters
             MailBlocks.Paragraph("If the code above did not load, open it here: {PassUrl}")),
         [MailKinds.BookingDecided.Key]);
 
+    /// <summary>The results are ready: the organizer's last letter, with the link and the QR code (event-scenario-gaps).</summary>
+    public static readonly MailStarter EventResults = new(
+        "event-results", "The results are ready",
+        "The evidence page is ready: the link, and a QR code that opens it on a phone.",
+        "The results from {HostedEvents.Name} are ready",
+        Branded(
+            MailBlocks.Heading("The results are in"),
+            MailBlocks.Paragraph("Hello {AppUsers.DisplayName}. The evidence from <strong>{HostedEvents.Name}</strong> is ready to see."),
+            MailBlocks.Button("See the results", "{ResultsUrl}"),
+            MailBlocks.Paragraph("Or point your phone's camera at this code:"),
+            "{ResultsQr}",
+            MailBlocks.Paragraph("— {Organizations.Name}")),
+        [MailKinds.EventResults.Key]);
+
     public static readonly MailStarter Plain = new(
         "plain", "Something plain",
         "A heading and words, with nothing else in the way.",
@@ -312,7 +326,7 @@ public static class MailStarters
     [
         Confirmation, PasswordReset, Receipt, Invoice, Invitation, HelpAtAnEvent, AccountMade, HoldPlaces,
         RequestUnderYourAddress, VenueCode, BookingConfirmed, OrderConfirmation, NewOrderAlert, OrderLink,
-        OrderShipped, OrderRefunded, LowStock, SellerParcelToShip, Plain,
+        OrderShipped, OrderRefunded, LowStock, SellerParcelToShip, EventResults, Plain,
     ];
 
     /// <summary>

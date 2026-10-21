@@ -337,7 +337,19 @@ public sealed record PublicHostedEventRecord(
     IReadOnlyList<PublicEventImageRecord>? Gallery = null,
 
     /// <summary>Getting in and getting around: stairs, lighting, parking (phase 17a). Additive, so older apps ignore it.</summary>
-    string? AccessNotes = null);
+    string? AccessNotes = null,
+
+    /// <summary>When evidence stops being taken, or null for no deadline (event-scenario-gaps).</summary>
+    DateTime? EvidenceDeadlineUtc = null,
+
+    /// <summary>Why evidence can no longer be offered, or null while it can.</summary>
+    string? EvidenceClosedSentence = null,
+
+    /// <summary>The organizer's window in words: "We're accepting evidence for three days…".</summary>
+    string? EvidenceSentence = null,
+
+    /// <summary>Whether the page asks people to vote on the evidence it shows.</summary>
+    bool AsksForVotes = false);
 
 /// <summary>
 /// One thing that has to be true before an event can go live (item 235 phase 3).
@@ -479,10 +491,17 @@ public sealed record HostedEventSessionRosterRecord(
     Guid SessionId,
     string Title,
     IReadOnlyList<HostedEventSessionRosterLine> In,
-    IReadOnlyList<HostedEventSessionRosterLine> Waiting);
+    IReadOnlyList<HostedEventSessionRosterLine> Waiting,
+    /// <summary>People marked there, counting each sign-up's party.</summary>
+    int PeopleThere = 0,
+    /// <summary>Whether this reader may mark people there.</summary>
+    bool CanMarkAttendance = false);
 
 /// <summary>One person on a roster.</summary>
-public sealed record HostedEventSessionRosterLine(Guid SignUpId, string Name, int People, DateTime SignedUpUtc, bool IsHelping);
+public sealed record HostedEventSessionRosterLine(
+    Guid SignUpId, string Name, int People, DateTime SignedUpUtc, bool IsHelping,
+    /// <summary>When they were marked there (event-scenario-gaps: classes that "track who attends"); null: not marked.</summary>
+    DateTime? AttendedUtc = null);
 
 /// <summary>The published programme, for a guest or a visitor.</summary>
 /// <param name="CanSignUp">Whether this viewer may sign up for anything.</param>
@@ -588,7 +607,13 @@ public sealed record EventRoomMessageRecord(
     bool IsMine,
     bool IsHidden,
     bool SentToHosts,
-    int Reports);
+    int Reports,
+    /// <summary>
+    /// What the author is at this event when they are running it — "Organizer", "Guide", "Venue",
+    /// or the role the organizer gave a helper — so their posts stand out; null for a guest
+    /// (event-scenario-gaps, Ben 10/20/2026). Additive, so older apps ignore it.
+    /// </summary>
+    string? AuthorRole = null);
 
 /// <summary>Why a post is being reported.</summary>
 public sealed record ReportEventRoomMessageRequest(string? Reason);
@@ -621,7 +646,14 @@ public sealed record CmsEventSectionRecord(
     decimal? DayPassPrice = null,
     IReadOnlyList<CmsEventSessionRecord>? Programme = null,
     IReadOnlyList<PublicEventImageRecord>? Gallery = null,
-    CmsEventVenueRecord? Venue = null);
+    CmsEventVenueRecord? Venue = null,
+    IReadOnlyList<CmsEventEvidenceRecord>? Evidence = null,
+    bool AsksForVotes = false);
+
+/// <summary>One accepted piece of evidence in an event's evidence section, in rank order (event-scenario-gaps).</summary>
+public sealed record CmsEventEvidenceRecord(
+    Guid SubmissionId, Guid OrgCalendarEventId, Guid UploadFileId, string FileName, string ContentType,
+    string By, string? Note, int PositiveVotes, DateTime CaughtUtc);
 
 /// <summary>One session in an event section's programme.</summary>
 public sealed record CmsEventSessionRecord(string Title, string When, string? Where, string? LedBy, string? Places, bool IsCancelled);
@@ -714,10 +746,44 @@ public sealed record HostedEventAfterRecord(
     bool HasGallery,
     decimal? Average,
     int Count,
-    IReadOnlyList<TourReviewRecord> Reviews);
+    IReadOnlyList<TourReviewRecord> Reviews,
+    // ── the evidence window, the missed-you letter and the results (event-scenario-gaps) ──
+    bool CollectsEvidence = false,
+    int? EvidenceDays = null,
+    int? ResultsInDays = null,
+    DateTime? EvidenceDeadlineUtc = null,
+    bool SendMissedYou = true,
+    string? MissedYouNote = null,
+    bool AsksForVotes = false,
+    string? ResultsUrl = null,
+    /// <summary>Where the results letter points: <see cref="ResultsUrl"/>, or the event's page.</summary>
+    string? ResultsPath = null,
+    DateTime? ResultsSentUtc = null,
+    /// <summary>Parties the results letter has gone to.</summary>
+    int GuestsSentResults = 0,
+    /// <summary>Confirmed parties the door never saw arrive; null when the door recorded nobody at all.</summary>
+    int? GuestsMissed = null,
+    /// <summary>Accepted evidence so far.</summary>
+    int AcceptedEvidence = 0);
 
 /// <summary>Changing the thank-you and whether reviews are taken.</summary>
-public sealed record SetHostedEventAfterRequest(bool AllowReviews, bool SendThankYou, string? ThankYouNote);
+/// <remarks>The fields after the first three were added later; left out, they keep what the event has.</remarks>
+public sealed record SetHostedEventAfterRequest(
+    bool AllowReviews, bool SendThankYou, string? ThankYouNote,
+    int? EvidenceDays = null,
+    int? ResultsInDays = null,
+    bool? SendMissedYou = null,
+    string? MissedYouNote = null,
+    bool? AsksForVotes = null,
+    string? ResultsUrl = null,
+    /// <summary>True when the request carries the evidence fields at all, so an older caller changes none of them.</summary>
+    bool SetsEvidence = false);
+
+/// <summary>Sending the results letter: the organizer's few words above the link.</summary>
+public sealed record SendHostedEventResultsRequest(string? Note = null);
+
+/// <summary>What sending the results letter did.</summary>
+public sealed record HostedEventResultsSentRecord(int Sent, int AlreadySent, int NoAddress, string ResultsUrl, HostedEventAfterRecord After);
 
 /// <summary>What an organizer can take away from an event before its files are removed (phase 12).</summary>
 /// <param name="ClearsOn">The day the files go, or null for an event the rule does not reach yet.</param>
@@ -753,3 +819,56 @@ public sealed record EarlierPlanUnitsRecord(
     IReadOnlyList<HostedEventLayoutUnitRecord> Units,
     int RoomsLeftOut);
 
+
+// ── the results (event-scenario-gaps, 10/21/2026) ─────────────────────────────
+
+/// <summary>An event's accepted evidence, ranked, and where its results page is — what the app shows.</summary>
+/// <param name="ResultsUrl">The organizer's results page, or the event's own page at its evidence. Absolute.</param>
+/// <param name="EvidenceSentence">"We're accepting evidence for three days…", or null.</param>
+/// <param name="ResultsSentUtc">When the organizer sent "the results are ready"; null until then.</param>
+public sealed record PublicHostedEventResultsRecord(
+    Guid HostedEventId,
+    string Name,
+    bool CollectsEvidence,
+    string ResultsUrl,
+    bool AsksForVotes,
+    string? EvidenceSentence,
+    DateTime? ResultsSentUtc,
+    IReadOnlyList<PublicHostedEventResultItem> Items);
+
+/// <summary>One accepted piece, in rank order: most positive votes, then earliest caught.</summary>
+/// <param name="FileUrl">Where the file plays from. Absolute, anonymous.</param>
+public sealed record PublicHostedEventResultItem(
+    Guid SubmissionId,
+    Guid UploadFileId,
+    string FileName,
+    string ContentType,
+    string By,
+    string? Note,
+    int PositiveVotes,
+    DateTime CaughtUtc,
+    string FileUrl);
+
+/// <summary>Marking somebody as there at a class, or taking the mark off (event-scenario-gaps).</summary>
+public sealed record SetHostedEventSessionAttendanceRequest(bool Attended);
+
+// ── a tour date's room (event-scenario-gaps, 10/21/2026) ──────────────────────
+
+/// <summary>A tour date's room, as somebody checked in on the walk (or running it) reads it.</summary>
+/// <param name="MyRole">"Guide" or "Organizer" when the reader runs the walk; null for a guest.</param>
+public sealed record TourRoomRecord(
+    Guid DateId,
+    string Title,
+    bool CanPost,
+    string? WhyNotPost,
+    string? MyRole,
+    IReadOnlyList<TourRoomMessageRecord> Messages,
+    string? Note = null);
+
+/// <summary>One post in a tour date's room, newest first.</summary>
+/// <param name="AuthorRole">"Guide" or "Organizer" for the people running the walk; null for a guest.</param>
+public sealed record TourRoomMessageRecord(
+    Guid Id, Guid AuthorId, string AuthorName, string Body, DateTime PostedUtc, bool IsMine, string? AuthorRole);
+
+/// <summary>A post in a tour date's room. Words only.</summary>
+public sealed record PostTourRoomMessageRequest(string? Body);

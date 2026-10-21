@@ -157,7 +157,8 @@ public sealed class HostedEventSessionController : OrgCmsControllerBase
         if (userId is null) return Unauthorized();
 
         await using var db = await DbFactory.CreateDbContextAsync(ct);
-        if (!await _access.CanReadBookingsAsync(userId.Value, orgId, eventId, db, ct)) return Forbid();
+        // The door may read it too: it marks who came to a class (event-scenario-gaps), and sees names at the door anyway.
+        if (!await MayMarkAttendanceAsync(userId.Value, orgId, eventId, db, ct)) return Forbid();
 
         var session = await db.HostedEventSessions.AsNoTracking()
             .Include(s => s.SignUps).ThenInclude(u => u.AppUser)
@@ -165,13 +166,55 @@ public sealed class HostedEventSessionController : OrgCmsControllerBase
         if (session is null) return NotFound();
 
         HostedEventSessionRosterLine Line(HostedEventSessionSignUp u) => new(
-            u.Id, u.AppUser?.DisplayName ?? u.AppUser?.Email ?? "A guest", u.People, u.DateCreated, u.HostedEventBookingId is null);
+            u.Id, u.AppUser?.DisplayName ?? u.AppUser?.Email ?? "A guest", u.People, u.DateCreated, u.HostedEventBookingId is null,
+            u.AttendedUtc);
 
         return Ok(new HostedEventSessionRosterRecord(
             session.Id, session.Title,
             [.. session.SignUps.Where(u => u.WaitlistedUtc is null).OrderBy(u => u.DateCreated).Select(Line)],
-            [.. session.SignUps.Where(u => u.WaitlistedUtc is not null).OrderBy(u => u.WaitlistedUtc).ThenBy(u => u.DateCreated).Select(Line)]));
+            [.. session.SignUps.Where(u => u.WaitlistedUtc is not null).OrderBy(u => u.WaitlistedUtc).ThenBy(u => u.DateCreated).Select(Line)],
+            SessionSignUps.PeopleThere(session.SignUps),
+            await MayMarkAttendanceAsync(userId.Value, orgId, eventId, db, ct)));
     }
+
+    /// <summary>
+    /// Marks somebody as there at a class, or not (event-scenario-gaps: Ben's "classes … with either
+    /// limits on people who could attend and track who attends").
+    /// </summary>
+    /// <remarks>
+    /// The people who read the roster or run the door may mark it; the class's leader is a name on the
+    /// program, not an account. Only somebody with a place in the class can be marked there — a person
+    /// still waiting was never let in.
+    /// </remarks>
+    [HttpPut("{sessionId:guid}/sign-ups/{signUpId:guid}/attended")]
+    public async Task<ActionResult<HostedEventSessionRosterRecord>> SetAttended(
+        Guid orgId, Guid eventId, Guid sessionId, Guid signUpId,
+        [FromBody] SetHostedEventSessionAttendanceRequest request, CancellationToken ct)
+    {
+        var userId = GetCurrentUserId();
+        if (userId is null) return Unauthorized();
+
+        await using (var db = await DbFactory.CreateDbContextAsync(ct))
+        {
+            if (!await MayMarkAttendanceAsync(userId.Value, orgId, eventId, db, ct)) return Forbid();
+
+            var signUp = await db.HostedEventSessionSignUps
+                .FirstOrDefaultAsync(u => u.Id == signUpId && u.HostedEventSessionId == sessionId
+                                       && u.HostedEventSession.HostedEventId == eventId
+                                       && u.HostedEventSession.HostedEvent.OrganizationId == orgId, ct);
+            if (signUp is null) return NotFound();
+            if (SessionSignUps.WhyAttendanceCannotBeMarked(signUp) is { } why) return BadRequest(why);
+
+            SessionSignUps.MarkAttended(signUp, request.Attended, userId.Value, DateTime.UtcNow);
+            await db.SaveChangesAsync(ct);
+        }
+
+        return await Roster(orgId, eventId, sessionId, ct);
+    }
+
+    private async Task<bool> MayMarkAttendanceAsync(Guid userId, Guid orgId, Guid eventId, BenDataContext db, CancellationToken ct)
+        => await _access.CanReadBookingsAsync(userId, orgId, eventId, db, ct)
+        || await _access.CanRunTheDoorAsync(userId, orgId, eventId, db, ct);
 
     /// <summary>Takes somebody off a session, and moves the queue up.</summary>
     [HttpDelete("{sessionId:guid}/sign-ups/{signUpId:guid}")]

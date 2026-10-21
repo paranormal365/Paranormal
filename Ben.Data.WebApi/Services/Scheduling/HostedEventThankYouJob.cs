@@ -7,7 +7,8 @@ using Microsoft.EntityFrameworkCore;
 namespace Ben.Data.WebApi.Services.Scheduling;
 
 /// <summary>
-/// Sends the thank-you the morning after an event's last night (item 235 phase 12).
+/// Sends the thank-you the morning after an event's last night (item 235 phase 12), and the
+/// we-missed-you letter to a party with a place the door never saw arrive (event-scenario-gaps).
 /// </summary>
 /// <remarks>
 /// <para><b>Once per party, however often it runs.</b> Each booking is stamped as it is thanked, so a
@@ -57,7 +58,7 @@ public sealed class HostedEventThankYouJob : IScheduledJob
             .Include(e => e.Nights)
             .Include(e => e.Organization)
             .Where(e => e.LifecycleState == HostedEventLifecycleState.Ended
-                     && e.SendThankYou
+                     && (e.SendThankYou || e.SendMissedYou)
                      && e.ThankYouSentUtc == null
                      && e.EndsOn >= recent)
             .ToListAsync(ct);
@@ -101,13 +102,30 @@ public sealed class HostedEventThankYouJob : IScheduledJob
             .Take(3)
             .ToListAsync(ct);
 
+        // Who came, as the door saw it — or null when the door recorded nobody, and then everybody
+        // with a place is thanked as before (event-scenario-gaps).
+        var came = await HostedEventEvidence.CameAsync(db, ev.Id, ct);
+        var evidence = HostedEventEvidence.WindowSentence(ev, [.. ev.Nights]);
+
         var failed = 0;
         foreach (var booking in bookings)
         {
             booking.HostedEvent = ev;
+            var missed = came is not null && !came.Contains(booking.Id);
+            if (missed ? !ev.SendMissedYou : !ev.SendThankYou)
+            {
+                // Nothing to send, and nothing left to do for them.
+                booking.ThankedUtc = now;
+                await db.SaveChangesAsync(ct);
+                continue;
+            }
+
             try
             {
-                await _mailer.SendThankYouAsync(booking, hasGallery, upcoming, ct);
+                if (missed)
+                    await _mailer.SendMissedYouAsync(booking, upcoming, evidence, ct);
+                else
+                    await _mailer.SendThankYouAsync(booking, hasGallery, upcoming, ct, evidence);
             }
             catch (Exception e) when (e is not OperationCanceledException)
             {

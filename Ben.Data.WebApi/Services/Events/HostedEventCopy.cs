@@ -297,7 +297,7 @@ public static class HostedEventCopy
                     Id = Guid.NewGuid(), HostedEventId = copy.Id, AppUserId = helper.AppUserId,
                     DisplayName = helper.DisplayName, RoleLabel = helper.RoleLabel,
                     SeesBookings = helper.SeesBookings, Decides = helper.Decides, RunsTheDoor = helper.RunsTheDoor,
-                    SeesMenus = helper.SeesMenus, SeesFiles = helper.SeesFiles,
+                    SeesMenus = helper.SeesMenus, SeesFiles = helper.SeesFiles, StartsSessions = helper.StartsSessions,
                     DateConfirmed = now, DateCreated = now, CreatedByAppUserId = actorId,
                 });
                 helpers++;

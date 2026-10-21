@@ -218,4 +218,25 @@ public static class SessionSignUps
             : session.SignUps.Where(s => s.WaitlistedUtc is not null)
                 .OrderBy(s => s.WaitlistedUtc).ThenBy(s => s.DateCreated)
                 .ToList().FindIndex(s => s.Id == signUp.Id) + 1;
+
+    // ── who was actually there (event-scenario-gaps) ─────────────────────────
+
+    /// <summary>Why this sign-up can't be marked there, or null when it can.</summary>
+    public static string? WhyAttendanceCannotBeMarked(HostedEventSessionSignUp signUp)
+        => signUp.WaitlistedUtc is not null
+            ? "They're still waiting for a place, so they weren't let in. Give them a place first."
+            : null;
+
+    /// <summary>Marks them there, or takes the mark off. The caller saves.</summary>
+    public static void MarkAttended(HostedEventSessionSignUp signUp, bool attended, Guid actorId, DateTime now)
+    {
+        signUp.AttendedUtc = attended ? signUp.AttendedUtc ?? now : null;
+        signUp.AttendanceRecordedByAppUserId = attended ? actorId : null;
+        signUp.DateUpdated = now;
+        signUp.UpdatedByAppUserId = actorId;
+    }
+
+    /// <summary>People marked there, counting each sign-up's whole party.</summary>
+    public static int PeopleThere(IEnumerable<HostedEventSessionSignUp> signUps)
+        => signUps.Where(s => s.WaitlistedUtc is null && s.AttendedUtc is not null).Sum(s => Math.Max(1, s.People));
 }

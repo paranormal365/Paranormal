@@ -277,7 +277,8 @@ public sealed class PublicEventAttendanceController : BenControllerBase
         string token,
         [FromServices] Services.Events.EventGuestMailer hostedMail,
         [FromServices] Services.EmailLinkAccounts accounts,
-        CancellationToken ct)
+        CancellationToken ct,
+        [FromServices] Services.Events.HostedEventCalendarSync? sync = null)
     {
         await using var db = await _db.CreateDbContextAsync(ct);
 
@@ -384,6 +385,8 @@ public sealed class PublicEventAttendanceController : BenControllerBase
         // adds nothing — and the host decides this from their own board, which is the only place
         // a day pass starts counting.
         HostedEventBooking? asked = null;
+        var ticketConfirmed = false;
+        (HostedEventBooking Booking, Guid Organizer, DateTime Now)? pendingTicket = null;
         if (hosted is not null)
         {
             asked = await HostedEventGuestDoor.AddDayPassRequestAsync(
@@ -392,6 +395,23 @@ public sealed class PublicEventAttendanceController : BenControllerBase
             if (invite.FirstName is { } first && invite.LastName is { } last)
                 await BookingContact.FillEmptyNamesAsync(
                     db, user.Id, new BookingContact.Details(first, last, invite.Phone ?? ""), ct);
+
+            // A ticket the organizer sent (event-scenario-gaps): they already said yes, so the click
+            // confirms the place and hands over the pass. Only while it still fits — a day pass the
+            // house has run out of stays a request, and the board shows it to them.
+            if (asked is not null && invite.ConfirmsOnAccept && invite.InvitedByAppUserId is Guid organizer)
+            {
+                var others = await db.HostedEventBookings.Where(b => b.HostedEventId == hosted.Id).ToListAsync(ct);
+                var taken = EventCapacity.DayPassesTaken(others, excludingBookingId: asked.Id);
+                if (EventCapacity.WhyTheseDayPassesCannotBeGiven(
+                        hosted.DayPassCapacity, taken, EventCapacity.ClampPartySize(asked.PartySize)) is null)
+                {
+                    var now = DateTime.UtcNow;
+                    BookingTransitions.Confirm(asked, organizer, note: null, now);
+                    ticketConfirmed = true;
+                    pendingTicket = (asked, organizer, now);
+                }
+            }
         }
 
         invite.DateConfirmed        = DateTime.UtcNow;
@@ -437,7 +457,18 @@ public sealed class PublicEventAttendanceController : BenControllerBase
         // A hosted event's own acknowledgement (item 235 phase 6). The page they land on says the
         // same thing, but a link clicked on a phone in a parking lot is a page nobody reads twice,
         // and "nothing is held yet" is the part that must survive being half-read.
-        if (asked is not null)
+        if (asked is not null && pendingTicket is { } ticket && hosted is not null)
+        {
+            // The umbrella row and the pass need the booking saved first, then the letter carrying
+            // the pass goes in the same transaction as both.
+            await Services.Events.BookingTransitions.ApplyUmbrellaAsync(
+                db, sync ?? new Services.Events.HostedEventCalendarSync(), hosted, ticket.Booking, ticket.Organizer, ticket.Now, ct);
+            await Services.Events.EventPasses.EnsureAsync(db, ticket.Booking, ticket.Organizer, ct);
+            await db.SaveChangesAsync(ct);
+            await hostedMail.SendDecisionAsync(db, asked.Id, ct);
+            await db.SaveChangesAsync(ct);
+        }
+        else if (asked is not null)
         {
             await hostedMail.SendAskedAsync(db, asked.Id, ct);
             await db.SaveChangesAsync(ct);
@@ -456,7 +487,8 @@ public sealed class PublicEventAttendanceController : BenControllerBase
             AccountHasNoPassword: !await _users.HasPasswordAsync(user),
             // A tour date's seat waits for the business (item 234); a hosted event says so its own way.
             AwaitsApproval: isTour,
-            TimeZoneId: ev.TimeZoneId));
+            TimeZoneId: ev.TimeZoneId,
+            IsConfirmed: ticketConfirmed));
     }
 
     // ── Plumbing ─────────────────────────────────────────────────────────────

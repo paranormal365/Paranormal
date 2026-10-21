@@ -39,6 +39,7 @@ public static class CmsEmbed
                 or CmsSectionType.EventBooking
                 or CmsSectionType.EventGallery
                 or CmsSectionType.EventVenue
+                or CmsSectionType.EventEvidence
                 // Built from the group's own records on every read (backlog 256).
                 or CmsSectionType.ContactInfo
                 or CmsSectionType.FileGallery
@@ -266,7 +267,7 @@ public static class CmsEmbed
 
         // An event (item 235 phase 11): one stored shape, {"eventId": …}, for all four sections.
         if (type is CmsSectionType.EventProgramme or CmsSectionType.EventBooking
-                 or CmsSectionType.EventGallery or CmsSectionType.EventVenue)
+                 or CmsSectionType.EventGallery or CmsSectionType.EventVenue or CmsSectionType.EventEvidence)
             return JsonSerializer.Serialize(await ResolveEventAsync(db, organizationId, type, contentJson, ct), Json);
 
         // Case media stores a different shape — one case and its files, not a list of records — so
@@ -508,6 +509,22 @@ public static class CmsEmbed
                         .Where(g => g.HostedEventId == ev.Id).OrderBy(g => g.SortOrder)
                         .Select(g => new Ben.Service.Models.Entities.PublicEventImageRecord(g.UploadFileId, g.Caption))
                         .ToListAsync(ct),
+                };
+
+            case CmsSectionType.EventEvidence:
+                // What the event accepted, ranked by positive votes and then by when it was caught —
+                // the same order as the event's page, from the same method (event-scenario-gaps).
+                var umbrella = await db.OrgCalendarEvents.AsNoTracking()
+                    .Where(c => c.HostedEventId == ev.Id && c.IsPublic).Select(c => (Guid?)c.Id).FirstOrDefaultAsync(ct);
+                var ranked = umbrella is Guid calendarId && ev.CollectsEvidence
+                    ? await Entities.EventEvidenceController.RankedAcceptedAsync(db, calendarId, ct)
+                    : [];
+                return record with
+                {
+                    AsksForVotes = ev.AsksForVotes,
+                    Evidence = [.. ranked.Select(e => new Ben.Service.Models.Entities.CmsEventEvidenceRecord(
+                        e.Id, e.OrgCalendarEventId, e.UploadFileId, e.FileName, e.ContentType,
+                        e.SubmitterDisplayName, e.Note, e.PositiveVotes, e.CaughtAtUtc ?? e.DateCreated))],
                 };
 
             default:

@@ -94,7 +94,10 @@ public sealed class PublicEventMenuController : BenControllerBase
             .ToListAsync(ct);
 
         // Nobody reading a published menu can change an item, so no group is "the viewer's".
-        return [.. EventMenus.InReadingOrder(menus.Select(m => EventMenus.Record(m, Guid.Empty, null)))
+        // The planner's own title is only for the planner (Ben's menu rules: "They are given titles so
+        // the event manager will know which menu they are looking at"); guests read the heading.
+        return [.. EventMenus.InReadingOrder(menus.Select(m => EventMenus.Record(m, Guid.Empty, null))
+                                                  .Select(m => m with { Title = m.ShownHeading }))
             // A menu with nowhere to be served isn't on show, even if it was published before its meal went.
             .Where(m => m.ThroughoutTheEvent || m.Meals.Count > 0)];
     }

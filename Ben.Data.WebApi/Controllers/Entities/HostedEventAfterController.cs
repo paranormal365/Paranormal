@@ -241,6 +241,20 @@ public sealed class HostedEventAfterController : OrgCmsControllerBase
         var note = string.IsNullOrWhiteSpace(request.ThankYouNote) ? null : request.ThankYouNote.Trim();
         if (note is { Length: > 2000 }) return BadRequest("The note is longer than 2,000 characters.");
 
+        // The evidence window and the results (event-scenario-gaps). Refused in words, never clamped:
+        // a host who typed 90 days and got 60 would promise guests the wrong date.
+        var missedNote = string.IsNullOrWhiteSpace(request.MissedYouNote) ? null : request.MissedYouNote.Trim();
+        var resultsUrl = string.IsNullOrWhiteSpace(request.ResultsUrl) ? null : request.ResultsUrl.Trim();
+        if (request.SetsEvidence)
+        {
+            if (missedNote is { Length: > 2000 }) return BadRequest("The we-missed-you note is longer than 2,000 characters.");
+            if (request.EvidenceDays is int days && (days < 1 || days > HostedEventEvidence.MaxEvidenceDays))
+                return BadRequest($"Evidence can be taken for 1 to {HostedEventEvidence.MaxEvidenceDays} days after the last night, or leave it empty for no deadline.");
+            if (request.ResultsInDays is int results && (results < 1 || results > HostedEventEvidence.MaxResultsInDays))
+                return BadRequest($"Say the results will be ready in 1 to {HostedEventEvidence.MaxResultsInDays} days, or leave it empty.");
+            if (HostedEventEvidence.WhyNotAResultsUrl(resultsUrl) is { } badUrl) return BadRequest(badUrl);
+        }
+
         await using var db = await DbFactory.CreateDbContextAsync(ct);
         var ev = await db.HostedEvents.FirstOrDefaultAsync(e => e.Id == eventId && e.OrganizationId == orgId, ct);
         if (ev is null) return NotFound();
@@ -248,6 +262,15 @@ public sealed class HostedEventAfterController : OrgCmsControllerBase
         ev.AllowReviews = request.AllowReviews;
         ev.SendThankYou = request.SendThankYou;
         ev.ThankYouNote = note;
+        if (request.SetsEvidence)
+        {
+            ev.EvidenceDays = request.EvidenceDays;
+            ev.ResultsInDays = request.ResultsInDays;
+            ev.SendMissedYou = request.SendMissedYou ?? ev.SendMissedYou;
+            ev.MissedYouNote = missedNote;
+            ev.AsksForVotes = request.AsksForVotes ?? ev.AsksForVotes;
+            ev.ResultsUrl = resultsUrl;
+        }
         ev.DateUpdated = DateTime.UtcNow;
         ev.UpdatedByAppUserId = userId;
         await db.SaveChangesAsync(ct);
@@ -285,7 +308,7 @@ public sealed class HostedEventAfterController : OrgCmsControllerBase
         return Ok(await AfterAsync(db, review.HostedEvent, ct));
     }
 
-    private static async Task<HostedEventAfterRecord> AfterAsync(BenDataContext db, HostedEvent ev, CancellationToken ct)
+    internal static async Task<HostedEventAfterRecord> AfterAsync(BenDataContext db, HostedEvent ev, CancellationToken ct)
     {
         var reviews = await db.HostedEventReviews.AsNoTracking()
             .Where(r => r.HostedEventId == ev.Id)
@@ -295,13 +318,35 @@ public sealed class HostedEventAfterController : OrgCmsControllerBase
                 r.Stars, r.Comment, r.DateCreated, false, r.HiddenAtUtc != null))
             .ToListAsync(ct);
         var (average, count) = await HostedEventReviews.RatingAsync(db, ev.Id, ct);
+        var nights = await db.HostedEventNights.AsNoTracking().Where(n => n.HostedEventId == ev.Id).OrderBy(n => n.Date).ToListAsync(ct);
+        var orgUrlName = await db.Organizations.AsNoTracking().Where(o => o.Id == ev.OrganizationId).Select(o => o.UrlName).FirstOrDefaultAsync(ct) ?? "";
+        var came = await HostedEventEvidence.CameAsync(db, ev.Id, ct);
+        var confirmed = await db.HostedEventBookings.AsNoTracking()
+            .Where(b => b.HostedEventId == ev.Id && b.Status == HostedEventBookingStatus.Confirmed)
+            .Select(b => b.Id).ToListAsync(ct);
 
         return new HostedEventAfterRecord(
             ev.Id, ev.Name, ev.LifecycleState, ev.AllowReviews, ev.SendThankYou, ev.ThankYouNote, ev.ThankYouSentUtc,
             await db.HostedEventBookings.CountAsync(b => b.HostedEventId == ev.Id && b.ThankedUtc != null, ct),
             await db.HostedEventBookings.CountAsync(b => b.HostedEventId == ev.Id && b.Status == HostedEventBookingStatus.Confirmed, ct),
             await db.HostedEventGalleryImages.AnyAsync(g => g.HostedEventId == ev.Id, ct),
-            average, count, reviews);
+            average, count, reviews)
+        {
+            CollectsEvidence = ev.CollectsEvidence,
+            EvidenceDays = ev.EvidenceDays,
+            ResultsInDays = ev.ResultsInDays,
+            EvidenceDeadlineUtc = HostedEventEvidence.DeadlineUtc(ev, nights),
+            SendMissedYou = ev.SendMissedYou,
+            MissedYouNote = ev.MissedYouNote,
+            AsksForVotes = ev.AsksForVotes,
+            ResultsUrl = ev.ResultsUrl,
+            ResultsPath = HostedEventEvidence.ResultsPath(ev, orgUrlName),
+            ResultsSentUtc = ev.ResultsSentUtc,
+            GuestsSentResults = await db.HostedEventBookings.CountAsync(b => b.HostedEventId == ev.Id && b.ResultsSentUtc != null, ct),
+            GuestsMissed = came is null ? null : confirmed.Count(id => !came.Contains(id)),
+            AcceptedEvidence = await db.EventEvidenceSubmissions.CountAsync(s => s.OrgCalendarEvent.HostedEventId == ev.Id
+                                                                              && s.Status == EvidenceSubmissionStatus.Accepted, ct),
+        };
     }
 
     // ── what the venue remembers ─────────────────────────────────────────────

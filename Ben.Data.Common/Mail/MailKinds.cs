@@ -281,6 +281,25 @@ public static class MailKinds
         ["AppUsers", "HostedEvents", "Organizations"],
         CanDecline: true);
 
+    /// <summary>The letter to a party with a place the door never saw arrive (event-scenario-gaps).</summary>
+    public static readonly MailKindInfo EventMissedYou = new(
+        "event-missed-you", "We missed you",
+        "After the event, to people with a place who weren't checked in, with the organizer's note and where the evidence will be.",
+        ["AppUsers", "HostedEvents", "Organizations"],
+        CanDecline: true);
+
+    /// <summary>
+    /// "The results are in": the organizer's last letter to everybody who had a place, with a link and
+    /// a QR code to the evidence page (event-scenario-gaps).
+    /// </summary>
+    public static readonly MailKindInfo EventResults = new(
+        "event-results", "The event's results are ready",
+        "Sent by the organizer once the evidence page is ready, with a link and a QR code to it.",
+        ["AppUsers", "HostedEvents", "Organizations"],
+        [new("ResultsUrl", "The page with the event's evidence.", Required: true, Provides: "a way to see the results"),
+         new("ResultsQr", "A QR code that opens the same page.", IsHtml: true)],
+        CanDecline: true);
+
     /// <summary>
     /// Asks somebody to help at an event, with the one link that says yes.
     /// </summary>
@@ -486,7 +505,7 @@ public static class MailKinds
         BookingAsked, BookingDecided, HoldPlaced, HoldLapsed,
         EventGoingAhead, EventCalledOff, EventAnnouncement,
         SessionMoved, SessionCancelled, SessionPromoted,
-        EventThankYou, StaffInvite, GuestRemoved, AppealAnswered, HoldYourPlaces,
+        EventThankYou, EventMissedYou, EventResults, StaffInvite, GuestRemoved, AppealAnswered, HoldYourPlaces,
         BookingsArrived, BookingsDigest,
         PaymentReceipt, SubscriptionLapsing, PlanChanged, EventCreditExpiring,
         VenueClaimCode,
