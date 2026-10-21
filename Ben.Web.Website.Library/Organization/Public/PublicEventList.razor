@@ -29,6 +29,19 @@
 
 <div class="home-band">
 
+    @* Looking for one (event-scenario-gaps: Ben's scenario has people "search for it"). *@
+    <form class="d-flex flex-wrap gap-2 mb-3" role="search" @onsubmit="SearchAsync" id="events-search">
+        <label class="visually-hidden" for="events-search-words">Search events</label>
+        <input id="events-search-words" class="form-control" style="max-width:28rem;flex:1 1 12rem;min-height:44px;"
+               type="search" maxlength="100" placeholder="An event, a group, a tour or a town"
+               @bind="_query" @bind:event="oninput" />
+        <button type="submit" class="btn btn-primary" style="min-height:44px;" id="events-search-go">Search</button>
+        @if (_searched is { Length: > 0 })
+        {
+            <button type="button" class="btn btn-outline-secondary" style="min-height:44px;" id="events-search-clear" @onclick="ClearSearchAsync">Show everything</button>
+        }
+    </form>
+
     @* This page is served to signed-out visitors, which is why the failure state matters more here
        than anywhere else: somebody who is refused sees "Nothing coming up", has no account, no
        error and no reason to try again. The empty state is kept verbatim — it says the right thing
@@ -38,9 +51,11 @@
         <Empty>
             <div>
                 <div>
-                    <h6 class="ben-empty__title mb-2">Nothing coming up</h6>
-                    <p class="ben-empty__text mb-0">
-                        @(UrlName is null
+                    <h6 class="ben-empty__title mb-2">@(_searched is { Length: > 0 } ? "Nothing matches" : "Nothing coming up")</h6>
+                    <p class="ben-empty__text mb-0" id="events-empty-text">
+                        @(_searched is { Length: > 0 } words
+                            ? $"No upcoming event matches “{words}”. Try fewer words, or the name of a town."
+                            : UrlName is null
                             ? "No groups have public events scheduled at the moment. Worth checking back."
                             : "This group has no public events scheduled at the moment.")
                     </p>
@@ -257,8 +272,26 @@
     /// <summary>The signed-in reader's list; the public one if theirs cannot be had.</summary>
     private async Task<LoadResult<PublicEventListItem>> ForMeOrPublicAsync()
     {
-        var mine = await AdminClient.GetPublicEventsForMeAsync(UrlName);
-        return mine.Failed ? await AdminClient.GetPublicEventsAsync(UrlName) : mine;
+        var mine = await AdminClient.GetPublicEventsForMeAsync(UrlName, query: _searched);
+        return mine.Failed ? await AdminClient.GetPublicEventsAsync(UrlName, query: _searched) : mine;
+    }
+
+    /// <summary>What is typed in the search box, and what the list was last searched for.</summary>
+    private string _query = "";
+    private string? _searched;
+
+    private async Task SearchAsync()
+    {
+        _searched = string.IsNullOrWhiteSpace(_query) ? null : _query.Trim();
+        RenderedEvents = null;
+        await ReloadAsync();
+    }
+
+    private async Task ClearSearchAsync()
+    {
+        _query = "";
+        _searched = null;
+        await ReloadAsync();
     }
 
     protected override async Task OnParametersSetAsync()
@@ -293,7 +326,7 @@
         StateHasChanged();
         _events  = _forMe
             ? await ForMeOrPublicAsync()
-            : await AdminClient.GetPublicEventsAsync(UrlName);
+            : await AdminClient.GetPublicEventsAsync(UrlName, query: _searched);
         _loading = false;
         if (!RendererInfo.IsInteractive && !_events.Failed && PrerenderCarry.Fits(_events.Items))
         {

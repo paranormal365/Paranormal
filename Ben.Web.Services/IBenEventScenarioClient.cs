@@ -15,6 +15,9 @@ namespace Ben.Web.Services;
 /// </remarks>
 public interface IBenEventScenarioClient
 {
+    /// <summary>Upcoming public hosted events for the home map, at approximate points.</summary>
+    Task<LoadResult<PublicHostedEventMapPin>> GetHostedEventMapPinsAsync(CancellationToken token = default);
+
     /// <summary>Invites a pasted list, or sends each of them a ticket, with the organizer's own words.</summary>
     Task<(HostedEventGuestInvitesRecord? Result, string? Error)> InviteEventGuestsAsync(
         Guid orgId, Guid eventId, InviteHostedEventGuestsRequest request, CancellationToken token = default);

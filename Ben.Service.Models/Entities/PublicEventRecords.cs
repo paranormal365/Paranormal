@@ -288,6 +288,11 @@ public sealed record PublicInvestigationDetail(
     // The clock the visit happened on (2026-09-28); the times above are UTC.
     string? TimeZoneId = null);
 
+/// <summary>An upcoming public hosted event on the home map, at an approximate point (event-scenario-gaps).</summary>
+public sealed record PublicHostedEventMapPin(
+    Guid Id, string Name, string UrlName, string OrganizationName, string OrganizationUrlName,
+    decimal Latitude, decimal Longitude, DateTime StartsOn, DateTime EndsOn);
+
 /// <summary>One attendee evidence submission, in every view that shows one (item 111).</summary>
 public sealed record EventEvidenceRecord(
     Guid Id,

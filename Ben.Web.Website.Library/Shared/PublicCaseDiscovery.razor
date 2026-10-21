@@ -85,7 +85,7 @@
             @* Said plainly, because a pin on a map reads as an address whether or not it is one.
                These are cell centers several miles across; the property is somewhere nearby. *@
             <p class="text-secondary small mt-2 mb-0">
-                Pins show an approximate area, not an address. Case locations are deliberately
+                Pins show an approximate area, not an address. Case and event locations are deliberately
                 published to within a few miles.
             </p>
         </div>
@@ -385,6 +385,8 @@
         // Fetched once, alongside the cases, so the map is drawn from one pass rather than
         // repainting when a second answer arrives.
         _tourPins = (await AdminClient.GetTourMapPinsAsync(token)).Items;
+        // Public hosted events too (Ben's scenario: "it will appear in the map on the home page").
+        _eventPins = (await AdminClient.GetHostedEventMapPinsAsync(token)).Items;
 
         BuildMarkers(allItems);
         FrameFirstView();
@@ -448,6 +450,18 @@
                 Color: "#5b8def",
                 Cluster: "tours"));
 
+        // Hosted events after the tours, at the same blurred cell a case gets: a pin is seen by everybody,
+        // and the event's own page gives the address to whoever it is for.
+        _eventPinOffset = pins.Count;
+        foreach (var ev in _eventPins)
+            pins.Add(new BenMapPin(
+                (double)ev.Latitude, (double)ev.Longitude,
+                Title: ev.Name,
+                Subtitle: $"{ev.OrganizationName} · {(ev.StartsOn.Date == ev.EndsOn.Date ? ev.StartsOn.ToString("MM/dd/yyyy") : $"{ev.StartsOn:MM/dd} – {ev.EndsOn:MM/dd/yyyy}")}",
+                Glyph: "🎟",
+                Color: "#9b59b6",
+                Cluster: "events"));
+
         _mapPins = pins;
     }
 
@@ -503,8 +517,19 @@
     /// <summary>Where the tour pins start in the pin list the map was given.</summary>
     private int _tourPinOffset;
 
+    /// <summary>Upcoming public hosted events, and where their pins start (event-scenario-gaps).</summary>
+    private IReadOnlyList<PublicHostedEventMapPin> _eventPins = [];
+    private int _eventPinOffset = int.MaxValue;
+
     private void OnMarkerClicked(int index)
     {
+        // An event pin goes to the event's page, like a tour pin goes to the tour's.
+        if (index >= _eventPinOffset && index - _eventPinOffset < _eventPins.Count)
+        {
+            var ev = _eventPins[index - _eventPinOffset];
+            NavManager.NavigateTo($"/o/{ev.OrganizationUrlName}/events/{ev.UrlName}");
+            return;
+        }
         // A tour pin is a link, not a popup: the tour's own page answers everything the popup
         // would have to summarise, and it is the page somebody would want to share anyway.
         if (index >= _tourPinOffset && index - _tourPinOffset < _tourPins.Count)

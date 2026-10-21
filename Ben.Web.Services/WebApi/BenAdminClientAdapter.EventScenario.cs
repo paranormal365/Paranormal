@@ -15,6 +15,9 @@ public sealed partial class BenAdminClientAdapter
     private static string TourRoomUrl(Guid dateId)
         => $"/api/public/tour-dates/{dateId}/room";
 
+    public Task<LoadResult<PublicHostedEventMapPin>> GetHostedEventMapPinsAsync(CancellationToken token = default)
+        => _api.GetAnonymousListAsync<PublicHostedEventMapPin>("/api/public/hosted-events/map?maxResults=500", token);
+
     public Task<(HostedEventGuestInvitesRecord? Result, string? Error)> InviteEventGuestsAsync(
         Guid orgId, Guid eventId, InviteHostedEventGuestsRequest request, CancellationToken token = default)
         => _api.SendExpectingReasonAsync<InviteHostedEventGuestsRequest, HostedEventGuestInvitesRecord>(

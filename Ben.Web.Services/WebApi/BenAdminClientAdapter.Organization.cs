@@ -172,19 +172,21 @@ public sealed partial class BenAdminClientAdapter
     // ── Public events (item #87) ────────────────────────────────────────────
 
     public async Task<LoadResult<PublicEventListItem>> GetPublicEventsAsync(
-        string? orgUrlName = null, int maxResults = 50, CancellationToken token = default)
+        string? orgUrlName = null, int maxResults = 50, CancellationToken token = default, string? query = null)
     {
         var url = $"/api/public/events?maxResults={maxResults}"
-                + (string.IsNullOrWhiteSpace(orgUrlName) ? "" : $"&orgUrlName={Uri.EscapeDataString(orgUrlName)}");
+                + (string.IsNullOrWhiteSpace(orgUrlName) ? "" : $"&orgUrlName={Uri.EscapeDataString(orgUrlName)}")
+                + (string.IsNullOrWhiteSpace(query) ? "" : $"&query={Uri.EscapeDataString(query.Trim())}");
         var result = await _api.GetAnonymousListAsync<PublicEventListItem>(url, token);
         return result;
     }
 
     public Task<LoadResult<PublicEventListItem>> GetPublicEventsForMeAsync(
-        string? orgUrlName = null, int maxResults = 50, CancellationToken token = default)
+        string? orgUrlName = null, int maxResults = 50, CancellationToken token = default, string? query = null)
         => _api.GetListAsync<PublicEventListItem>(
             $"/api/public/events?maxResults={maxResults}&includeMine=true"
-            + (string.IsNullOrWhiteSpace(orgUrlName) ? "" : $"&orgUrlName={Uri.EscapeDataString(orgUrlName)}"),
+            + (string.IsNullOrWhiteSpace(orgUrlName) ? "" : $"&orgUrlName={Uri.EscapeDataString(orgUrlName)}")
+            + (string.IsNullOrWhiteSpace(query) ? "" : $"&query={Uri.EscapeDataString(query.Trim())}"),
             token);
 
     // Readable by a visitor who has never signed in — but the response also carries the viewer's

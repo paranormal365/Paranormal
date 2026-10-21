@@ -504,6 +504,38 @@ public sealed class PublicEventControllerTests
         Assert.Equal("Already Happened", record.Title);
     }
 
+    /// <summary>
+    /// The events list can be searched by name, group or town (event-scenario-gaps: Ben's scenario has
+    /// people "search for it"), and every word has to match.
+    /// </summary>
+    [Fact]
+    public async Task The_listing_can_be_searched_by_the_events_name_or_its_group()
+    {
+        var w = await SeedAsync();
+        await using (var db = await w.Factory.CreateDbContextAsync())
+        {
+            db.OrgCalendarEvents.Add(new OrgCalendarEvent
+            {
+                Id = Guid.NewGuid(), OrganizationId = OrgId, Title = "Overnight at The Factory",
+                UrlName = "overnight-at-the-factory", StartDateTime = DateTime.UtcNow.AddDays(9),
+                EndDateTime = DateTime.UtcNow.AddDays(10), IsPublic = true,
+                DateCreated = DateTime.UtcNow, CreatedByAppUserId = MemberId,
+            });
+            await db.SaveChangesAsync();
+        }
+
+        async Task<List<string>> Search(string words)
+            => [.. Assert.IsType<List<PublicEventListItem>>(Assert.IsType<OkObjectResult>(
+                   (await Build(w.Factory, null).GetUpcoming(null, 50, default, searchText: words)).Result).Value).Select(e => e.Title)];
+
+        Assert.Equal(["Overnight at The Factory"], await Search("FACTORY"));
+        Assert.Equal(["Overnight at The Factory"], await Search("factory overnight"));
+        Assert.Empty(await Search("factory walk"));
+        Assert.Contains("Ghost Walk", await Search("ghost squad"));   // the group's name
+        Assert.Contains("Ghost Walk", await Search("   "));             // no words: everything
+        Assert.Null(PublicEventController.Words(" , "));
+    }
+
     private static async Task<IReadOnlyList<PublicEventListItem>> ListAsync(World w)
     {
         var result = await Build(w.Factory, null).GetUpcoming(null, 50, default);
