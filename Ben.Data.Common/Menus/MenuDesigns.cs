@@ -217,7 +217,7 @@ public static class MenuDesigns
     public static MenuDesign FindOrDefault(string? key) => Find(key) ?? Default;
 
     /// <summary>The credit at the foot of every menu (Ben, 10/13/2026).</summary>
-    public static string Credit(int year) => $"Menu made with IsHaunted.com · © {year} ISHAUNTED LLC";
+    public static string Credit(int year) => $"IsHaunted.com © {year} ISHAUNTED LLC";
 
     /// <summary>
     /// Where the website serves the small site mark drawn beside the credit (event-scenario-gaps: the

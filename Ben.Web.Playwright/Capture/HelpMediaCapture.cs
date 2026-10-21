@@ -3051,7 +3051,7 @@ public sealed class HelpMediaCapture : BenTestBase
                 var pick = await designed.CountAsync() > 0
                     ? "[data-testid=event-menus] [data-testid=menu-document]:not([data-design=classic-bistro])"
                     : "[data-testid=event-menus] [data-testid=menu-document]";
-                await ShootAsync("going-to-an-event", "event-menus-for-guests.png", selector: pick, proves: "Menu made with IsHaunted.com");
+                await ShootAsync("going-to-an-event", "event-menus-for-guests.png", selector: pick, proves: "ISHAUNTED LLC");
             }
             await LoginAsync(SuperAdminEmail, SuperAdminPassword);
         }

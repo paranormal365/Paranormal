@@ -88,6 +88,23 @@ public sealed class EventMenuRulesTests
 
     // ── saving and publishing ────────────────────────────────────────────────
 
+    /// <summary>Ben, 10/21/2026: "alcohol gets its own mark and 21+, plus priced separately".</summary>
+    [Fact]
+    public void Alcohol_is_marked_21_plus_and_always_priced_on_its_own()
+    {
+        var cat = Guid.NewGuid(); var wine = Guid.NewGuid();
+        var alcohol = new HashSet<Guid> { wine };
+
+        Assert.Equal("Alcohol is always priced on its own. Set it to \"Priced on its own\" and give its price.",
+            EventMenus.WhyItCannotBeSaved(Request(cat, wine, MenuPricing.IncludedInEvent, price: null),
+                new HashSet<Guid> { wine }, new HashSet<Guid> { cat }, new HashSet<Guid>(), alcohol));
+        Assert.Null(EventMenus.WhyItCannotBeSaved(Request(cat, wine, MenuPricing.PricedSeparately, price: 9m),
+            new HashSet<Guid> { wine }, new HashSet<Guid> { cat }, new HashSet<Guid>(), alcohol));
+
+        Assert.Equal("VG 21+", EventMenuPresentation.Letters(MenuDietary.Vegan | MenuDietary.Alcohol));
+        Assert.Equal("IsHaunted.com © 2026 ISHAUNTED LLC", Ben.Data.Common.Menus.MenuDesigns.Credit(2026));
+    }
+
     [Fact]
     public void An_item_priced_on_its_own_needs_its_price()
     {

@@ -26,6 +26,8 @@ public struct MenuDietary: OptionSet, Sendable, Codable, Equatable, Hashable {
     public static let spicy = MenuDietary(rawValue: 32)
     public static let halal = MenuDietary(rawValue: 64)
     public static let kosher = MenuDietary(rawValue: 128)
+    /// Marked "21+" and always priced on its own.
+    public static let alcohol = MenuDietary(rawValue: 256)
 }
 
 /// What a dish contains: the nine major US allergens. Flags.
@@ -229,7 +231,7 @@ public enum EventMenuWording {
     private static let dietaryMarks: [(MenuDietary, String, String)] = [
         (.vegan, "VG", "vegan"), (.vegetarian, "V", "vegetarian"), (.glutenFree, "GF", "gluten free"),
         (.dairyFree, "DF", "dairy free"), (.nutFree, "NF", "nut free"), (.spicy, "S", "spicy"),
-        (.halal, "H", "halal"), (.kosher, "K", "kosher"),
+        (.halal, "H", "halal"), (.kosher, "K", "kosher"), (.alcohol, "21+", "alcohol, 21 and over"),
     ]
 
     private static let allergenWords: [(MenuAllergens, String)] = [
@@ -285,7 +287,7 @@ public enum EventMenuWording {
     }
 
     /// The credit at the foot of every menu, as the server writes it.
-    public static func credit(year: Int) -> String { "Menu made with IsHaunted.com · © \(year) ISHAUNTED LLC" }
+    public static func credit(year: Int) -> String { "IsHaunted.com © \(year) ISHAUNTED LLC" }
 
     /// What the event's price covers, for beside the booking: "Friday dinner and Snack table".
     public static func includedWithTheEvent(_ menus: [EventMenu]) -> String? {

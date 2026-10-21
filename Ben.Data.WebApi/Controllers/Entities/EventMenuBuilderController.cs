@@ -296,7 +296,10 @@ public sealed class EventMenuBuilderController : OrgCmsControllerBase
         var meals = (await db.HostedEventMenus.Where(m => m.HostedEventNight.HostedEventId == eventId)
             .Select(m => m.Id).ToListAsync(ct)).ToHashSet();
 
-        if (EventMenus.WhyItCannotBeSaved(request, usable, categories, meals) is { } why) return BadRequest(why);
+        var alcohol = (await db.MenuLibraryItems.AsNoTracking()
+            .Where(i => usable.Contains(i.Id) && (i.Dietary & MenuDietary.Alcohol) == MenuDietary.Alcohol)
+            .Select(i => i.Id).ToListAsync(ct)).ToHashSet();
+        if (EventMenus.WhyItCannotBeSaved(request, usable, categories, meals, alcohol) is { } why) return BadRequest(why);
 
         EventMenus.Apply(db, menu, request, open.UserId, DateTime.UtcNow);
 

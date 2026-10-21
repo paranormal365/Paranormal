@@ -461,10 +461,16 @@
     /// <summary>A new item starts priced the way the menu suggests: in the meal's price when it has one.</summary>
     private MenuPricing DefaultPricing => _prices.Count > 0 ? MenuPricing.IncludedInMeal : _throughout ? MenuPricing.PricedSeparately : MenuPricing.IncludedInEvent;
 
+    /// <summary>Alcohol is always priced on its own (Ben, 10/21/2026); anything else starts as the menu suggests.</summary>
+    private MenuPricing PricingFor(Guid itemId)
+        => _workspace?.Library.FirstOrDefault(i => i.Id == itemId)?.Dietary.HasFlag(MenuDietary.Alcohol) == true
+            ? MenuPricing.PricedSeparately
+            : DefaultPricing;
+
     private void AddEntry(SectionForm section, string? itemId)
     {
         if (!Guid.TryParse(itemId, out var id)) return;
-        section.Entries.Add(new EntryForm { ItemId = id, Pricing = DefaultPricing });
+        section.Entries.Add(new EntryForm { ItemId = id, Pricing = PricingFor(id) });
         _dirty = true;
     }
 
@@ -486,7 +492,7 @@
             target = new SectionForm { CategoryId = item.MenuCategoryId };
             _sections.Add(target);
         }
-        if (target.Entries.All(e => e.ItemId != item.Id)) target.Entries.Add(new EntryForm { ItemId = item.Id, Pricing = DefaultPricing });
+        if (target.Entries.All(e => e.ItemId != item.Id)) target.Entries.Add(new EntryForm { ItemId = item.Id, Pricing = PricingFor(item.Id) });
         _dirty = true;
         _itemFor = null;
     }

@@ -57,6 +57,11 @@ public enum MenuDietary
     Spicy = 32,
     Halal = 64,
     Kosher = 128,
+    /// <summary>
+    /// Alcohol: marked "21+" on the menu, and always priced on its own (Ben, 10/21/2026: "alcohol gets its
+    /// own mark and 21+, plus priced separately"). Stored in the same flags, so no column changes.
+    /// </summary>
+    Alcohol = 256,
 }
 
 /// <summary>

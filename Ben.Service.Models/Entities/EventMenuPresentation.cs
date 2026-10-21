@@ -87,6 +87,7 @@ public static class EventMenuPresentation
         (MenuDietary.Spicy, "S", "spicy"),
         (MenuDietary.Halal, "H", "halal"),
         (MenuDietary.Kosher, "K", "kosher"),
+        (MenuDietary.Alcohol, "21+", "alcohol, 21 and over"),
     ];
 
     private static readonly (MenuAllergen Mark, string Words)[] AllergenWords =
