@@ -441,4 +441,53 @@ public sealed class HostedEventHoldTests
         var attendee = await after.OrgCalendarEventAttendees.SingleAsync();
         Assert.Equal(RsvpStatus.Accepted, attendee.RsvpStatus);
     }
+
+    /// <summary>
+    /// A party of two holding two seats on one night is confirmed into both (event-scenario-gaps).
+    /// </summary>
+    /// <remarks>
+    /// The confirm checked the whole party against each seat, so every multi-seat party was refused
+    /// ("A1 seats 1 more on …, and this is a party of 2"), the seat a guest picked for themselves included.
+    /// </remarks>
+    [Fact]
+    public async Task A_party_holding_two_seats_on_a_night_is_confirmed_into_both()
+    {
+        await using var sqlite = await SeedAsync();
+
+        Assert.IsType<OkObjectResult>(
+            (await As(sqlite, GuestId).HoldPlaces(EventId, Picking(SeatA1Id, SeatA2Id), NoMail(), default)).Result);
+
+        Guid bookingId;
+        await using (var db = await sqlite.NewContextAsync())
+            bookingId = (await db.HostedEventBookings.SingleAsync()).Id;
+
+        var confirmed = await BoardAs(sqlite, HostId).Confirm(OrgId, EventId, bookingId,
+            new ConfirmHostedEventBookingRequest(
+                [new HostedEventBookingNightChoice(FridayId, SeatA1Id), new HostedEventBookingNightChoice(FridayId, SeatA2Id)], null),
+            default);
+
+        Assert.IsType<OkObjectResult>(confirmed.Result);
+        await using var after = await sqlite.NewContextAsync();
+        var booking = await after.HostedEventBookings.Include(b => b.Nights).FirstAsync(b => b.Id == bookingId);
+        Assert.Equal(2, booking.PartySize);
+        Assert.Equal(new[] { SeatA1Id, SeatA2Id }.Order(), booking.Nights.Select(n => n.HostedEventLayoutUnitId!.Value).Order());
+    }
+
+    [Fact]
+    public void Several_places_on_a_night_hold_the_party_together_and_each_place_at_least_one()
+    {
+        var friday = new DateTime(2026, 10, 30);
+        Assert.Null(Ben.Data.WebApi.Services.Events.EventCapacity.WhyThesePlacesCannotTakeThem(
+            [("A1", 1, null), ("A2", 1, null), ("A3", 1, null)], friday, 3, HostedEventLayoutKind.Seats));
+        Assert.Equal("Those places seat 2 on 10/30/2026, and this is a party of 3.",
+            Ben.Data.WebApi.Services.Events.EventCapacity.WhyThesePlacesCannotTakeThem(
+                [("A1", 1, null), ("A2", 1, null)], friday, 3, HostedEventLayoutKind.Seats));
+        Assert.Equal("A2 is taken on 10/30/2026. Free it first, or seat them somewhere else.",
+            Ben.Data.WebApi.Services.Events.EventCapacity.WhyThesePlacesCannotTakeThem(
+                [("A1", 1, null), ("A2", 0, null)], friday, 2, HostedEventLayoutKind.Seats));
+        // One place: the whole party against it, as before.
+        Assert.Equal("Blue Room sleeps 2 more on 10/30/2026, and this is a party of 3.",
+            Ben.Data.WebApi.Services.Events.EventCapacity.WhyThesePlacesCannotTakeThem(
+                [("Blue Room", 2, null)], friday, 3));
+    }
 }

@@ -1185,30 +1185,38 @@ public sealed class HostedEventBookingController : OrgCmsControllerBase
             .Where(n => n.HostedEventId == ev.Id)
             .ToDictionaryAsync(n => n.Id, ct);
 
-        foreach (var choice in nights)
+        // One night at a time: a party spread over several seats or rooms on a night is checked
+        // against what those places hold together, not the whole party against each one (a party
+        // of three in three seats was refused, "H9 seats 1 more … and this is a party of 3").
+        foreach (var onANight in nights.Where(c => c.HostedEventLayoutUnitId is not null)
+                                       .GroupBy(c => c.HostedEventNightId))
         {
-            if (!eventNights.TryGetValue(choice.HostedEventNightId, out var night))
+            if (!eventNights.TryGetValue(onANight.Key, out var night))
                 return "One of those nights is not part of this event any more.";
 
-            // A night with no unit is somebody here for the day and going home again, which holds
-            // nothing and so cannot be over capacity. It is how a three-night event sells its
-            // Saturday on its own, and refusing it here would make that impossible to say.
-            if (choice.HostedEventLayoutUnitId is not { } unitId) continue;
+            var places = new List<(string Name, int? Left, int? People)>();
+            foreach (var choice in onANight.DistinctBy(c => c.HostedEventLayoutUnitId))
+            {
+                var unitId = choice.HostedEventLayoutUnitId!.Value;
+                var unit = offered.FirstOrDefault(u => u.Id == unitId);
+                if (unit is null)
+                    return ev.LayoutKind == HostedEventLayoutKind.Seats
+                        ? "That seat is not one on this event's plan. Add it to the plan first."
+                        : "That room is not one this event is offering. Add it to the plan first.";
 
-            var unit = offered.FirstOrDefault(u => u.Id == unitId);
-            if (unit is null)
-                return ev.LayoutKind == HostedEventLayoutKind.Seats
-                    ? "That seat is not one on this event's plan. Add it to the plan first."
-                    : "That room is not one this event is offering. Add it to the plan first.";
+                var taken = EventCapacity.PeopleIn(all, onANight.Key, unitId, excludingBookingId: booking.Id);
+                places.Add((EventCapacity.NameOf(unit), EventCapacity.BedsLeft(EventCapacity.CapacityOf(unit), taken), choice.People));
+            }
 
-            var taken = EventCapacity.PeopleIn(all, choice.HostedEventNightId, unitId,
-                                               excludingBookingId: booking.Id);
-            if (EventCapacity.WhyThisRoomCannotTakeThem(
-                    EventCapacity.NameOf(unit), night.Date, EventCapacity.CapacityOf(unit),
-                    taken, party, ev.LayoutKind)
-                is { } refusal)
+            if (EventCapacity.WhyThesePlacesCannotTakeThem(places, night.Date, party, ev.LayoutKind) is { } refusal)
                 return refusal;
         }
+
+        // A night with no unit is somebody here for the day and going home again, which holds
+        // nothing and so cannot be over capacity. It is how a three-night event sells its
+        // Saturday on its own, and refusing it here would make that impossible to say.
+        if (nights.FirstOrDefault(c => !eventNights.ContainsKey(c.HostedEventNightId)) is not null)
+            return "One of those nights is not part of this event any more.";
 
         return null;
     }
