@@ -1,4 +1,4 @@
-﻿using Ben.Service.Models;
+using Ben.Service.Models;
 using Ben.Service.Models.Admin;
 
 namespace Ben.Web.Services.WebApi;
@@ -117,10 +117,55 @@ public sealed partial class BenAdminClientAdapter
 
     /// <inheritdoc />
     public Task<(StartCheckoutResponse? Result, string? Error)> StartEventCreditCheckoutAsync(
-        Guid organizationId, int quantity, CancellationToken token = default)
+        Guid organizationId, int quantity, int? bundle = null, CancellationToken token = default)
         => _api.SendExpectingReasonAsync<object, StartCheckoutResponse>(
             HttpMethod.Post,
-            $"/api/organizations/{organizationId}/subscription/checkout/event-credits?quantity={quantity}",
+            $"/api/organizations/{organizationId}/subscription/checkout/event-credits?quantity={quantity}"
+                + (bundle is { } b ? $"&bundle={b}" : ""),
+            new { }, token);
+
+    /// <inheritdoc />
+    public Task<ItemResult<OrgEventCreditsView>> GetMyEventCreditsAsync(CancellationToken token = default)
+        => _api.GetItemAsync<OrgEventCreditsView>("/api/me/event-credits", token);
+
+    /// <inheritdoc />
+    public Task<(StartCheckoutResponse? Result, string? Error)> StartMyEventCreditCheckoutAsync(
+        int quantity, int? bundle = null, CancellationToken token = default)
+        => _api.SendExpectingReasonAsync<object, StartCheckoutResponse>(
+            HttpMethod.Post,
+            $"/api/me/event-credits/checkout?quantity={quantity}" + (bundle is { } b ? $"&bundle={b}" : ""),
+            new { }, token);
+
+    /// <inheritdoc />
+    public Task<LoadResult<OrgBillingHistoryRecord>> GetMyEventCreditHistoryAsync(CancellationToken token = default)
+        => _api.GetListAsync<OrgBillingHistoryRecord>("/api/me/event-credits/history", token);
+
+    /// <inheritdoc />
+    public async Task<(byte[] Data, string FileName)?> DownloadMyEventCreditReceiptAsync(
+        Guid entryId, CancellationToken token = default)
+    {
+        var result = await _api.GetBytesAsync($"/api/me/event-credits/receipts/{entryId}", "receipt.html", token);
+        return result is { } r ? (r.Data, r.FileName) : null;
+    }
+
+    /// <inheritdoc />
+    public Task<ItemResult<GhostWalkSubscriptionView>> GetGhostWalkAsync(
+        Guid organizationId, CancellationToken token = default)
+        => _api.GetItemAsync<GhostWalkSubscriptionView>($"/api/organizations/{organizationId}/billing/ghost-walk", token);
+
+    /// <inheritdoc />
+    public Task<(StartCheckoutResponse? Result, string? Error)> StartGhostWalkCheckoutAsync(
+        Guid organizationId, CancellationToken token = default)
+        => _api.SendExpectingReasonAsync<object, StartCheckoutResponse>(
+            HttpMethod.Post, $"/api/organizations/{organizationId}/subscription/checkout/ghost-walk",
+            new { }, token);
+
+    /// <inheritdoc />
+    public Task<(GhostWalkSubscriptionView? Result, string? Error)> SetGhostWalkRenewalAsync(
+        Guid organizationId, bool cancel, CancellationToken token = default)
+        => _api.SendExpectingReasonAsync<object, GhostWalkSubscriptionView>(
+            HttpMethod.Post,
+            $"/api/organizations/{organizationId}/billing/ghost-walk/{(cancel ? "cancel" : "resume")}",
             new { }, token);
 
     // ── the money trail (item 168) ────────────────────────────────────────────

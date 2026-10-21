@@ -227,7 +227,7 @@ figcaption { color: var(--faint); font-size: 8.4pt; margin-top: .07in; }
     <h1>Everything <span class="accent-text">IsHaunted</span> does.</h1>
     <p class="lede">The complete product documentation — every screen, rule and safeguard, written for the people who use it.</p>
   </div>
-  <div class="facts"><div class="fact"><b>Documents</b><span>21</span></div><div class="fact"><b>Sections</b><span>6</span></div><div class="fact"><b>Updated</b><span>10/17/2026</span></div></div>
+  <div class="facts"><div class="fact"><b>Documents</b><span>21</span></div><div class="fact"><b>Sections</b><span>6</span></div><div class="fact"><b>Updated</b><span>10/21/2026</span></div></div>
   <div class="about"><b>About this document.</b> This is the in-product help, reproduced in full and unaltered — the same text the application serves to its users. It describes the software as built. It contains no business, market or financial information, and no usage figures.</div>
   <div class="foot"><span>ishaunted.com</span><span>Product documentation</span></div>
 </section>
@@ -5168,6 +5168,9 @@ and keep its own sessions private.</p>
 <p>The price depends on how many members the group has. The <strong>Billing</strong> screen under Settings shows
 which band you are in and what it costs. If the price list has no charge for a group your size,
 that screen tells you there is nothing to buy, rather than offering you a plan for nothing.</p>
+<p>After you pay on Stripe's page, or start a plan that a coupon fully covers, you see a short page
+saying your subscription went through. It takes you on to your group's <strong>Billing</strong> screen, where the
+receipt is, after a few seconds, or straight away with <strong>Go to your group's billing</strong>.</p>
 <h3>With no plan, work at a public place is public</h3>
 <p>This is the trade-off, and it matches how the field archive has always worked: what a free account
 records at a public location appears on that location's own page, where anyone can read it. One
@@ -5678,7 +5681,7 @@ makes that timeline entry private, or the case is unpublished, the photos are re
 page that used them automatically. You don't have to remember which pages they were on. Direct
 image links work the same way — a link copied from the page stops working at the same moment.</p>
 <h2>Tours</h2>
-<p>If you run ghost walks, a <strong>tour</strong> is what you sell and what your plan is priced on. The walk down
+<p>If you run ghost walks, a <strong>tour</strong> is what you sell. The walk down
 Printers Alley is one tour whether you run it twice a year or four nights a week; a walk down a
 different street is a second tour. You'll find them under <strong>Administration → Tours</strong>, and each one
 has its own page.</p>
@@ -5694,10 +5697,19 @@ to tell guests what to bring and what it costs.</p>
 between tours if you run more than one.</p>
 <p><img alt="One tour" src=".print-media/Ben.Web.Services/Help/Media/organization-administration/tour-details.jpg" /></p>
 <h3>Adding a tour, and what it costs</h3>
-<p>Your plan covers one tour. Each extra tour is charged for the rest of your current billing period,
-on the card you already have on file, and after that every renewal counts the tours you are
-running. If there is no card on file, you can still run the tour, and it is simply counted at your
-next renewal. The Tours page tells you which of these will happen before you press the button.</p>
+<p>Running tours takes a <strong>Ghost Walk Tour subscription</strong>: the monthly price shown on the Pricing page a month, separate
+from your group's plan, with no limit on tours, dates or guests. Any group can take it, on your
+group's <strong>Billing</strong> page under <strong>Ghost Walk Tour subscription</strong>, or from the <strong>Pricing</strong> page.
+Without it you can't add a tour, bring a retired one back, or put a new tour date on the calendar.
+Tours and dates you already have keep running, and guests keep their places. You can stop renewing
+at any time; the month you paid for runs out first.</p>
+<p>If your group is on the per-tour business plan, its tours stay covered by that plan as they always
+have.</p>
+<p><strong>On the per-tour business plan</strong>, the plan covers one tour. Each extra tour is charged for the rest
+of your current billing period, on the card you already have on file, and after that every renewal
+counts the tours you are running. If there is no card on file, you can still run the tour, and it is
+simply counted at your next renewal. The Tours page tells you which of these will happen before you
+press the button.</p>
 <p><strong>Retiring</strong> a tour stops new dates from being added and drops it from your next renewal. It
 doesn't refund anything for the period you have already paid for, and it leaves the tour's past
 dates exactly as they are. <strong>Pausing</strong> — turning off <em>Taking sign-ups</em> — is the lighter option for
@@ -5713,7 +5725,7 @@ whether to publish one. A guide without a public photo is just named.</p>
 <h3>Dates</h3>
 <p>A date is one run of the tour, and it goes on the <strong>calendar</strong> like any other event. Pick the tour
 and set the time; the meeting point, length and group size come from the tour unless you change
-them. Scheduling more dates costs nothing, because the plan counts tours, not nights.</p>
+them. Scheduling more dates costs nothing extra: tours are counted, not nights.</p>
 <p>For a tour business, every public date must be linked to a tour. Without one, there is nothing to
 tell guests where to meet or who they are meeting, so the calendar won't save it and explains why.
 A private date — a guides' meeting or a rehearsal — doesn't need a tour.</p>
@@ -5885,17 +5897,29 @@ a weekend by a day and your Saturday keeps its title and notes.</p>
 <p>Publishing puts the event on your public page, on the site-wide <strong>What's on</strong> list and in the phone
 apps, and opens it for bookings. This is when any charge applies, and the page tells you what it
 will be before you press the button.</p>
-<p>If your plan includes running events, publishing uses one of your plan's event slots. If it
-doesn't, publishing uses an <strong>event credit</strong>: $99, one credit per event, covering that event from
-the day you publish it. Before you press the button, you can see how many credits you have and what
-the button will do.</p>
+<p>Publishing uses one <strong>event credit</strong>. No plan includes events, the largest included: every event is
+bought on its own. One credit covers one event, however many days in a row it runs. A credit is
+<strong>the price shown on the Pricing page</strong>, and a group with a paid plan pays the percentage shown on the Pricing page of that:
+<strong>a share of that price</strong>. Before you press the button, you can see how many credits you
+have and what the button will do.</p>
+<p>Your group's own credits are used first. If the group has none, publishing uses one of <strong>your own</strong>
+credits, if you hold any (see <a href="#buying-event-credits">Buying event credits</a>).</p>
 <p><strong>An event is only ever charged once.</strong> You can unpublish it and publish it again as often as you
 need. The first publish pays for it, and there is no second charge for the life of that event.</p>
 <h3>Buying event credits</h3>
-<p>You buy credits on your group's <strong>Billing</strong> page, under <strong>Event credits</strong>. When the Events page
-tells you that you need one, that message links straight there. Buy one or several at a time.
-Payment happens on Stripe's secure page, and the receipt appears in your billing history like any
-other.</p>
+<p>Anyone can buy event credits: a group for itself, or a person for the events they organize.</p>
+<ul>
+<li><strong>For your group:</strong> on your group's <strong>Billing</strong> page, under <strong>Event credits</strong>. When the Events
+  page tells you that you need one, that message links straight there. A group with a paid plan
+  pays the percentage shown on the Pricing page of the price, and the card shows the lower price.</li>
+<li><strong>For yourself:</strong> on <strong>My event credits</strong> (there's a link on the Events page and the Pricing
+  page). Credits you hold are yours, and you pay the full price.</li>
+</ul>
+<p>Buy one or several at a time, or a <strong>bundle</strong> when the Pricing page offers one — several credits for
+one price. Payment happens on Stripe's secure page, and the receipt appears in the billing history
+(or, for your own credits, under <strong>Payments</strong> on My event credits).</p>
+<p>Your guests never pay through the site. If you charge for your event, you collect that money
+yourself.</p>
 <p>A credit lasts <strong>a year from the day you buy it</strong>. When you use it, two things must be true: the
 credit hasn't expired, and the event's first date falls within that year. So you can't use a
 credit bought today on an event three years away — if that's your plan, buy the credit closer to
@@ -5974,7 +5998,7 @@ app, and in every confirmation letter, just before the pass.</p>
 wheelchair can decide for themselves whether a flight of stairs to the bedrooms is a problem.</p>
 <h3>Before you publish</h3>
 <p>A draft costs nothing and isn't visible to anyone outside your group. Publishing puts the event on
-your public page, opens it for bookings, and uses a slot or an event credit. So the page shows a
+your public page, opens it for bookings, and uses an event credit. So the page shows a
 checklist of anything that still needs doing, and each item links to where you fix it.</p>
 <p>There are four items. <strong>At least one date</strong>, because nobody can come to an event without a date.
 <strong>The venue's say-so</strong>, explained below. <strong>Somewhere to book</strong> — a room or a seat on the plan, or a
@@ -6978,10 +7002,15 @@ site, so a part of the site that's turned off isn't offered on any plan.</p>
 <p>Below that, <strong>Hosted events</strong> says what an event includes: the rooms or seats plan, bookings and the
 booking board, the program, menus, dining tables and the dietary sheet, passes and the door, staff,
 the event's page, files, the guests' room, and the thank-you afterwards. It also says what an event
-costs on a plan that doesn't include hosting. If you look after a group's billing, you can buy one
-or more events for it right there; they go to your group's event credits, the same as buying them on
-the billing page (see <a href="#buying-event-credits">Buying event credits</a>).</p>
+costs. No plan includes events, so every event is bought on its own: <strong>the price shown on the Pricing page</strong>, or
+<strong>a share of that price</strong> for a group with a paid plan, with bundles of several events when
+they're offered. Once you're signed in you can buy one or more right there, for a group whose billing
+you look after or for yourself; they go to that group's event credits, or to your own, the same as
+buying them on the billing page (see <a href="#buying-event-credits">Buying event credits</a>).</p>
 <p><img alt="Hosted events on the Pricing page: what an event includes, and buying events" src=".print-media/Ben.Web.Services/Help/Media/organization-administration/pricing-hosted-events.jpg" /></p>
+<p>When it's offered, <strong>Ghost Walk Tour subscription</strong> comes after that: the monthly price shown on the Pricing page a
+month for as many tours, dates and guests as you like, separate from the investigation plans. If you
+look after a group's billing, <strong>Subscribe</strong> takes you to Stripe's page for that group.</p>
 <p>Each band on the Pricing page has its own button. If you don't run a group yet, <strong>Start a group on
 this plan</strong> opens the new-group steps with that plan shown at the top; once the group exists, you
 go straight to its billing page to confirm the plan and pay. If you already run a group, <strong>Choose
@@ -7692,6 +7721,44 @@ It's on unless someone has turned it off.</p>
 </ul>
 <p>Nothing already bought changes: plans and paid seats continue and renew as before. Event credits
 have their own switch, <strong>Sell event credits</strong>.</p>
+<h3>What plans include, and what they don't</h3>
+<p>Plans cover <strong>investigations</strong>. No plan includes hosted events, the top band included: every event
+uses one event credit, bought on its own. The tier editor no longer offers <em>Host events</em>, <em>Buy event
+credits</em> or <em>Sell tickets</em>, and it has no <em>Events at once</em> limit, because none of them can be part of
+a plan. Ghost walk tours aren't part of a plan either; they have their own subscription (see
+<a href="#the-ghost-walk-tour-subscription">The Ghost Walk Tour subscription</a>).</p>
+<p>Events that were already published before this change stay live, and putting one back up never
+uses a credit. When the site was updated, each group whose plan used to include events was given one
+credit for every draft event it was preparing, with the reason written on the credit, so nothing it
+was building needs a purchase it wasn't told about. That happened once and doesn't repeat.</p>
+<h3>Event credit prices</h3>
+<p>Under <em>Events</em> in Site Settings:</p>
+<ul>
+<li><strong>Event credit price ($)</strong> is the full price of one credit. Leave it empty for $99.</li>
+<li><strong>Paid-subscriber price (% of the full price)</strong> is what a group with an active paid plan pays. 20
+  makes a $99 credit $19.80. Leave it empty for 20. It applies to bundles too.</li>
+<li><strong>Event credit bundles</strong> are several credits for one price, one per line as <em>how many = price</em>,
+  for example <code>3 = 249</code>. Up to six, each for 2 to 20 credits.</li>
+</ul>
+<p>The home page, the Pricing page, the billing pages and the help all show these prices as they are
+set, so changing one changes every place it appears. A value that doesn't make sense, such as a
+percentage over 100 or a bundle line the site can't read, is refused when you save it, with a
+sentence saying why. Anyone can buy credits: a group on its Billing page, or a person on <strong>My event
+credits</strong>. A person always pays the full price.</p>
+<h3>The Ghost Walk Tour subscription</h3>
+<p>A monthly subscription of its own, separate from the investigation plans, for running ghost walk
+tours with no limit on tours or guests. Under <em>Ghost Walk Tour subscription</em> in Site Settings:</p>
+<ul>
+<li><strong>Sell the Ghost Walk Tour subscription</strong> turns it on. It's off until you turn it on.</li>
+<li><strong>Ghost Walk Tour subscription price ($ a month)</strong> is its monthly price. With no price set it isn't
+  on sale, whatever the switch says.</li>
+</ul>
+<p>While it's on sale, any group can subscribe from its Billing page or the Pricing page, and adding a
+tour, bringing a retired tour back or putting a new tour date on the calendar needs the
+subscription. Tours and dates already on the calendar keep running, and a group on the per-tour
+business plan stays covered by that plan. While it's off, the subscription isn't mentioned anywhere
+on the site or in the help, and tours aren't held back by it. Months already paid for run out and
+aren't renewed while it's off.</p>
 <h2>The storage ceiling</h2>
 <p><strong>Administration → Site Settings → Limits → Free account storage (MB)</strong> sets how much a free account
 can store for itself. Leaving the box empty is safe: there's a built-in default of 2048 MB.</p>
@@ -7869,9 +7936,9 @@ from joining: they're a member from the moment they're accepted, and the seat is
 record. When they pay, record the payment on the Ledger and set the seat to <strong>Active</strong> with its
 period. Recording the payment and activating the seat are deliberately two separate steps.</p>
 <h2>Event credits</h2>
-<p><strong>Event Credits</strong> lists every credit ever bought. One credit publishes one hosted event, whatever
-it costs to run and however many nights it lasts, and is good for a year from the day it was
-bought. It's spent as soon as the event goes live. The price it was bought at is locked in on the
+<p><strong>Event Credits</strong> lists every credit ever bought, by a group or by a person for themselves. One
+credit publishes one hosted event, whatever it costs to run and however many days in a row it runs,
+and is good for a year from the day it was bought. It's spent as soon as the event goes live. The price it was bought at is locked in on the
 row, so changing the price never affects a credit someone already holds.</p>
 <p>The screen shows who holds each credit, when it expires, whether it has been spent and on what, and
 the receipt from the purchase. An envelope next to the expiry date means the holder has already had

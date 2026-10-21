@@ -238,6 +238,7 @@ namespace Ben.Data.Source.Context
         public virtual DbSet<FieldSessionShareLink> FieldSessionShareLinks { get; set; }
         public virtual DbSet<FieldSessionShareLinkView> FieldSessionShareLinkViews { get; set; }
         public virtual DbSet<OrganizationSubscription> OrganizationSubscriptions { get; set; }
+        public virtual DbSet<GhostWalkSubscription> GhostWalkSubscriptions { get; set; }
         public virtual DbSet<OrganizationBillingContact> OrganizationBillingContacts { get; set; }
         public virtual DbSet<Coupon> Coupons { get; set; }
         public virtual DbSet<CouponCode> CouponCodes { get; set; }
@@ -4642,6 +4643,31 @@ namespace Ben.Data.Source.Context
             modelBuilder.Entity<OrganizationSubscription>()
                 .HasIndex(e => new { e.Status, e.CurrentPeriodEnd });
 
+            // Ghost Walk Tour subscription (10/21/2026): its own row, one per group, beside the plan.
+            modelBuilder.Entity<GhostWalkSubscription>()
+                .HasIndex(e => e.OrganizationId).IsUnique();
+            modelBuilder.Entity<GhostWalkSubscription>()
+                .HasOne(e => e.Organization).WithMany()
+                .HasForeignKey(e => e.OrganizationId).OnDelete(DeleteBehavior.Cascade);
+            modelBuilder.Entity<GhostWalkSubscription>()
+                .HasOne(e => e.CreatedByAppUser).WithMany()
+                .HasForeignKey(e => e.CreatedByAppUserId).OnDelete(DeleteBehavior.NoAction);
+            modelBuilder.Entity<GhostWalkSubscription>()
+                .HasOne(e => e.UpdatedByAppUser).WithMany()
+                .HasForeignKey(e => e.UpdatedByAppUserId).IsRequired(false).OnDelete(DeleteBehavior.NoAction);
+            modelBuilder.Entity<GhostWalkSubscription>()
+                .Property(e => e.PriceAtPeriodStart).HasPrecision(18, 2);
+            modelBuilder.Entity<GhostWalkSubscription>()
+                .Property(e => e.ProviderName).HasMaxLength(32);
+            modelBuilder.Entity<GhostWalkSubscription>()
+                .Property(e => e.ProviderSubscriptionRef).HasMaxLength(128);
+            modelBuilder.Entity<GhostWalkSubscription>()
+                .Property(e => e.ProviderCustomerRef).HasMaxLength(128);
+            modelBuilder.Entity<GhostWalkSubscription>()
+                .Property(e => e.ProviderPaymentMethodRef).HasMaxLength(128);
+            modelBuilder.Entity<GhostWalkSubscription>()
+                .HasIndex(e => new { e.Status, e.CurrentPeriodEnd });
+
             // One nomination per person per organization.
             modelBuilder.Entity<OrganizationBillingContact>()
                 .HasIndex(e => new { e.OrganizationId, e.AppUserId }).IsUnique();
@@ -4680,6 +4706,9 @@ namespace Ben.Data.Source.Context
             modelBuilder.Entity<BillingLedgerEntry>()
                 .HasOne(e => e.ReferrerAppUser).WithMany()
                 .HasForeignKey(e => e.ReferrerAppUserId).IsRequired(false).OnDelete(DeleteBehavior.Restrict);
+            modelBuilder.Entity<BillingLedgerEntry>()
+                .HasOne(e => e.PayerAppUser).WithMany()
+                .HasForeignKey(e => e.PayerAppUserId).IsRequired(false).OnDelete(DeleteBehavior.NoAction);
             modelBuilder.Entity<BillingLedgerEntry>()
                 .HasOne(e => e.CreatedByAppUser).WithMany()
                 .HasForeignKey(e => e.CreatedByAppUserId).OnDelete(DeleteBehavior.NoAction);

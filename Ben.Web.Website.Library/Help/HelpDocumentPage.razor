@@ -1,9 +1,10 @@
-﻿@page "/help/{Slug}"
+@page "/help/{Slug}"
 @using Ben.Web.Services.Help
 @inject HelpContentService Content
 @inject HelpViewerResolver Viewers
 @inject SiteFeaturesProvider Features
 @inject IJSRuntime JS
+@inject IBenAdminClient PricingClient
 
 <PageTitle>@(_document?.Title ?? "Help")</PageTitle>
 
@@ -72,6 +73,7 @@
     [Parameter] public string Slug { get; set; } = string.Empty;
 
     private HelpDocument? _document;
+    private HelpLiveValues? _live;
     private string _html = string.Empty;
     private IReadOnlyList<(string Text, string Anchor)> _headings = [];
     private bool _loading = true;
@@ -88,8 +90,14 @@
         var viewer = await Viewers.ResolveAsync();
 
         _document = Content.Find(Slug, viewer, Features.IsOn);
-        _html = _document is null ? string.Empty : Content.ToHtml(_document);
-        _headings = _document is null ? [] : HelpContentService.HeadingsOf(_document);
+
+        // Today's prices from the site settings, read where the Pricing page reads them (10/21/2026),
+        // so the help never quotes a number the site no longer charges. Fetched once per page.
+        _live ??= HelpLiveValues.From(await PricingClient.GetPublicPricingExtrasAsync(),
+            Ben.Web.Website.Library.Kit.BenMoney.Format);
+
+        _html = _document is null ? string.Empty : Content.ToHtml(_document, _live);
+        _headings = _document is null ? [] : HelpContentService.HeadingsOf(_document, _live);
         _loading = false;
         _scrollPending = _document is not null;
     }

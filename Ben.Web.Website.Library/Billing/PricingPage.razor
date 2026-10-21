@@ -1,4 +1,4 @@
-﻿@page "/pricing"
+@page "/pricing"
 
 @inject IBenAdminClient Client
 @inject IBenUserState UserState
@@ -169,9 +169,11 @@
                             </div>
 
                             <ul class="pricing-band__limits">
-                                @if (tier.Limits.Count > 0)
+                                @* Only caps the site enforces, and never the events-at-once cap: events are not
+                                   part of any plan (Ben, 10/21/2026). *@
+                                @if (tier.Limits.Any(l => PricingWords.IsShown(l.Limit)))
                                 {
-                                    @foreach (var limit in tier.Limits)
+                                    @foreach (var limit in tier.Limits.Where(l => PricingWords.IsShown(l.Limit)))
                                     {
                                         <li><BenIcon Name="check-circle" /><span>@LimitSentence(limit)</span></li>
                                     }
@@ -211,6 +213,13 @@
     @if (Features.IsOn(SiteFeatures.Events) && _extras is { } extras && _tiersResult.Items.Count > 0)
     {
         @EventsSection(extras.Events, extras)
+    }
+
+    @* The Ghost Walk Tour subscription: its own monthly price, not part of any plan (Ben, 10/21/2026).
+       The API sends it only while it is on sale, so when it is off this page says nothing about it. *@
+    @if (_extras?.GhostWalk is { } ghostWalk)
+    {
+        @GhostWalkSection(ghostWalk)
     }
 
     @* Several groups this person manages: which one is the plan for? (2026-09-14) *@
@@ -406,10 +415,12 @@
 </div>
 
 @code {
+    // Only what a plan can actually be sold with: events are never part of a plan (10/21/2026), so a
+    // plan is never described as "not including" them either.
     private static IReadOnlyList<Ben.Data.Common.Enums.TierCapability> MissingCapabilities(PublicSubscriptionTier tier)
         => tier.IncludedCapabilities is null
             ? []
-            : [.. Enum.GetValues<Ben.Data.Common.Enums.TierCapability>().Except(tier.IncludedCapabilities)];
+            : [.. Ben.Data.Common.Enums.TierCapabilities.Sellable.Except(tier.IncludedCapabilities)];
 
     private static string CapabilityLabel(Ben.Data.Common.Enums.TierCapability capability)
         => PricingWords.CapabilityLabel(capability);
@@ -651,48 +662,64 @@
 
     private static string LimitSentence(PublicTierLimit limit) => PricingWords.LimitSentence(limit);
 
-    // ── Hosted events, bought one at a time (Ben, 10/13/2026) ───────────────────────────────────────────
-    // What an event includes, and buying one or more from here. Every figure comes from the site's
-    // settings through the API, the same ones checkout and the publish rule read.
+    // ── Hosted events, bought one at a time (Ben, 10/13/2026; 10/21/2026) ─────────────────────────────
+    // What an event includes, and buying one or more from here. No plan includes events: every event
+    // uses one credit, bought by a group or by a person, and a group with a paid plan pays a share of
+    // the price. Every figure comes from the site's settings through the API, the same ones checkout
+    // and the publish rule read.
 
     private PublicPricingExtras? _extras;
     [PersistentState] public PublicPricingExtras? RenderedExtras { get; set; }
 
     private int _eventQuantity = 1;
-    private Guid? _eventGroupId;
+    private int? _eventBundle;
+    // Empty means "choose", "me" means the person's own credits, otherwise a group's id.
+    private string _eventBuyer = "";
     private bool _buyingEvents;
     private string? _eventError;
 
-    /// <summary>Whether a plan includes hosting, so its groups have nothing to buy.</summary>
-    private static bool IncludesHosting(PublicSubscriptionTier tier)
-        => tier.IncludedCapabilities?.Contains(Ben.Data.Common.Enums.TierCapability.HostEvents) ?? true;
+    /// <summary>Whether a group pays the paid-plan price: its plan is active. The server decides at
+    /// checkout; this only lets the button say the right number beforehand.</summary>
+    private static bool PaysSubscriberPrice(OrgSubscriptionView view)
+        => view.Status == SubscriptionStatus.Active;
 
-    /// <summary>
-    /// The plan one of this person's groups is on: by its name, or the free band when it has none.
-    /// Null when it can't be told, in which case the group is offered events like any other.
-    /// </summary>
-    private PublicSubscriptionTier? TierOf(OrgSubscriptionView view)
-        => view.Status == SubscriptionStatus.Free
-            ? _tiersResult.Items.FirstOrDefault(IsFree)
-            : _tiersResult.Items.FirstOrDefault(t => string.Equals(t.Name, view.TierName, StringComparison.OrdinalIgnoreCase));
+    /// <summary>Who the events are for, as the chooser has it: a group, the person, or not chosen yet.</summary>
+    private (Guid? GroupId, bool Myself) EventBuyer()
+    {
+        if (_eventBuyer == "me") return (null, true);
+        if (Guid.TryParse(_eventBuyer, out var g)) return (g, false);
+        // One group and nothing chosen: that group, the way the page has always offered it.
+        return _myGroups.Count == 1 && _eventBuyer == "" ? (_myGroups[0].Org.Id, false) : (null, false);
+    }
 
-    /// <summary>The groups this person can buy events for: they look after its billing, and its
-    /// plan doesn't already include hosting.</summary>
-    private List<OrganizationListItemResponse> GroupsThatBuyEvents()
-        => [.. _myGroups.Where(g => TierOf(g.View) is not { } tier || !IncludesHosting(tier)).Select(g => g.Org)];
+    /// <summary>What the current choice costs before tax, worked out the way checkout works it out.</summary>
+    private decimal EventPriceShown(PublicEventOffer offer)
+    {
+        var (groupId, _) = EventBuyer();
+        var subscriber = groupId is { } id && _myGroups.FirstOrDefault(g => g.Org.Id == id).View is { } view
+                         && PaysSubscriberPrice(view);
+        var bundle = _eventBundle is { } q ? offer.Bundles?.FirstOrDefault(b => b.Quantity == q) : null;
+        var full = bundle?.FullPrice ?? offer.UnitPrice * Math.Clamp(_eventQuantity, 1, offer.MaximumPerPurchase);
+        return subscriber ? Math.Round(full * offer.SubscriberPercent / 100m, 2, MidpointRounding.AwayFromZero) : full;
+    }
+
+    private int EventCountShown(PublicEventOffer offer)
+        => _eventBundle ?? Math.Clamp(_eventQuantity, 1, offer.MaximumPerPurchase);
 
     private async Task BuyEventsAsync()
     {
-        var groups = GroupsThatBuyEvents();
-        var orgId = _eventGroupId ?? (groups.Count == 1 ? groups[0].Id : (Guid?)null);
-        if (orgId is not { } id) { _eventError = "Choose which group the events are for."; return; }
+        var (groupId, myself) = EventBuyer();
+        if (groupId is null && !myself) { _eventError = "Choose who the events are for."; return; }
 
         _buyingEvents = true;
         _eventError = null;
         try
         {
             var max = _extras?.Events.MaximumPerPurchase ?? 1;
-            var (result, error) = await Client.StartEventCreditCheckoutAsync(id, Math.Clamp(_eventQuantity, 1, max));
+            var quantity = Math.Clamp(_eventQuantity, 1, max);
+            var (result, error) = groupId is { } id
+                ? await Client.StartEventCreditCheckoutAsync(id, quantity, _eventBundle)
+                : await Client.StartMyEventCreditCheckoutAsync(quantity, _eventBundle);
             if (result is null) { _eventError = error ?? "Couldn't start checkout. Try again."; return; }
 
             // Stripe's page isn't a Blazor route, so the browser goes there itself.
@@ -703,16 +730,14 @@
 
     private RenderFragment EventsSection(PublicEventOffer offer, PublicPricingExtras extras) => __builder =>
     {
-        var tiers = _tiersResult.Items;
-        var including = tiers.Where(IncludesHosting).ToList();
-        var buying = tiers.Where(t => !IncludesHosting(t)).ToList();
-        var groups = GroupsThatBuyEvents();
+        var bundles = offer.Bundles ?? [];
 
         <section class="pricing-events" id="events" aria-labelledby="pricing-events-title" data-testid="pricing-events">
             <h2 class="h4 mb-1" id="pricing-events-title">Hosted events</h2>
             <p class="text-secondary mb-4">
                 Run a whole event on the site, from the first booking to the thank-you: a weekend at a
-                haunted hotel, a theater night, a lock-in.
+                haunted hotel, a theater night, a lock-in. Events aren't part of any plan. Each one is
+                bought on its own, by a group or by the person organizing it.
             </p>
 
             <div class="row g-4">
@@ -736,88 +761,96 @@
 
                 <div class="col-12 col-lg-5">
                     <article class="plan-inclusions__card pricing-events__buy h-100" data-testid="pricing-event-offer">
-                        @if (buying.Count == 0)
-                        {
-                            <h3 class="h5 mb-2">Included in every plan</h3>
-                            <p class="mb-0">Every plan includes hosted events, so there's nothing to buy.</p>
-                        }
-                        else
-                        {
-                            <h3 class="h5 mb-2">Buy events one at a time</h3>
-                            <div class="pricing-events__price">
-                                <span class="pricing-band__amount">@BenMoney.Format(offer.UnitPrice)</span>
-                                <span class="pricing-band__per">per event</span>
-                            </div>
-                            <p class="small text-secondary mb-3">plus sales tax where your state requires it</p>
+                        <h3 class="h5 mb-2">One event, one credit</h3>
+                        <div class="pricing-events__price">
+                            <span class="pricing-band__amount" data-testid="pricing-event-price">@BenMoney.Format(offer.UnitPrice)</span>
+                            <span class="pricing-band__per">per event</span>
+                        </div>
+                        <p class="small mb-1" data-testid="pricing-event-subscriber-price">
+                            <strong>@BenMoney.Format(offer.SubscriberUnitPrice)</strong> for a group with a paid plan
+                            (@offer.SubscriberPercent.ToString("0.##")% of the price).
+                        </p>
+                        <p class="small text-secondary mb-3">plus sales tax where your state requires it</p>
 
-                            <p class="small mb-2">
-                                For groups on @Names(buying).
-                                @if (including.Count > 0)
+                        @if (bundles.Count > 0)
+                        {
+                            <ul class="plan-inclusions__list small mb-3" data-testid="pricing-event-bundles">
+                                @foreach (var b in bundles)
                                 {
-                                    <text>@Names(including) @(including.Count == 1 ? "includes" : "include") hosted events.</text>
+                                    <li><BenIcon Name="package" /><span>@b.Quantity events for @BenMoney.Format(b.FullPrice) — @BenMoney.Format(b.SubscriberPrice) with a paid plan</span></li>
                                 }
-                            </p>
-                            <ul class="plan-inclusions__list small mb-3">
-                                <li><BenIcon Name="check-circle" /><span>An event is paid for when you first publish it. Drafts are free.</span></li>
-                                <li><BenIcon Name="check-circle" /><span>Each one is good for @offer.LifeDays days. The event's first date has to fall before it runs out.</span></li>
-                                <li><BenIcon Name="check-circle" /><span>Call an event off at least @offer.CancellationWindowHours hours before it starts and you get it back to use again.</span></li>
-                                <li><BenIcon Name="check-circle" /><span>Buy up to @offer.MaximumPerPurchase at a time.</span></li>
                             </ul>
+                        }
 
-                            @if (!offer.OnSale)
-                            {
-                                <p class="alert alert-secondary mb-0 py-2">Events aren't on sale at the moment.</p>
-                            }
-                            else if (groups.Count > 0)
-                            {
-                                <div class="d-flex flex-wrap gap-2 align-items-end">
-                                    @if (groups.Count > 1)
-                                    {
-                                        <div class="flex-grow-1">
-                                            <label class="form-label small mb-1" for="pricing-event-group">For</label>
-                                            <select id="pricing-event-group" class="form-select" data-testid="pricing-event-group"
-                                                    @onchange="@(e => _eventGroupId = Guid.TryParse(e.Value?.ToString(), out var g) ? g : null)">
-                                                <option value="">Choose a group</option>
-                                                @foreach (var group in groups)
-                                                {
-                                                    <option value="@group.Id">@group.Name</option>
-                                                }
-                                            </select>
-                                        </div>
-                                    }
+                        <ul class="plan-inclusions__list small mb-3">
+                            <li><BenIcon Name="check-circle" /><span>One credit covers one event, however many days in a row it runs.</span></li>
+                            <li><BenIcon Name="check-circle" /><span>An event is paid for when you first publish it. Drafts are free.</span></li>
+                            <li><BenIcon Name="check-circle" /><span>Each one is good for @offer.LifeDays days. The event's first date has to fall before it runs out.</span></li>
+                            <li><BenIcon Name="check-circle" /><span>Call an event off at least @offer.CancellationWindowHours hours before it starts and you get it back to use again.</span></li>
+                        </ul>
+
+                        @if (!offer.OnSale)
+                        {
+                            <p class="alert alert-secondary mb-0 py-2">Events aren't on sale at the moment.</p>
+                        }
+                        else if (UserState.IsAuthenticated)
+                        {
+                            <div class="d-flex flex-wrap gap-2 align-items-end">
+                                <div class="flex-grow-1" style="min-width: 10rem;">
+                                    <label class="form-label small mb-1" for="pricing-event-group">For</label>
+                                    <select id="pricing-event-group" class="form-select" data-testid="pricing-event-group"
+                                            @onchange="@(e => _eventBuyer = e.Value?.ToString() ?? "")">
+                                        @if (_myGroups.Count != 1)
+                                        {
+                                            <option value="" selected="@(_eventBuyer == "")">Choose</option>
+                                        }
+                                        @foreach (var (org, _) in _myGroups)
+                                        {
+                                            <option value="@org.Id" selected="@(_eventBuyer == org.Id.ToString() || (_eventBuyer == "" && _myGroups.Count == 1))">@org.Name</option>
+                                        }
+                                        <option value="me" selected="@(_eventBuyer == "me")">Myself — credits I hold</option>
+                                    </select>
+                                </div>
+                                @if (bundles.Count > 0)
+                                {
+                                    <div style="min-width: 9rem;">
+                                        <label class="form-label small mb-1" for="pricing-event-bundle">Buy</label>
+                                        <select id="pricing-event-bundle" class="form-select" data-testid="pricing-event-bundle"
+                                                @onchange="@(e => _eventBundle = int.TryParse(e.Value?.ToString(), out var q) ? q : null)">
+                                            <option value="" selected="@(_eventBundle is null)">Single events</option>
+                                            @foreach (var b in bundles)
+                                            {
+                                                <option value="@b.Quantity" selected="@(_eventBundle == b.Quantity)">Bundle of @b.Quantity</option>
+                                            }
+                                        </select>
+                                    </div>
+                                }
+                                @if (_eventBundle is null)
+                                {
                                     <div style="width: 6.5rem;">
                                         <label class="form-label small mb-1" for="pricing-event-quantity">How many</label>
                                         <input id="pricing-event-quantity" type="number" class="form-control"
                                                min="1" max="@offer.MaximumPerPurchase" data-testid="pricing-event-quantity"
                                                @bind="_eventQuantity" @bind:event="oninput" />
                                     </div>
-                                    <button type="button" class="btn btn-primary" data-testid="pricing-buy-events"
-                                            disabled="@(_buyingEvents || _eventQuantity < 1 || _eventQuantity > offer.MaximumPerPurchase)"
-                                            @onclick="BuyEventsAsync">
-                                        @(_buyingEvents ? "Opening…" : $"Buy {Math.Clamp(_eventQuantity, 1, offer.MaximumPerPurchase)} for {BenMoney.Format(offer.UnitPrice * Math.Clamp(_eventQuantity, 1, offer.MaximumPerPurchase))}")
-                                    </button>
-                                </div>
-                                @if (groups.Count == 1)
-                                {
-                                    <div class="small text-secondary mt-2">for @groups[0].Name</div>
                                 }
-                                @if (_eventError is not null)
-                                {
-                                    <div class="alert alert-danger mt-2 mb-0 py-2">@_eventError</div>
-                                }
-                            }
-                            else if (_myGroups.Count > 0)
+                                <button type="button" class="btn btn-primary text-nowrap" data-testid="pricing-buy-events"
+                                        disabled="@(_buyingEvents || (_eventBundle is null && (_eventQuantity < 1 || _eventQuantity > offer.MaximumPerPurchase)))"
+                                        @onclick="BuyEventsAsync">
+                                    @(_buyingEvents ? "Opening…" : $"Buy {EventCountShown(offer)} for {BenMoney.Format(EventPriceShown(offer))}")
+                                </button>
+                            </div>
+                            @if (_eventError is not null)
                             {
-                                <p class="small mb-0">Your @(_myGroups.Count == 1 ? "group's plan includes" : "groups' plans include") hosted events, so there's nothing to buy.</p>
+                                <div class="alert alert-danger mt-2 mb-0 py-2" role="alert">@_eventError</div>
                             }
-                            else if (UserState.IsAuthenticated)
-                            {
-                                <a class="btn btn-outline-primary" href="/organizations/new">Start a group to buy events</a>
-                            }
-                            else
-                            {
-                                <a class="btn btn-outline-primary" href="@Ben.Web.Website.Library.Kit.SignInLink.For("pricing#events")">Sign in to buy events</a>
-                            }
+                            <p class="small text-secondary mt-2 mb-0">
+                                Credits you buy for yourself are on <a href="/my-event-credits">My event credits</a>.
+                            </p>
+                        }
+                        else
+                        {
+                            <a class="btn btn-outline-primary" href="@Ben.Web.Website.Library.Kit.SignInLink.For("pricing#events")">Sign in to buy events</a>
                         }
                     </article>
                 </div>
@@ -825,17 +858,99 @@
         </section>
     };
 
-    private static string Names(IEnumerable<PublicSubscriptionTier> tiers)
+    // ── The Ghost Walk Tour subscription (10/21/2026) ───────────────────────────────────────────────────
+
+    private Guid? _walkGroupId;
+    private bool _startingWalk;
+    private string? _walkError;
+
+    private async Task SubscribeGhostWalkAsync()
     {
-        var names = tiers.Select(t => t.Name).ToList();
-        return names.Count switch
+        var orgId = _walkGroupId ?? (_myGroups.Count == 1 ? _myGroups[0].Org.Id : (Guid?)null);
+        if (orgId is not { } id) { _walkError = "Choose which group the subscription is for."; return; }
+
+        _startingWalk = true;
+        _walkError = null;
+        try
         {
-            0 => "",
-            1 => names[0],
-            2 => $"{names[0]} and {names[1]}",
-            _ => string.Join(", ", names.Take(names.Count - 1)) + " and " + names[^1],
-        };
+            var (result, error) = await Client.StartGhostWalkCheckoutAsync(id);
+            if (result is null) { _walkError = error ?? "Couldn't start checkout. Try again."; return; }
+            NavManager.NavigateTo(result.RedirectUrl, forceLoad: true);
+        }
+        finally { _startingWalk = false; }
     }
+
+    private RenderFragment GhostWalkSection(PublicGhostWalkOffer offer) => __builder =>
+    {
+        <section class="pricing-events" id="ghost-walk" aria-labelledby="pricing-ghost-walk-title" data-testid="pricing-ghost-walk">
+            <h2 class="h4 mb-1" id="pricing-ghost-walk-title">Ghost Walk Tour subscription</h2>
+            <p class="text-secondary mb-4">
+                A monthly subscription of its own, for running ghost walks. It isn't part of any
+                investigation plan, and any group can take it.
+            </p>
+            <div class="row g-4">
+                <div class="col-12 col-lg-7">
+                    <article class="plan-inclusions__card h-100">
+                        <h3 class="h5 mb-3">What it includes</h3>
+                        <ul class="plan-inclusions__list">
+                            <li><BenIcon Name="check-circle" /><span>As many tours as you run, and as many dates for each</span></li>
+                            <li><BenIcon Name="check-circle" /><span>No limit on guests: sign-ups, walk-ups and the door list for the guide</span></li>
+                            <li><BenIcon Name="check-circle" /><span>A page for every tour, with its meeting point, gallery and reviews</span></li>
+                            <li><BenIcon Name="check-circle" /><span>Guests sign up for free. The site never takes their money.</span></li>
+                        </ul>
+                    </article>
+                </div>
+                <div class="col-12 col-lg-5">
+                    <article class="plan-inclusions__card pricing-events__buy h-100" data-testid="pricing-ghost-walk-offer">
+                        <div class="pricing-events__price">
+                            <span class="pricing-band__amount" data-testid="pricing-ghost-walk-price">@BenMoney.Format(offer.MonthlyPrice)</span>
+                            <span class="pricing-band__per">per month</span>
+                        </div>
+                        <p class="small text-secondary mb-3">plus sales tax where your state requires it. Stop renewing any time; the month you paid for runs out.</p>
+                        @if (_myGroups.Count > 0)
+                        {
+                            <div class="d-flex flex-wrap gap-2 align-items-end">
+                                @if (_myGroups.Count > 1)
+                                {
+                                    <div class="flex-grow-1" style="min-width: 10rem;">
+                                        <label class="form-label small mb-1" for="pricing-ghost-walk-group">For</label>
+                                        <select id="pricing-ghost-walk-group" class="form-select" data-testid="pricing-ghost-walk-group"
+                                                @onchange="@(e => _walkGroupId = Guid.TryParse(e.Value?.ToString(), out var g) ? g : null)">
+                                            <option value="">Choose a group</option>
+                                            @foreach (var (org, _) in _myGroups)
+                                            {
+                                                <option value="@org.Id">@org.Name</option>
+                                            }
+                                        </select>
+                                    </div>
+                                }
+                                <button type="button" class="btn btn-primary text-nowrap" data-testid="pricing-ghost-walk-subscribe"
+                                        disabled="@_startingWalk" @onclick="SubscribeGhostWalkAsync">
+                                    @(_startingWalk ? "Opening…" : "Subscribe")
+                                </button>
+                            </div>
+                            @if (_myGroups.Count == 1)
+                            {
+                                <div class="small text-secondary mt-2">for @_myGroups[0].Org.Name</div>
+                            }
+                            @if (_walkError is not null)
+                            {
+                                <div class="alert alert-danger mt-2 mb-0 py-2" role="alert">@_walkError</div>
+                            }
+                        }
+                        else if (UserState.IsAuthenticated)
+                        {
+                            <a class="btn btn-outline-primary" href="/organizations/new">Start a group to run tours</a>
+                        }
+                        else
+                        {
+                            <a class="btn btn-outline-primary" href="@Ben.Web.Website.Library.Kit.SignInLink.For("pricing#ghost-walk")">Sign in to subscribe</a>
+                        }
+                    </article>
+                </div>
+            </div>
+        </section>
+    };
 
     private static string StorageWords(int megabytes)
         => megabytes >= 1024 ? $"{megabytes / 1024m:0.#} GB" : $"{megabytes:N0} MB";

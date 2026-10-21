@@ -192,7 +192,9 @@
                 Things a band may or may not be sold, rather than areas a role can cover.
             </p>
             <div class="row g-1">
-                @foreach (var capability in Enum.GetValues<Ben.Data.Common.Enums.TierCapability>())
+                @* Events are not part of any plan (Ben, 10/21/2026), so hosting, buying credits and
+                   selling tickets are not offered here: a plan can neither include nor leave them out. *@
+                @foreach (var capability in Ben.Data.Common.Enums.TierCapabilities.Sellable)
                 {
                     var has = (inc.IncludedCapabilities ?? []).Contains(capability);
                     <div class="col-6">
@@ -476,12 +478,12 @@
         => Enum.GetValues<Ben.Data.Common.Enums.OrganizationPermissionArea>().Length;
 
     private static int TotalCapabilities
-        => Enum.GetValues<Ben.Data.Common.Enums.TierCapability>().Length;
+        => Ben.Data.Common.Enums.TierCapabilities.Sellable.Count;
 
     private static int AreaCount(SubscriptionTierAdminRecord t) => (t.IncludedAreas ?? []).Count;
 
     private static int CapabilityCount(SubscriptionTierAdminRecord t)
-        => (t.IncludedCapabilities ?? []).Count;
+        => (t.IncludedCapabilities ?? []).Count(c => !Ben.Data.Common.Enums.TierCapabilities.IsAboutEvents(c));
 
     private void OpenIncludes(SubscriptionTierAdminRecord tier)
     {
@@ -724,6 +726,8 @@
         {
             var next = (tier.IncludedCapabilities ?? []).ToHashSet();
             if (on) next.Add(capability); else next.Remove(capability);
+            // Never saved as part of a plan, whatever an older row said (10/21/2026).
+            next.RemoveWhere(Ben.Data.Common.Enums.TierCapabilities.IsAboutEvents);
 
             var (updated, error) = await AdminClient.SetTierCapabilitiesAsync(tier.Id, next.ToList());
             if (updated is null)
@@ -813,11 +817,18 @@
         public List<PriceRow> Prices = [];
         public List<LimitRow> Limits = [];
 
+        /// <summary>
+        /// Every cap a plan can set, less the events-at-once cap: no plan includes events
+        /// (Ben, 10/21/2026), so it has nothing to count.
+        /// </summary>
+        private static IEnumerable<SubscriptionLimit> EditableLimits
+            => Enum.GetValues<SubscriptionLimit>().Where(l => l != SubscriptionLimit.ActiveHostedEvents);
+
         public static TierForm Blank() => new()
         {
             Prices = [.. Enum.GetValues<BillingInterval>().Select(i => new PriceRow
                 { Interval = i, IsActive = i == BillingInterval.Monthly })],
-            Limits = [.. Enum.GetValues<SubscriptionLimit>().Select(l => new LimitRow { Limit = l })],
+            Limits = [.. EditableLimits.Select(l => new LimitRow { Limit = l })],
         };
 
         public static TierForm From(SubscriptionTierAdminRecord tier) => new()
@@ -837,7 +848,7 @@
                     Price    = existing?.Price ?? 0m,
                 };
             })],
-            Limits = [.. Enum.GetValues<SubscriptionLimit>().Select(l =>
+            Limits = [.. EditableLimits.Select(l =>
             {
                 var existing = tier.Limits.FirstOrDefault(x => x.Limit == l);
                 return new LimitRow

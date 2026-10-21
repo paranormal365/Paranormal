@@ -253,6 +253,12 @@ public sealed class OrgCalendarEventController : BenControllerBase
         if (await TourDateRefusalAsync(db, orgId, entity, ct) is string tourRefusal)
             return BadRequest(tourRefusal);
 
+        // 10/21/2026: a NEW date for a tour needs the Ghost Walk Tour subscription while it is on
+        // sale. Only new ones: a date already on the calendar keeps its guests whatever happens.
+        if (entity.TourId is not null
+            && await Services.Tours.GhostWalkAccess.WhyNotAsync(db, orgId, DateTime.UtcNow, ct) is string toursClosed)
+            return BadRequest(toursClosed);
+
         await ApplyTourDefaultsAsync(db, entity, request, ct);
         await StampHomeClockAsync(db, entity, ct);
 

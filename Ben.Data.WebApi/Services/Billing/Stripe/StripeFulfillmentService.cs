@@ -87,6 +87,24 @@ public sealed class StripeFulfillmentService
             /// purchase, not a subscription, and fulfilled down its own path.
             /// </summary>
             public const string EventCredits = "ih_event_credits";
+
+            /// <summary>
+            /// Set when the credits belong to a PERSON rather than a group (10/21/2026): the person
+            /// who holds them. A person's purchase carries no organization key at all.
+            /// </summary>
+            public const string CreditOwnerUser = "ih_credit_owner_user";
+
+            /// <summary>The credits' price before any subscriber price — for the ledger's wording.</summary>
+            public const string CreditFullPrice = "ih_credit_full";
+
+            /// <summary>"single" or "bundle", with "+subscriber" when the paid-plan price applied.</summary>
+            public const string CreditBasis = "ih_credit_basis";
+
+            /// <summary>
+            /// Present exactly when this payment buys a month of the Ghost Walk Tour subscription
+            /// (10/21/2026): the group it is for. Fulfilled down its own path, like a seat.
+            /// </summary>
+            public const string GhostWalk = "ih_ghost_walk";
         }
 
         public Dictionary<string, string> ToMetadata() => new()
@@ -195,6 +213,15 @@ public sealed class StripeFulfillmentService
             && Guid.TryParse(seatRaw, out var seatId))
         {
             await FulfillSeatAsync(seatId, checkout, ct);
+            return;
+        }
+
+        // A month of the Ghost Walk Tour subscription (10/21/2026): its own row beside the plan, so
+        // its own path — the plan path below would rewrite the group's investigation plan.
+        if (checkout.Metadata.TryGetValue(CheckoutFacts.Keys.GhostWalk, out var ghostRaw)
+            && Guid.TryParse(ghostRaw, out var ghostOrgId))
+        {
+            await FulfillGhostWalkAsync(ghostOrgId, checkout, ct);
             return;
         }
 
@@ -368,7 +395,8 @@ public sealed class StripeFulfillmentService
             facts.OrganizationId, tier?.Name, facts.Interval, facts.Payable, facts.TaxAmount, payment.ReceiptNumber);
 
         if (_email is not null)
-            await PostReceiptAsync(db, facts.OrganizationId, payment, tier?.Name, ct);
+            await PostReceiptAsync(db, facts.OrganizationId, payment,
+                tier?.Name is { Length: > 0 } t ? $"{t} plan" : "your plan", ct);
     }
 
     /// <summary>
@@ -389,25 +417,30 @@ public sealed class StripeFulfillmentService
     /// use — because the payer may be a card on file rather than a person reading mail.</para>
     /// </remarks>
     private async Task PostReceiptAsync(
-        BenDataContext db, Guid organizationId, BillingLedgerEntry payment, string? tierName,
-        CancellationToken ct)
+        BenDataContext db, Guid? organizationId, BillingLedgerEntry payment, string what,
+        CancellationToken ct, Guid? personId = null)
     {
         try
         {
-            var org = await db.Organizations.AsNoTracking()
-                .Where(o => o.Id == organizationId)
-                .Select(o => new { o.Name, o.CreatedByAppUserId })
-                .FirstOrDefaultAsync(ct);
-            if (org is null) return;
+            // A group's receipt goes to its billing people; a person's own purchase (10/21/2026)
+            // goes to the person, named as who it was for.
+            var org = organizationId is { } orgId
+                ? await db.Organizations.AsNoTracking()
+                    .Where(o => o.Id == orgId)
+                    .Select(o => new { o.Name, o.CreatedByAppUserId })
+                    .FirstOrDefaultAsync(ct)
+                : null;
+            if (org is null && personId is null) return;
 
+            var recipientId = org?.CreatedByAppUserId ?? personId!.Value;
             var to = await db.AppUsers.AsNoTracking()
-                .Where(u => u.Id == org.CreatedByAppUserId && u.Email != null && u.Email != "")
+                .Where(u => u.Id == recipientId && u.Email != null && u.Email != "")
                 .Select(u => new { u.Email, u.DisplayName })
                 .FirstOrDefaultAsync(ct);
             if (to is null) return;
+            org ??= new { Name = to.DisplayName ?? to.Email!, CreatedByAppUserId = recipientId };
 
             var reference = $"R-{payment.ReceiptNumber:00000}";
-            var what = tierName is { Length: > 0 } t ? $"{t} plan" : "your plan";
 
             var subject = $"{_site.Name} receipt {reference}";
             var body =
@@ -419,8 +452,11 @@ public sealed class StripeFulfillmentService
               + $"<tr><td><strong>Paid</strong></td><td>{payment.Amount:C}</td></tr>"
               + $"<tr><td><strong>Date</strong></td><td>{payment.DateCreated:MM/dd/yyyy}</td></tr>"
               + "</table>"
-              + "<p>Your group's billing page keeps every receipt, so this one is there whenever "
-              + "you need it again.</p>";
+              + (organizationId is null
+                    ? "<p>Your event credits page keeps every receipt, so this one is there whenever "
+                      + "you need it again.</p>"
+                    : "<p>Your group's billing page keeps every receipt, so this one is there whenever "
+                      + "you need it again.</p>");
 
             await _email!.SendAsync(
                 new Ben.Data.Common.Interfaces.EmailMessage(
@@ -555,12 +591,15 @@ public sealed class StripeFulfillmentService
     /// of course, and a second delivery must not hand somebody a second set of credits. The ledger's
     /// payment reference is the lock, exactly as it is for a seat.</para>
     ///
-    /// <para><b>Taxed like the digital service it is</b>, through the same resolver a subscription
-    /// uses. A credit is a sale, not a donation.</para>
+    /// <para><b>A group or a person</b> (10/21/2026). A group's credits land on its ledger; a person's
+    /// land on the ledger with no group and the payer named, so the money trail has the sale either
+    /// way.</para>
     ///
-    /// <para><b>No period.</b> A credit is not a subscription: it has no renewal, nothing to open
-    /// and nothing to close. It has a life — a year — and it is spent when an event is published.
-    /// </para>
+    /// <para><b>What was charged, exactly.</b> The total is the metadata's frozen figure — a bundle or a
+    /// subscriber price included — and it is shared across the credits to the cent, so the credits add
+    /// up to the receipt and a refund of one returns what that one cost.</para>
+    ///
+    /// <para><b>Taxed like the digital service it is</b>, at the rate frozen when checkout opened.</para>
     /// </remarks>
     private async Task FulfillEventCreditsAsync(
         int count, StripeCompletedCheckout checkout, CancellationToken ct)
@@ -575,10 +614,17 @@ public sealed class StripeFulfillmentService
             return;
         }
 
-        if (!checkout.Metadata.TryGetValue(CheckoutFacts.Keys.Organization, out var orgRaw)
-            || !Guid.TryParse(orgRaw, out var organizationId))
+        Guid? organizationId = null, personId = null;
+        if (checkout.Metadata.TryGetValue(CheckoutFacts.Keys.Organization, out var orgRaw)
+            && Guid.TryParse(orgRaw, out var parsedOrg))
+            organizationId = parsedOrg;
+        else if (checkout.Metadata.TryGetValue(CheckoutFacts.Keys.CreditOwnerUser, out var personRaw)
+                 && Guid.TryParse(personRaw, out var parsedPerson))
+            personId = parsedPerson;
+
+        if (organizationId is null && personId is null)
         {
-            _log.LogError("Event-credit payment {Reference} names no organization.", reference);
+            _log.LogError("Event-credit payment {Reference} names no group and no person.", reference);
             return;
         }
 
@@ -586,59 +632,49 @@ public sealed class StripeFulfillmentService
         if (checkout.Metadata.TryGetValue(CheckoutFacts.Keys.User, out var userRaw))
             Guid.TryParse(userRaw, out buyerId);
 
-        var unit = Services.Events.EventCredits.DefaultPriceUsd;
+        var inv = System.Globalization.CultureInfo.InvariantCulture;
+        var total = Services.Events.EventCredits.DefaultPriceUsd * count;
         if (checkout.Metadata.TryGetValue(CheckoutFacts.Keys.List, out var listRaw)
-            && decimal.TryParse(listRaw, System.Globalization.NumberStyles.Any,
-                                System.Globalization.CultureInfo.InvariantCulture, out var listed)
-            && count > 0)
-            unit = decimal.Round(listed / count, 2);
+            && decimal.TryParse(listRaw, System.Globalization.NumberStyles.Any, inv, out var listed))
+            total = decimal.Round(listed, 2, MidpointRounding.AwayFromZero);
 
         var now = DateTime.UtcNow;
-        var total = unit * count;
 
-        // The tax the buyer was CHARGED, read back from the metadata (2026-09-17 audit).
-        //
-        // The credit checkout resolves the rate, works out the tax, writes both into the metadata
-        // AND adds the tax to what Stripe collects. This then threw those away and resolved the
-        // rate again from the live rules, filing that second answer in the ledger. The two differ
-        // whenever anything moved in between — a TaxRateRule edited, the group's first address
-        // added or changed — and the window is however long the webhook takes, which on a retry is
-        // hours. The card statement then says one number and the receipt says another, and the
-        // receipt is the document we hand over.
-        //
-        // TaxResolver's own summary states the rule this restores: "the rate is resolved at write
-        // time and frozen onto whatever document asked — a later rule edit never rewrites a bill
-        // already sent." The subscription path beside this one has always done it through
-        // CheckoutFacts; only the credit path read live.
-        //
-        // The live resolve stays as the fallback, for a session created before this shipped whose
-        // webhook arrives after it. It is the old behaviour, so such a session is no worse off.
-        var inv = System.Globalization.CultureInfo.InvariantCulture;
+        // The tax the buyer was CHARGED, read back from the metadata (2026-09-17 audit): the rate
+        // is frozen onto whatever document asked, and a later rule edit never rewrites a bill. The
+        // live resolve is only the fallback for a session created before the key existed.
         decimal taxRate, tax;
         if (checkout.Metadata.TryGetValue(CheckoutFacts.Keys.TaxRate, out var rateRaw)
             && decimal.TryParse(rateRaw, System.Globalization.NumberStyles.Number, inv, out taxRate)
             && checkout.Metadata.TryGetValue(CheckoutFacts.Keys.TaxAmount, out var taxRaw)
             && decimal.TryParse(taxRaw, System.Globalization.NumberStyles.Number, inv, out tax))
         {
-            // Nothing to do: both figures came from the session the buyer actually paid.
+            // Both figures came from the session the buyer actually paid.
         }
         else
         {
             _log.LogWarning(
                 "Event-credit payment {Reference} carries no frozen tax; resolving it live.", reference);
-            (_, taxRate) = await TaxResolver.ForOrganizationAsync(db, organizationId, ct);
+            taxRate = 0m;
+            if (organizationId is { } taxedOrg)
+                (_, taxRate) = await TaxResolver.ForOrganizationAsync(db, taxedOrg, ct);
             tax = TaxResolver.TaxOn(total, taxRate);
         }
 
-        var description = count == 1 ? "1 event credit" : $"{count} event credits";
+        checkout.Metadata.TryGetValue(CheckoutFacts.Keys.CreditBasis, out var basis);
+        var description = (count == 1 ? "1 event credit" : $"{count} event credits")
+            + (basis?.StartsWith("bundle", StringComparison.Ordinal) == true ? " (bundle)" : "")
+            + (basis?.EndsWith("+subscriber", StringComparison.Ordinal) == true ? ", paid-plan price" : "");
 
+        var shares = Services.Events.EventCreditPricing.Share(total, count);
         for (var i = 0; i < count; i++)
         {
             db.EventCredits.Add(new EventCredit
             {
                 Id = Guid.NewGuid(),
                 OwnerOrganizationId = organizationId,
-                PriceAtPurchase = unit,
+                OwnerAppUserId = organizationId is null ? personId : null,
+                PriceAtPurchase = shares[i],
                 Currency = "USD",
                 PurchasedUtc = now,
                 ExpiresUtc = now.Add(Services.Events.EventCredits.Life),
@@ -649,10 +685,11 @@ public sealed class StripeFulfillmentService
             });
         }
 
+        var payer = organizationId is null ? personId : null;
         db.BillingLedgerEntries.Add(new BillingLedgerEntry
         {
             Id = Guid.NewGuid(), Kind = BillingLedgerKind.Charge,
-            OrganizationId = organizationId,
+            OrganizationId = organizationId, PayerAppUserId = payer,
             Amount = total, TaxRatePercent = taxRate, TaxAmount = tax,
             Description = description, PaymentReference = reference,
             DateCreated = now, CreatedByAppUserId = buyerId,
@@ -661,7 +698,7 @@ public sealed class StripeFulfillmentService
         var payment = new BillingLedgerEntry
         {
             Id = Guid.NewGuid(), Kind = BillingLedgerKind.Payment,
-            OrganizationId = organizationId,
+            OrganizationId = organizationId, PayerAppUserId = payer,
             Amount = total, TaxRatePercent = taxRate, TaxAmount = tax,
             Description = $"Card payment — {description}", PaymentReference = reference,
             DateCreated = now, CreatedByAppUserId = buyerId,
@@ -683,8 +720,120 @@ public sealed class StripeFulfillmentService
         await db.SaveChangesAsync(ct);
 
         _log.LogInformation(
-            "Stripe fulfilled {Count} event credit(s) for org {OrganizationId}, receipt R-{Receipt:00000}.",
-            count, organizationId, payment.ReceiptNumber);
+            "Stripe fulfilled {Count} event credit(s) for {Owner}, receipt R-{Receipt:00000}.",
+            count, organizationId?.ToString() ?? $"person {personId}", payment.ReceiptNumber);
+
+        if (_email is not null)
+            await PostReceiptAsync(db, organizationId, payment, description, ct, personId);
+    }
+
+    /// <summary>
+    /// A month of the Ghost Walk Tour subscription, paid (10/21/2026).
+    /// </summary>
+    /// <remarks>
+    /// <para>Mirrors the plan path where they share a meaning — idempotent by payment reference, the
+    /// period dated from the metadata's start when it is a renewal and from now when it is the first,
+    /// a charge and a payment with frozen tax and the next receipt number — and leaves everything that
+    /// is the plan's alone. It never touches the group's investigation plan.</para>
+    ///
+    /// <para><b>Fulfilled even if the subscription has since been taken off sale.</b> The money was
+    /// taken while it was on sale, and a month somebody paid for is a month they get.</para>
+    /// </remarks>
+    private async Task FulfillGhostWalkAsync(Guid organizationId, StripeCompletedCheckout checkout, CancellationToken ct)
+    {
+        await using var db = await _dbFactory.CreateDbContextAsync(ct);
+
+        var reference = checkout.PaymentIntentRef ?? checkout.SessionId;
+        if (await db.BillingLedgerEntries.AnyAsync(e => e.PaymentReference == reference, ct))
+        {
+            _log.LogInformation("Ghost Walk payment {Reference} delivered again — already fulfilled.", reference);
+            return;
+        }
+
+        var inv = System.Globalization.CultureInfo.InvariantCulture;
+        if (!checkout.Metadata.TryGetValue(CheckoutFacts.Keys.Payable, out var payRaw)
+            || !decimal.TryParse(payRaw, System.Globalization.NumberStyles.Number, inv, out var payable))
+        {
+            _log.LogError("Ghost Walk payment {Reference} carries no price; not fulfilled.", reference);
+            return;
+        }
+        checkout.Metadata.TryGetValue(CheckoutFacts.Keys.TaxRate, out var rateRaw);
+        checkout.Metadata.TryGetValue(CheckoutFacts.Keys.TaxAmount, out var taxRaw);
+        decimal.TryParse(rateRaw, System.Globalization.NumberStyles.Number, inv, out var taxRate);
+        decimal.TryParse(taxRaw, System.Globalization.NumberStyles.Number, inv, out var tax);
+
+        Guid buyerId = Guid.Empty;
+        if (checkout.Metadata.TryGetValue(CheckoutFacts.Keys.User, out var userRaw))
+            Guid.TryParse(userRaw, out buyerId);
+
+        var now = DateTime.UtcNow;
+        var periodStart = now;
+        if (checkout.Metadata.TryGetValue(CheckoutFacts.Keys.PeriodStart, out var psRaw)
+            && DateTime.TryParse(psRaw, inv, System.Globalization.DateTimeStyles.RoundtripKind, out var ps))
+            periodStart = ps;
+        var periodEnd = periodStart.AddMonths(1);
+
+        var sub = await db.GhostWalkSubscriptions.FirstOrDefaultAsync(s => s.OrganizationId == organizationId, ct);
+        if (sub is null)
+        {
+            sub = new GhostWalkSubscription
+            {
+                Id = Guid.NewGuid(), OrganizationId = organizationId,
+                DateCreated = now, CreatedByAppUserId = buyerId,
+            };
+            db.GhostWalkSubscriptions.Add(sub);
+        }
+        else
+        {
+            sub.DateUpdated = now;
+            sub.UpdatedByAppUserId = buyerId;
+        }
+
+        sub.Status = SubscriptionStatus.Active;
+        sub.PriceAtPeriodStart = payable;
+        sub.CurrentPeriodStart = periodStart;
+        sub.CurrentPeriodEnd = periodEnd;
+        sub.CancelAtPeriodEnd = false;
+        sub.ProviderName = "Stripe";
+        sub.ProviderSubscriptionRef = checkout.SessionId;
+        sub.ProviderCustomerRef = checkout.CustomerRef ?? sub.ProviderCustomerRef;
+        sub.ProviderPaymentMethodRef = checkout.PaymentMethodRef ?? sub.ProviderPaymentMethodRef;
+
+        const string description = "Ghost Walk Tour subscription — monthly";
+        db.BillingLedgerEntries.Add(new BillingLedgerEntry
+        {
+            Id = Guid.NewGuid(), Kind = BillingLedgerKind.Charge,
+            OrganizationId = organizationId,
+            Amount = payable, TaxRatePercent = taxRate, TaxAmount = tax,
+            Description = description, PaymentReference = reference,
+            PeriodStart = periodStart, PeriodEnd = periodEnd,
+            DateCreated = now, CreatedByAppUserId = buyerId,
+        });
+        var payment = new BillingLedgerEntry
+        {
+            Id = Guid.NewGuid(), Kind = BillingLedgerKind.Payment,
+            OrganizationId = organizationId,
+            Amount = payable, TaxRatePercent = taxRate, TaxAmount = tax,
+            Description = $"Card payment — {description}", PaymentReference = reference,
+            PeriodStart = periodStart, PeriodEnd = periodEnd,
+            DateCreated = now, CreatedByAppUserId = buyerId,
+        };
+
+        for (var attempt = 0; ; attempt++)
+        {
+            payment.ReceiptNumber = 1 + await db.BillingLedgerEntries
+                .MaxAsync(e => (int?)e.ReceiptNumber, ct) ?? 1;
+            db.BillingLedgerEntries.Add(payment);
+            try { await db.SaveChangesAsync(ct); break; }
+            catch (DbUpdateException) when (attempt < 2) { db.BillingLedgerEntries.Remove(payment); }
+        }
+
+        _log.LogInformation(
+            "Stripe fulfilled Ghost Walk Tour subscription for org {OrganizationId} through {End:MM/dd/yyyy}, receipt R-{Receipt:00000}.",
+            organizationId, periodEnd, payment.ReceiptNumber);
+
+        if (_email is not null)
+            await PostReceiptAsync(db, organizationId, payment, "the Ghost Walk Tour subscription", ct);
     }
 
     private static async Task RedeemCouponAsync(

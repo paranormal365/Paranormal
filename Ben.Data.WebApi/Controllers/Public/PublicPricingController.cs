@@ -70,15 +70,18 @@ public sealed class PublicPricingController : ControllerBase
                 : [.. t.PermissionAreas.Select(a => a.Area).OrderBy(a => (int)a)],
             // Item 167: capabilities. Storage is exclusion rows; the payload speaks in
             // inclusions with the same null-means-everything contract as the areas.
+            // 10/21/2026: no plan includes events, so the event capabilities are never reported as
+            // part of one, whatever rows a tier still carries from before.
             t.ExcludedCapabilities.Count == 0
                 ? null
-                : [.. Enum.GetValues<Ben.Data.Common.Enums.TierCapability>()
+                : [.. Ben.Data.Common.Enums.TierCapabilities.Sellable
                     .Except(t.ExcludedCapabilities.Select(c => c.Capability)).OrderBy(c => (int)c)],
             t.IsBandedByMembers)));
     }
 
     /// <summary>
-    /// What the page says beside the bands: the free account's storage and the event offer.
+    /// What the page says beside the bands: the free account's storage, the event offer and the
+    /// Ghost Walk Tour subscription when it is on sale.
     /// </summary>
     /// <remarks>
     /// Every value is read the way the code that enforces it reads it, with the same fallbacks, so
@@ -93,11 +96,9 @@ public sealed class PublicPricingController : ControllerBase
         var freeBytes = await AccountStorageGuard.CapBytesAsync(db, ct);
         var eventBytes = await EventStorage.CapBytesAsync(db, ct);
 
-        var onSale = await SiteSettingsService.GetBoolAsync(
-            db, SiteSettingKeys.EventCreditsEnabled, whenUnset: true, ct);
-        var price = PositiveDecimal(
-            await SiteSettingsService.GetAsync(db, SiteSettingKeys.EventCreditPriceUsd, ct),
-            EventCredits.DefaultPriceUsd);
+        // The same reader checkout uses, so the price list can't show a price checkout won't charge.
+        var offer = await EventCreditOffer.ReadAsync(db, ct);
+        var ghostWalk = await Services.Tours.GhostWalkOffer.ReadAsync(db, ct);
         var windowHours = (int)PositiveDecimal(
             await SiteSettingsService.GetAsync(db, SiteSettingKeys.EventCancellationCreditWindowHours, ct),
             (decimal)EventCredits.CancellationWindow.TotalHours);
@@ -105,13 +106,19 @@ public sealed class PublicPricingController : ControllerBase
         return Ok(new PublicPricingExtras(
             (int)(freeBytes / (1024 * 1024)),
             new PublicEventOffer(
-                OnSale: onSale && price > 0m,
-                UnitPrice: price,
+                OnSale: offer.OnSale,
+                UnitPrice: offer.UnitPrice,
                 LifeDays: (int)EventCredits.Life.TotalDays,
                 MaximumPerPurchase: EventCredits.MaximumPerPurchase,
                 CancellationWindowHours: windowHours,
                 StorageMegabytes: (int)(eventBytes / (1024 * 1024)),
-                FilesKeptDays: await EventRetention.DaysAsync(db, ct))));
+                FilesKeptDays: await EventRetention.DaysAsync(db, ct),
+                SubscriberPercent: offer.SubscriberPercent,
+                SubscriberUnitPrice: offer.SubscriberUnitPrice,
+                Bundles: [.. offer.Bundles.Select(b => new EventCreditBundleOffer(
+                    b.Quantity, b.Price, b.Price, EventCreditPricing.AtPercent(b.Price, offer.SubscriberPercent)))]),
+            // Off, or on with no price: not sent at all, so no page can mention it (Ben, 10/21/2026).
+            ghostWalk.OnSale ? new PublicGhostWalkOffer(ghostWalk.MonthlyPrice) : null));
     }
 
     /// <summary>The same reading <see cref="SiteSettingsService.GetDecimalAsync"/> gives.</summary>

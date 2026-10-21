@@ -193,16 +193,15 @@
     }
 
     /// <summary>
-    /// The capabilities a reader can judge a plan by. Buying events and selling tickets aren't
-    /// shown: nothing checks the first (events are bought by any group that needs one) and the
-    /// second is reserved, so either would be a promise the site doesn't keep.
+    /// The capabilities a reader can judge a plan by. Nothing about events: no plan includes them
+    /// (Ben, 10/21/2026) — every event is bought on its own, which the Hosted events section below
+    /// says — so a plan is described neither as including events nor as leaving them out.
     /// </summary>
     private static readonly TierCapability[] Shown =
     [
         TierCapability.PrivateResidenceCases,
         TierCapability.CaseTransfers,
         TierCapability.MediaMetadataStripping,
-        TierCapability.HostEvents,
     ];
 
     private string CapabilitySentence(TierCapability capability, bool included) => capability switch
@@ -216,11 +215,6 @@
         TierCapability.MediaMetadataStripping => included
             ? "Location data removed from audio and video before it's shared"
             : "Location data is removed from photos only",
-        TierCapability.HostEvents => included
-            ? "Hosted events included"
-            : Extras?.Events.OnSale == true
-                ? "Hosted events, bought one at a time"
-                : "No hosted events",
         _ => capability.ToString(),
     };
 

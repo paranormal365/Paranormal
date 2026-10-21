@@ -33,6 +33,17 @@ day-by-day account of building it would say nothing to anyone using it now.
 
 ## Unreleased
 
+- Plans cover investigations. Hosted events are not part of any plan: every event uses one event
+  credit, which covers it however many days in a row it runs. A group with a paid plan pays a share
+  of the credit price, shown on the **Pricing** page and on its **Billing** page.
+- Anyone can buy event credits: a group on its **Billing** page, or a person for the events they
+  organize on **My event credits**. Publishing uses the group's credit first, then one of yours.
+- Event credits can be bought in bundles of several for one price, when they're offered.
+- Ghost walk tours have their own monthly subscription, separate from the plans, with no limit on
+  tours or guests. Subscribe from the **Pricing** page or your group's **Billing** page, and stop
+  renewing at any time.
+- The prices on the home page, the **Pricing** page and in the help are the site's current prices.
+  Guests still never pay anything through the site.
 - After you pay for your group's subscription, or start one a coupon fully covers, a short page
   confirms it went through and then takes you to your group's **Billing** page.
 - The website may ask once whether we can measure our ads. Accept and Decline are equal, nothing
@@ -150,6 +161,13 @@ day-by-day account of building it would say nothing to anyone using it now.
 
 ### Administration
 
+- Site Settings sets the event credit price, the share a paid subscriber pays (20% unless changed)
+  and up to six bundles, and turns the Ghost Walk Tour subscription on with its monthly price. A
+  price the site can't use is refused with a sentence saying why.
+- Plans no longer include events, and the tier editor no longer offers hosting, buying credits,
+  ticket sales or an events-at-once limit. Groups whose plan used to include events were given one
+  credit for each draft event they were preparing.
+- The ledger shows a person's own credit purchases, marked as personal.
 - The audit log's CSV export marks any cell that starts like a spreadsheet formula, so opening the
   file in a spreadsheet cannot run it.
 - What's new shows SuperAdmins the work that is not released yet, and the changes to administration

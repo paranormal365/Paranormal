@@ -17,10 +17,15 @@ public static class PricingWords
     /// but nothing checks them yet (per-event storage comes from a site setting instead). Listing
     /// one would describe a plan by a rule it doesn't have.
     /// </remarks>
+    /// <remarks>
+    /// The events-at-once cap is never shown either: no plan includes events (Ben, 10/21/2026), so a
+    /// plan described as "up to 2 hosted events live at a time" would be a promise of something it
+    /// does not sell. Nothing checks it any more.
+    /// </remarks>
     public static bool IsShown(SubscriptionLimit limit) => limit is not (
         SubscriptionLimit.StorageMegabytes or SubscriptionLimit.CustomRoles
         or SubscriptionLimit.EventSessions or SubscriptionLimit.EventStaff
-        or SubscriptionLimit.EventFilesMegabytes);
+        or SubscriptionLimit.EventFilesMegabytes or SubscriptionLimit.ActiveHostedEvents);
 
     /// <summary>
     /// A cap as a sentence: "Up to 25 pieces of equipment", "Unlimited open cases", "No public pages".

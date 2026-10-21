@@ -691,6 +691,51 @@ When it's off:
 Nothing already bought changes: plans and paid seats continue and renew as before. Event credits
 have their own switch, **Sell event credits**.
 
+### What plans include, and what they don't
+
+Plans cover **investigations**. No plan includes hosted events, the top band included: every event
+uses one event credit, bought on its own. The tier editor no longer offers *Host events*, *Buy event
+credits* or *Sell tickets*, and it has no *Events at once* limit, because none of them can be part of
+a plan. Ghost walk tours aren't part of a plan either; they have their own subscription (see
+[The Ghost Walk Tour subscription](#the-ghost-walk-tour-subscription)).
+
+Events that were already published before this change stay live, and putting one back up never
+uses a credit. When the site was updated, each group whose plan used to include events was given one
+credit for every draft event it was preparing, with the reason written on the credit, so nothing it
+was building needs a purchase it wasn't told about. That happened once and doesn't repeat.
+
+### Event credit prices
+
+Under *Events* in Site Settings:
+
+- **Event credit price ($)** is the full price of one credit. Leave it empty for $99.
+- **Paid-subscriber price (% of the full price)** is what a group with an active paid plan pays. 20
+  makes a $99 credit $19.80. Leave it empty for 20. It applies to bundles too.
+- **Event credit bundles** are several credits for one price, one per line as *how many = price*,
+  for example `3 = 249`. Up to six, each for 2 to 20 credits.
+
+The home page, the Pricing page, the billing pages and the help all show these prices as they are
+set, so changing one changes every place it appears. A value that doesn't make sense, such as a
+percentage over 100 or a bundle line the site can't read, is refused when you save it, with a
+sentence saying why. Anyone can buy credits: a group on its Billing page, or a person on **My event
+credits**. A person always pays the full price.
+
+### The Ghost Walk Tour subscription
+
+A monthly subscription of its own, separate from the investigation plans, for running ghost walk
+tours with no limit on tours or guests. Under *Ghost Walk Tour subscription* in Site Settings:
+
+- **Sell the Ghost Walk Tour subscription** turns it on. It's off until you turn it on.
+- **Ghost Walk Tour subscription price ($ a month)** is its monthly price. With no price set it isn't
+  on sale, whatever the switch says.
+
+While it's on sale, any group can subscribe from its Billing page or the Pricing page, and adding a
+tour, bringing a retired tour back or putting a new tour date on the calendar needs the
+subscription. Tours and dates already on the calendar keep running, and a group on the per-tour
+business plan stays covered by that plan. While it's off, the subscription isn't mentioned anywhere
+on the site or in the help, and tours aren't held back by it. Months already paid for run out and
+aren't renewed while it's off.
+
 ## The storage ceiling
 
 **Administration → Site Settings → Limits → Free account storage (MB)** sets how much a free account
@@ -922,9 +967,9 @@ period. Recording the payment and activating the seat are deliberately two separ
 
 ## Event credits
 
-**Event Credits** lists every credit ever bought. One credit publishes one hosted event, whatever
-it costs to run and however many nights it lasts, and is good for a year from the day it was
-bought. It's spent as soon as the event goes live. The price it was bought at is locked in on the
+**Event Credits** lists every credit ever bought, by a group or by a person for themselves. One
+credit publishes one hosted event, whatever it costs to run and however many days in a row it runs,
+and is good for a year from the day it was bought. It's spent as soon as the event goes live. The price it was bought at is locked in on the
 row, so changing the price never affects a credit someone already holds.
 
 The screen shows who holds each credit, when it expires, whether it has been spent and on what, and

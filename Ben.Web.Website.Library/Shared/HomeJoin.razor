@@ -9,7 +9,8 @@
     The wording is the flyers' (docs/ads/build-ads.py). The GROUP price is read from the same tier
     rows /pricing renders — the cheapest paid band's monthly price — so a SuperAdmin changing a
     band changes this line too, and the front page can never quote a price the plans page does
-    not. $19.99, the live band when this was written, is only the fallback for a failed load.
+    not. $19.99, the live band when this was written, is only the fallback for a failed load. The
+    ghost walk and event prices come from the site settings the same way (10/21/2026).
 
     The button follows who is looking, once AuthReady says so: a visitor is asked to join, a
     signed-in person who is in no group yet is offered the way into one. Before AuthReady the
@@ -23,9 +24,19 @@
         <h2 class="home-join__title">Free to explore. <span>Pay only for what you run.</span></h2>
         <ul class="home-join__prices">
             <li><b>Free</b><span>to join, explore and post — with the Paranormal Platform and 2&nbsp;GB of your own files</span></li>
-            <li><b data-testid="home-join-group-price">@GroupPrice</b><span>a month for a group (public places stay free on every plan)</span></li>
-            <li><b>$29</b><span>a month per ghost walk, every guide and every date included</span></li>
-            <li><b>$99</b><span>per hosted event, however many nights — guests pay you directly</span></li>
+            <li><b data-testid="home-join-group-price">@GroupPrice</b><span>a month for a group's investigations (public places stay free on every plan)</span></li>
+            @* Ghost walks and events are not part of any plan (Ben, 10/21/2026), and their prices are the
+               SuperAdmin's settings, read through the same endpoint the Pricing page uses. A line whose
+               price could not be read is left out rather than filled with a number from the past; the
+               ghost walk line is there only while that subscription is on sale. *@
+            @if (_extras?.GhostWalk is { } walk)
+            {
+                <li data-testid="home-join-ghost-walk"><b>@BenMoney.Format(walk.MonthlyPrice)</b><span>a month for a Ghost Walk Tour subscription — no limit on tours or guests</span></li>
+            }
+            @if (_extras?.Events is { OnSale: true } events)
+            {
+                <li data-testid="home-join-event-price"><b>@BenMoney.Format(events.UnitPrice)</b><span>per hosted event, however many days in a row (@BenMoney.Format(events.SubscriberUnitPrice) for a group with a paid plan) — guests pay you directly</span></li>
+            }
         </ul>
         <div class="home-join__ctas">
             @if (_signedIn)
@@ -46,6 +57,7 @@
 @code {
     private bool _signedIn;
     private string GroupPrice { get; set; } = "$19.99";
+    private Ben.Service.Models.PublicPricingExtras? _extras;
 
     protected override async Task OnInitializedAsync()
     {
@@ -59,6 +71,8 @@
             .Min();
         if (cheapest is { } price)
             GroupPrice = BenMoney.Format(price);
+
+        _extras = await Client.GetPublicPricingExtrasAsync();
     }
 
     protected override async Task OnAfterRenderAsync(bool firstRender)

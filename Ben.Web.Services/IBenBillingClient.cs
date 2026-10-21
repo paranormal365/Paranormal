@@ -1,4 +1,4 @@
-﻿using Ben.Service.Models;
+using Ben.Service.Models;
 using Ben.Service.Models.Admin;
 using Ben.Web.Services.WebApi;
 
@@ -170,11 +170,38 @@ public interface IBenBillingClient
     // ── Event credits (item 235) ──────────────────────────────────────────────
 
     /// <summary>
-    /// Opens a Stripe Checkout page for <paramref name="quantity"/> event credits. Org-gated on
-    /// the settings key, because it spends the group's money.
+    /// Opens a Stripe Checkout page for <paramref name="quantity"/> event credits, or for the bundle
+    /// of <paramref name="bundle"/> credits when one is chosen. Org-gated on the settings key,
+    /// because it spends the group's money.
     /// </summary>
     Task<(StartCheckoutResponse? Result, string? Error)> StartEventCreditCheckoutAsync(
-        Guid organizationId, int quantity, CancellationToken token = default);
+        Guid organizationId, int quantity, int? bundle = null, CancellationToken token = default);
+
+    /// <summary>The credits the signed-in person holds themselves, and their price (10/21/2026).</summary>
+    Task<ItemResult<OrgEventCreditsView>> GetMyEventCreditsAsync(CancellationToken token = default);
+
+    /// <summary>Opens a Stripe Checkout page for credits the signed-in person will hold.</summary>
+    Task<(StartCheckoutResponse? Result, string? Error)> StartMyEventCreditCheckoutAsync(
+        int quantity, int? bundle = null, CancellationToken token = default);
+
+    /// <summary>The signed-in person's own credit payments.</summary>
+    Task<LoadResult<OrgBillingHistoryRecord>> GetMyEventCreditHistoryAsync(CancellationToken token = default);
+
+    /// <summary>A receipt for one of the signed-in person's own payments.</summary>
+    Task<(byte[] Data, string FileName)?> DownloadMyEventCreditReceiptAsync(Guid entryId, CancellationToken token = default);
+
+    // ── Ghost Walk Tour subscription (10/21/2026) ─────────────────────────────
+
+    /// <summary>The group's Ghost Walk Tour subscription and today's price.</summary>
+    Task<ItemResult<GhostWalkSubscriptionView>> GetGhostWalkAsync(Guid organizationId, CancellationToken token = default);
+
+    /// <summary>Opens a Stripe Checkout page for a month of the Ghost Walk Tour subscription.</summary>
+    Task<(StartCheckoutResponse? Result, string? Error)> StartGhostWalkCheckoutAsync(
+        Guid organizationId, CancellationToken token = default);
+
+    /// <summary>Stops (<paramref name="cancel"/> true) or restarts the subscription's renewal.</summary>
+    Task<(GhostWalkSubscriptionView? Result, string? Error)> SetGhostWalkRenewalAsync(
+        Guid organizationId, bool cancel, CancellationToken token = default);
 
     /// <summary>
     /// What a credit costs today and what this group holds, spent credits included. An

@@ -519,6 +519,11 @@ public sealed partial class BenAdminClientAdapter
         => _api.PutAsync<SetSiteSettingRequest, SiteSettingRecord>(
                $"/api/admin/site-settings/{Uri.EscapeDataString(key)}", request, token);
 
+    public Task<(SiteSettingRecord? Result, string? Error)> SetSiteSettingWithReasonAsync(
+        string key, SetSiteSettingRequest request, CancellationToken token = default)
+        => _api.SendExpectingReasonAsync<SetSiteSettingRequest, SiteSettingRecord>(
+               HttpMethod.Put, $"/api/admin/site-settings/{Uri.EscapeDataString(key)}", request, token);
+
     public Task<CaseDisplayAliasRecord?> GetCaseDisplayAliasAsync(Guid caseId, CancellationToken token = default)
         => _api.GetAsync<CaseDisplayAliasRecord>($"/api/my-cases/{caseId}/display-alias", token);
 

@@ -1,4 +1,4 @@
-﻿using Ben.Data.Common.Enums;
+using Ben.Data.Common.Enums;
 using System.Collections.Concurrent;
 using System.Reflection;
 using System.Text.RegularExpressions;
@@ -85,7 +85,66 @@ public sealed class HelpContentService
     /// ordinary static files under the site's wwwroot and pass through untouched.
     /// </remarks>
     public string ToHtml(HelpDocument document)
-        => Markdown.ToHtml(InlineEmbeddedMedia(document.Markdown), _pipeline);
+        => ToHtml(document, live: null);
+
+    /// <summary>
+    /// Renders a document with today's prices in it and the passages that apply today (10/21/2026).
+    /// </summary>
+    /// <remarks>
+    /// Ben: the help text must read the live prices from the site settings, not numbers typed into it.
+    /// See <see cref="ApplyLiveValues"/> for the two markers a document may use.
+    /// </remarks>
+    public string ToHtml(HelpDocument document, HelpLiveValues? live)
+        => Markdown.ToHtml(InlineEmbeddedMedia(ApplyLiveValues(document.Markdown, live)), _pipeline);
+
+    // ── Live values (10/21/2026) ──────────────────────────────────────────────
+
+    /// <summary>A value marker, e.g. <c>{{price.event-credit}}</c>.</summary>
+    private static readonly Regex ValueMarker = new(@"\{\{(?<name>[a-z][a-z0-9.-]*)\}\}", RegexOptions.Compiled);
+
+    /// <summary>A passage marker on a line of its own: <c>{{#if name}}</c> … <c>{{/if}}</c>.</summary>
+    private static readonly Regex PassageMarker = new(
+        @"^[ \t]*\{\{#if (?<name>[a-z][a-z0-9.-]*)\}\}[ \t]*\r?\n(?<body>.*?)^[ \t]*\{\{/if\}\}[ \t]*(\r?\n|$)",
+        RegexOptions.Compiled | RegexOptions.Multiline | RegexOptions.Singleline);
+
+    /// <summary>
+    /// What a value reads as when the live one isn't known: a page whose prices could not be read,
+    /// and the printed product documentation, which has no live site behind it. Words, never an old
+    /// number. <c>docs/build-documentation-pdf.py</c> carries the same table.
+    /// </summary>
+    public static readonly IReadOnlyDictionary<string, string> Fallbacks = new Dictionary<string, string>(StringComparer.Ordinal)
+    {
+        [HelpLiveValues.EventCreditPrice]           = "the price shown on the Pricing page",
+        [HelpLiveValues.EventCreditSubscriberPrice] = "a share of that price",
+        [HelpLiveValues.EventCreditSubscriberPercent] = "the percentage shown on the Pricing page",
+        [HelpLiveValues.GhostWalkMonthlyPrice]      = "the monthly price shown on the Pricing page",
+    };
+
+    /// <summary>
+    /// Fills a document's value markers and keeps or drops its passages.
+    /// </summary>
+    /// <remarks>
+    /// <para><b>Values.</b> <c>{{price.event-credit}}</c> and the others in <see cref="HelpLiveValues"/>
+    /// become today's figure, or the words in <see cref="Fallbacks"/> when it isn't known.</para>
+    ///
+    /// <para><b>Passages.</b> A block between <c>{{#if ghost-walk}}</c> and <c>{{/if}}</c>, each on a line
+    /// of its own, is shown only while that condition holds — so when the SuperAdmin takes the Ghost Walk
+    /// Tour subscription off sale, the help stops mentioning it, as Ben's rule asks. With no live values
+    /// at all (the catalogue checks, the printed documentation) every passage is kept: a catalogue check
+    /// wants the whole text.</para>
+    /// </remarks>
+    public static string ApplyLiveValues(string markdown, HelpLiveValues? live)
+    {
+        var text = PassageMarker.Replace(markdown, m =>
+            live is null || live.Conditions.Contains(m.Groups["name"].Value) ? m.Groups["body"].Value : string.Empty);
+
+        return ValueMarker.Replace(text, m =>
+        {
+            var name = m.Groups["name"].Value;
+            if (live?.Values.TryGetValue(name, out var value) == true) return value;
+            return Fallbacks.TryGetValue(name, out var words) ? words : m.Value;
+        });
+    }
 
     // ── Embedded media ────────────────────────────────────────────────────────
 
@@ -183,7 +242,11 @@ public sealed class HelpContentService
     /// deeper ones make the list longer than the document.
     /// </summary>
     public static IReadOnlyList<(string Text, string Anchor)> HeadingsOf(HelpDocument document)
-        => document.Markdown
+        => HeadingsOf(document, live: null);
+
+    /// <summary>The contents list for the text as it will actually be shown, passages applied.</summary>
+    public static IReadOnlyList<(string Text, string Anchor)> HeadingsOf(HelpDocument document, HelpLiveValues? live)
+        => ApplyLiveValues(document.Markdown, live)
             .Split('\n')
             .Select(line => line.TrimEnd('\r'))
             .Where(line => line.StartsWith("## ") && !line.StartsWith("###"))
@@ -274,5 +337,51 @@ public sealed class HelpContentService
             Markdown: body,
             Feature:  fields.TryGetValue("feature", out var feature) && !string.IsNullOrWhiteSpace(feature) ? feature : null,
             Role:     fields.TryGetValue("role", out var role) && !string.IsNullOrWhiteSpace(role) ? role : null);
+    }
+}
+
+/// <summary>
+/// Today's prices and switches, for a help document to read (10/21/2026).
+/// </summary>
+/// <param name="Values">Marker name to the text it becomes, e.g. "price.event-credit" → "$99".</param>
+/// <param name="Conditions">The passage conditions that hold today, e.g. "ghost-walk".</param>
+public sealed record HelpLiveValues(IReadOnlyDictionary<string, string> Values, IReadOnlySet<string> Conditions)
+{
+    /// <summary>One event credit at the full price.</summary>
+    public const string EventCreditPrice = "price.event-credit";
+
+    /// <summary>One event credit at the paid-subscriber price.</summary>
+    public const string EventCreditSubscriberPrice = "price.event-credit-subscriber";
+
+    /// <summary>The paid-subscriber percentage, with its % sign.</summary>
+    public const string EventCreditSubscriberPercent = "percent.event-credit-subscriber";
+
+    /// <summary>One month of the Ghost Walk Tour subscription.</summary>
+    public const string GhostWalkMonthlyPrice = "price.ghost-walk-month";
+
+    /// <summary>The passage condition that holds while the Ghost Walk Tour subscription is on sale.</summary>
+    public const string GhostWalkOnSale = "ghost-walk";
+
+    /// <summary>
+    /// Builds the values from the price list's extras, the same figures the Pricing page shows.
+    /// Null extras gives an empty set, so every value reads as its fallback words and every
+    /// conditional passage is left out.
+    /// </summary>
+    public static HelpLiveValues From(Ben.Service.Models.PublicPricingExtras? extras, Func<decimal, string> money)
+    {
+        var values = new Dictionary<string, string>(StringComparer.Ordinal);
+        var conditions = new HashSet<string>(StringComparer.Ordinal);
+        if (extras is { } x)
+        {
+            values[EventCreditPrice] = money(x.Events.UnitPrice);
+            values[EventCreditSubscriberPrice] = money(x.Events.SubscriberUnitPrice);
+            values[EventCreditSubscriberPercent] = $"{x.Events.SubscriberPercent:0.##}%";
+            if (x.GhostWalk is { } walk)
+            {
+                values[GhostWalkMonthlyPrice] = money(walk.MonthlyPrice);
+                conditions.Add(GhostWalkOnSale);
+            }
+        }
+        return new HelpLiveValues(values, conditions);
     }
 }

@@ -48,7 +48,10 @@ public sealed class AdminBillingController : BenControllerBase
             .Take(Math.Clamp(take, 1, 1000))
             .Select(e => new BillingLedgerEntryRecord(
                 e.Id, e.Kind, e.OrganizationId,
-                e.Organization != null ? e.Organization.Name : null,
+                // A person's own purchase (10/21/2026) has no group; the payer stands in its place.
+                e.Organization != null
+                    ? e.Organization.Name
+                    : e.PayerAppUser != null ? (e.PayerAppUser.DisplayName ?? e.PayerAppUser.Email) + " (personal)" : null,
                 e.ReferrerAppUserId,
                 e.ReferrerAppUser != null ? (e.ReferrerAppUser.DisplayName ?? e.ReferrerAppUser.Email) : null,
                 e.Amount, e.AdjustmentIsCredit, e.TaxRatePercent, e.TaxAmount,
@@ -194,7 +197,10 @@ public sealed class AdminBillingController : BenControllerBase
             .Where(e => e.Id == id)
             .Select(e => new BillingLedgerEntryRecord(
                 e.Id, e.Kind, e.OrganizationId,
-                e.Organization != null ? e.Organization.Name : null,
+                // A person's own purchase (10/21/2026) has no group; the payer stands in its place.
+                e.Organization != null
+                    ? e.Organization.Name
+                    : e.PayerAppUser != null ? (e.PayerAppUser.DisplayName ?? e.PayerAppUser.Email) + " (personal)" : null,
                 e.ReferrerAppUserId,
                 e.ReferrerAppUser != null ? (e.ReferrerAppUser.DisplayName ?? e.ReferrerAppUser.Email) : null,
                 e.Amount, e.AdjustmentIsCredit, e.TaxRatePercent, e.TaxAmount,
@@ -356,13 +362,15 @@ public sealed class AdminBillingController : BenControllerBase
 
         // A granted credit cost nothing, so there is nothing to hand back and a $0 adjustment
         // would only add a line saying so. Revoking one is what refunding it means.
+        // A person's own credit (10/21/2026) is refunded on the person's side of the ledger.
         if (request.RecordAdjustment && credit.PriceAtPurchase > 0m
-            && credit.OwnerOrganizationId is { } orgId)
+            && (credit.OwnerOrganizationId is not null || credit.OwnerAppUserId is not null))
             db.BillingLedgerEntries.Add(new BillingLedgerEntry
             {
                 Id                 = Guid.NewGuid(),
                 Kind               = BillingLedgerKind.Adjustment,
-                OrganizationId     = orgId,
+                OrganizationId     = credit.OwnerOrganizationId,
+                PayerAppUserId     = credit.OwnerOrganizationId is null ? credit.OwnerAppUserId : null,
                 Amount             = credit.PriceAtPurchase,
                 AdjustmentIsCredit = true,
                 Description        = $"Event credit refunded — {credit.RefundedReason}",
