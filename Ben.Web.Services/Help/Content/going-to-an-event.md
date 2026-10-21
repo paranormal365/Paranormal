@@ -35,6 +35,13 @@ email.
 
 You don't need an account to choose your places, either — see [Choosing without an account](#choosing-without-an-account).
 
+**Finding an event.** Public events appear on the map on the home page, marked with a ticket, at an
+approximate spot near the venue rather than its exact address. Tap one to open its page. On **What's
+on** you can search by the event's name, the group running it, a tour, or a town.
+
+**Add the dates to your calendar**, on an event's page, saves every date to your calendar in one file,
+with the menus served on each date if the organizers have published them.
+
 ## Two ways to get a place
 
 The venue decides which one an event uses, and the page shows you the one that applies.
@@ -177,6 +184,9 @@ a drink from the bar. **Included** means the event's price covers it. A price at
 your place covers. **Download this menu as a PDF** saves a copy to print or keep. The iPhone and
 iPad app shows the same menus, in the same look, with the same PDF.
 
+Alcohol is marked **21+**, and it is always priced on its own, never included in the meal's price or
+the event's. The menus also appear on the dates in your calendar file and on the group's calendar.
+
 The marks on a menu describe the food. If there's something someone in your party can't eat, add it
 to your booking under [Who's coming](#whos-coming), and the kitchen will see it.
 
@@ -190,7 +200,9 @@ under **Downloads**. Files marked **For guests** appear once the venue has confi
 
 Once the venue has confirmed your place, the event's page shows **The room**: a space where the
 people at the event — guests, organizers and anyone helping — can post what's happening. Nobody
-else can see it, and nothing in it appears on the public feed.
+else can see it, and nothing in it appears on the public feed. You don't have to be checked in at
+the door: the room opens to you as soon as your place is confirmed, so you can talk to the others
+before the event as well as during it.
 
 ![The room on the event's page](/help/media/going-to-an-event/the-room.png)
 
@@ -218,9 +230,22 @@ available so you can look back through it.
 Posts from the people running the event have a colored edge and a badge — *Organizer*, *Guide*,
 *Venue* — so you can tell them from other guests.
 
-**On a ghost walk**, once the guide has checked you in, the walk's page and the app show **The walk's
-room**, where you and the others on the walk, and your guides, can keep in touch. It's words only,
-and it stays open for a week after the walk.
+**On a ghost walk** it's different: the walk's room is only for people the guide has checked in.
+Once you're checked in, the walk's page and the app show **The walk's room**, where you and the
+others on the walk, and your guides, can keep in touch. It's words only, and it stays open for a
+week after the walk.
+
+## Writing to the organizers
+
+If you have a booking at an event, whatever became of it, the event's page has **Write to the
+organizers**. Ask about parking, your booking, what to bring, or anything else. Only the group
+running the event, and the people they've asked to answer bookings, see what you write. Nobody else
+does, and it never appears on the feed or in the room.
+
+Their answer appears in the same place, marked with a colored edge, and your bell tells you when
+it arrives. The iPhone and iPad app has the same conversation under **Profile → What I'm going to →
+The event → Write to the organizers**. It's words only, and it stays open until a month after the
+event ends.
 
 ## When the organizer starts the group's session
 
@@ -237,8 +262,13 @@ Some organizers sell places at the door. Scan the QR code by the door with your 
 in or make an account, and ask for your place. Pay them however they take it — nothing is paid
 through this site. When they confirm you, your pass appears on the same screen, ready to scan in.
 
+**You need an account to ask at the door.** It takes a minute with an email address, and it's what
+your pass, the room and the results letter are sent to. **If the event is full**, you can still
+ask: it goes to the organizers as a request, and they can let you in if a place opens up.
+
 If an organizer has already been paid by you, they may send you a **ticket** by email instead.
-Opening its link confirms your place straight away and sends you your pass.
+Opening its link confirms your place straight away and sends you your pass. If the event filled up
+before you opened it, it arrives as a request instead, and the organizers will sort it out with you.
 
 ## Your pass
 
@@ -355,6 +385,18 @@ results are ready, the organizer may email everyone who had a place, with a link
 results page. The evidence they accepted is listed with the most *confirms* votes first, then in the
 order it was caught, and if they ask, you can vote for the best. With the IsHaunted app, the
 results are also under **Results** on the event.
+
+- **Only *confirms* votes decide the order.** Other votes are counted but don't move a piece up.
+  When two pieces have the same number of *confirms*, the one caught first comes first.
+- **The deadline is for evidence you offer on the page.** Sessions you recorded with the IsHaunted
+  app can still be sent to the event after it, because a long night can take days to go through.
+
+**Your sessions in the results.** When you send a session from the app to an event, you can turn on
+**May be shown with the results**, or tick the same box later under **My field sessions** on the
+website. If you do, and the organizers choose to show it, anybody can play it from the event's page
+in the session player, with any EVPs marked, credited to you. Your exact position is never shown.
+It's only possible at an event that takes evidence, at a public place. Turn the box off and it comes
+off the page at once.
 
 **Saying how it was** is open to anyone who had a confirmed place — the person who booked, and any
 guests they named who have an account — for two months after the event ends. It's one to five stars

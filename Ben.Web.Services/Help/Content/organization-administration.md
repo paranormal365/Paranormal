@@ -1698,6 +1698,8 @@ On the menu:
     event's price includes, under the dates.
   - **Priced on its own.** An extra or an add-on, such as alcohol, or blue cheese on a steak. Give its
     price.
+- **Alcohol** has its own mark, **21+**. Anything marked as alcohol is always priced on its own; the
+  menu won't save if it's in the meal's price or covered by the event.
 - **Prices**: the meal's price, as one amount for everybody or one for each kind of guest. The
   buttons **+ Adults**, **+ Children**, **+ Seniors**, **+ First responders** and **+ Military** add
   a row with its name filled in, and you can type any other. A note under them can say *Gratuity not
@@ -1723,7 +1725,10 @@ blackletter and Case File's typewriter, and the PDF uses the same ones.
 ![The ghost-hunting designs, each drawn as a finished menu](help-media:organization-administration/event-menu-designs.png) The design picker
 shows each one as a finished sample menu, and a new menu starts in Séance Parlor.
 
-Every menu ends with a very small line saying it was made with IsHaunted.com.
+Every menu ends with a very small line: *IsHaunted.com © 2026 ISHAUNTED LLC*, with the current year.
+
+Published menus also appear on your group's calendar, on the event's entry for each date they're
+served, and in the calendar file guests download from the event's page.
 
 #### Publishing, copies and the PDF
 
@@ -1872,6 +1877,15 @@ pay you however you take money; the site never handles it. Then whoever is on th
 may confirm only the places asked for at the door; every other booking stays with whoever decides
 bookings. Only the organizer turns door sales on or off, and turning them off stops the printed code
 working.
+
+- **An account is needed at the door.** A guest makes one with an email address before asking, so
+  their pass, the room and the results letter have somewhere to go.
+- **A sold-out event still takes requests at the door.** What somebody asks for becomes a request on
+  the booking board, and you or the door can confirm it if a place opens up.
+
+**Who's at the classes**, linked from the door, lists each class with a switch per person with a
+place, so a helper running the door can mark who came without opening the program, which is your
+group's. The app has the same screen under the door.
 
 **On the iPhone or iPad app.** Anyone who can run an event's door — a group member with door access,
 a helper who accepted an invitation, or the venue's own staff if the venue granted it — will find
@@ -2149,6 +2163,10 @@ the people in them didn't agree to appear on a public page.
 The public event page opens with the pictures, shows how long until the first night, and on a
 phone keeps an **Ask for a place** button at the bottom of the screen as people scroll.
 
+**Where people find it.** Once published, the event appears on the map on the home page, at an
+approximate spot near the venue rather than its exact address, until the day after it ends. It can
+be found on **What's on** by its name, your group's name, a tour or the town.
+
 **Putting an event on your group's own pages.** When you edit one of your public pages, four
 section types show one of your published events and stay up to date automatically: *An event: dates
 and ask for a place*, *An event's program*, *An event's pictures* and *An event's venue*. If a
@@ -2209,6 +2227,17 @@ about to expire gets its own row there.
 The color's name is always shown along with the color itself, because about one in twelve men can't
 tell red from green.
 
+### When a guest writes to you
+
+Anybody with a booking at the event can **write to the organizers** from the event's page or the
+app. Their message arrives in your group's **Messages** as *Guest Message*, one thread per guest,
+addressed to everyone who can say yes or no to bookings, and your bell counts it.
+
+**Guest messages**, on the event page, lists every guest who has written, the newest first, with
+*Waiting on you* beside the ones you haven't answered. Choose one to read it and answer. The guest
+sees your answer on the event's page and in the app, and their bell tells them. Messages are words
+only, and the event stops taking them a month after it ends.
+
 ### Writing to your guests
 
 **Write to your guests**, at the bottom of the booking board, sends one message to everyone with a
@@ -2248,13 +2277,26 @@ one message.
 - **We missed you** goes instead to anyone with a confirmed place who was never checked in, with a
   note of its own. If the door didn't check anybody in at all, the site can't tell who came, so
   everybody gets the thank-you.
+- **Who came.** Before the letters go, the *Who came* card lists each confirmed party, with a **Here**
+  switch that starts from the door's scans. Change any that are wrong, for example somebody who came
+  in by the side door: the thank-you goes to everyone marked here and *we missed you* to the rest.
+  Once a party's letter has gone, its switch can't change.
 - **The evidence window.** On an event that takes evidence, say how many days after the event you'll
   accept evidence, and roughly how many days until the results are ready. Both letters say it — for
   example, *We're accepting evidence for three days … ready to see in about a week* — and the
   event's page shows the deadline. After it, the page stops taking evidence and says so.
 - **Votes.** Tick **Ask people to vote for the best evidence** and the evidence you accept is shown
   with a vote beside each piece. Accepted evidence is always listed with the most *confirms* votes
-  first, then in the order it was caught.
+  first, then in the order it was caught. Only *confirms* votes count toward the order, and a tie
+  goes to the piece caught first.
+- **Sessions from the app aren't held to the window.** The deadline closes the event's page to new
+  evidence; a guest can still send a session they recorded in the app afterward.
+- **Sessions in the results.** Under the sessions sent to the event, **Show with the results** puts a
+  session on the event's page, where anybody can play it in the session player with its EVPs marked.
+  It needs the sender's yes first: they give it when they send it from the app, or later on the
+  website, and the button says *Waiting for the sender's OK* until they do. It's only offered at an
+  event that takes evidence, at a public place. **Stop showing** takes it off, and so does the
+  sender changing their mind.
 - **The results.** When the evidence is ready, **Send the results letter** emails everybody who had
   a place, including those who missed it, with a link and a QR code to the results. The link goes to
   the event's page, or to a page you built: add the section **An event's evidence** to one of your

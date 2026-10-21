@@ -4,8 +4,9 @@ Jim's overnight conference at The Factory and the menu rules, walked sentence by
 code. The table, with what was built, partly built or missing and what this branch did, is in
 `ProjectNotes/branches/event-scenario-gaps.md`.
 
-> **DEPLOY NEEDS A MIGRATION: `20261021220236_EventScenarioGaps`** (columns and two indexes only;
-> `HostedEvents.SendMissedYou` is true for existing rows).
+> **DEPLOY NEEDS A MIGRATION: `20261021231806_EventScenarioGaps`** (columns and two indexes only;
+> `HostedEvents.SendMissedYou` is true for existing rows). It replaced `20261021220236`, which was never
+> deployed.
 
 ## What this branch adds
 
@@ -23,46 +24,50 @@ code. The table, with what was built, partly built or missing and what this bran
 - Menus: one-tap price kinds, the site mark beside the credit, the planner's title kept from guests, what
   the event covers in the confirmation letter. The decision sheet keeps every seat a party holds.
 
+### Second pass, after Ben's answers
+
+- A party holding several seats or rooms on a night is checked against them together, not whole against
+  each one (`EventCapacity.WhyThesePlacesCannotTakeThem`).
+- Menus: alcohol has its own **21+** mark and is always priced on its own; the credit reads
+  "IsHaunted.com © {year} ISHAUNTED LLC" on the web, the PDF and iOS.
+- **Who came** after the event: the organizer's marks override the door's scans for the letters.
+- Published menus on the group's calendar entry for each date and in the calendar files; a public
+  `/calendar/hosted-events/{id}.ics` linked from the event page.
+- Public hosted events on the home map (approximate pins) and a keyword search on **What's on**.
+- **Who's at the classes** for door helpers, on the website and in the app.
+- Sessions in the results: the sender's yes (app toggle or **My field sessions**), the organizer's
+  **Show with the results**, and the event's own standing (public, taking evidence, at a public place).
+  Anybody can then play it in the session player from the event's page.
+- **Write to the organizers**: a guest with a booking writes from the event's page or the app; one thread
+  per guest (`OrgMessageChannel.EventGuestThread`) addressed to whoever decides bookings; the organizers
+  answer on **Guest messages**; each side's bell says when there's something new.
+
+## Ben's answers (10/21/2026), now in the help
+
+1. **The hosted room** stays open to confirmed guests from publishing; check-in only applies to walks.
+2. **Tickets at the door need an account.** Kept.
+3. **Who came**: built; the organizer marks who came before the letters go.
+4. **The evidence deadline** covers evidence offered on the event's page only; app sessions are exempt.
+5. **Ties** go to the earliest caught.
+6. **Only *Confirms* votes** rank.
+7. **A ticket opened after the day passes ran out** arrives as a request. Kept.
+8. **Map pins and search**: built.
+10. **Messaging the organizer**: built.
+11. **Sessions in the results**: built, with the sender's consent.
+12. **Menus in the calendar**: built.
+13. **Alcohol**: its own 21+ mark, always priced on its own.
+14. **The credit**: shortened.
+15. **Multi-seat capacity**: fixed, with a test.
+16. **Door helpers marking classes**: a web page and an app screen.
+
 ## For Ben
 
-These are business decisions or ambiguous, so nothing was guessed:
+Still open:
 
-1. **Who may message in a hosted event's room.** Your note says both people must be checked in. The room
-   (item 235) is open to confirmed guests from publishing until a week after, including before anybody
-   arrives. I left that as it is and built the check-in rule for ghost walks only. Should a hosted room
-   require check-in (and so only open once the doors do)?
-2. **Tickets at the door need an account.** The scanner signs in or makes one, because the place and the
-   pass live on an account. A no-account door sale (name and email only) would mean making accounts from
-   typed addresses, which the site has refused to do so far. Keep it this way?
-3. **"We missed you" depends on the door.** When the door checked nobody in, everybody gets the
-   thank-you. Fine, or should an organizer be able to tick who came after the event?
-4. **The evidence deadline covers evidence offered on the event's page only.** Sessions sent from the
-   app to the event still have no deadline (a phone may only get a signal days later). Should the deadline
-   apply to them too, by when they were recorded?
-5. **Ties in the ranking** go to the **earliest** caught. Or newest first?
-6. **"Positive votes"** are the existing *Confirms* votes; *Disputes* and *Inconclusive* don't rank.
-7. **Ticket capacity.** A ticket opened after the day passes ran out arrives as a request rather than
-   overbooking. Should a ticket the organizer sent always get in?
-8. **Events on the home map and keyword search on /events** (story sentences 7 and 8): the nearby list is
-   deliberately "list-only, no map". Do you want event pins on the home map and a search box?
-9. **A newsletter for people looking for this kind of event** (sentence 9, "if we decide"): not built.
-10. **Messaging the organizer from the app** (sentence 10): only the free-text contact line and the
-    ask-for-a-place note exist. A "message the organizer" thread would be new.
-11. **Sessions in the player for guests, with EVPs** (sentences 33–34): sessions sent to an event play for
-    the team only; a guest's session is theirs until they publish it to a place. Should the organizer be
-    able to put sent sessions on the results page, with the sender's consent, and should the player show
-    the EVP detector's marks?
-12. **Menus "in the calendar for the event"**: they're on the event page's dates list. Do you also want them
-    on the group's own calendar or in the downloadable .ics?
-13. **Extras like alcohol**: "Priced on its own" with a note covers it. Do you want a separate *Extra* mark
-    or a 21+ note?
-14. **The credit's wording** stays "Menu made with IsHaunted.com · © {year} ISHAUNTED LLC" (approved
-    10/13). Your menu note reads "IsHaunted.com © {year} ISHAUNTED LLC"; say if it should be shorter.
-15. **Multi-seat parties on the server.** The decision sheet now sends every seat; the server's capacity
-    check counts the whole party against each seat. Please try confirming a party of three in seats on the
-    seeded evening; if it refuses, the per-seat check needs the party split across the seats.
-16. **Door helpers marking classes on the website.** The API lets the door mark class attendance and read
-    the roster, but the program page itself is for the group's members; door helpers have no web page for
-    it yet (the app has none either).
-17. **iOS fixtures** for the results and the walk's room are written from the API's records, not captured.
-    Capture them from a running API on the next end-to-end run.
+1. **The AAC EVP detector** isn't part of the session player's marks on the public page: the player shows
+   the marks the sender's phone made. Running the detector on shown sessions is a separate piece of work.
+2. **A newsletter for people looking for this kind of event** (sentence 9, "if we decide"): not built.
+3. **Who may write to the organizers.** Anybody with a booking at the event, whatever its status, as its
+   lead or named on it. Somebody thinking about booking can't write yet. Should they?
+4. **iOS fixtures** for the results, the walk's room, the classes and the organizer thread are written
+   from the API's records, not captured. Capture them from a running API on the next end-to-end run.

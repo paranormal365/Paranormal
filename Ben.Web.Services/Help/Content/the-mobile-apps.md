@@ -594,7 +594,9 @@ Turn it off to keep it as your own session instead. One upload carries ten minut
 600 MB. A longer night goes in parts — narrow the window, send, move it along, send again — and each
 part arrives as its own session rather than replacing the last one.
 
-What you send is for the group to see, not the other guests.
+What you send is for the group to see, not the other guests. At an event, **May be shown with the
+results** lets the organizers also show it on the event's page, where anybody can play it, credited
+to you. It's off unless you turn it on, and you can change your mind on the website.
 
 ### Joining by scanning the lead's code
 
@@ -795,6 +797,8 @@ under **Getting in and getting around**.
 - **Results** — once the organizers have accepted evidence from the night, the event shows what
   people caught, with the most *confirms* votes first, then in the order it was caught. Tap a piece to
   play or view it, or open the results page on the website.
+- **Write to the organizers** — ask the people running the event anything. Their answers appear here,
+  with a colored edge, and on the event's page on the website.
 
 ![The program, with a place signed up for and a party waiting](/help/media/the-mobile-apps/iphone-event-programme.png)
 
@@ -858,6 +862,8 @@ If an event's organizers have asked you to help at the door — or you're in the
   and a name if they give one.
 - Nobody's address or phone number appears on these screens, and the screen stays awake while the
   door is open.
+- **Who's at the classes**, at the top of the door, lists each class with a switch per person with a place, to
+  mark who came.
 
 ![A scanned pass, showing its reservation](/help/media/the-mobile-apps/iphone-door-scanned.png)
 

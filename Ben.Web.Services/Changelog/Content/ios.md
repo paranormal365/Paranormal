@@ -35,7 +35,13 @@ it is hidden from everybody else, but still takes its number. No other sub-headi
   and your guides.
 - In an event's room, posts from the organizers, guides and venue carry a badge.
 - The notice when a session starts now says, plainly, that sessions are being accepted for the event.
-- A menu's credit carries the small IsHaunted mark.
+- A menu's credit carries the small IsHaunted mark, and reads "IsHaunted.com © 2026 ISHAUNTED LLC".
+  Alcohol is marked **21+**.
+- An event you have a booking at has **Write to the organizers**, with their answers in the same
+  place.
+- The door has **Who's at the classes**, to mark who came to each class.
+- When you send a session to an event, **May be shown with the results** lets the organizers show it
+  on the event's page. It's off unless you turn it on.
 - The magnetic field and sound readings never show "-0": a reading at the base level reads 0, and
   VoiceOver says "at base".
 - The sound reading follows the room. It used to stop at -60 dB, which is about where an ordinary

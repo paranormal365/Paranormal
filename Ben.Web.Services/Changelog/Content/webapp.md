@@ -64,7 +64,23 @@ day-by-day account of building it would say nothing to anyone using it now.
   credit at the foot of every menu carries the small IsHaunted mark; and a menu's own working title
   is no longer sent to guests.
 - What an event's price includes is now in the confirmation email too.
-- Confirming a party with several seats or rooms on one night keeps them all.
+- Confirming a party with several seats or rooms on one night keeps them all, and a party holding
+  two seats is counted once, not once per seat.
+- Guests with a booking can **write to the organizers** from the event's page. The organizers read
+  and answer on the event's new **Guest messages** page, and both sides' bells say when there's
+  something new.
+- After an event, the **Who came** card lets the organizer correct what the door recorded before the
+  letters go. The thank-you and *we missed you* letters follow those marks.
+- A door helper has a **Who's at the classes** page to mark who came to each class.
+- Published events appear on the home page's map, at an approximate spot, and **What's on** has a
+  search for an event's name, its group, a tour or a town.
+- Published menus appear on the group's calendar for the dates they're served, and in the calendar
+  file. An event's page has **Add the dates to your calendar**.
+- Menus mark alcohol **21+**, and it is always priced on its own. The credit at the foot of a menu
+  now reads "IsHaunted.com © 2026 ISHAUNTED LLC".
+- With the sender's yes, an organizer can show a session sent to an event with its results. Anybody
+  can then play it in the session player from the event's page, with its EVPs marked. Senders give
+  or take back their yes under **My field sessions**.
 - A helper who runs the door is taken straight to the event's door after accepting.
 - Plans cover investigations. Hosted events are not part of any plan: every event uses one event
   credit, which covers it however many days in a row it runs. A group with a paid plan pays a share
