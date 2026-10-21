@@ -47,6 +47,11 @@ public final class ActiveFieldSession {
     public private(set) var watchForMotion = false
     /// The last time Watch for Motion (or the sentry) saw something, for the live screen's sign.
     public private(set) var lastMotionDetectedAt: Date?
+    /// The last photo Watch for Motion took on its own, and how many it has taken this session.
+    /// Ben, 10/20/2026: "it was not obvious that it was supposed to be recording pictures when
+    /// detecting movement." The live screen flashes and counts them from these.
+    public private(set) var lastMotionPhotoAt: Date?
+    public private(set) var motionPhotoCount = 0
 
     /// Set when a recording stopped for a reason nobody chose — a call, another app taking the
     /// microphone. Surfaced rather than swallowed: somebody who thinks they are recording and
@@ -468,12 +473,21 @@ public final class ActiveFieldSession {
     /// with that moment — so the replay placed a video after the stretch it had filmed, and a
     /// whole-session video would have started at the session's end. A photo is an instant and
     /// passes nothing.
+    ///
+    /// `byMotion` is a photo Watch for Motion took on its own, which the live screen shows as it
+    /// happens. The file and the reading are the same as any other photo's.
     public func noteCapture(kind: CaptureKind, relativePath: String, byteCount: Int64,
-                            durationSeconds: Double? = nil, startedAt: Date? = nil) async {
+                            durationSeconds: Double? = nil, startedAt: Date? = nil,
+                            byMotion: Bool = false) async {
         await engine.noteCapture(kind: kind, relativePath: relativePath,
                                  durationSeconds: durationSeconds)
+        let at = startedAt ?? now()
+        if byMotion, kind == .photo {
+            lastMotionPhotoAt = at
+            motionPhotoCount += 1
+        }
         captures.insert(CaptureRecord(
-            at: startedAt ?? now(), kind: kind, relativePath: relativePath, byteCount: byteCount,
+            at: at, kind: kind, relativePath: relativePath, byteCount: byteCount,
             durationSeconds: durationSeconds,
             latitude: sample.position?.latitude, longitude: sample.position?.longitude,
             headingDegrees: sample.headingDegrees, room: room), at: 0)

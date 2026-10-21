@@ -19,13 +19,18 @@ final class LiveDictation: DictationService, @unchecked Sendable {
     private var request: SFSpeechAudioBufferRecognitionRequest?
     private var task: SFSpeechRecognitionTask?
     private var latest = ""
-    /// True while the session's own microphone is running. Dictation then leaves the shared audio
-    /// session on when it stops: switching it off would end the session's recording too (10/15/2026,
-    /// asking a question with the microphone in the middle of a recorded session).
-    private let audioInUse: @Sendable () -> Bool
+    /// The session's own microphone. While it is running, dictation listens to ITS buffers rather
+    /// than opening a second engine on the same input. Two engines on one microphone is one way
+    /// the session's sound stopped during a question (10/20/2026): starting this one reconfigured
+    /// the hardware underneath the session's engine, which stopped. And the shared audio session
+    /// is left alone when dictation stops: switching it off would end the session's recording too
+    /// (10/15/2026).
+    private weak var shared: (any MicrophoneTapSharing)?
+    /// Set while listening through the session's microphone.
+    private var sharedListener: UUID?
 
-    init(audioInUse: @escaping @Sendable () -> Bool = { false }) {
-        self.audioInUse = audioInUse
+    init(sharing shared: (any MicrophoneTapSharing)? = nil) {
+        self.shared = shared
     }
 
     var isAvailableOffline: Bool {
@@ -63,26 +68,13 @@ final class LiveDictation: DictationService, @unchecked Sendable {
 
         return AsyncStream { continuation in
             do {
-                let session = AVAudioSession.sharedInstance()
-                try session.setCategory(.playAndRecord, mode: .measurement,
-                                        options: [.mixWithOthers, .defaultToSpeaker])
-                try session.setActive(true)
-
-                let input = engine.inputNode
-                let format = input.outputFormat(forBus: 0)
-                // No microphone — the camera has it, or the session never came up — reports as a
-                // format with no channels, and installing a tap for it raises rather than throws.
-                guard format.sampleRate > 0, format.channelCount > 0 else {
-                    throw DictationError.unavailableOffline
+                // Through the session's microphone when it is running: no second engine, and the
+                // audio session is not touched.
+                if let shared, let id = shared.addListener({ request.append($0) }) {
+                    store(listener: id)
+                } else {
+                    try startOwnEngine(feeding: request)
                 }
-                // A tap left by a start that failed after this point would make the next install
-                // raise; removing one that is not there is allowed and costs nothing.
-                input.removeTap(onBus: 0)
-                input.installTap(onBus: 0, bufferSize: 1024, format: format) { buffer, _ in
-                    request.append(buffer)
-                }
-                engine.prepare()
-                try engine.start()
 
                 let task = recognizer.recognitionTask(with: request) { [weak self] result, error in
                     if let result {
@@ -105,18 +97,50 @@ final class LiveDictation: DictationService, @unchecked Sendable {
         }
     }
 
+    /// The microphone, opened by dictation itself — only when no session has it (a note written
+    /// outside a recording, say).
+    private func startOwnEngine(feeding request: SFSpeechAudioBufferRecognitionRequest) throws {
+        let session = AVAudioSession.sharedInstance()
+        try session.setCategory(.playAndRecord, mode: .measurement,
+                                options: [.mixWithOthers, .defaultToSpeaker])
+        try session.setActive(true)
+
+        let input = engine.inputNode
+        let format = input.outputFormat(forBus: 0)
+        // No microphone — the camera has it, or the session never came up — reports as a
+        // format with no channels, and installing a tap for it raises rather than throws.
+        guard format.sampleRate > 0, format.channelCount > 0 else {
+            throw DictationError.unavailableOffline
+        }
+        // A tap left by a start that failed after this point would make the next install
+        // raise; removing one that is not there is allowed and costs nothing.
+        input.removeTap(onBus: 0)
+        input.installTap(onBus: 0, bufferSize: 1024, format: format) { buffer, _ in
+            request.append(buffer)
+        }
+        engine.prepare()
+        try engine.start()
+    }
+
     @discardableResult
     func stop() async -> String {
         let (request, task) = takeHandles()
         request?.endAudio()
         task?.finish()
 
-        // The tap comes off whether or not the engine got as far as running: `start` installs
-        // it before `engine.start()`, and a failure between the two would otherwise leave it in
-        // place for the next attempt to trip over.
-        engine.inputNode.removeTap(onBus: 0)
-        if engine.isRunning { engine.stop() }
-        if !audioInUse() { try? AVAudioSession.sharedInstance().setActive(false) }
+        if let listener = takeListener() {
+            // Listening through the session's microphone: step off it, and leave it running.
+            shared?.removeListener(listener)
+        } else {
+            // The tap comes off whether or not the engine got as far as running: `start` installs
+            // it before `engine.start()`, and a failure between the two would otherwise leave it
+            // in place for the next attempt to trip over.
+            engine.inputNode.removeTap(onBus: 0)
+            if engine.isRunning { engine.stop() }
+            if shared?.isUsingMicrophone != true {
+                try? AVAudioSession.sharedInstance().setActive(false)
+            }
+        }
 
         // A beat for the recogniser to hand back its last revision — stopping mid-word otherwise
         // loses the end of the sentence, which is usually the part that mattered.
@@ -128,6 +152,18 @@ final class LiveDictation: DictationService, @unchecked Sendable {
     private func store(request: SFSpeechAudioBufferRecognitionRequest) {
         lock.lock(); defer { lock.unlock() }
         self.request = request
+    }
+
+    private func store(listener: UUID) {
+        lock.lock(); defer { lock.unlock() }
+        sharedListener = listener
+    }
+
+    private func takeListener() -> UUID? {
+        lock.lock(); defer { lock.unlock() }
+        let listener = sharedListener
+        sharedListener = nil
+        return listener
     }
 
     private func store(task: SFSpeechRecognitionTask) {

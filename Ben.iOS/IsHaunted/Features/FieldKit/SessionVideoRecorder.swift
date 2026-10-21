@@ -108,10 +108,13 @@ final class SessionVideoRecorder {
         takingMotionPhoto = true
         defer { takingMotionPhoto = false }
         do {
-            let url = try await camera.capturePhoto()
+            // Silent: a room full of people recording does not want a shutter going off
+            // whenever something moves (Ben, 10/20/2026). See `captureMotionPhoto`.
+            let url = try await camera.captureMotionPhoto()
             let adopted = try files.adopt(url, for: session.sessionId, kind: .photo)
+            // Marked as the motion's own photo, so the live screen flashes and counts it.
             await session.noteCapture(kind: .photo, relativePath: adopted.relativePath,
-                                      byteCount: adopted.byteCount)
+                                      byteCount: adopted.byteCount, byMotion: true)
         } catch {
             // A missed photo is not worth a warning: the mark is in the log and the video has it.
         }

@@ -5,6 +5,7 @@ import Foundation
 // are instead of decorating every capture with its own unsafe marker.
 @preconcurrency import AVFoundation
 import CoreMotion
+import CoreImage
 import UIKit
 import SwiftUI
 import BenKit
@@ -149,7 +150,18 @@ final class FieldCameraSession {
 
     // MARK: - Taking something
 
+    /// Whether a photo can be taken without the shutter sound here.
+    ///
+    /// Ben, 10/20/2026: "it made the shutter sound when taking a photo ... it would be rude in a
+    /// room full of people recording." iOS 18 lets an app turn the sound off for each photo with
+    /// `isShutterSoundSuppressionEnabled`, and says through `isShutterSoundSuppressionSupported`
+    /// where that is allowed: it is false only in the few countries whose rules require the sound.
+    var canTakeSilentPhotos: Bool { photoOutput.isShutterSoundSuppressionSupported }
+
     /// One photo, written to a file of its own. The caller moves it into the session.
+    ///
+    /// Silent wherever iOS allows it. Where the local rules require the shutter sound, a photo
+    /// somebody takes by hand makes it, as the system decides.
     func capturePhoto() async throws -> URL {
         guard isRunning else { throw FieldCameraError.notRunning }
 
@@ -158,12 +170,29 @@ final class FieldCameraSession {
         defer { photoCaptures.removeAll { $0 === capture } }
 
         let settings = AVCapturePhotoSettings()
+        // Setting it where it is not supported raises an exception, so it is asked every time.
+        if photoOutput.isShutterSoundSuppressionSupported {
+            settings.isShutterSoundSuppressionEnabled = true
+        }
         if let connection = photoOutput.connection(with: .video),
            let angle = rotation?.videoRotationAngleForHorizonLevelCapture,
            connection.isVideoRotationAngleSupported(angle) {
             connection.videoRotationAngle = angle
         }
         return try await capture.run(on: photoOutput, settings: settings)
+    }
+
+    /// The photo Watch for Motion takes on its own when the camera sees something move.
+    ///
+    /// A full photo with the sound turned off where iOS allows that. Where it does not, the photo
+    /// is the camera's next video frame instead: the session is already filming the room, and a
+    /// frame of that video is not a separate shutter press. Smaller than a photo (the size the
+    /// video records at), and it makes no sound.
+    func captureMotionPhoto() async throws -> URL {
+        guard isRunning else { throw FieldCameraError.notRunning }
+        if canTakeSilentPhotos { return try await capturePhoto() }
+        let angle = rotation?.videoRotationAngleForHorizonLevelCapture ?? 0
+        return try await delegate.nextStill(rotationAngle: angle)
     }
 
     /// Starts a clip that records the sound as well as the picture.
@@ -515,8 +544,73 @@ private final class FrameDelegate: NSObject, AVCaptureVideoDataOutputSampleBuffe
         }
     }
 
+    // MARK: - A still from the video
+
+    private var stillWaiter: (continuation: CheckedContinuation<URL, Error>, angle: CGFloat)?
+    private static let stillContext = CIContext()
+
+    /// The next frame the camera delivers, written as a JPEG. Silent: no photo is taken.
+    func nextStill(rotationAngle: CGFloat) async throws -> URL {
+        try await withCheckedThrowingContinuation { continuation in
+            lock.lock()
+            let previous = stillWaiter
+            stillWaiter = (continuation, rotationAngle)
+            lock.unlock()
+            previous?.continuation.resume(throwing: FieldCameraError.photoFailed)
+            // A camera that has stopped delivering frames answers with a sentence, not a hang.
+            DispatchQueue.global().asyncAfter(deadline: .now() + 3) { [weak self] in
+                self?.giveUpOnStill()
+            }
+        }
+    }
+
+    private func giveUpOnStill() {
+        lock.lock()
+        let waiter = stillWaiter
+        stillWaiter = nil
+        lock.unlock()
+        waiter?.continuation.resume(throwing: FieldCameraError.photoTimedOut)
+    }
+
+    private func answerStillIfWanted(_ sampleBuffer: CMSampleBuffer) {
+        lock.lock()
+        let waiter = stillWaiter
+        stillWaiter = nil
+        lock.unlock()
+        guard let waiter else { return }
+        guard let pixels = CMSampleBufferGetImageBuffer(sampleBuffer) else {
+            waiter.continuation.resume(throwing: FieldCameraError.photoFailed); return
+        }
+        let image = CIImage(cvPixelBuffer: pixels).oriented(Self.orientation(for: waiter.angle))
+        let url = FileManager.default.temporaryDirectory
+            .appendingPathComponent("field-\(UUID().uuidString).jpg")
+        guard let space = CGColorSpace(name: CGColorSpace.sRGB),
+              let data = Self.stillContext.jpegRepresentation(of: image, colorSpace: space)
+        else {
+            waiter.continuation.resume(throwing: FieldCameraError.photoFailed); return
+        }
+        do {
+            try data.write(to: url)
+            waiter.continuation.resume(returning: url)
+        } catch {
+            waiter.continuation.resume(throwing: error)
+        }
+    }
+
+    /// The back camera's frames arrive sideways; the angle the rotation coordinator gives for a
+    /// level picture says which way to turn them.
+    private static func orientation(for angle: CGFloat) -> CGImagePropertyOrientation {
+        switch Int(angle.rounded()) % 360 {
+        case 90: .right
+        case 180: .down
+        case 270: .left
+        default: .up
+        }
+    }
+
     func captureOutput(_ output: AVCaptureOutput, didOutput sampleBuffer: CMSampleBuffer,
                        from connection: AVCaptureConnection) {
+        answerStillIfWanted(sampleBuffer)
         // Four times a second is plenty to catch somebody walking through, and leaves the CPU
         // to the magnetometer.
         let now = Date()
