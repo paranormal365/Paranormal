@@ -22,6 +22,12 @@
 .pitch-pillar p { color: var(--ben-ink-muted); font-size: .9rem; line-height: 1.45; margin: 0; flex: 1; }
 .pitch-pillar__go { color: var(--ben-link); font-weight: 650; font-size: .88rem; margin-top: .35rem; }
 
+/* The way to the prices, under the three (10/22/2026). 44px tall at every width: it is a finger's
+   target on a phone and costs nothing on a desktop. */
+.pitch__pricing { display: flex; align-items: center; flex-wrap: wrap; gap: .5rem 1rem; margin: 1.25rem 0 0; }
+.pitch__pricing .btn { display: inline-flex; align-items: center; gap: .45rem; min-height: 44px; }
+.pitch__pricing-note { color: var(--ben-ink-muted); font-size: .9rem; }
+
 /* ── a browser window around a real screen, cropped to its subject ── */
 .pitch-shot {
     position: relative; overflow: hidden; height: 9rem;

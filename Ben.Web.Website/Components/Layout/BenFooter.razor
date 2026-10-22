@@ -1,11 +1,17 @@
 ﻿@inject Microsoft.Extensions.Options.IOptions<Ben.Data.Common.SiteIdentity> SiteOptions
 @inject Microsoft.Extensions.Configuration.IConfiguration Configuration
+@inject Ben.Web.Services.SiteFeaturesProvider Features
 
 <footer class="app-footer">
     <span class="app-footer-text">@SiteOptions.Value.Name &copy; @DateTime.UtcNow.Year</span>
     @* Both reachable signed out: the guides explaining how to request an investigation are
        for people without an account, and so is the contact form. *@
     <a href="/help" class="app-footer-link ms-3">Help</a>
+    @* Prices, from every page (Ben, 10/22/2026). Hidden only while nothing is on sale. *@
+    @if (Features.PricingIsShown)
+    {
+        <a href="/pricing" class="app-footer-link ms-3" data-testid="footer-pricing">Pricing</a>
+    }
     @* Anonymous like the rest of these: somebody deciding whether to sign up is exactly the
        reader who wants to see the place is being worked on. *@
     <a href="/changes" class="app-footer-link ms-3">What's new</a>

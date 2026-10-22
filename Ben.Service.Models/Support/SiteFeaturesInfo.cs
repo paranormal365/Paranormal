@@ -32,12 +32,18 @@ namespace Ben.Service.Models.Support;
 /// from it. Defaults to true, so an older or unreachable server leaves buying where it has always been; the API
 /// refuses a checkout itself when the switch is off.
 /// </param>
+/// <param name="EventCreditsEnabled">
+/// Whether event credits are on sale (10/22/2026). The menus show Pricing while plans or event credits
+/// are on sale, so they have to know both switches before they draw. Defaults to true, matching the
+/// API's own reading of an unset switch.
+/// </param>
 public sealed record SiteFeaturesInfo(
     IReadOnlyDictionary<string, bool> Features,
     string? Announcement = null,
     bool AllowOrganizationSelfRegistration = true,
     bool AllowTourBusinessSignUps = true,
-    bool PlanPurchasesEnabled = true)
+    bool PlanPurchasesEnabled = true,
+    bool EventCreditsEnabled = true)
 {
     /// <summary>Whether a feature is on. Unknown keys read as off.</summary>
     public bool IsOn(string key) => Features.TryGetValue(key, out var on) && on;
