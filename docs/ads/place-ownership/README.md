@@ -42,7 +42,11 @@ Ben.Web.Playwright once, or point PW_DRIVER at a Playwright driver).
   a hand covers too much, and rebuilt from the device's shape where the frame's edge cuts it off. The
   green light the old screen threw on hands, fur and faces is turned to the page's violet. The 1776 iPad
   showed a page of text rather than green; it is keyed on its mint color, with only skin and the cuff in
-  front. The pages switch at the taps in the footage (`SCHEDULE`).
+  front, and only what reaches in from beyond the screen (a pale patch of the old page is not a hand).
+  A tracked device whose green mostly falls outside its outline (the goalie's thrown tablet) is refitted
+  from that frame's own green; the Sistine tablet rising into frame (`ENTER`) takes its shape from the
+  first whole frame, set on the green's top edge, and while tossed onto the plank (`OWN`) each frame's
+  outline is settled onto the bezel. The pages switch at the taps in the footage (`SCHEDULE`).
 - **The name tag** (`tag.py`): the card is unwarped flat, "John Handook." is inpainted away, "John
   Hancock." is set in Palatino at the old line's place, width and ink, and the card is warped back —
   through the dissolve into Mars too.

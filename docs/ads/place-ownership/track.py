@@ -30,7 +30,7 @@ CFG = {
     'soccer':     dict(a=212, b=280, t=80, up='landscape', win=2, cuts=[225], edges=True, planar=True, from_=225),
     # the iPad thrown up as he leaps: tracked afresh, the same page
     'soccer2':    dict(planar=True, fit_only=[281], a=281, b=332, t=80, gmin=130, up='landscape', win=3, screen='soccer'),   # bright: not the grass
-    'sistine':    dict(planar=True, a=420, b=556, t=40, up='landscape', win=5),
+    'sistine':    dict(planar=True, a=420, b=549, t=40, up='landscape', win=5),
     'rubberball': dict(planar=True, a=551, b=724, t=40, up='portrait', win=5),
     'liberty':    dict(planar=True, a=767, b=893, t=40, up='portrait', win=5),
     'iss':        dict(planar=True, cuts=[1039], a=1030, b=1079, t=35, up='landscape', win=5),
@@ -64,13 +64,22 @@ def key(f, t, mode='green', gmin=0):
     return k
 
 
-def in_front(f):
+def in_front(f, inside=None):
     """For the mint page: what is in front of it is a hand or the white cuff — skin redder than green,
-    the cuff bright and grey — never the page's dark text, which is neither."""
+    the cuff bright and grey — never the page's dark text, which is neither. Graded rather than cut, so
+    a finger's edge is smooth, not the video's blocks. Given the screen's area, only what reaches in from
+    beyond the screen counts: a hand comes from outside it, a pale patch of the old page does not."""
     b, g, r = [f[..., i].astype(np.float32) for i in range(3)]
-    front = ((r - g > 6) | ((g - r < 12) & (r > 165))).astype(np.float32)
-    front = cv2.morphologyEx(front, cv2.MORPH_OPEN, np.ones((5, 5), np.uint8))
-    return cv2.GaussianBlur(cv2.erode(front, np.ones((3, 3), np.uint8)), (0, 0), 1.6)
+    skin = np.clip((r - g - 2) / 10, 0, 1)
+    cuff = np.clip((r - 160) / 15, 0, 1) * np.clip((14 - (g - r)) / 8, 0, 1)
+    soft = np.maximum(skin, cuff)
+    hard = cv2.morphologyEx((soft > .5).astype(np.uint8), cv2.MORPH_OPEN, np.ones((5, 5), np.uint8))
+    if inside is not None:
+        n, lab = cv2.connectedComponents(hard)
+        outside = cv2.erode((inside > .5).astype(np.uint8), np.ones((9, 9), np.uint8)) == 0
+        hard = np.isin(lab, np.unique(lab[outside & (lab > 0)])) & (lab > 0)
+    reach = cv2.dilate(hard.astype(np.uint8), np.ones((7, 7), np.uint8)).astype(np.float32)
+    return cv2.GaussianBlur(soft * reach, (0, 0), 1.0)
 
 
 def fit_quad(m, prev_center=None):

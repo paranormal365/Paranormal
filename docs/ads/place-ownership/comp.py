@@ -125,11 +125,48 @@ def look_of_the_shot(scene, n, f, warped, matte, inside, q):
     return out
 
 
+REFIT = []    # the tracked frames refitted from their own green, for checking
+
+# A device rising into the frame shows only its top edge at first; there the tracking has nothing to hold.
+# Those frames take the device's shape from the first frame it is whole (ref) and set it on this frame's
+# own top edge of green: tilted to its slope, at its height.
+ENTER = {'sistine': (427, 433, 434)}
+# Thrown or tossed, a device turns faster than the tracking follows; there each frame's own outline,
+# settled onto the bezel, is the better fit
+OWN = {'sistine': (494, 513)}
+
+
+def entering(scene, n, frame, Q, N):
+    a, b, ref = ENTER[scene]
+    R = Q[ref - int(N[0])].astype(np.float64)
+    cf = TR.CFG[scene]
+    k = TR.key(frame, cf['t'], cf.get('mode', 'green'), cf.get('gmin', 0)) > .5
+    cols = np.where(k.sum(0) > 3)[0]
+    if len(cols) < 50: return None
+    xs = cols[(cols > np.percentile(cols, 10)) & (cols < np.percentile(cols, 90))]
+    ys = np.array([np.argmax(k[:, x]) for x in xs], np.float64)
+    m, c0 = np.polyfit(xs, ys, 1)
+    for _ in range(2):                                  # a hand across the top edge is not the edge
+        keep = np.abs(ys - (m * xs + c0)) < 6
+        if keep.sum() > 20: m, c0 = np.polyfit(xs[keep], ys[keep], 1)
+    tm = (R[0] + R[1]) / 2
+    da = np.arctan(m) - np.arctan2(R[1, 1] - R[0, 1], R[1, 0] - R[0, 0])
+    rot = np.array([[np.cos(da), -np.sin(da)], [np.sin(da), np.cos(da)]])
+    q = (R - tm) @ rot.T + tm
+    q[:, 1] += (m * tm[0] + c0) - tm[1]
+    return q.astype(np.float32)
+
+
+
 def comp_scene(scene, n, frame, M=None, src=None):
     N, Q = track_of(scene)
     i = n - int(N[0])
     if i < 0 or i >= len(Q): return frame
-    q = np.roll(Q[i], -ROT.get(scene, 0), 0).astype(np.float32)
+    q = Q[i]
+    if scene in ENTER and ENTER[scene][0] <= n <= ENTER[scene][1]:
+        e = entering(scene, n, src if src is not None else frame, Q, N)
+        if e is not None: q = e
+    q = np.roll(q, -ROT.get(scene, 0), 0).astype(np.float32)
     if scene in GROW: c = q.mean(0); q = (c + (q - c) * GROW[scene]).astype(np.float32)
     if M is not None: q = (q @ M[:, :2].T + M[:, 2]).astype(np.float32)
     cf = TR.CFG[scene]
@@ -141,11 +178,20 @@ def comp_scene(scene, n, frame, M=None, src=None):
     # A safeguard for every scene: where the tracked corners leave much of THIS frame's screen uncovered —
     # a screen half out of frame, half behind a shoulder, smeared by being thrown, filled in from
     # neighbors that were wrong — fit the corners from this frame's own green instead.
-    if cf.get('mode') != 'mint' and not cf.get('planar'):     # a tracked device is never re-fitted from a hand-bent green
+    if scene in OWN and OWN[scene][0] <= n <= OWN[scene][1] and M is None:
+        q0 = np.roll(q, ROT.get(scene, 0), 0).astype(np.float64)
+        q2, _ = TR.fit_quad(key, q0.mean(0))
+        if q2 is not None:
+            q2 = TR.settle(frame, key, TR.order_like(q2, q0))
+            q = np.roll(q2, -ROT.get(scene, 0), 0).astype(np.float32)
+    # A tracked device is refitted only when the tracking has plainly lost it (most of the green outside
+    # the outline, as when the goalie throws his tablet), never from a hand merely bending the green
+    if cf.get('mode') != 'mint':
         kb = key > .5; area = int(kb.sum())
         if area > 250:
             covered = np.zeros(kb.shape, np.uint8); cv2.fillConvexPoly(covered, q.astype(np.int32), 1)
-            if (kb & ~covered.astype(bool)).sum() > .2 * area:
+            if (kb & ~covered.astype(bool)).sum() > (.5 if cf.get('planar') else .2) * area:
+                if cf.get('planar') and n not in REFIT: REFIT.append(n)
                 q2, _ = TR.fit_quad(key, q.mean(0))
                 if q2 is not None: q = TR.order_like(q2, q).astype(np.float32)
     sc = cf.get('screen', scene)
@@ -164,14 +210,15 @@ def comp_scene(scene, n, frame, M=None, src=None):
     warped = cv2.warpPerspective(page, P, (W, H), flags=cv2.INTER_AREA, borderMode=cv2.BORDER_REPLICATE)
     inside = cv2.warpPerspective(np.ones((h, w), np.float32), P, (W, H), flags=cv2.INTER_LINEAR)
     grow = max(5, int(.07 * np.sqrt(abs(cv2.contourArea(q)) + 1))) | 1
-    inside = cv2.dilate(inside, np.ones((grow, grow), np.uint8)) if cf.get('mode') != 'mint' else cv2.dilate(inside, np.ones((3, 3), np.uint8))
+    inside = cv2.dilate(inside, np.ones((grow, grow), np.uint8)) if cf.get('mode') != 'mint' else cv2.dilate(inside, np.ones((5, 5), np.uint8))
     near = cv2.dilate(inside, np.ones((15, 15), np.uint8))
     f = frame.astype(np.float32)
     k = key
     if TR.CFG[scene].get('mode') == 'mint':
         # the old page's own area (its text closed over), less the hands and cuff in front of it
         page_area = cv2.dilate(cv2.morphologyEx((k > .3).astype(np.uint8), cv2.MORPH_CLOSE, np.ones((15, 15), np.uint8)), np.ones((3, 3), np.uint8))
-        matte = (1 - TR.in_front(frame)) * cv2.GaussianBlur(page_area.astype(np.float32), (5, 5), 0)
+        page_area = np.maximum(page_area, cv2.erode((inside > .5).astype(np.uint8), np.ones((9, 9), np.uint8)))
+        matte = (1 - TR.in_front(frame, inside)) * cv2.GaussianBlur(page_area.astype(np.float32), (5, 5), 0)
     else:
         matte = k
     # the whole screen: every patch of its green that touches the device's outline gets the page (its
