@@ -33,6 +33,8 @@ day-by-day account of building it would say nothing to anyone using it now.
 
 ## Unreleased
 
+- A new short film on the home page: people through history claim famous places, from the Sistine
+  Chapel to the Sphinx to an operating room.
 - Pricing is on the menu bar, signed in or not, with a **See pricing** button on the home page and a
   Pricing link in the footer. It's no longer tucked under Community.
 - Hosted events: **Invite people by email** takes a whole pasted list and your own message, and hands

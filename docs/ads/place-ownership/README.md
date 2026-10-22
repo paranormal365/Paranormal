@@ -32,6 +32,15 @@ time and place, the silent scenes have sound, and it ends on the new icon.
         -af "volume=5.3dB,alimiter=limit=0.7:attack=3:release=60:level=disabled,aresample=48000" \
         -c:a aac -b:a 256k -shortest -movflags +faststart IsHaunted-Place-Ownership-Ad-sound.mp4
 
+The home page plays `placeownership-{hd,sd}.mp4` and `placeownership-poster.jpg` from
+Ben.Web.Website/wwwroot/static/video/ads (HomeAdPlayer.AdIds). The film grain makes it heavy, so its web
+copies sit a few steps lighter than the other ads' (still 0.98 SSIM to the master):
+
+    M=build/IsHaunted-Place-Ownership-Ad-sound.mp4; O=../../../Ben.Web.Website/wwwroot/static/video/ads
+    ffmpeg -i $M -c:v libx264 -preset slow -crf 26 -pix_fmt yuv420p -c:a aac -b:a 128k -movflags +faststart $O/placeownership-hd.mp4
+    ffmpeg -i $M -vf scale=960:540 -c:v libx264 -preset slow -crf 27 -pix_fmt yuv420p -c:a aac -b:a 112k -movflags +faststart $O/placeownership-sd.mp4
+    ffmpeg -ss 71.8 -i $M -frames:v 1 -q:v 3 $O/placeownership-poster.jpg
+
 The source video lives in ~/_Fun/IsHaunted (override with PO_SRC); nothing in build/ is in git. The
 screens and pieces are rendered with the Chromium that the e2e project's Playwright installs (build
 Ben.Web.Playwright once, or point PW_DRIVER at a Playwright driver).

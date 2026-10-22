@@ -68,7 +68,7 @@
     // wwwroot is in the rotation (each also has -sd.mp4 for narrow screens and -poster.jpg). The page starts on
     // a random one; after it the module plays the others in a shuffled order with no repeats until all have
     // played, then shuffles again. Add an id here to add an ad.
-    private static readonly string[] AdIds = { "anime", "wizard", "cartoon", "underwater", "campfire", "walkingtour" };
+    private static readonly string[] AdIds = { "anime", "wizard", "cartoon", "underwater", "campfire", "walkingtour", "placeownership" };
     private sealed record Ad(string Hd, string Sd, string Poster);
     private readonly List<Ad> _ads = new();
     private int _start;
