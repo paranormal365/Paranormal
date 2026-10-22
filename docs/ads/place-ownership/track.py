@@ -30,16 +30,16 @@ CFG = {
     'soccer':     dict(a=212, b=280, t=80, up='landscape', win=2, cuts=[225], edges=True, planar=True, from_=225),
     # the iPad thrown up as he leaps: tracked afresh, the same page
     'soccer2':    dict(a=281, b=332, t=80, gmin=130, up='landscape', win=3, screen='soccer'),   # bright: not the grass
-    'sistine':    dict(a=420, b=556, t=40, up='landscape', win=5),
-    'rubberball': dict(a=551, b=724, t=40, up='portrait', win=5),
-    'liberty':    dict(a=767, b=893, t=40, up='portrait', win=5),
-    'iss':        dict(a=1030, b=1079, t=35, up='landscape', win=5),
+    'sistine':    dict(planar=True, a=420, b=556, t=40, up='landscape', win=5),
+    'rubberball': dict(planar=True, a=551, b=724, t=40, up='portrait', win=5),
+    'liberty':    dict(planar=True, a=767, b=893, t=40, up='portrait', win=5),
+    'iss':        dict(planar=True, cuts=[1039], a=1030, b=1079, t=35, up='landscape', win=5),
     # not a green screen: the iPad shows a mint page of text, keyed as mint (text strokes closed over)
-    'hancock':    dict(a=1141, b=1206, t=25, mode='mint', up='portrait', win=5, para=2),
-    'mars':       dict(a=1250, b=1422, t=24, ft=22, up='landscape', win=7),
-    'sphinx':     dict(a=1540, b=1596, t=30, up='portrait', win=5),
-    'prairie':    dict(a=1660, b=1766, t=70, up='portrait', win=5),
-    'surgery':    dict(a=1767, b=1943, t=35, up='portrait', win=15),
+    'hancock':    dict(planar=True, a=1141, b=1206, t=25, mode='mint', up='portrait', win=5, para=2),
+    'mars':       dict(planar=True, a=1250, b=1422, t=24, ft=22, up='landscape', win=7),
+    'sphinx':     dict(planar=True, a=1540, b=1596, t=30, up='portrait', win=5),
+    'prairie':    dict(planar=True, a=1660, b=1766, t=70, up='portrait', win=5),
+    'surgery':    dict(planar=True, a=1767, b=1943, t=35, up='portrait', win=15),
 }
 
 
@@ -141,7 +141,7 @@ def _meet(l1, l2):
     return np.array([(b1 * c2 - b2 * c1) / dt, (c1 * a2 - c2 * a1) / dt])
 
 
-def edge_quad(frame, m, prev, ref=None, min_pts=25, dark=75):
+def edge_quad(frame, m, prev, ref=None, min_pts=25, dark=80, tol=.08):
     """The screen's corners from its EDGES, and only from edges that meet the device's dark bezel.
 
     Where the green ends at a glove, a finger or a shoulder, that boundary says where the hand is, not
@@ -157,7 +157,7 @@ def edge_quad(frame, m, prev, ref=None, min_pts=25, dark=75):
     gx = cv2.Sobel(blur, cv2.CV_32F, 1, 0, ksize=5); gy = cv2.Sobel(blur, cv2.CV_32F, 0, 1, ksize=5)
     xi = np.clip(pts[:, 0].astype(int), 0, mb.shape[1] - 1); yi = np.clip(pts[:, 1].astype(int), 0, mb.shape[0] - 1)
     nrm = -np.stack([gx[yi, xi], gy[yi, xi]], 1); nrm /= (np.linalg.norm(nrm, axis=1, keepdims=True) + 1e-9)
-    v = frame.max(2).astype(np.float32)
+    v = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY).astype(np.float32)   # a navy bezel is dark too
     outs = []
     for step in (5, 8):
         o = np.round(pts + nrm * step).astype(int)
@@ -171,7 +171,7 @@ def edge_quad(frame, m, prev, ref=None, min_pts=25, dark=75):
         a, b = prev[k], prev[(k + 1) % 4]; L = _line(a, b)
         d = np.abs(pts @ L[:2] + L[2]); seg = b - a
         t = ((pts - a) @ seg) / (seg @ seg + 1e-9)
-        sel = bezel & (d < max(10, .08 * np.hypot(*seg))) & (t > .05) & (t < .95)
+        sel = bezel & (d < max(10, tol * np.hypot(*seg))) & (t > .05) & (t < .95)
         if sel.sum() >= min_pts:
             vx, vy, x0, y0 = cv2.fitLine(pts[sel].astype(np.float32), cv2.DIST_HUBER, 0, .01, .01).ravel()
             nl = _line(np.array([x0, y0]), np.array([x0 + vx, y0 + vy]))
@@ -213,41 +213,71 @@ def edge_quad(frame, m, prev, ref=None, min_pts=25, dark=75):
     return q, seen
 
 
-def planar(frames_bgr, quads, keys, start, start_q):
-    """Carry one good outline of the device through a shot by optical flow (planar tracking).
+def settle(frame, m, q, steps=(.25, .18, .12, .08, .08, .08)):
+    """An outline settled onto the device's bezel: each side refitted from bezel points only, the
+    search narrowing. A hand over a corner bends the green's outline, never the bezel's."""
+    for tol in steps:
+        qe, _ = edge_quad(frame, m, q, None, tol=tol)
+        if qe is not None and np.abs(qe - q).max() < 120: q = qe
+    return q
 
-    What moves with the device — its bezel, the hand holding it, the edges of the screen — is tracked
-    from frame to frame; a robust fit of how it moved (RANSAC throws out the tapping finger, which moves
-    on its own) moves the outline with it. The page then sits on the device as the device sits in the
-    frame, whatever hands pass over it. Forward and backward from the shot's clearest frame."""
-    n = len(frames_bgr); out = [None] * n; out[start] = start_q.copy()
+
+def planar(frames_bgr, raw, keys, start, start_q, fill=None):
+    """Carry the screen's outline through a shot, frame to frame, following the device.
+
+    Each frame is predicted from the last by optical flow on a thin band round the screen — its bezel
+    and the hands holding it, never the background behind and never the flat green — with a robust
+    fit (RANSAC drops a tapping finger, which moves on its own). The prediction then snaps to the dark
+    bezel wherever the bezel shows, and gives way to the frame's own fit wherever that fit is plainly
+    reliable (every corner sits in clean green). Forward and backward from the shot's best frame."""
+    n = len(frames_bgr); out = [None] * n; out[start] = start_q.copy(); ref = [start_q.copy()]
     gray = [cv2.cvtColor(f, cv2.COLOR_BGR2GRAY) for f in frames_bgr]
+    clean = [raw[i] is not None and not np.isnan(raw[i][0, 0]) and (fill is None or fill[i] > .9)
+             and (corner_support(keys[i], raw[i]) > .7).all() for i in range(n)]
     def step(i, j):
         q = out[i]
-        region = np.zeros(gray[i].shape, np.uint8)
-        c = q.mean(0); big = c + (q - c) * 1.3
-        cv2.fillConvexPoly(region, np.round(big).astype(np.int32), 255)
-        region[keys[i] > .4] = 0                                   # no features on the flat green
-        p0 = cv2.goodFeaturesToTrack(gray[i], 300, .01, 6, mask=region)
-        if p0 is None or len(p0) < 8: out[j] = q.copy(); return
-        p1, st, _ = cv2.calcOpticalFlowPyrLK(gray[i], gray[j], p0, None, winSize=(21, 21), maxLevel=3)
-        good = st.ravel() == 1
-        if good.sum() < 8: out[j] = q.copy(); return
-        A, inl = cv2.estimateAffine2D(p0[good], p1[good], method=cv2.RANSAC, ransacReprojThreshold=2.0)
-        if A is None: out[j] = q.copy(); return
-        out[j] = q @ A[:, :2].T + A[:, 2]
+        band = np.zeros(gray[i].shape, np.uint8)
+        side = max(12, int(.06 * np.sqrt(abs(cv2.contourArea(q.astype(np.float32))) + 1)))
+        cv2.polylines(band, [np.round(q).astype(np.int32)], True, 255, 2 * side)
+        band[keys[i] > .4] = 0
+        p0 = cv2.goodFeaturesToTrack(gray[i], 300, .01, 5, mask=band)
+        pred = q.copy()
+        if p0 is not None and len(p0) >= 8:
+            p1, st, _ = cv2.calcOpticalFlowPyrLK(gray[i], gray[j], p0, None, winSize=(21, 21), maxLevel=3)
+            good = st.ravel() == 1
+            if good.sum() >= 8:
+                A, _ = cv2.estimateAffine2D(p0[good], p1[good], method=cv2.RANSAC, ransacReprojThreshold=2.0)
+                if A is not None: pred = q @ A[:, :2].T + A[:, 2]
+        qe, seen = edge_quad(frames_bgr[j], keys[j], pred, ref[0], tol=.12)
+        if qe is not None and (np.abs(qe - pred).max() < 30 or (all(seen) and np.abs(qe - pred).max() < 90)):
+            if all(seen): ref[0] = qe.copy()
+            pred = qe
+        if clean[j]:
+            r = order_like(raw[j], pred)
+            if np.abs(r - pred).max() < 60: pred = .25 * pred + .75 * r
+        # lost (a fast move the flow could not follow): most of this frame's green is outside the
+        # outline, so take the frame's own fit and carry on from there
+        kb = keys[j] > .5; area = kb.sum()
+        if area > 300 and raw[j] is not None and not np.isnan(raw[j][0, 0]):
+            m = np.zeros(kb.shape, np.uint8); cv2.fillConvexPoly(m, np.round(pred).astype(np.int32), 1)
+            qa = abs(cv2.contourArea(pred.astype(np.float32)))
+            if (kb & ~m.astype(bool)).sum() > .25 * area:
+                pred = settle(frames_bgr[j], keys[j], order_like(raw[j], pred)); ref[0] = pred.copy()
+        out[j] = pred
     for i in range(start, n - 1): step(i, i + 1)
     for i in range(start, 0, -1): step(i, i - 1)
     return np.array(out)
 
 
-def corner_support(m, q, r=.12):
-    """How much of the screen's green is really there just inside each corner (0..1): a corner under a
-    glove or a shoulder has little, and its fitted position is a guess."""
+def corner_support(m, q, inset=.1, r=.035):
+    """How much clean green is just inside each corner (0..1). Screens have rounded corners, so the
+    probe sits a little in from the corner, toward the middle; a corner under a glove or a shoulder has
+    little green there, and its fitted position is a guess."""
     H, W = m.shape; c = q.mean(0); out = []
+    rad = max(3, int(r * np.sqrt(abs(cv2.contourArea(q.astype(np.float32))) + 1)))
     for k in range(4):
-        tri = np.array([q[k], q[k] + (q[(k + 1) % 4] - q[k]) * r, q[k] + (c - q[k]) * r * 1.6, q[k] + (q[(k - 1) % 4] - q[k]) * r])
-        mask = np.zeros((H, W), np.uint8); cv2.fillConvexPoly(mask, np.round(tri).astype(np.int32), 1)
+        p = q[k] + (c - q[k]) * inset
+        mask = np.zeros((H, W), np.uint8); cv2.circle(mask, (int(round(p[0])), int(round(p[1]))), rad, 1, -1)
         a = mask.sum(); out.append(float((m * mask).sum() / a) if a else 0.0)
     return np.array(out)
 
@@ -313,14 +343,35 @@ def track(scene):
         for s0, s1 in zip(bounds[:-1], bounds[1:]):
             if s0 + N[0] < cf.get('from_', 0): continue        # shots before it fit fine on their own
             st = cf.get('planar_start', {}).get(s0 + N[0])
-            if st is None:     # the shot's clearest frame: the most green, cleanly fitted
-                cand = [i for i in range(s0, s1) if not np.isnan(Q[i, 0, 0])]
+            if st is None:     # the shot's best frame: the most green, cleanly fitted, wholly in the picture
+                H_, W_ = imgs[0].shape[:2]
+                inside = lambda q: (q[:, 0] > 6).all() and (q[:, 0] < W_ - 7).all() and (q[:, 1] > 6).all() and (q[:, 1] < H_ - 7).all()
+                cand = [i for i in range(s0, s1) if not np.isnan(Q[i, 0, 0]) and inside(Q[i])]
                 if not cand: continue
-                i0 = max(cand, key=lambda i: F[i] * cv2.contourArea(Q[i].astype(np.float32)))
+                i0 = max(cand, key=lambda i: F[i] * min(1.0, corner_support(keys_[i], Q[i]).min() / .7) * cv2.contourArea(Q[i].astype(np.float32)))
                 q0 = Q[i0]
             else:
                 i0, q0 = st[0] - N[0], np.array(st[1], float)
-            Q[s0:s1] = planar(imgs[s0:s1], None, keys_[s0:s1], i0 - s0, q0)
+            # settle the starting outline onto the bezel first: a hand over a corner bends the green's
+            # outline, never the bezel's
+            q0 = settle(imgs[i0], keys_[i0], q0)
+            P = planar(imgs[s0:s1], list(Q[s0:s1]), keys_[s0:s1], i0 - s0, q0, F[s0:s1])
+            # slow drift taken out where the device's whole screen is plainly visible: the difference from
+            # the plain fit there, smoothed over a second, so it corrects drift but carries no jitter
+            raw = Q[s0:s1]; D = np.full(P.shape, np.nan)
+            for i in range(len(P)):
+                if np.isnan(raw[i, 0, 0]) or F[s0 + i] < .9: continue
+                if (corner_support(keys_[s0 + i], raw[i]) > .7).all() and np.abs(raw[i] - P[i]).max() < 40:
+                    D[i] = raw[i] - P[i]
+            ok_ = ~np.isnan(D[:, 0, 0])
+            if False and ok_.sum() >= 3:   # superseded: planar() anchors to every reliable frame itself
+                t = np.arange(len(P)); w = 15; ker = np.hanning(2 * w + 1)
+                for k in range(4):
+                    for j in range(2):
+                        v = np.interp(t, t[ok_], D[ok_, k, j]); wt = np.convolve(ok_.astype(float), ker, 'same') + 1e-6
+                        vv = np.convolve(np.where(ok_, D[:, k, j], 0), ker, 'same') / wt
+                        P[:, k, j] += np.where(wt > .5, vv, v)
+            Q[s0:s1] = P
         F[max(0, cf.get('from_', 0) - N[0]):] = 1.0
     if 'para' in cf:     # a hand over this corner: complete it as a parallelogram from the other three
         k = cf['para']; j0 = max(0, cf.get('para_from', N[0]) - N[0])
@@ -343,7 +394,7 @@ def track(scene):
         S, trusted = steady(Q, M, np.array(N), cf.get('cuts', []))
         print(scene, 'corners trusted', int(trusted.sum()), 'of', trusted.size)
     # smoothed shot by shot: never across a cut, or the page drifts from one shot's tablet to the next
-    w = 0 if cf.get('steady') else cf['win']
+    w = 0 if (cf.get('steady') or cf.get('planar')) else cf['win']
     if w > 1:
         bounds = [0] + [c - N[0] for c in cf.get('cuts', []) if N[0] < c <= N[-1]] + [len(S)]
         ker = np.hanning(2 * w + 1); ker /= ker.sum()
