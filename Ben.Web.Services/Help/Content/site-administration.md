@@ -50,6 +50,9 @@ group's settings.
 You can't add a new setting from this page. Settings are declared in code, in
 `SiteSettingKeys.Seed`, and the page shows whatever is declared there.
 
+The prices (the *Selling plans*, *Events* and *Ghost Walk Tour subscription* tabs) are also on
+**Administration → Pricing**, beside the plans; see [Prices in one place](#prices-in-one-place).
+
 ### Allowing groups to sign themselves up
 
 **Allow groups to self-register** controls whether an ordinary signed-in visitor can start a group.
@@ -573,6 +576,28 @@ is about to need can't be wiped out with one click.
 Administrators and SuperAdministrators can both open it, so whoever is on call can always see why
 the site is failing.
 
+## Prices in one place
+
+**Administration → Pricing** shows every price the site charges on one page, with one plain sentence
+under each part saying what a group or a visitor pays right now:
+
+- **Plans**: each plan with its members and its monthly and yearly price, how many groups are on it,
+  and the **Sell plans and seats** switch. Plans and their prices are changed in **Price Bands**;
+  **Edit plans and prices** takes you there.
+- **Events**: **Sell event credits**, the price of one event, the share a group with a paid plan
+  pays, and the bundles. The sentence says what one event costs and what a group with a paid plan
+  pays for it.
+- **Ghost Walk Tour subscription**: on or off, and the monthly price for each tour route.
+
+These are the same settings as the *Selling plans*, *Events* and *Ghost Walk Tour subscription* tabs
+in Site Settings, so a change in either place shows in both. A price the site can't use is refused
+with a sentence saying why, and nothing is changed. **See what visitors see** opens the public
+Pricing page.
+
+Everybody can reach the Pricing page from the menu bar, a **See pricing** button on the home page,
+and the footer. Those links only disappear when **Sell plans and seats** and **Sell event credits**
+are both off, because then there's nothing to buy.
+
 ## Billing
 
 ### Tour businesses: the Ghost Walk Tour subscription
@@ -673,8 +698,8 @@ renewal, the group is re-banded based on the current count.
 
 ## Taking plans off sale
 
-**Sell plans and seats**, under *Selling plans* in Site Settings, controls whether anyone can buy.
-It's on unless someone has turned it off.
+**Sell plans and seats**, under *Selling plans* in Site Settings and on **Administration → Pricing**,
+controls whether anyone can buy. It's on unless someone has turned it off.
 
 When it's off:
 
@@ -701,7 +726,7 @@ was building needs a purchase it wasn't told about. That happened once and doesn
 
 ### Event credit prices
 
-Under *Events* in Site Settings:
+Under *Events* in Site Settings, and on **Administration → Pricing**:
 
 - **Event credit price ($)** is the full price of one credit. Leave it empty for $99.
 - **Paid-subscriber price (% of the full price)** is what a group with an active paid plan pays. 20
@@ -719,7 +744,7 @@ credits**. A person always pays the full price.
 
 A monthly subscription of its own, separate from the investigation plans, priced **per tour route**:
 one tour on a group's Tours page, with unlimited walks (dates) and guests on it. Under *Ghost Walk
-Tour subscription* in Site Settings:
+Tour subscription* in Site Settings, and on **Administration → Pricing**:
 
 - **Sell the Ghost Walk Tour subscription** turns it on. It's off until you turn it on.
 - **Ghost Walk Tour price ($ a month per tour route)** is the price of one route for one month.

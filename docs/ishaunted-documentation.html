@@ -227,7 +227,7 @@ figcaption { color: var(--faint); font-size: 8.4pt; margin-top: .07in; }
     <h1>Everything <span class="accent-text">IsHaunted</span> does.</h1>
     <p class="lede">The complete product documentation — every screen, rule and safeguard, written for the people who use it.</p>
   </div>
-  <div class="facts"><div class="fact"><b>Documents</b><span>21</span></div><div class="fact"><b>Sections</b><span>6</span></div><div class="fact"><b>Updated</b><span>10/21/2026</span></div></div>
+  <div class="facts"><div class="fact"><b>Documents</b><span>21</span></div><div class="fact"><b>Sections</b><span>6</span></div><div class="fact"><b>Updated</b><span>10/22/2026</span></div></div>
   <div class="about"><b>About this document.</b> This is the in-product help, reproduced in full and unaltered — the same text the application serves to its users. It describes the software as built. It contains no business, market or financial information, and no usage figures.</div>
   <div class="foot"><span>ishaunted.com</span><span>Product documentation</span></div>
 </section>
@@ -5787,9 +5787,11 @@ out first.</p>
 for the time it had already paid for, with the same number of routes, at no charge. The plan isn't
 renewed, and your next bill is the subscription's.</p>
 <p><strong>Retiring</strong> a tour stops new dates from being added, and leaves the tour's past dates exactly as
-they are. With a Ghost Walk Tour subscription the route comes off your subscription, as above; on
+they are.
+With a Ghost Walk Tour subscription the route comes off your subscription, as above; on
 the per-tour business plan it drops from your next renewal, and nothing is refunded for the period
-already paid for. <strong>Pausing</strong> — turning off <em>Taking sign-ups</em> — is the lighter option for
+already paid for.
+<strong>Pausing</strong> — turning off <em>Taking sign-ups</em> — is the lighter option for
 an off-season.</p>
 <h3>Guides</h3>
 <p>You don't have to be a guide yourself. Choose the members who actually lead the tour, and each
@@ -7339,6 +7341,8 @@ belongs here: settings for one person are on their profile, and settings for one
 group's settings.</p>
 <p>You can't add a new setting from this page. Settings are declared in code, in
 <code>SiteSettingKeys.Seed</code>, and the page shows whatever is declared there.</p>
+<p>The prices (the <em>Selling plans</em>, <em>Events</em> and <em>Ghost Walk Tour subscription</em> tabs) are also on
+<strong>Administration → Pricing</strong>, beside the plans; see <a href="#prices-in-one-place">Prices in one place</a>.</p>
 <h3>Allowing groups to sign themselves up</h3>
 <p><strong>Allow groups to self-register</strong> controls whether an ordinary signed-in visitor can start a group.
 When it's on (the default, and how the site normally runs), anyone can start one from
@@ -7790,6 +7794,25 @@ has a minimum window and works in batches. There's no button to empty the log, s
 is about to need can't be wiped out with one click.</p>
 <p>Administrators and SuperAdministrators can both open it, so whoever is on call can always see why
 the site is failing.</p>
+<h2>Prices in one place</h2>
+<p><strong>Administration → Pricing</strong> shows every price the site charges on one page, with one plain sentence
+under each part saying what a group or a visitor pays right now:</p>
+<ul>
+<li><strong>Plans</strong>: each plan with its members and its monthly and yearly price, how many groups are on it,
+  and the <strong>Sell plans and seats</strong> switch. Plans and their prices are changed in <strong>Price Bands</strong>;
+  <strong>Edit plans and prices</strong> takes you there.</li>
+<li><strong>Events</strong>: <strong>Sell event credits</strong>, the price of one event, the share a group with a paid plan
+  pays, and the bundles. The sentence says what one event costs and what a group with a paid plan
+  pays for it.</li>
+<li><strong>Ghost Walk Tour subscription</strong>: on or off, and the monthly price for each tour route.</li>
+</ul>
+<p>These are the same settings as the <em>Selling plans</em>, <em>Events</em> and <em>Ghost Walk Tour subscription</em> tabs
+in Site Settings, so a change in either place shows in both. A price the site can't use is refused
+with a sentence saying why, and nothing is changed. <strong>See what visitors see</strong> opens the public
+Pricing page.</p>
+<p>Everybody can reach the Pricing page from the menu bar, a <strong>See pricing</strong> button on the home page,
+and the footer. Those links only disappear when <strong>Sell plans and seats</strong> and <strong>Sell event credits</strong>
+are both off, because then there's nothing to buy.</p>
 <h2>Billing</h2>
 <h3>Tour businesses: the Ghost Walk Tour subscription</h3>
 <p>Ghost walk tours aren't priced by a tier any more. They have their own subscription, priced per tour
@@ -7869,8 +7892,8 @@ price are locked in when you save, and the group keeps those terms for the whole
 happens to the price list. The Members column shows the current count next to the locked-in one. At
 renewal, the group is re-banded based on the current count.</p>
 <h2>Taking plans off sale</h2>
-<p><strong>Sell plans and seats</strong>, under <em>Selling plans</em> in Site Settings, controls whether anyone can buy.
-It's on unless someone has turned it off.</p>
+<p><strong>Sell plans and seats</strong>, under <em>Selling plans</em> in Site Settings and on <strong>Administration → Pricing</strong>,
+controls whether anyone can buy. It's on unless someone has turned it off.</p>
 <p>When it's off:</p>
 <ul>
 <li>the pricing page still shows every band and price, with one line saying plans aren't on sale;</li>
@@ -7891,7 +7914,7 @@ uses a credit. When the site was updated, each group whose plan used to include 
 credit for every draft event it was preparing, with the reason written on the credit, so nothing it
 was building needs a purchase it wasn't told about. That happened once and doesn't repeat.</p>
 <h3>Event credit prices</h3>
-<p>Under <em>Events</em> in Site Settings:</p>
+<p>Under <em>Events</em> in Site Settings, and on <strong>Administration → Pricing</strong>:</p>
 <ul>
 <li><strong>Event credit price ($)</strong> is the full price of one credit. Leave it empty for $99.</li>
 <li><strong>Paid-subscriber price (% of the full price)</strong> is what a group with an active paid plan pays. 20
@@ -7907,7 +7930,7 @@ credits</strong>. A person always pays the full price.</p>
 <h3>The Ghost Walk Tour subscription</h3>
 <p>A monthly subscription of its own, separate from the investigation plans, priced <strong>per tour route</strong>:
 one tour on a group's Tours page, with unlimited walks (dates) and guests on it. Under <em>Ghost Walk
-Tour subscription</em> in Site Settings:</p>
+Tour subscription</em> in Site Settings, and on <strong>Administration → Pricing</strong>:</p>
 <ul>
 <li><strong>Sell the Ghost Walk Tour subscription</strong> turns it on. It's off until you turn it on.</li>
 <li><strong>Ghost Walk Tour price ($ a month per tour route)</strong> is the price of one route for one month.
