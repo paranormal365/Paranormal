@@ -218,6 +218,44 @@ public class EventCreditsAndToursTests : Oct16TestBase
         NothingWrong(problems);
     }
 
+    /// <summary>
+    /// The home page's price lines stay drawn when the page comes alive (10/22/2026).
+    /// </summary>
+    /// <remarks>
+    /// The server drew them, then the live page fetched the prices again and drew the list without
+    /// them until the answer came, so the ghost walk line vanished and came back on every visit.
+    /// PagesDoNotBlinkTests watches for a spinner and could not see it, because nothing spins: a
+    /// line is simply missing for a moment. This watches the line itself, from the first paint.
+    /// </remarks>
+    [Test]
+    public async Task With_the_ghost_walk_subscription_on_its_home_page_line_never_vanishes()
+    {
+        await SetAsync(WalkPriceKey, "34");
+        await SetAsync(WalkOnKey, "true");
+
+        await Page.AddInitScriptAsync("""
+            window.__line = { drawn: false, vanished: false };
+            const look = () => {
+                const there = !!document.querySelector("[data-testid='home-join-ghost-walk']");
+                if (there) window.__line.drawn = true;
+                else if (window.__line.drawn) window.__line.vanished = true;
+            };
+            document.addEventListener('DOMContentLoaded', () => {
+                look();
+                new MutationObserver(look).observe(document, { childList: true, subtree: true });
+            });
+            """);
+
+        await Page.GotoAsync(BaseUrl);
+        await WaitForTheCircuitAsync();
+        await Page.WaitForTimeoutAsync(2500);   // the live page's first render and whatever it fetches
+
+        Assert.That(await Page.EvaluateAsync<bool>("window.__line.drawn"), Is.True,
+            "the ghost walk line was never drawn on the home page");
+        Assert.That(await Page.EvaluateAsync<bool>("window.__line.vanished"), Is.False,
+            "the ghost walk line was drawn, then disappeared when the page came alive");
+    }
+
     [Test]
     public async Task With_the_ghost_walk_subscription_off_the_pricing_page_and_help_say_nothing_about_it()
     {

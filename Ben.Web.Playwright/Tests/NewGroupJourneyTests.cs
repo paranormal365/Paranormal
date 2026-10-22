@@ -127,6 +127,12 @@ public class NewGroupJourneyTests : BenTestBase
         // ── 3. The platform bills the group (the manual provider, with a coupon) ──
         await LoginAsync(SuperAdminEmail, SuperAdminPassword);
         await Page.GotoAsync($"{BaseUrl}/admin/org-subscriptions");
+        // Found by searching, as a SuperAdmin would: the list is every group, a page at a time,
+        // and a database the suite has run on for a while has more than a page of them.
+        var search = Main.Locator(".k-grid-search input");
+        await Expect(search).ToBeVisibleAsync(new() { Timeout = 15_000 });
+        await WaitForTheCircuitAsync();
+        await search.FillAsync(groupName);
         var row = Main.Locator("tr", new() { HasTextString = groupName }).First;
         await Expect(row).ToBeVisibleAsync(new() { Timeout = 15_000 });
         await row.GetByRole(AriaRole.Button, new() { Name = "Set" }).ClickAsync();

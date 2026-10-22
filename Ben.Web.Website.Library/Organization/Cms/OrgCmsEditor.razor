@@ -305,11 +305,15 @@
             </div>
             <div class="col-12">
                 <label class="form-label fw-semibold" for="orgcmseditor-url-slug-d5ae">Web address <span class="text-danger">*</span></label>
+                @* The address made from the title is the box's placeholder, never its text: writing it into
+                   the box while somebody was starting to type there joined the two (10/22/2026, a page
+                   saved as "about-usabout"). Left empty, the page takes the placeholder's address. *@
                 <BenTextBox id="orgcmseditor-url-slug-d5ae" type="text" class="form-control" Value="@_pageForm.UrlName"
-                            OnInput="@(e => { _pageForm.UrlName = e.Value?.ToString() ?? ""; _slugTouched = true; })" />
+                            placeholder="@SuggestedAddress"
+                            OnInput="@(e => _pageForm.UrlName = e.Value?.ToString() ?? "")" />
                 <div class="form-text">
-                    The page's address on this site: <code>@($"/o/{_orgUrlName ?? "your-group"}/{(string.IsNullOrWhiteSpace(_pageForm.UrlName) ? "…" : _pageForm.UrlName.Trim().ToLowerInvariant())}")</code>.
-                    Use lowercase letters, numbers and hyphens. It is filled in from the title until you change it.
+                    The page's address on this site: <code>@($"/o/{_orgUrlName ?? "your-group"}/{(Address.Length == 0 ? "…" : Address)}")</code>.
+                    Use lowercase letters, numbers and hyphens. Leave it empty to use the one made from the title.
                 </div>
             </div>
             <div class="col-12">
@@ -786,13 +790,22 @@
 
     // ── Page dialog ───────────────────────────────────────────────────────────
 
-    private bool _slugTouched;
+    /// <summary>A new page's address made from its title, offered until somebody types their own.</summary>
+    /// <remarks>
+    /// Only for a new page: an existing page keeps its address unless somebody edits it, because
+    /// renaming "About" to "About us" must not quietly break every link to /about.
+    /// </remarks>
+    private string? SuggestedAddress => _editingPage is null ? CmsPageIdeas.SlugFrom(_pageForm.PageTitle) : null;
+
+    /// <summary>The address the page is saved under: what was typed, or else the suggestion.</summary>
+    private string Address => string.IsNullOrWhiteSpace(_pageForm.UrlName)
+        ? SuggestedAddress ?? ""
+        : _pageForm.UrlName.Trim().ToLowerInvariant();
 
     private async Task OpenNewPageDialogAsync()
     {
         _editingPage  = null;
         _dialogError  = null;
-        _slugTouched  = false;
         _pageForm     = new PageFormModel();
         _showPageDialog = true;
 
@@ -803,9 +816,6 @@
     {
         _editingPage = pg;
         _dialogError = null;
-        // An existing page keeps its address unless somebody edits it: renaming "About" to "About us"
-        // must not quietly break every link to /about.
-        _slugTouched = true;
         _pageForm = new PageFormModel
         {
             PageTitle   = pg.PageTitle,
@@ -818,12 +828,8 @@
         _showPageDialog = true;
     }
 
-    /// <summary>The title as typed; a new page's address follows it until somebody edits the address.</summary>
-    private void OnTitleTyped(string? title)
-    {
-        _pageForm.PageTitle = title ?? "";
-        if (!_slugTouched) _pageForm.UrlName = CmsPageIdeas.SlugFrom(title);
-    }
+    /// <summary>The title as typed; a new page's suggested address follows it (<see cref="SuggestedAddress"/>).</summary>
+    private void OnTitleTyped(string? title) => _pageForm.PageTitle = title ?? "";
 
     private void UseIdea(CmsPageIdeas.Idea idea) => OnTitleTyped(idea.Title);
 
@@ -836,7 +842,7 @@
 
     private async Task SavePage()
     {
-        if (string.IsNullOrWhiteSpace(_pageForm.PageTitle) || string.IsNullOrWhiteSpace(_pageForm.UrlName))
+        if (string.IsNullOrWhiteSpace(_pageForm.PageTitle) || Address.Length == 0)
         {
             _dialogError = "Give the page a title and a web address.";
             return;
@@ -854,7 +860,7 @@
         {
             var (result, createError) = await AdminClient.CreateCmsPageAsync(OrgId, new CmsCreatePageRequest(
                 _pageForm.PageTitle.Trim(),
-                _pageForm.UrlName.Trim().ToLowerInvariant(),
+                Address,
                 _pageForm.PageHtml,
                 _pageForm.IsPublic,
                 parentId,
@@ -880,7 +886,7 @@
         {
             var result = await AdminClient.UpdateCmsPageAsync(OrgId, _editingPage.Id, new CmsUpdatePageRequest(
                 _pageForm.PageTitle.Trim(),
-                _pageForm.UrlName.Trim().ToLowerInvariant(),
+                Address,
                 _pageForm.PageHtml,
                 _pageForm.IsPublished,
                 _pageForm.IsPublic,

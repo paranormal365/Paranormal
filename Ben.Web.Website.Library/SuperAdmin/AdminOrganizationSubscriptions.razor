@@ -32,6 +32,11 @@
                   EmptyText="No organizations exist yet" OnRetry="@LoadAsync">
         <TelerikGrid Data="@_subsResult.Items" TItem="OrganizationSubscriptionAdminRecord"
                      Sortable="true" Pageable="true" PageSize="25">
+            @* A search, because the list is every group on the site, twenty-five at a time: past the
+               first page, a group could only be found by paging (10/22/2026). *@
+            <GridToolBar>
+                <GridToolBarSearchBoxTool />
+            </GridToolBar>
             <GridColumns>
                 <GridColumn Field="@nameof(OrganizationSubscriptionAdminRecord.OrganizationName)" Title="Group" />
                 <GridColumn Field="@nameof(OrganizationSubscriptionAdminRecord.Status)" Title="Status" Width="110px">

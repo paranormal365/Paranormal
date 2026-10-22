@@ -144,6 +144,59 @@ public class CmsAuthoringTests : BenTestBase
         }
     }
 
+    /// <summary>
+    /// A web address typed straight after the title stays what was typed, on a slow connection
+    /// (10/22/2026).
+    /// </summary>
+    /// <remarks>
+    /// The title fills in the address until somebody edits it. On a slow connection, the address
+    /// made from the title arrived after the person had typed their own, landed on top of it, and
+    /// stayed: the box showed one address while the page saved another. The full suite met it
+    /// under load as "the page was not found".
+    /// </remarks>
+    [Test]
+    public async Task An_address_typed_after_the_title_is_kept_on_a_slow_connection()
+    {
+        await LoginAsync(SuperAdminEmail, SuperAdminPassword);
+        await ResolveOrgAsync();
+        if (_orgId.Length == 0) Assert.Ignore("no organization with a url name in the seed data");
+
+        await Page.GotoAsync($"{BaseUrl}/organizations/{_orgId}/cms");
+        await WaitUntilLoadedAsync();
+        await SkipAnyTourAsync();
+
+        var dialog = Page.Locator(".modal.show");
+        var newPage = Main.GetByRole(AriaRole.Button, new() { Name = "New Page" }).First;
+        await Expect(newPage).ToBeVisibleAsync(new() { Timeout = 30_000 });
+        await ClickUntilAsync(newPage, dialog);
+
+        // A quarter of a second each way, from here on: the address made from the title is still on
+        // its way when the address box is typed into.
+        var cdp = await Page.Context.NewCDPSessionAsync(Page);
+        await cdp.SendAsync("Network.enable");
+        await cdp.SendAsync("Network.emulateNetworkConditions", new Dictionary<string, object>
+        {
+            ["offline"] = false, ["latency"] = 250, ["downloadThroughput"] = -1, ["uploadThroughput"] = -1,
+        });
+
+        var stamp = Guid.NewGuid().ToString("N")[..8];
+        var address = dialog.GetByLabel("Web address", new() { Exact = false }).First;
+        await dialog.GetByLabel("Title", new() { Exact = false }).First.FillAsync($"Slow page {stamp}");
+        await address.FillAsync($"slow-{stamp}");
+        await Page.WaitForTimeoutAsync(2000);   // every reply the server was going to send has arrived
+
+        await Expect(address).ToHaveValueAsync($"slow-{stamp}");
+        await Expect(dialog.Locator("code").Filter(new() { HasText = "/o/" }).First)
+            .ToContainTextAsync($"/slow-{stamp}");
+
+        // Nothing is saved: the dialog is closed with the page unmade.
+        await cdp.SendAsync("Network.emulateNetworkConditions", new Dictionary<string, object>
+        {
+            ["offline"] = false, ["latency"] = 0, ["downloadThroughput"] = -1, ["uploadThroughput"] = -1,
+        });
+        await Page.Keyboard.PressAsync("Escape");
+    }
+
     [Test]
     public async Task UnpublishedPage_IsNotVisibleToASignedOutVisitor()
     {

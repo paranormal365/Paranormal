@@ -173,7 +173,7 @@ public class CmsEditorUxTests : BenTestBase
     }
 
     /// <summary>
-    /// A new page's title can come from the Ideas list, its address follows the title, and the tree puts it
+    /// A new page's title can come from the Ideas list, its suggested address follows the title, and the tree puts it
     /// under another page — saved where it was put.
     /// </summary>
     [Test]
@@ -190,7 +190,9 @@ public class CmsEditorUxTests : BenTestBase
                               dialog.GetByRole(AriaRole.Button, new() { Name = "Frequently asked questions" }));
         await dialog.GetByRole(AriaRole.Button, new() { Name = "Frequently asked questions" }).ClickAsync();
         await Expect(dialog.Locator("#orgcmseditor-title-5a77")).ToHaveValueAsync("Frequently asked questions");
-        await Expect(dialog.Locator("#orgcmseditor-url-slug-d5ae")).ToHaveValueAsync("frequently-asked-questions");
+        // The address made from the title is offered, not written into the box (10/22/2026).
+        await Expect(dialog.Locator("#orgcmseditor-url-slug-d5ae")).ToHaveAttributeAsync("placeholder", "frequently-asked-questions");
+        await Expect(dialog.Locator("#orgcmseditor-url-slug-d5ae")).ToHaveValueAsync("");
 
         // Make it this run's own. A new page starts last at the top level; the arrow puts it under the page
         // just above it — the group's last top-level page, which is About unless other pages exist.
