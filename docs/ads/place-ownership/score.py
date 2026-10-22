@@ -11,7 +11,7 @@ and every scene plays it in the clothes of its own time and place:
   1  0.0-12.4   the final, a stadium:      a brass anthem on drums, held back while the ball comes, then the save
   2  12.4-18.3  the Sistine Chapel, 1541:  a choir in the chapel's long echo, a lute, a recorder
   3  18.3-24.0  the rubber-band ball:      bluegrass — fiddle (solo violin) on the tune, banjo rolls, guitar
-  4  24.0-29.7  Bedloe's Island, 1886:     a French musette waltz — accordion, tuba oom-pah-pah, clarinet
+  4  24.0-29.7  Bedloe's Island, 1886:     a Parisian salon waltz — violins, clarinet, basses and violas, harp
   5  29.7-35.9  the space station:         celesta, vibraphone and synth pads in orbit; the erhu takes the tune when the
                                            Great Wall comes into the binoculars, a guzheng sweeps
   6  35.9-41.8  Independence Hall, 1776:   fife and drum, a roll as Hancock runs for the desk
@@ -114,25 +114,25 @@ def strings(scene, inst, art, midi, t, dur, vel=.6, pan=0.0, att=0.0, rel=.4):
 def s1():
     S = 1
     # the walk-up: a low pedal and a snare roll building under the crowd
-    play(S, 'tuba', 38, .4, .3, .5, -.2); play(S, 'horns', 50, .5, 2.9, .35, -.3, att=1.2)
-    play(S, 'trombones', 45, .9, 2.5, .3, .2, att=1.0)
+    play(S, 'tuba', 38, .4, .3, .5, -.2); play(S, 'st_trombone', 50, .5, 2.9, .35, -.3, att=1.2)
+    play(S, 'st_trombone', 45, .9, 2.5, .3, .2, att=1.0)
     for k in range(40):
         t = .8 + k * .066; kit(S, 'Snare/KTr_ES-L1_p.wav' if k < 26 else 'Snare/KTr_ES-L1_mf.wav', t, .12 + .3 * k / 40, .1)
     kit(S, 'Gran casa/GTr1_ES_f1.wav', 3.5, .7); kit(S, 'Piatti/BE_a-due_20Is_mf.wav', 3.5, .35, .2)
     # the tune, on horns and trumpets, as the goalie looks at his tablet (104 bpm)
     bt = 60 / 104; t0 = 3.5
     for t, d, n in tune(t0, bt):
-        play(S, 'horns', n, t, d * .95, .55, -.25); play(S, 'trumpets', n + 12 if n < 62 else n, t, d * .9, .45, .2)
+        play(S, 'st_trombone', n, t, d * .95, .55, -.25); play(S, 'st_trumpet', n + 12 if n < 62 else n, t, d * .9, .45, .2)
     for k, ch in enumerate(CHORD):
         tb = t0 + k * bt
         play(S, 'tuba', ROOT[ch] + 12 * (ROOT[ch] < 40), tb, bt * .5, .55, -.1)
-        chord(S, 'trombones', [n - 12 for n in TONES[ch][:3]], tb, bt * .9, .4, .25)
+        chord(S, 'st_trombone', [n - 12 for n in TONES[ch][:3]], tb, bt * .9, .4, .25)
         kit(S, 'Gran casa/GTr1_ES_mf1.wav' if k % 2 == 0 else 'Snare/KTr_ES-L1_mf.wav', tb, .45, 0)
         kit(S, 'Snare/KTr_ES-L1_p.wav', tb + bt / 2, .2, .1)
     # the ball comes: trumpets hammer the A, a roll swells, the bass climbs
     t1 = t0 + 8 * bt
     for k in range(int((10.2 - t1) / (bt / 2))):
-        t = t1 + k * bt / 2; play(S, 'trumpet_st', 69 + (k // 4), t, bt * .4, .3 + .3 * k / 8, .2)
+        t = t1 + k * bt / 2; play(S, 'st_trumpet', 69 + (k // 4), t, bt * .35, .3 + .3 * k / 8, .2)
         play(S, 'tuba', 45 + (k // 2), t, bt * .4, .4, -.1)
     for k in range(int((10.2 - t1) / .05)):
         kit(S, 'Snare/KTr_ES-L1_mf.wav', t1 + k * .05, .1 + .35 * k * .05 / (10.2 - t1), -.1)
@@ -140,10 +140,10 @@ def s1():
     ts = 10.25
     kit(S, 'Gran casa/GTr1_ES_ff1.wav', ts, 1.0); kit(S, 'Piatti/BE_a-due_20Is_ff.wav', ts, .7, .1)
     kit(S, 'Taiko drum/Tai_ES_fff_1_L1.wav', ts, .6, -.2)
-    chord(S, 'trumpets', [74, 78, 81], ts, 1.4, .9, .2); chord(S, 'horns', [62, 66, 69], ts, 1.6, .8, -.2)
-    chord(S, 'trombones', [50, 57, 62], ts, 1.6, .7, .1); play(S, 'tuba', 38, ts, 1.6, .7, -.1)
+    chord(S, 'st_trumpet', [74, 78, 81], ts, 1.4, .9, .2); chord(S, 'st_trombone', [62, 66, 69], ts, 1.6, .8, -.2)
+    chord(S, 'st_trombone', [50, 57, 62], ts, 1.6, .7, .1); play(S, 'tuba', 38, ts, 1.6, .7, -.1)
     # the wink (11.5): the tune's cadence, softly, on one horn
-    play(S, 'horns', 66, 11.35, .35, .4, -.2); play(S, 'horns', 62, 11.7, .9, .4, -.2)
+    play(S, 'st_trombone', 66, 11.35, .35, .4, -.2); play(S, 'st_trombone', 62, 11.7, .9, .4, -.2)
     play(S, 'harp', 74, 11.7, .9, .35, .3)
 
 
@@ -160,10 +160,10 @@ def s2():
         play(S, 'choir_m', TONES[ch][1] - 12, tb, bt * 1.05, .35, .3, att=.1)
         # the lute: a broken chord on the guitar, thinned in the mix to a lute's nasal pluck
         for j, n in enumerate((ROOT[ch] + 12, TONES[ch][0] - 12 + 12 * (TONES[ch][0] < 62), TONES[ch][1], TONES[ch][2])):
-            play(S, 'guitar', n, tb + j * bt / 4, bt * .6, .32, -.35 + .1 * j)
+            play(S, 'lute', n, tb + j * bt / 4, bt * .6, .32, -.35 + .1 * j)
     # a recorder answers the tune's last bar
     for t, d, n in tune(t0, bt, 12, pickup=False)[5:]:
-        play(S, 'flute', n, t, d, .22, .4)
+        play(S, 'woodflute', n, t, d, .22, .4)
     play(S, 'choir_f', 74, t0 + 8 * bt, 1.2, .45, -.1, att=.2); play(S, 'choir_m', 50, t0 + 8 * bt, 1.2, .4, .1, att=.2)
 
 
@@ -182,14 +182,14 @@ def s3():
     for k, ch in enumerate(CHORD + ['D', 'D']):
         tb = t0 + k * bt
         for j in range(2):   # banjo: a forward roll, eighths
-            play(S, 'banjo', ROLL[ch][(2 * k + j) % 8], tb + j * bt / 2, bt * .45, .42, .35)
+            play(S, 'dulcimer', ROLL[ch][(2 * k + j) % 8], tb + j * bt / 2, bt * .45, .42, .35)
         # guitar: boom on the beat (root, then the fifth), chuck on the off-beat
-        play(S, 'guitar', (ROOT[ch] if k % 2 == 0 else FIFTH[ch]) + 12, tb, bt * .45, .5, -.3)
-        if k % 2 == 1: chord(S, 'guitar', [n - 12 for n in TONES[ch][:3]] if ch != 'G' else [55, 59, 62], tb, bt * .3, .45, -.25, spread=.008)
+        play(S, 'ac_guitar', (ROOT[ch] if k % 2 == 0 else FIFTH[ch]) + 12, tb, bt * .45, .5, -.3)
+        if k % 2 == 1: chord(S, 'ac_guitar', [n - 12 for n in TONES[ch][:3]] if ch != 'G' else [55, 59, 62], tb, bt * .3, .45, -.25, spread=.008)
     # the grin: a banjo run up and the last chord
-    for j, n in enumerate((62, 66, 69, 69)): play(S, 'banjo', n, t0 + 9 * bt + j * .07, .5, .4, .35)
-    chord(S, 'guitar', [50, 57, 62, 66], t0 + 10 * bt, 1.0, .55, -.25, spread=.012)
-    play(S, 'harmonica', 62, t0 + 10 * bt, .9, .35, .2)
+    for j, n in enumerate((62, 66, 69, 69)): play(S, 'dulcimer', n, t0 + 9 * bt + j * .07, .5, .4, .35)
+    chord(S, 'ac_guitar', [50, 57, 62, 66], t0 + 10 * bt, 1.0, .55, -.25, spread=.012)
+    play(S, 'dulcimer', 74, t0 + 10 * bt, .9, .35, .2)
 
 
 # ════════════════════════════════════════════════════════════════════════════
@@ -199,25 +199,25 @@ WALTZ = [(-1, 1, 57), (0, 1, 62), (1, 1, 66), (2, 1, 69), (3, 2, 74), (5, 1, 73)
          (8, .5, 67), (8.5, .5, 64), (9, 1, 66), (10, 2, 62)]
 WBARS = ['D', 'D', 'G', 'D']
 def s4():
+    """A Parisian salon waltz: violins on the tune, clarinet under it, basses and violas oom-pah-pah, harp."""
     S = 4; bt = 60 / 168; t0 = 24.55
-    for b, d, n in WALTZ:
-        t = t0 + b * bt
-        play(S, 'accordion', n + 12 if n < 62 else n, t, d * bt * .95, .6, .15)
+    for b_, d, n in WALTZ:
+        t = t0 + b_ * bt
+        play(S, 'st_violins', n + 12 if n < 62 else n, t, d * bt * .95, .6, .15)
         play(S, 'clarinet', n - 12 + 12 * (n < 62), t, d * bt * .9, .25, -.3)
     for k, ch in enumerate(WBARS + ['D']):
         tb = t0 + 3 * k * bt
         if k == 2:  # bar 3: G, then the A7 on its third beat
-            play(S, 'tuba', ROOT['G'], tb, bt * .6, .6, -.1)
-            chord(S, 'accordion', [59, 62, 67], tb + bt, bt * .5, .35, .25)
-            chord(S, 'accordion', [61, 64, 67], tb + 2 * bt, bt * .5, .35, .25)
-            play(S, 'tuba', ROOT['A7'], tb + 2 * bt, bt * .6, .45, -.1)
+            play(S, 'st_basses', ROOT['G'], tb, bt * .8, .6, -.1)
+            chord(S, 'st_violas', [59, 62, 67], tb + bt, bt * .5, .35, .25)
+            chord(S, 'st_violas', [61, 64, 67], tb + 2 * bt, bt * .5, .35, .25)
             continue
-        play(S, 'tuba', ROOT[ch], tb, bt * .6, .6, -.1)
+        play(S, 'st_basses', ROOT[ch], tb, bt * .8, .6, -.1)
         if k < 4:
-            for j in (1, 2): chord(S, 'accordion', [62, 66, 69] if ch == 'D' else [62, 67, 71], tb + j * bt, bt * .5, .3, .25)
-    # the tag: a bright tremolo chord as the last piece goes on
-    chord(S, 'accordion', [62, 66, 69, 74], t0 + 15 * bt, 1.4, .5, .15)
-    play(S, 'tuba', 38, t0 + 15 * bt, .6, .5, -.1)
+            for j in (1, 2): chord(S, 'st_violas', [62, 66, 69] if ch == 'D' else [62, 67, 71], tb + j * bt, bt * .5, .3, .25)
+    for j, n in enumerate((62, 66, 69, 74, 78, 81)): play(S, 'harp', n, t0 + 15 * bt + j * .05, 1.2, .3, -.3 + .1 * j)
+    chord(S, 'st_violins', [74, 78, 81], t0 + 15 * bt, 1.4, .5, .15)
+    play(S, 'st_basses', 38, t0 + 15 * bt, .8, .5, -.1)
     kit(S, 'Triangle/TG1_ES_di_f_mu_1.wav', t0 + 15 * bt, .3, .5)
 
 
@@ -249,7 +249,7 @@ def s5():
 def s6():
     S = 6; bt = 60 / 120; t0 = 36.4
     for t, d, n in tune(t0, bt, 12):
-        play(S, 'flute_st' if d < bt else 'flute', n, t, d * .85, .55, .15)
+        play(S, 'woodflute', n, t, d * .85, .55, .15)
     # the drum: the rudiments of a march — a flam on the beat, a drag before the third, rolls at the ends
     for k in range(8):
         tb = t0 + k * bt
@@ -262,8 +262,8 @@ def s6():
     tr = t0 + 8 * bt
     for k in range(int((41.4 - tr) / .045)):
         kit(S, 'Field drum w/Field-S_ES_p_L1.wav' if k % 2 else 'Field drum w/Field-S_ES_mf_L1.wav', tr + k * .045, .2 + .25 * k * .045 / (41.4 - tr), -.15)
-    for k in range(int((41.3 - tr) / .09)): play(S, 'flute_st', 74 + 12 * 0 + (2 if k % 2 else 0) + 12, tr + k * .09, .08, .3, .15)
-    kit(S, 'Gran casa/GTr1_ES_f1.wav', 41.45, .6); play(S, 'flute', 74 + 12, 41.45, .5, .5, .15)
+    for k in range(int((41.3 - tr) / .09)): play(S, 'woodflute', 86 + (2 if k % 2 else 0), tr + k * .09, .08, .3, .15)
+    kit(S, 'Gran casa/GTr1_ES_f1.wav', 41.45, .6); play(S, 'woodflute', 86, 41.45, .5, .5, .15)
 
 
 # ════════════════════════════════════════════════════════════════════════════
@@ -289,10 +289,10 @@ def s7():
 def s8():
     S = 8; bt = 60 / 104; t0 = 48.45
     for t, d, n in tune(t0, bt, 0, HIJAZ):
-        play(S, 'oud', n - 12, t, d * .9, .6, .1)                # the oud an octave down, where it sings
+        play(S, 'pipa', n, t, d * .9, .6, .1)                     # a real lute, plucked, with tremolo
         if d >= bt: # the oud's tremolo on the long notes
-            for j in range(1, int(d / .09)): play(S, 'oud', n - 12, t + j * .09, .08, .2, .1)
-        play(S, 'flute', n, t, d * 1.0, .2, -.3, att=.06)       # the ney, low and breathy, doubling
+            for j in range(1, int(d / .09)): play(S, 'pipa', n, t + j * .09, .08, .2, .1)
+        play(S, 'lowflute', n - 12 if n > 69 else n, t, d * 1.0, .28, -.3, att=.06)       # the ney, low and breathy
     # the darbuka: maqsum — DUM tek _ tek DUM _ tek _ — doum on the low hits, tek on the rim
     darb = I.decode(I.loops('Egyptian Nile Darbouka')[0])
     segs = I.by_onsets(darb, min_len=.06, max_len=.5)
@@ -306,9 +306,9 @@ def s8():
             if c == '_': continue
             h = (dum if c == 'D' else tek)[k % len(dum if c == 'D' else tek)]
             MUS[S].add(t0 + k * bt / 2, h / (np.abs(h).max() or 1), .55 if c == 'D' else .35, -.15)
-    play(S, 'oud', 50, t0 - 1.2, 1.0, .5, .1)
-    for j in range(int(1.0 / .09)): play(S, 'oud', 50, t0 - 1.2 + j * .09, .08, .18, .1)
-    chord(S, 'oud', [50, 54, 57], t0 + 8 * bt, 1.0, .5, .1, spread=.03)
+    play(S, 'pipa', 50, t0 - 1.2, 1.0, .5, .1)
+    for j in range(int(1.0 / .09)): play(S, 'pipa', 50, t0 - 1.2 + j * .09, .08, .18, .1)
+    chord(S, 'pipa', [50, 54, 57], t0 + 8 * bt, 1.0, .5, .1, spread=.03)
 
 
 # ════════════════════════════════════════════════════════════════════════════
@@ -317,17 +317,17 @@ def s8():
 def s9():
     S = 9; bt = 60 / 100; t0 = 54.0
     for t, d, n in tune(t0, bt):
-        play(S, 'harmonica', n, t, d * .95, .55, .2)
+        play(S, 'steel', n, t, d * .95, .55, .2)
     for k, ch in enumerate(CHORD + ['D']):
         tb = t0 + k * bt
-        play(S, 'guitar', (ROOT[ch] if k % 2 == 0 else FIFTH[ch]) + 12, tb, bt * .45, .5, -.25)
-        chord(S, 'guitar', [n - 12 for n in TONES[ch][:3]], tb + bt / 2, bt * .3, .4, -.2, spread=.01)
+        play(S, 'ac_guitar', (ROOT[ch] if k % 2 == 0 else FIFTH[ch]) + 12, tb, bt * .45, .5, -.25)
+        chord(S, 'ac_guitar', [n - 12 for n in TONES[ch][:3]], tb + bt / 2, bt * .3, .4, -.2, spread=.01)
         for j in range(2):   # hoofbeats on a woodblock: clip-clop
             kit(S, f'Woodblocks/HBL{4 if j else 3}_Ho_ES1_mf.wav', tb + j * bt / 2, .22, .3)
     # the dobro slides in under the long notes; the grin and the wink
     for t, n in ((54.0 - .4, 50), (t0 + 2 * bt - .1, 50), (t0 + 6 * bt - .1, 45)):
-        play(S, 'dobro', n, t, .9, .4, -.3)
-    play(S, 'harmonica', 74, t0 + 8 * bt + .2, .7, .4, .2)
+        play(S, 'st_cellos', n, t, .9, .35, -.3, att=.1)
+    play(S, 'steel', 74, t0 + 8 * bt + .2, .7, .4, .2)
 
 
 # ════════════════════════════════════════════════════════════════════════════
@@ -336,17 +336,17 @@ def s9():
 def s10():
     S = 10; bt = 60 / 76; t0 = 59.5
     for t, d, n in tune(t0, bt, 12):
-        play(S, 'piano', n, t, d * 1.1, .45, .1)
+        play(S, 'steinway', n, t, d * 1.1, .45, .1)
     for k, ch in enumerate(CHORD):
         tb = t0 + k * bt
-        play(S, 'piano', ROOT[ch] + 12, tb, bt * 1.6, .35, -.2)
-        for j, n in enumerate(TONES[ch][:3]): play(S, 'piano', n - 12, tb + bt / 2 + j * .02, bt * .9, .18, -.1)
-        strings(S, STR.CEL, STR.SUS[STR.CEL], ROOT[ch] + 12, tb, bt * 1.05, .35, -.3, att=.3)
-        strings(S, STR.VLA, STR.SUS[STR.VLA], TONES[ch][1] - 12 + (12 if TONES[ch][1] < 66 else 0), tb, bt * 1.05, .25, .2, att=.3)
+        play(S, 'steinway', ROOT[ch] + 12, tb, bt * 1.6, .35, -.2)
+        for j, n in enumerate(TONES[ch][:3]): play(S, 'steinway', n - 12, tb + bt / 2 + j * .02, bt * .9, .18, -.1)
+        play(S, 'st_cellos', ROOT[ch] + 12, tb, bt * 1.05, .35, -.3, att=.3)
+        play(S, 'st_violas', TONES[ch][1] - 12 + (12 if TONES[ch][1] < 66 else 0), tb, bt * 1.05, .25, .2, att=.3)
     # the camera finds the phone (61.0): the violins swell up to it
-    strings(S, STR.VLN, STR.SUS[STR.VLN], 74, 61.0, 3.3, .45, .3, att=2.2)
-    strings(S, STR.VLN, STR.SUS[STR.VLN], 78, 62.4, 2.0, .35, -.2, att=1.2)
-    strings(S, STR.CB, STR.SUS[STR.CB], 38, 61.5, 3.5, .45, 0, att=1.0)
+    play(S, 'st_violins', 74, 61.0, 3.3, .45, .3, att=2.2)
+    play(S, 'st_violins', 78, 62.4, 2.0, .35, -.2, att=1.2)
+    play(S, 'st_basses', 38, 61.5, 3.5, .45, 0, att=1.0)
     for j, n in enumerate((62, 66, 69, 74, 78, 81)): play(S, 'harp', n, 63.2 + j * .06, 1.2, .3, -.3 + .1 * j)
 
 
@@ -360,29 +360,29 @@ def ending():
     kit(S, 'Gran casa/GTr1_ES_mf1.wav', t(EV['tile_land']), .5)
     for j, n in enumerate((50, 57, 62, 66)): play(S, 'harp', n, t(EV['tile']) + j * .07, 1.2, .3, -.2 + .1 * j)
     # the tune's first eight notes, each on another scene's instrument, as each piece lands
-    relay = [(EV['arc_land'], 'trumpets', 62), (EV['moon_land'], 'choir_f', 66),
-             (EV['win'][0], 'banjo', 69), (EV['win'][1], 'accordion', 74), (EV['win'][2], 'erhu', 73),
-             (EV['win'][3], 'flute', 71 + 12), (EV['ghost'] + .15, 'synthlead', 69 + 12), (EV['ghost'] + .4, 'oud', 55),
-             (EV['ghost'] + .65, 'harmonica', 64), (EV['face'], 'piano', 66 + 12)]
+    relay = [(EV['arc_land'], 'st_trumpet', 62), (EV['moon_land'], 'choir_f', 66),
+             (EV['win'][0], 'dulcimer', 69), (EV['win'][1], 'st_violins', 74), (EV['win'][2], 'erhu', 73),
+             (EV['win'][3], 'woodflute', 71 + 12), (EV['ghost'] + .15, 'synthlead', 69 + 12), (EV['ghost'] + .4, 'pipa', 67),
+             (EV['ghost'] + .65, 'steel', 64), (EV['face'], 'steinway', 66 + 12)]
     for k, (tt, name, n) in enumerate(relay):
         play(S, name, n, t(tt), .32 if k < 9 else .8, .55, -.5 + k * .1)
     # the wordmark: all of them on D
     tw = t(EV['word'])
-    chord(S, 'trumpets', [74, 78, 81], tw, 2.2, .7, .2); chord(S, 'horns', [62, 66, 69], tw, 2.4, .7, -.2)
+    chord(S, 'st_trumpet', [74, 78, 81], tw, 2.2, .7, .2); chord(S, 'st_trombone', [62, 66, 69], tw, 2.4, .7, -.2)
     chord(S, 'choir_f', [74, 78], tw, 2.6, .5, -.1, att=.15); chord(S, 'choir_m', [50, 57], tw, 2.6, .5, .1, att=.15)
-    play(S, 'tuba', 38, tw, 1.6, .6, -.1); chord(S, 'accordion', [62, 66, 69], tw, 1.4, .3, .3)
+    play(S, 'tuba', 38, tw, 1.6, .6, -.1); chord(S, 'st_violas', [62, 66, 69], tw, 1.4, .3, .3)
     for j, n in enumerate((62, 66, 69, 74, 78, 81, 86)): play(S, 'harp', n, tw + j * .045, 1.6, .3, -.3 + .1 * j)
     kit(S, 'Gran casa/GTr1_ES_f1.wav', tw, .7); kit(S, 'Piatti/BE_a-due_20Is_mf.wav', tw, .5, .1)
-    strings(S, STR.VLN, STR.SUS[STR.VLN], 74, tw, 3.0, .45, .3, att=.1); strings(S, STR.CEL, STR.SUS[STR.CEL], 50, tw, 3.0, .45, -.3, att=.1)
+    play(S, 'st_violins', 74, tw, 3.0, .45, .3, att=.1); play(S, 'st_cellos', 50, tw, 3.0, .45, -.3, att=.1)
     # the tagline: the tune's last bar, gently, on celesta and guitar; then the final chord
     tt = t(EV['tag']) + .4; bt = 60 / 96
     for k, (b, d, n) in enumerate(THEME[6:]):
         play(S, 'celesta', n + 12, tt + (b - 4) * bt, d * bt, .4, .2)
-        play(S, 'guitar', n, tt + (b - 4) * bt, d * bt, .3, -.2)
+        play(S, 'ac_guitar', n, tt + (b - 4) * bt, d * bt, .3, -.2)
     tf = tt + 4 * bt
-    chord(S, 'horns', [50, 57, 62, 66], tf, DUR - tf - .3, .45, 0, att=.2)
+    chord(S, 'st_trombone', [50, 57, 62, 66], tf, DUR - tf - .3, .45, 0, att=.2)
     chord(S, 'choir_f', [69, 74], tf, DUR - tf - .3, .35, 0, att=.3)
-    strings(S, STR.CB, STR.SUS[STR.CB], 38, tf, DUR - tf - .3, .4, 0, att=.3)
+    play(S, 'st_basses', 38, tf, DUR - tf - .3, .4, 0, att=.3)
     play(S, 'glock', 86, tf, 2.5, .3, .3)
 
 

@@ -43,7 +43,7 @@ def bp(x, a, b): return sosfilt(butter(2, [a, b], 'band', fs=SR, output='sos'), 
 
 
 # ── pitch ─────────────────────────────────────────────────────────────────────
-def f0_track(mono, hop=1024, win=2048, fmin=55, fmax=1800):
+def f0_track(mono, hop=1024, win=4096, fmin=30, fmax=1800):
     """(midi, confidence) per frame, by normalized autocorrelation."""
     out = []
     lo, hi = int(SR / fmax), int(SR / fmin)
@@ -167,8 +167,14 @@ def bank_labeled(name, paths, pick=None):
         if p is not None: offs.append(12 * round((p - lab) / 12))
     off = int(np.median(offs)) if offs else 0
     # the name says which note; where the recording measurably sits a little off it, tune to what it is
-    notes = sorted(((lab + off + (p - lab - off if p is not None and abs(p - lab - off) < .5 else 0), x)
-                    for (lab, x), p in zip(raw, meas)), key=lambda t: t[0])
+    def true_pitch(lab, x, p):
+        n0 = lab + off
+        if p is not None and abs(p - n0) < .5: return p
+        h = hps_pitch(x)                      # a file filed under the wrong octave: go by what it plays
+        if abs(h - n0) > 6 and abs(h - round(h)) < .3 and abs((h - n0) % 12 - 0) < .4 or abs((h - n0) % 12 - 12) < .4:
+            return h
+        return n0
+    notes = sorted(((true_pitch(lab, x, p), x) for (lab, x), p in zip(raw, meas)), key=lambda t: t[0])
     if pick: notes = pick(notes)
     os.makedirs(os.path.dirname(cache), exist_ok=True); pickle.dump(notes, open(cache, 'wb'))
     return notes
@@ -284,6 +290,22 @@ def get(name):
     if name == 'dobro':      return Instrument(bank_of(name, loops('Front Porch Dobro'), 'onsets', several_per_semitone), att=0, rel=.4)
     if name == 'dizi':       return Instrument(bank_of(name, loops('Chinese Traditional Dizi'), 'onsets', several_per_semitone), sustain=True, att=.03, rel=.25)
     if name == 'mandolin':   return Instrument(bank_of(name, loops('Cheerful Mandolin'), 'onsets', several_per_semitone), att=0, rel=.3, prefer_long=False)
+    S_ = f'{LIB}/Samples'; AL_ = f'{S_}/Alchemy Samples'
+    cons = lambda path, keep=one_per_semitone: bank_of(name, [path], 'silence', keep)
+    wavs = lambda d: bank_labeled(name, [f for f in files(d) if f.endswith(('.wav', '.caf'))])
+    if name == 'st_trumpet':  return Instrument(cons(f'{S_}/Brass/Studio Horns/Studio Trumpet 1_consolidated.caf'), sustain=True, att=.02, rel=.25)
+    if name == 'st_trombone': return Instrument(cons(f'{S_}/Brass/Studio Horns/Studio Trombone 1_consolidated.caf'), sustain=True, att=.03, rel=.3)
+    if name == 'st_violins':  return Instrument(cons(f'{S_}/Strings/Studio Strings/Studio Violins 1_consolidated.caf'), sustain=True, att=.08, rel=.5)
+    if name == 'st_violas':   return Instrument(cons(f'{S_}/Strings/Studio Strings/Studio Violas_consolidated.caf'), sustain=True, att=.08, rel=.5)
+    if name == 'st_cellos':   return Instrument(cons(f'{S_}/Strings/Studio Strings/Studio Cellos_consolidated.caf'), sustain=True, att=.08, rel=.5)
+    if name == 'st_basses':   return Instrument(cons(f'{S_}/Strings/Studio Strings/Studio Double Basses_consolidated.caf'), sustain=True, att=.08, rel=.5)
+    if name == 'steinway':    return Instrument(cons(f'{S_}/Keyboard/Acoustic Piano/Steinway Piano 2_consolidated.caf', lambda n: one_per_semitone(n, 'loud')), att=0, rel=.6)
+    if name == 'ac_guitar':   return Instrument(cons(f'{S_}/Guitar/Acoustic Guitar_consolidated.caf', lambda n: one_per_semitone(n, 'loud')), att=0, rel=.5)
+    if name == 'lute':        return Instrument(cons(f'{S_}/Guitar/Classical Acoustic Guitar_consolidated.caf', lambda n: one_per_semitone(n, 'loud')), att=0, rel=.6)
+    if name == 'steel':       return Instrument(wavs(f'{AL_}/Guitars/Acoustic Guitars/Steel String'), att=0, rel=.5)
+    if name == 'woodflute':   return Instrument(wavs(f'{AL_}/Woodwinds/World Woodwinds/Natural Wood Flute'), sustain=True, att=.03, rel=.2)
+    if name == 'lowflute':    return Instrument(wavs(f'{AL_}/Woodwinds/World Woodwinds/Mystical Low Flute'), sustain=True, att=.06, rel=.3)
+    if name == 'dulcimer':    return Instrument(wavs(f'{AL_}/Guitars/Plucked Strings/App Dulcimer'), att=0, rel=.6)
     SY = f'{LIB}/Samples/Synthesizer'
     one = lambda path, root: [(root, (lambda x: (x / (np.abs(x).max() or 1)).astype(np.float32))(decode(path)))]
     if name == 'celesta':    return Instrument(bank_of(name, [f'{LIB}/Samples/Mallet/Toy Celesta_consolidated.caf'], 'silence', lambda n: one_per_semitone(n, 'loud')), att=0, rel=1.0)
