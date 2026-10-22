@@ -151,18 +151,24 @@ public class EventScenarioSecondPassTests : Oct16TestBase
     [Test]
     public async Task A_guest_writes_to_the_organizers_and_reads_their_answer()
     {
-        // A booking first: asked at the door, which needs nothing from the organizers.
-        var on = await _admin.PutAsync($"/api/organizations/{_orgId}/events/{RoomsEventId}/door-tickets",
-                                       new() { DataObject = new { on = true } });
-        if (on.Status == 400) Assert.Ignore("The seeded weekend sells no day passes, so a guest can't ask at the door.");
-        var url = (await OkJsonAsync(on, "turning on tickets at the door")).GetProperty("url").GetString()!;
-        var token = url[(url.LastIndexOf('/') + 1)..];
-
+        // The thread needs a booking. The seeded guest already holds a confirmed place at the weekend,
+        // and that one is used as it is: withdrawing a confirmed booking only records a request to cancel
+        // it, so taking it "back" here would leave the seeded party asking to cancel. Only when he holds
+        // none is one made, by asking at the door, and that one is withdrawn afterwards.
         var guest = await ApiAsAsync(ClientEmail, ClientPassword);
-        await guest.DeleteAsync($"/api/public/hosted-events/{RoomsEventId}/my-booking");
-        await OkJsonAsync(await guest.PostAsync($"/api/public/door-tickets/{token}",
-            new() { DataObject = new { partySize = 1, firstName = "Daniel", lastName = "Park", phone = "615-555-0100" } }),
-            "asking at the door");
+        var asked = false;
+        if (!await HoldsABookingAsync(guest))
+        {
+            var on = await _admin.PutAsync($"/api/organizations/{_orgId}/events/{RoomsEventId}/door-tickets",
+                                           new() { DataObject = new { on = true } });
+            if (on.Status == 400) Assert.Ignore("The seeded weekend sells no day passes, so a guest can't ask at the door.");
+            var url = (await OkJsonAsync(on, "turning on tickets at the door")).GetProperty("url").GetString()!;
+            var token = url[(url.LastIndexOf('/') + 1)..];
+            await OkJsonAsync(await guest.PostAsync($"/api/public/door-tickets/{token}",
+                new() { DataObject = new { partySize = 1, firstName = "Daniel", lastName = "Park", phone = "615-555-0100" } }),
+                "asking at the door");
+            asked = true;
+        }
 
         try
         {
@@ -200,6 +206,8 @@ public class EventScenarioSecondPassTests : Oct16TestBase
             var bell = await OkJsonAsync(await guest.GetAsync("/api/me/notification-summary"), "reading the guest's bell");
             Assert.That(bell.GetProperty("eventOrganizerReplies").GetProperty("count").GetInt32(), Is.GreaterThan(0));
 
+            // The theme loop above ended in dark; this last look is in light, so the page is put back in light.
+            await UseThemeAsync("light");
             await LoginAsync(ClientEmail, ClientPassword);
             await Page.GotoAsync($"{page}#event-organizer-thread");
             await Expect(Page.Locator("#event-organizer-thread [data-from-organizer=true]").Last)
@@ -209,8 +217,15 @@ public class EventScenarioSecondPassTests : Oct16TestBase
         }
         finally
         {
-            await guest.DeleteAsync($"/api/public/hosted-events/{RoomsEventId}/my-booking");
+            if (asked) await guest.DeleteAsync($"/api/public/hosted-events/{RoomsEventId}/my-booking");
         }
+    }
+
+    /// <summary>Whether the API's caller holds a live booking at the seeded weekend.</summary>
+    private static async Task<bool> HoldsABookingAsync(IAPIRequestContext who)
+    {
+        var mine = await who.GetAsync($"/api/public/hosted-events/{RoomsEventId}/my-booking");
+        return mine.Ok && (await mine.TextAsync()).Trim().Length > 2;
     }
 
     [Test]
@@ -233,13 +248,34 @@ public class EventScenarioSecondPassTests : Oct16TestBase
     [Test]
     public async Task A_senders_yes_to_the_results_is_a_switch_that_answers_in_words()
     {
+        // A session sent to the weekend, from the seeded guest's confirmed place there. Sent by the API
+        // the way the phone sends it; a session filed with an event stays filed, so a second run finds
+        // the same one rather than making another.
+        var guest = await ApiAsAsync(ClientEmail, ClientPassword);
+        if (!await HoldsABookingAsync(guest))
+            Assert.Ignore("The seeded guest holds no place at the seeded weekend, so he has nothing to send to it.");
+        var bytes = await File.ReadAllBytesAsync(Path.Combine(AppContext.BaseDirectory, "Fixtures", "field-session-stage.ben"));
+        string deviceSessionId;
+        using (var zip = new System.IO.Compression.ZipArchive(new MemoryStream(bytes)))
+        using (var seal = zip.GetEntry("seal.json")!.Open())
+            deviceSessionId = System.Text.Json.JsonDocument.Parse(seal).RootElement.GetProperty("session_id").GetString()!;
+        var form = Context.APIRequest.CreateFormData();
+        form.Append("file", new FilePayload { Name = "field-session.ben", MimeType = "application/vnd.ishaunted.field-session", Buffer = bytes });
+        form.Append("deviceSessionId", deviceSessionId);
+        form.Append("hostedEventId", RoomsEventId);
+        var sent = await OkJsonAsync(await guest.PostAsync("/api/field-sessions/bundle", new() { Multipart = form }),
+                                     "sending a session to the weekend");
+        Assert.That(sent.GetProperty("hostedEventId").GetString(), Is.EqualTo(RoomsEventId),
+            "The guest's session went somewhere other than the weekend.");
+        var sessionId = Guid.Parse(sent.GetProperty("id").GetString()!).ToString("N");
+
+        // The page names itself with a level-three heading, like the other pages of the Media section.
         await LoginAsync(ClientEmail, ClientPassword);
         await Page.GotoAsync($"{BaseUrl}/my-field-sessions");
-        await Expect(Page.Locator("h1").First).ToBeVisibleAsync(new() { Timeout = 30_000 });
+        await Expect(Page.GetByRole(AriaRole.Heading, new() { Name = "My field sessions" })).ToBeVisibleAsync(new() { Timeout = 30_000 });
 
-        var consent = Page.Locator("[id^=show-with-results-]").First;
-        if (await consent.CountAsync() == 0)
-            Assert.Ignore("This guest has no session sent to an event today.");
+        var consent = Page.Locator($"#show-with-results-{sessionId}");
+        await Expect(consent).ToBeVisibleAsync(new() { Timeout = 30_000 });
 
         var was = await consent.IsCheckedAsync();
         await consent.ClickAsync();
@@ -247,5 +283,9 @@ public class EventScenarioSecondPassTests : Oct16TestBase
         await Expect(consent).ToBeCheckedAsync(new() { Checked = !was, Timeout = 15_000 });
         await consent.ClickAsync();
         await Expect(consent).ToBeCheckedAsync(new() { Checked = was, Timeout = 15_000 });
+
+        // The switch is the sender's word, kept: a reload reads it back.
+        await Page.ReloadAsync();
+        await Expect(Page.Locator($"#show-with-results-{sessionId}")).ToBeCheckedAsync(new() { Checked = was, Timeout = 30_000 });
     }
 }

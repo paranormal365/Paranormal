@@ -124,39 +124,72 @@ public class EventScenarioTests : Oct16TestBase
     public async Task Somebody_at_the_door_asks_on_their_phone_and_the_door_confirms_them_once_paid()
     {
         var (url, token) = await DoorSellingAsync();
-        var guest = await ApiAsAsync(ClientEmail, ClientPassword);
-        // A guest who already has a place here is told so instead; start from none.
-        await guest.DeleteAsync($"/api/public/hosted-events/{RoomsEventId}/my-booking");
+        // Wren, who belongs to nothing. Not Daniel: the seeded weekend has his confirmed party of four, and
+        // the door rightly tells somebody with a place to show their pass rather than ask again.
+        var guest = await ApiAsAsync(SoloEmail, SoloPassword);
+        await LetGoOfAnyPlaceAsync(guest);
+        string? bookingId = null;
 
-        await LoginAsync(ClientEmail, ClientPassword);
-        await Page.SetViewportSizeAsync(375, 812);
-        await Page.GotoAsync(url);
-        await Expect(Page.Locator("#door-ticket")).ToBeVisibleAsync(new() { Timeout = 30_000 });
-        await Expect(Page.Locator("#door-ticket-price")).ToContainTextAsync("Nothing is paid through this site");
+        try
+        {
+            await LoginAsync(SoloEmail, SoloPassword);
+            await Page.SetViewportSizeAsync(375, 812);
+            await Page.GotoAsync(url);
+            await Expect(Page.Locator("#door-ticket")).ToBeVisibleAsync(new() { Timeout = 30_000 });
+            await Expect(Page.Locator("#door-ticket-price")).ToContainTextAsync("Nothing is paid through this site");
+            await Expect(Page.Locator("#door-ticket-ask")).ToBeVisibleAsync(new() { Timeout = 30_000 });
 
-        var problems = new List<string>();
-        problems.AddRange(await TouchTargetAsync(Page.Locator("#door-ticket-ask"), "door-ticket-ask", "light"));
-        await Page.Locator("#door-ticket-ask").ClickAsync();
-        await Expect(Page.Locator("#door-ticket-asked")).ToContainTextAsync("Show this screen at the door", new() { Timeout = 30_000 });
+            // Her account may not hold a name and a phone yet; the door asks for what is missing.
+            foreach (var (box, value) in new[] { ("#door-ticket-first", "Wren"), ("#door-ticket-last", "Ashby"), ("#door-ticket-phone", "615-555-0101") })
+            {
+                var field = Page.Locator(box);
+                if (await field.CountAsync() > 0 && string.IsNullOrWhiteSpace(await field.InputValueAsync()))
+                    await field.FillAsync(value);
+            }
 
-        // The door sees them waiting, and confirms them once they have paid.
-        var waiting = await OkJsonAsync(await _admin.GetAsync($"/api/organizations/{_orgId}/events/{RoomsEventId}/door-tickets"), "reading the door");
-        var request = waiting.GetProperty("requests").EnumerateArray().Last(r => !r.GetProperty("isConfirmed").GetBoolean());
-        var bookingId = request.GetProperty("bookingId").GetString();
+            var problems = new List<string>();
+            problems.AddRange(await TouchTargetAsync(Page.Locator("#door-ticket-ask"), "door-ticket-ask", "light"));
+            await Page.Locator("#door-ticket-ask").ClickAsync();
+            await Expect(Page.Locator("#door-ticket-asked")).ToContainTextAsync("Show this screen at the door", new() { Timeout = 30_000 });
 
-        await LoginAsync(SuperAdminEmail, SuperAdminPassword);
-        await Page.GotoAsync(EventPage("/door"));
-        var confirm = Page.Locator($"#door-ticket-confirm-{bookingId}");
-        problems.AddRange(await TouchTargetAsync(confirm, "door-ticket-confirm", "light"));
-        await confirm.ClickAsync(new() { Timeout = 30_000 });
-        await Expect(Page.Locator("#door-tickets-note")).ToContainTextAsync("is confirmed", new() { Timeout = 30_000 });
+            // The door sees them waiting, and confirms them once they have paid.
+            var waiting = await OkJsonAsync(await _admin.GetAsync($"/api/organizations/{_orgId}/events/{RoomsEventId}/door-tickets"), "reading the door");
+            var request = waiting.GetProperty("requests").EnumerateArray().Last(r => !r.GetProperty("isConfirmed").GetBoolean());
+            bookingId = request.GetProperty("bookingId").GetString();
 
-        // Their phone now shows a place.
-        var seen = await OkJsonAsync(await guest.GetAsync($"/api/public/door-tickets/{token}"), "reading the door's code as the guest");
-        Assert.That(IsEnum(seen.GetProperty("myStatus"), 1, "Confirmed"), Is.True, $"The guest's place reads {seen.GetProperty("myStatus")}.");
+            await LoginAsync(SuperAdminEmail, SuperAdminPassword);
+            await Page.GotoAsync(EventPage("/door"));
+            var confirm = Page.Locator($"#door-ticket-confirm-{bookingId}");
+            problems.AddRange(await TouchTargetAsync(confirm, "door-ticket-confirm", "light"));
+            await confirm.ClickAsync(new() { Timeout = 30_000 });
+            await Expect(Page.Locator("#door-tickets-note")).ToContainTextAsync("is confirmed", new() { Timeout = 30_000 });
 
-        await guest.DeleteAsync($"/api/public/hosted-events/{RoomsEventId}/my-booking");
-        NothingWrong(problems);
+            // Their phone now shows a place.
+            var seen = await OkJsonAsync(await guest.GetAsync($"/api/public/door-tickets/{token}"), "reading the door's code as the guest");
+            Assert.That(IsEnum(seen.GetProperty("myStatus"), 1, "Confirmed"), Is.True, $"The guest's place reads {seen.GetProperty("myStatus")}.");
+            NothingWrong(problems);
+        }
+        finally
+        {
+            // A confirmed place is released by the organizers; the guest withdrawing one only asks to.
+            if (bookingId is not null)
+                await _admin.PostAsync($"/api/organizations/{_orgId}/events/{RoomsEventId}/bookings/{bookingId}/cancel",
+                    new() { DataObject = new { decisionNote = "Clearing up after a test." } });
+            await LetGoOfAnyPlaceAsync(guest);
+        }
+    }
+
+    /// <summary>Withdraws a request the guest still has at the seeded weekend, so the door offers them the form.</summary>
+    private async Task LetGoOfAnyPlaceAsync(IAPIRequestContext guest)
+    {
+        var mine = await guest.GetAsync($"/api/public/hosted-events/{RoomsEventId}/my-booking");
+        if (!mine.Ok || (await mine.TextAsync()).Trim().Length <= 2) return;
+        var booking = (await mine.JsonAsync())!.Value;
+        if (booking.TryGetProperty("status", out var status) && IsEnum(status, 1, "Confirmed"))
+            await _admin.PostAsync($"/api/organizations/{_orgId}/events/{RoomsEventId}/bookings/{booking.GetProperty("id").GetString()}/cancel",
+                new() { DataObject = new { decisionNote = "Clearing up after a test." } });
+        else
+            await guest.DeleteAsync($"/api/public/hosted-events/{RoomsEventId}/my-booking");
     }
 
     // ── time to investigate ──────────────────────────────────────────────────

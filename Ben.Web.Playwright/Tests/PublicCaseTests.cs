@@ -73,10 +73,13 @@ public class PublicCaseTests : BenTestBase
         // two of those choices, which are no longer on the page until somebody asks for them.
         var vote = Page.Locator(".vote-actions__vote > .vote-btn").First;
         await Expect(vote).ToBeVisibleAsync(new() { Timeout = 10_000 });
-        await vote.ClickAsync();
+        // The button is drawn before the circuit can answer it, and NetworkIdle says nothing about the
+        // circuit: a click that lands first opens nothing (full run, 10/21/2026). Wait for it, and retry.
+        await WaitForTheCircuitAsync();
+        var confirms = Page.GetByRole(AriaRole.Button, new() { Name = "Confirms the findings" });
+        await ClickUntilAsync(vote, confirms);
 
-        await Expect(Page.GetByRole(AriaRole.Button, new() { Name = "Confirms the findings" }))
-            .ToBeVisibleAsync(new() { Timeout = 8_000 });
+        await Expect(confirms).ToBeVisibleAsync(new() { Timeout = 8_000 });
         await Expect(Page.GetByRole(AriaRole.Button, new() { Name = "Disputes the findings" }))
             .ToBeVisibleAsync();
     }
@@ -96,9 +99,11 @@ public class PublicCaseTests : BenTestBase
         var vote = Page.Locator(".vote-actions__vote > .vote-btn").First;
         await Expect(vote).ToBeVisibleAsync(new() { Timeout = 10_000 });
 
-        // Open the dropdown and confirm.
-        await vote.ClickAsync();
-        await Page.GetByRole(AriaRole.Button, new() { Name = "Confirms the findings" }).ClickAsync();
+        // Open the dropdown and confirm, once the circuit can answer the click.
+        await WaitForTheCircuitAsync();
+        var confirms = Page.GetByRole(AriaRole.Button, new() { Name = "Confirms the findings" });
+        await ClickUntilAsync(vote, confirms);
+        await confirms.ClickAsync();
 
         // The one button now reports the vote back: it fills in, and says what pressing it again
         // would do. There is no separate Remove button any more — pressing this one is the way
