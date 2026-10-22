@@ -247,10 +247,10 @@
                     }
 
                     <div class="d-flex gap-2 align-items-center mt-2">
-                        <input class="form-control form-control-sm" style="max-width:280px;"
-                               placeholder="Invite someone else by email"
-                               value="@_inviteEmail"
-                               @oninput="@(e => _inviteEmail = e.Value?.ToString() ?? "")" />
+                        <BenTextBox class="form-control form-control-sm" style="max-width:280px;"
+                                    placeholder="Invite someone else by email"
+                                    Value="@_inviteEmail"
+                                    OnInput="@(e => _inviteEmail = e.Value?.ToString() ?? "")" />
                         <button type="button" class="btn @(ThemeConstants.Button.FillMode.Outline == ThemeConstants.Button.FillMode.Solid ? "btn-secondary" : "btn-outline-secondary") btn-sm" @onclick="AddEmailInvitee" disabled="@(!(!string.IsNullOrWhiteSpace(_inviteEmail)))">Add</button>
                     </div>
                     @if (_emailInvitees.Count > 0)
@@ -479,11 +479,11 @@
                                 else
                                 {
                                     <div class="d-flex gap-2">
-                                        <input id="calendar-place-search" class="form-control form-control-sm" style="max-width:320px;"
-                                               placeholder="@PlaceSearch.Placeholder"
-                                               value="@_placeSearch"
-                                               @oninput="@(e => _placeSearch = e.Value?.ToString() ?? "")"
-                                               @onkeydown="@(e => PlaceSearch.IsSearchKey(e.Key, _placeSearch) ? SearchPlacesAsync() : Task.CompletedTask)" />
+                                        <BenTextBox id="calendar-place-search" class="form-control form-control-sm" style="max-width:320px;"
+                                                    placeholder="@PlaceSearch.Placeholder"
+                                                    Value="@_placeSearch"
+                                                    OnInput="@(e => _placeSearch = e.Value?.ToString() ?? "")"
+                                                    @onkeydown="@(e => PlaceSearch.IsSearchKey(e.Key, _placeSearch) ? SearchPlacesAsync() : Task.CompletedTask)" />
                                         <button type="button" class="btn @(ThemeConstants.Button.FillMode.Outline == ThemeConstants.Button.FillMode.Solid ? "btn-secondary" : "btn-outline-secondary") btn-sm" @onclick="SearchPlacesAsync" disabled="@(!(!string.IsNullOrWhiteSpace(_placeSearch)))">Search</button>
                                     </div>
 

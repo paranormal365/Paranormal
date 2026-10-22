@@ -74,9 +74,9 @@
                     {
                         <div class="alert alert-danger">@_error</div>
                     }
-                    <textarea id="supporttickettrackingpage-add-to-this-conversation-669c" class="form-control mb-2" rows="4" maxlength="8000"
-                              value="@_reply"
-                              @oninput="@(e => _reply = e.Value?.ToString() ?? "")"></textarea>
+                    <BenTextArea id="supporttickettrackingpage-add-to-this-conversation-669c" class="form-control mb-2" rows="4" maxlength="8000"
+                                 Value="@_reply"
+                                 OnInput="@(e => _reply = e.Value?.ToString() ?? "")" />
                     <button type="button" class="btn btn-primary"
                             disabled="@(_sending || string.IsNullOrWhiteSpace(_reply))"
                             @onclick="SendReplyAsync">

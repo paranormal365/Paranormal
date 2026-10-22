@@ -64,13 +64,13 @@
         {
             <div class="border rounded p-2 mt-3">
                 <label class="form-label fw-semibold small mb-1" for="equipmentfaqsection-question-7efc">Question</label>
-                <input id="equipmentfaqsection-question-7efc" class="form-control form-control-sm mb-2" maxlength="500" value="@_question"
-                       placeholder="e.g. Does it come with a windscreen?"
-                       @oninput="@(e => _question = e.Value?.ToString() ?? string.Empty)" />
+                <BenTextBox id="equipmentfaqsection-question-7efc" class="form-control form-control-sm mb-2" maxlength="500" Value="@_question"
+                            placeholder="e.g. Does it come with a windscreen?"
+                            OnInput="@(e => _question = e.Value?.ToString() ?? string.Empty)" />
 
                 <label class="form-label fw-semibold small mb-1" for="equipmentfaqsection-answer-614a">Answer</label>
-                <textarea id="equipmentfaqsection-answer-614a" class="form-control form-control-sm mb-2" rows="3" maxlength="4000" value="@_answer"
-                          @oninput="@(e => _answer = e.Value?.ToString() ?? string.Empty)"></textarea>
+                <BenTextArea id="equipmentfaqsection-answer-614a" class="form-control form-control-sm mb-2" rows="3" maxlength="4000" Value="@_answer"
+                             OnInput="@(e => _answer = e.Value?.ToString() ?? string.Empty)" />
 
                 <div class="d-flex gap-2 justify-content-end">
                     <button type="button" class="btn btn-secondary btn-sm" @onclick="CancelCompose" disabled="@(!(!_busy))">Cancel</button>

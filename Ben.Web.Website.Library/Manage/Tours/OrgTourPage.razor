@@ -210,11 +210,11 @@
                                         <span class="input-group-text" style="min-width:6.5rem;">
                                             @SocialPlatforms.DisplayName(platform)
                                         </span>
-                                        <input class="form-control" maxlength="500" type="url"
-                                               id="@($"tour-link-{platform}")"
-                                               placeholder="@(hosts.Count == 0 ? "https://yourwalks.com" : $"https://{hosts[0]}/yourwalks")"
-                                               value="@_form.Links.GetValueOrDefault(platform)"
-                                               @oninput="@(e => _form.Links[platform] = e.Value?.ToString() ?? "")" />
+                                        <BenTextBox class="form-control" maxlength="500" type="url"
+                                                    id="@($"tour-link-{platform}")"
+                                                    placeholder="@(hosts.Count == 0 ? "https://yourwalks.com" : $"https://{hosts[0]}/yourwalks")"
+                                                    Value="@_form.Links.GetValueOrDefault(platform)"
+                                                    OnInput="@(e => _form.Links[platform] = e.Value?.ToString() ?? "")" />
                                     </div>
                                 </div>
                             }

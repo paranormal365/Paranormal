@@ -35,8 +35,8 @@
                 @* Plain input: this gates the Save button, and Telerik's binds on blur — a person
                    who types and clicks Save without leaving the field would be told the title is
                    missing while looking straight at it. *@
-                <input id="newinvestigationwindow-title-48f3" class="form-control" value="@_title" @oninput="@(e => _title = e.Value?.ToString() ?? "")"
-                       placeholder="e.g. Night investigation" />
+                <BenTextBox id="newinvestigationwindow-title-48f3" class="form-control" Value="@_title" OnInput="@(e => _title = e.Value?.ToString() ?? "")"
+                            placeholder="e.g. Night investigation" />
             </div>
 
             <div class="col-md-6">
@@ -57,8 +57,8 @@
                 }
                 else
                 {
-                    <input id="newinvestigationwindow-ends-7c31" type="time" class="form-control" value="@_endTimeText"
-                           @oninput="@(e => _endTimeText = e.Value?.ToString() ?? "")" />
+                    <BenTextBox id="newinvestigationwindow-ends-7c31" type="time" class="form-control" Value="@_endTimeText"
+                                OnInput="@(e => _endTimeText = e.Value?.ToString() ?? "")" />
                     <div class="form-text">A time at or before the start is the next morning.</div>
                 }
                 <div class="form-check mt-2">
@@ -85,9 +85,9 @@
 
             <div class="col-12">
                 <label class="form-label fw-semibold" for="newinvestigationwindow-description-e4f1">Description</label>
-                <textarea id="newinvestigationwindow-description-e4f1" class="form-control" rows="2" value="@_description"
-                          @oninput="@(e => _description = e.Value?.ToString() ?? "")"
-                          placeholder="What is being investigated, and with what equipment?"></textarea>
+                <BenTextArea id="newinvestigationwindow-description-e4f1" class="form-control" rows="2" Value="@_description"
+                             OnInput="@(e => _description = e.Value?.ToString() ?? "")"
+                             placeholder="What is being investigated, and with what equipment?" />
             </div>
         </div>
 
@@ -120,30 +120,30 @@
             <div class="row g-3">
                 <div class="col-md-6">
                     <label class="form-label" for="newinvestigationwindow-name-a-landmark-or-27ff">Name <span class="text-secondary small">(a landmark or building)</span></label>
-                    <input id="newinvestigationwindow-name-a-landmark-or-27ff" class="form-control" value="@_name"
-                           @oninput="@(e => OnPlaceFieldChanged(() => _name = e.Value?.ToString() ?? ""))"
-                           placeholder="Bell Witch Cave" />
+                    <BenTextBox id="newinvestigationwindow-name-a-landmark-or-27ff" class="form-control" Value="@_name"
+                                OnInput="@(e => OnPlaceFieldChanged(() => _name = e.Value?.ToString() ?? ""))"
+                                placeholder="Bell Witch Cave" />
                 </div>
                 <div class="col-md-6">
                     <label class="form-label" for="newinvestigationwindow-street-address-8dce">Street address</label>
-                    <input id="newinvestigationwindow-street-address-8dce" class="form-control" value="@_street"
-                           @oninput="@(e => OnPlaceFieldChanged(() => _street = e.Value?.ToString() ?? ""))"
-                           placeholder="4512 Belmont Blvd" />
+                    <BenTextBox id="newinvestigationwindow-street-address-8dce" class="form-control" Value="@_street"
+                                OnInput="@(e => OnPlaceFieldChanged(() => _street = e.Value?.ToString() ?? ""))"
+                                placeholder="4512 Belmont Blvd" />
                 </div>
                 <div class="col-md-5">
                     <label class="form-label" for="newinvestigationwindow-city-94c7">City</label>
-                    <input id="newinvestigationwindow-city-94c7" class="form-control" value="@_city"
-                           @oninput="@(e => OnPlaceFieldChanged(() => _city = e.Value?.ToString() ?? ""))" />
+                    <BenTextBox id="newinvestigationwindow-city-94c7" class="form-control" Value="@_city"
+                                OnInput="@(e => OnPlaceFieldChanged(() => _city = e.Value?.ToString() ?? ""))" />
                 </div>
                 <div class="col-md-3">
                     <label class="form-label" for="newinvestigationwindow-state-871f">State</label>
-                    <input id="newinvestigationwindow-state-871f" class="form-control" value="@_state"
-                           @oninput="@(e => OnPlaceFieldChanged(() => _state = e.Value?.ToString() ?? ""))" />
+                    <BenTextBox id="newinvestigationwindow-state-871f" class="form-control" Value="@_state"
+                                OnInput="@(e => OnPlaceFieldChanged(() => _state = e.Value?.ToString() ?? ""))" />
                 </div>
                 <div class="col-md-4">
                     <label class="form-label" for="newinvestigationwindow-postcode-9c56">ZIP code</label>
-                    <input id="newinvestigationwindow-postcode-9c56" class="form-control" value="@_zip"
-                           @oninput="@(e => OnPlaceFieldChanged(() => _zip = e.Value?.ToString() ?? ""))" />
+                    <BenTextBox id="newinvestigationwindow-postcode-9c56" class="form-control" Value="@_zip"
+                                OnInput="@(e => OnPlaceFieldChanged(() => _zip = e.Value?.ToString() ?? ""))" />
                 </div>
             </div>
 

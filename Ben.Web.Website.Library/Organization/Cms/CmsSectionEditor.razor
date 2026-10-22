@@ -116,13 +116,13 @@ else if (SectionType == CmsSectionType.ImageBanner)
         </div>
         <div class="col-12">
             <label class="form-label fw-semibold" for="cmssectioneditor-alt-text-4058">Alt Text</label>
-            <input id="cmssectioneditor-alt-text-4058" type="text" class="form-control" value="@_imgAlt" @oninput="@(e => { var v = e.Value?.ToString() ?? string.Empty; _imgAlt = v; PushImageJson(); })" />
+            <BenTextBox id="cmssectioneditor-alt-text-4058" type="text" class="form-control" Value="@_imgAlt" OnInput="@(e => { var v = e.Value?.ToString() ?? string.Empty; _imgAlt = v; PushImageJson(); })" />
             <div class="form-text">What the picture shows, in a few words, for people using a screen reader.</div>
         </div>
         <div class="col-12">
             <label class="form-label fw-semibold" for="cmssectioneditor-link-url-optional-82dd">Link URL (optional)</label>
             <div class="input-group">
-                <input id="cmssectioneditor-link-url-optional-82dd" type="text" class="form-control" placeholder="https://example.com" value="@_imgLink" @oninput="@(e => { var v = e.Value?.ToString() ?? string.Empty; _imgLink = v; PushImageJson(); })" />
+                <BenTextBox id="cmssectioneditor-link-url-optional-82dd" type="text" class="form-control" placeholder="https://example.com" Value="@_imgLink" OnInput="@(e => { var v = e.Value?.ToString() ?? string.Empty; _imgLink = v; PushImageJson(); })" />
                 @if (PageLinks is { Count: > 0 })
                 {
                     @* Ben, 10/09/2026: a link can go to one of the group's own pages, chosen rather than typed. *@
@@ -556,13 +556,13 @@ else if (SectionType == CmsSectionType.MemberRoster)
         }
 
         <label class="form-label fw-semibold" for="cmssectioneditor-name-it-3fc9">Name it</label>
-        <input id="cmssectioneditor-name-it-3fc9" class="form-control mb-2" maxlength="200" value="@_saveTemplateName"
-               placeholder="e.g. Investigation write-up layout"
-               @oninput="@(e => _saveTemplateName = e.Value?.ToString() ?? string.Empty)" />
+        <BenTextBox id="cmssectioneditor-name-it-3fc9" class="form-control mb-2" maxlength="200" Value="@_saveTemplateName"
+                    placeholder="e.g. Investigation write-up layout"
+                    OnInput="@(e => _saveTemplateName = e.Value?.ToString() ?? string.Empty)" />
 
         <label class="form-label fw-semibold" for="cmssectioneditor-what-is-it-for-6189">What is it for? (optional)</label>
-        <input id="cmssectioneditor-what-is-it-for-6189" class="form-control" maxlength="500" value="@_saveTemplateDescription"
-               @oninput="@(e => _saveTemplateDescription = e.Value?.ToString() ?? string.Empty)" />
+        <BenTextBox id="cmssectioneditor-what-is-it-for-6189" class="form-control" maxlength="500" Value="@_saveTemplateDescription"
+                    OnInput="@(e => _saveTemplateDescription = e.Value?.ToString() ?? string.Empty)" />
 
         <div class="form-text mt-2">
             Saved for the whole group, not just you. Anyone who can edit pages will be able to

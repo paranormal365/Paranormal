@@ -52,9 +52,9 @@
         </div>
         <div class="col-12 col-md-4">
             <label class="form-label small mb-1" for="adminsupporttickets-search-ee3d">Search</label>
-            <input id="adminsupporttickets-search-ee3d" class="form-control form-control-sm" placeholder="Reference, subject, name or email"
-                   value="@_search"
-                   @oninput="@(e => _search = e.Value?.ToString() ?? "")" />
+            <BenTextBox id="adminsupporttickets-search-ee3d" class="form-control form-control-sm" placeholder="Reference, subject, name or email"
+                        Value="@_search"
+                        OnInput="@(e => _search = e.Value?.ToString() ?? "")" />
         </div>
         <div class="col-auto">
             <button type="button" class="btn btn-primary btn-sm" @onclick="@(() => LoadAsync(1))">Apply</button>
@@ -128,10 +128,10 @@
                             </div>
                         }
 
-                        <textarea class="form-control mb-2" rows="4" maxlength="8000"
-                                  placeholder="Write a reply to the sender, or an internal note"
-                                  value="@_replyDraft"
-                                  @oninput="@(e => _replyDraft = e.Value?.ToString() ?? "")"></textarea>
+                        <BenTextArea class="form-control mb-2" rows="4" maxlength="8000"
+                                     placeholder="Write a reply to the sender, or an internal note"
+                                     Value="@_replyDraft"
+                                     OnInput="@(e => _replyDraft = e.Value?.ToString() ?? "")" />
 
                         <div class="d-flex gap-2 align-items-center flex-wrap">
                             <button type="button" class="btn btn-primary btn-sm" @onclick="@(() => ReplyAsync(ticket, internalNote: false))" disabled="@(!(!_busy && !string.IsNullOrWhiteSpace(_replyDraft)))">Reply to sender</button>

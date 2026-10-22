@@ -474,9 +474,9 @@
             </div>
 
             <div class="d-flex gap-2 align-items-start flex-wrap">
-                <input class="form-control" style="max-width:320px;" maxlength="128"
-                       placeholder="e.g. The Miller Family" value="@_aliasDraft"
-                       @oninput="@(e => _aliasDraft = e.Value?.ToString() ?? string.Empty)" />
+                <BenTextBox class="form-control" style="max-width:320px;" maxlength="128"
+                            placeholder="e.g. The Miller Family" Value="@_aliasDraft"
+                            OnInput="@(e => _aliasDraft = e.Value?.ToString() ?? string.Empty)" />
                 <button type="button" class="btn btn-primary" @onclick="SaveAliasAsync" disabled="@(!(!_aliasSaving))">Save</button>
                 @if (!string.IsNullOrWhiteSpace(_alias?.ClientDisplayAlias))
                 {

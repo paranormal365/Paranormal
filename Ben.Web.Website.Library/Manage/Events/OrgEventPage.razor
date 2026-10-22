@@ -367,10 +367,10 @@
                                         {
                                             <label class="form-label small mb-1" for="venue-search">Search for the new venue</label>
                                             <div class="input-group" style="max-width:32rem;">
-                                                <input id="venue-search" class="form-control" placeholder="@PlaceSearch.Placeholder"
-                                                       value="@_venueSearch"
-                                                       @oninput="e => _venueSearch = e.Value?.ToString() ?? string.Empty"
-                                                       @onkeydown="@(e => PlaceSearch.IsSearchKey(e.Key, _venueSearch) ? SearchVenuesAsync() : Task.CompletedTask)" />
+                                                <BenTextBox id="venue-search" class="form-control" placeholder="@PlaceSearch.Placeholder"
+                                                            Value="@_venueSearch"
+                                                            OnInput="e => _venueSearch = e.Value?.ToString() ?? string.Empty"
+                                                            @onkeydown="@(e => PlaceSearch.IsSearchKey(e.Key, _venueSearch) ? SearchVenuesAsync() : Task.CompletedTask)" />
                                                 <button type="button" class="btn btn-outline-secondary"
                                                         id="search-venue"
                                                         disabled="@string.IsNullOrWhiteSpace(_venueSearch)"

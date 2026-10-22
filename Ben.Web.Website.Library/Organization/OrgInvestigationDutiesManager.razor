@@ -33,9 +33,9 @@
                     <li class="list-group-item d-flex align-items-center gap-2 py-2 flex-wrap">
                         @if (_editingId == duty.Id)
                         {
-                            <input class="form-control form-control-sm" style="max-width:180px;"
-                                   id="duty-edit-name" value="@_formName"
-                                   @oninput="@(e => _formName = e.Value?.ToString() ?? "")" />
+                            <BenTextBox class="form-control form-control-sm" style="max-width:180px;"
+                                        id="duty-edit-name" Value="@_formName"
+                                        OnInput="@(e => _formName = e.Value?.ToString() ?? "")" />
                             <div class="form-check form-check-inline mb-0">
                                 <input type="checkbox" class="form-check-input" id="duty-edit-single"
                                        checked="@_formSingle"
@@ -75,9 +75,9 @@
     </BenListState>
 
     <div class="d-flex gap-2 align-items-center" style="max-width:640px;">
-        <input class="form-control form-control-sm" placeholder="New duty, e.g. Audio"
-               id="duty-new-name" value="@_newName"
-               @oninput="@(e => _newName = e.Value?.ToString() ?? "")" />
+        <BenTextBox class="form-control form-control-sm" placeholder="New duty, e.g. Audio"
+                    id="duty-new-name" Value="@_newName"
+                    OnInput="@(e => _newName = e.Value?.ToString() ?? "")" />
         <button type="button" class="btn btn-primary btn-sm text-nowrap"
                 disabled="@(string.IsNullOrWhiteSpace(_newName))"
                 @onclick="AddAsync">Add duty</button>

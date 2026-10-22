@@ -165,19 +165,19 @@
     <ChildContent>
         <div class="mb-3">
             <label class="form-label fw-semibold" for="adminequipmenttaxonomy-name-03f7">Name</label>
-            <input id="adminequipmenttaxonomy-name-03f7" class="form-control" maxlength="100" value="@_catName"
-                   @oninput="@(e => _catName = e.Value?.ToString() ?? string.Empty)" />
+            <BenTextBox id="adminequipmenttaxonomy-name-03f7" class="form-control" maxlength="100" Value="@_catName"
+                        OnInput="@(e => _catName = e.Value?.ToString() ?? string.Empty)" />
         </div>
         <div class="mb-3">
             <label class="form-label fw-semibold" for="adminequipmenttaxonomy-description-668a">Description</label>
-            <input id="adminequipmenttaxonomy-description-668a" class="form-control" maxlength="500" value="@_catDescription"
-                   @oninput="@(e => _catDescription = e.Value?.ToString() ?? string.Empty)" />
+            <BenTextBox id="adminequipmenttaxonomy-description-668a" class="form-control" maxlength="500" Value="@_catDescription"
+                        OnInput="@(e => _catDescription = e.Value?.ToString() ?? string.Empty)" />
         </div>
         <div class="row">
             <div class="col-6 mb-3">
                 <label class="form-label fw-semibold" for="adminequipmenttaxonomy-icon-class-a1c4">Icon class</label>
-                <input id="adminequipmenttaxonomy-icon-class-a1c4" class="form-control" maxlength="100" value="@_catIconClass"
-                       @oninput="@(e => _catIconClass = e.Value?.ToString() ?? string.Empty)" />
+                <BenTextBox id="adminequipmenttaxonomy-icon-class-a1c4" class="form-control" maxlength="100" Value="@_catIconClass"
+                            OnInput="@(e => _catIconClass = e.Value?.ToString() ?? string.Empty)" />
             </div>
             <div class="col-3 mb-3">
                 <label class="form-label fw-semibold" for="adminequipmenttaxonomy-order-a78d">Order</label>
@@ -209,8 +209,8 @@
     <ChildContent>
         <div class="mb-3">
             <label class="form-label fw-semibold" for="equipment-rename-name">New name</label>
-            <input id="equipment-rename-name" class="form-control" maxlength="100" value="@_renameName"
-                   @oninput="@(e => { _renameName = e.Value?.ToString() ?? string.Empty; _renameOffer = null; })" />
+            <BenTextBox id="equipment-rename-name" class="form-control" maxlength="100" Value="@_renameName"
+                        OnInput="@(e => { _renameName = e.Value?.ToString() ?? string.Empty; _renameOffer = null; })" />
             <div class="form-text">
                 The address for this @_renameKindLabel follows the corrected name.
             </div>

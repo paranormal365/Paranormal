@@ -229,11 +229,11 @@
                             <div class="d-flex align-items-center gap-1">
                                 @* Plain input, deliberately: Telerik text boxes push their value on
                                    blur, and this one is submitted by a button click. *@
-                                <input class="form-control form-control-sm" style="width:180px;"
-                                       placeholder="New type name"
-                                       maxlength="100"
-                                       value="@_newTypeName"
-                                       @oninput="@(e => _newTypeName = e.Value?.ToString() ?? "")" />
+                                <BenTextBox class="form-control form-control-sm" style="width:180px;"
+                                            placeholder="New type name"
+                                            maxlength="100"
+                                            Value="@_newTypeName"
+                                            OnInput="@(e => _newTypeName = e.Value?.ToString() ?? "")" />
                                 <button type="button" class="btn btn-primary btn-sm" @onclick="@(() => AddTypeAsync(catId))" disabled="@(!(!_addingType && !string.IsNullOrWhiteSpace(_newTypeName)))">Add</button>
                                 <button type="button" class="btn @(ThemeConstants.Button.FillMode.Flat == ThemeConstants.Button.FillMode.Solid ? "btn-secondary" : "btn-outline-secondary") btn-sm" @onclick="CancelAddType">Cancel</button>
                             </div>

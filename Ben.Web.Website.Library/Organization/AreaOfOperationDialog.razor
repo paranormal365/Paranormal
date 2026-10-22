@@ -12,9 +12,9 @@
                         <span class="text-secondary fw-normal small ms-1">— use a city or town center, not a personal address</span>
                     </label>
                     <div class="input-group">
-                        <input id="areaofoperationdialog-center-location-use-a-af4a" type="text" class="form-control" placeholder="e.g. Nashville, TN"
-                               value="@_locationQuery"
-                               @oninput="@(e => OnLocationQueryChanged(e.Value?.ToString() ?? string.Empty))" />
+                        <BenTextBox id="areaofoperationdialog-center-location-use-a-af4a" type="text" class="form-control" placeholder="e.g. Nashville, TN"
+                                    Value="@_locationQuery"
+                                    OnInput="@(e => OnLocationQueryChanged(e.Value?.ToString() ?? string.Empty))" />
                         @* W-A12: gated on _isBusy only — see the comment on GeocodeLookup. *@
                         <button type="button" class="btn btn-secondary" id="area-look-up" @onclick="GeocodeLookup" disabled="@_isBusy">
                             Look Up

@@ -22,17 +22,17 @@
         </button>
     </div>
 
-    <input class="form-control form-control-sm mb-2" maxlength="300"
-           placeholder="Ask something" value="@_question"
-           @oninput="@(e => Update(question: e.Value?.ToString()))" />
+    <BenTextBox class="form-control form-control-sm mb-2" maxlength="300"
+                placeholder="Ask something" Value="@_question"
+                OnInput="@(e => Update(question: e.Value?.ToString()))" />
 
     @for (var index = 0; index < _options.Count; index++)
     {
         var slot = index;
         <div class="poll-editor__option">
-            <input class="form-control form-control-sm" maxlength="120"
-                   placeholder="@($"Answer {slot + 1}")" value="@_options[slot]"
-                   @oninput="@(e => SetOption(slot, e.Value?.ToString() ?? ""))" />
+            <BenTextBox class="form-control form-control-sm" maxlength="120"
+                        placeholder="@($"Answer {slot + 1}")" Value="@_options[slot]"
+                        OnInput="@(e => SetOption(slot, e.Value?.ToString() ?? ""))" />
             @* Removable only down to two: a poll with one answer is not a question, which is the
                same floor the server holds. *@
             @if (_options.Count > MinOptions)

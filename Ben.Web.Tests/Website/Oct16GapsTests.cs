@@ -219,7 +219,8 @@ public class Oct16GapsTests
         var text = Source(path);
 
         Assert.Contains($"for=\"{id}\"", text);
-        var box = Regex.Match(text, $"<input id=\"{id}\".*?/>", RegexOptions.Singleline);
+        // BenTextBox renders an <input>; it is the plain box that keeps the cursor put while typing.
+        var box = Regex.Match(text, $"<(input|BenTextBox) id=\"{id}\".*?/>", RegexOptions.Singleline);
         Assert.True(box.Success, $"no input with id {id}");
         Assert.Contains("@onkeydown=", box.Value);
         Assert.Contains("PlaceSearch.IsSearchKey(e.Key", box.Value);
@@ -232,9 +233,9 @@ public class Oct16GapsTests
         var page = Source("Ben.Web.Website.Library", "Organization", "Public", "PublicEventDetail.razor");
 
         Assert.Contains("for=\"attend-email\"", page);
-        Assert.Contains("<input id=\"attend-email\"", page);
+        Assert.Matches("<(input|BenTextBox) id=\"attend-email\"", page);
         Assert.Contains("for=\"attend-name\"", page);
-        Assert.Contains("<input id=\"attend-name\"", page);
+        Assert.Matches("<(input|BenTextBox) id=\"attend-name\"", page);
     }
 
     // ── Gap 7: the case page's attendee table ────────────────────────────────

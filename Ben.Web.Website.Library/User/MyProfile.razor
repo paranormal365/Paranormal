@@ -210,9 +210,9 @@
                                 <div class="d-flex gap-2 align-items-start">
                                     @* Plain input rather than TelerikTextBox: Telerik inputs bind on blur here,
                                        which loses the last edit when the user clicks Save directly. *@
-                                    <input class="form-control" style="max-width:340px;" maxlength="100"
-                                           placeholder="Your name" value="@_displayName"
-                                           @oninput="@(e => _displayName = e.Value?.ToString() ?? string.Empty)" />
+                                    <BenTextBox class="form-control" style="max-width:340px;" maxlength="100"
+                                                placeholder="Your name" Value="@_displayName"
+                                                OnInput="@(e => _displayName = e.Value?.ToString() ?? string.Empty)" />
                                 </div>
 
                                 @* Legal name. Required, and separate from the display name above:
@@ -229,15 +229,15 @@
                                 <div class="row g-2" style="max-width:520px;">
                                     <div class="col-sm-6">
                                         <label class="form-label small" for="profile-first">First name</label>
-                                        <input id="profile-first" class="form-control" maxlength="100"
-                                               placeholder="First name" value="@_firstName"
-                                               @oninput="@(e => _firstName = e.Value?.ToString() ?? string.Empty)" />
+                                        <BenTextBox id="profile-first" class="form-control" maxlength="100"
+                                                    placeholder="First name" Value="@_firstName"
+                                                    OnInput="@(e => _firstName = e.Value?.ToString() ?? string.Empty)" />
                                     </div>
                                     <div class="col-sm-6">
                                         <label class="form-label small" for="profile-last">Last name</label>
-                                        <input id="profile-last" class="form-control" maxlength="100"
-                                               placeholder="Last name" value="@_lastName"
-                                               @oninput="@(e => _lastName = e.Value?.ToString() ?? string.Empty)" />
+                                        <BenTextBox id="profile-last" class="form-control" maxlength="100"
+                                                    placeholder="Last name" Value="@_lastName"
+                                                    OnInput="@(e => _lastName = e.Value?.ToString() ?? string.Empty)" />
                                     </div>
                                     <div class="col-sm-6">
                                         <label class="form-label small" for="profile-gender">Sex</label>

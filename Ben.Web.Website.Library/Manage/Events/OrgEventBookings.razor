@@ -279,17 +279,17 @@
 
         <div class="mb-3">
             <label class="form-label fw-semibold" for="invite-guest-email">Email addresses</label>
-            <textarea id="invite-guest-email" class="form-control" rows="4"
-                      placeholder="jim@example.com, sam@example.com"
-                      value="@_inviteEmail"
-                      @oninput="@(e => { _inviteEmail = e.Value?.ToString() ?? string.Empty; _inviteError = null; })"></textarea>
+            <BenTextArea id="invite-guest-email" class="form-control" rows="4"
+                         placeholder="jim@example.com, sam@example.com"
+                         Value="@_inviteEmail"
+                         OnInput="@(e => { _inviteEmail = e.Value?.ToString() ?? string.Empty; _inviteError = null; })" />
         </div>
         <div class="mb-3">
             <label class="form-label fw-semibold" for="invite-guest-message">Your message <span class="text-secondary small">(optional, at the top of every letter)</span></label>
-            <textarea id="invite-guest-message" class="form-control" rows="4" maxlength="2000"
-                      placeholder="e.g. Join us overnight at The Factory. Tickets are $45, paid to me before you come."
-                      value="@_inviteMessage"
-                      @oninput="@(e => _inviteMessage = e.Value?.ToString() ?? string.Empty)"></textarea>
+            <BenTextArea id="invite-guest-message" class="form-control" rows="4" maxlength="2000"
+                         placeholder="e.g. Join us overnight at The Factory. Tickets are $45, paid to me before you come."
+                         Value="@_inviteMessage"
+                         OnInput="@(e => _inviteMessage = e.Value?.ToString() ?? string.Empty)" />
         </div>
         <div class="row">
             <div class="col-sm-4 mb-3">
@@ -331,14 +331,14 @@
 
         <div class="mb-3">
             <label class="form-label fw-semibold" for="behalf-email">Their email address</label>
-            <input id="behalf-email" type="email" class="form-control" maxlength="256" value="@_behalfEmail"
-                   @oninput="@(e => { _behalfEmail = e.Value?.ToString() ?? string.Empty; _behalfError = null; })" />
+            <BenTextBox id="behalf-email" type="email" class="form-control" maxlength="256" Value="@_behalfEmail"
+                        OnInput="@(e => { _behalfEmail = e.Value?.ToString() ?? string.Empty; _behalfError = null; })" />
         </div>
         <div class="row">
             <div class="col-sm-8 mb-3">
                 <label class="form-label fw-semibold" for="behalf-name">Their name <span class="text-secondary small">(optional)</span></label>
-                <input id="behalf-name" class="form-control" maxlength="200" value="@_behalfName"
-                       @oninput="@(e => _behalfName = e.Value?.ToString() ?? string.Empty)" />
+                <BenTextBox id="behalf-name" class="form-control" maxlength="200" Value="@_behalfName"
+                            OnInput="@(e => _behalfName = e.Value?.ToString() ?? string.Empty)" />
             </div>
             <div class="col-sm-4 mb-3">
                 <label class="form-label fw-semibold" for="behalf-party">How many</label>
@@ -348,8 +348,8 @@
         </div>
         <div class="mb-3">
             <label class="form-label fw-semibold" for="behalf-note">A few words for them <span class="text-secondary small">(optional)</span></label>
-            <input id="behalf-note" class="form-control" maxlength="500" value="@_behalfNote"
-                   @oninput="@(e => _behalfNote = e.Value?.ToString() ?? string.Empty)" />
+            <BenTextBox id="behalf-note" class="form-control" maxlength="500" Value="@_behalfNote"
+                        OnInput="@(e => _behalfNote = e.Value?.ToString() ?? string.Empty)" />
         </div>
 
         @* A day pass, deliberately: sleeping over means a room on each night, which is chosen on the

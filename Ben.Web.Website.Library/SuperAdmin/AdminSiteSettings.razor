@@ -134,10 +134,10 @@
                         {
                             @* A postal address in a one-line input is technically editable and
                                miserable to edit. The server says which settings need the room. *@
-                            <textarea class="form-control" style="max-width:420px;" rows="4"
-                                      placeholder="@Placeholder(s.Key)"
-                                      value="@_drafts[s.Key]"
-                                      @oninput="@(e => _drafts[s.Key] = e.Value?.ToString() ?? string.Empty)"></textarea>
+                            <BenTextArea class="form-control" style="max-width:420px;" rows="4"
+                                         placeholder="@Placeholder(s.Key)"
+                                         Value="@_drafts[s.Key]"
+                                         OnInput="@(e => _drafts[s.Key] = e.Value?.ToString() ?? string.Empty)" />
                         }
                         else if (AvatarKeys.Contains(s.Key))
                         {
@@ -156,10 +156,10 @@
                         }
                         else
                         {
-                            <input class="form-control" style="max-width:420px;"
-                                   placeholder="@Placeholder(s.Key)"
-                                   value="@_drafts[s.Key]"
-                                   @oninput="@(e => _drafts[s.Key] = e.Value?.ToString() ?? string.Empty)" />
+                            <BenTextBox class="form-control" style="max-width:420px;"
+                                        placeholder="@Placeholder(s.Key)"
+                                        Value="@_drafts[s.Key]"
+                                        OnInput="@(e => _drafts[s.Key] = e.Value?.ToString() ?? string.Empty)" />
                         }
                         @if (!s.IsBoolean && !AvatarKeys.Contains(s.Key))
                         {

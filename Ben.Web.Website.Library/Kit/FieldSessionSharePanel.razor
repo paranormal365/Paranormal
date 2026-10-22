@@ -60,19 +60,19 @@
                         @* A plain input, not a Telerik one: these commit on blur, and a person who
                            types a number and presses the button straight away would send the value
                            it had before they typed. *@
-                        <input id="share-days" type="number" min="1" max="30"
-                               class="form-control form-control-sm" data-testid="share-days"
-                               value="@_days"
-                               @oninput="@(e => _days = int.TryParse(e.Value?.ToString(), out var d) ? d : _days)" />
+                        <BenTextBox id="share-days" type="number" min="1" max="30"
+                                    class="form-control form-control-sm" data-testid="share-days"
+                                    Value="@_days"
+                                    OnInput="@(e => _days = int.TryParse(e.Value?.ToString(), out var d) ? d : _days)" />
                         <div class="form-text">days</div>
                     </div>
                     <div class="col-12 col-md-6">
                         <label class="form-label small mb-1" for="share-note">Who it's for</label>
-                        <input id="share-note" class="form-control form-control-sm" maxlength="200"
-                               data-testid="share-note"
-                               placeholder="the producer at Channel 4"
-                               value="@_note"
-                               @oninput="@(e => _note = e.Value?.ToString() ?? string.Empty)" />
+                        <BenTextBox id="share-note" class="form-control form-control-sm" maxlength="200"
+                                    data-testid="share-note"
+                                    placeholder="the producer at Channel 4"
+                                    Value="@_note"
+                                    OnInput="@(e => _note = e.Value?.ToString() ?? string.Empty)" />
                     </div>
                 </div>
 

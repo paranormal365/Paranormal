@@ -413,39 +413,39 @@ else
                                     <div class="d-flex gap-3 flex-wrap">
                                         <label class="small">
                                             Shortest sound (s)
-                                            <input type="number" class="form-control form-control-sm" style="width:90px;"
-                                                   min="@EvpDetectionOptions.MinDurationRange.Min"
-                                                   max="@EvpDetectionOptions.MinDurationRange.Max"
-                                                   step="0.05"
-                                                   value="@_scanOptions.MinDurationSeconds"
-                                                   @oninput="@(e => SetOption(e.Value, v => _scanOptions = _scanOptions with { MinDurationSeconds = v }))" />
+                                            <BenTextBox type="number" class="form-control form-control-sm" style="width:90px;"
+                                                        min="@EvpDetectionOptions.MinDurationRange.Min"
+                                                        max="@EvpDetectionOptions.MinDurationRange.Max"
+                                                        step="0.05"
+                                                        Value="@_scanOptions.MinDurationSeconds"
+                                                        OnInput="@(e => SetOption(e.Value, v => _scanOptions = _scanOptions with { MinDurationSeconds = v }))" />
                                         </label>
                                         <label class="small">
                                             Join sounds within (s)
-                                            <input type="number" class="form-control form-control-sm" style="width:90px;"
-                                                   min="@EvpDetectionOptions.MergeGapRange.Min"
-                                                   max="@EvpDetectionOptions.MergeGapRange.Max"
-                                                   step="0.05"
-                                                   value="@_scanOptions.MergeGapSeconds"
-                                                   @oninput="@(e => SetOption(e.Value, v => _scanOptions = _scanOptions with { MergeGapSeconds = v }))" />
+                                            <BenTextBox type="number" class="form-control form-control-sm" style="width:90px;"
+                                                        min="@EvpDetectionOptions.MergeGapRange.Min"
+                                                        max="@EvpDetectionOptions.MergeGapRange.Max"
+                                                        step="0.05"
+                                                        Value="@_scanOptions.MergeGapSeconds"
+                                                        OnInput="@(e => SetOption(e.Value, v => _scanOptions = _scanOptions with { MergeGapSeconds = v }))" />
                                         </label>
                                         <label class="small">
                                             Context either side (s)
-                                            <input type="number" class="form-control form-control-sm" style="width:90px;"
-                                                   min="@EvpDetectionOptions.ContextPadRange.Min"
-                                                   max="@EvpDetectionOptions.ContextPadRange.Max"
-                                                   step="0.1"
-                                                   value="@_scanOptions.ContextPadSeconds"
-                                                   @oninput="@(e => SetOption(e.Value, v => _scanOptions = _scanOptions with { ContextPadSeconds = v }))" />
+                                            <BenTextBox type="number" class="form-control form-control-sm" style="width:90px;"
+                                                        min="@EvpDetectionOptions.ContextPadRange.Min"
+                                                        max="@EvpDetectionOptions.ContextPadRange.Max"
+                                                        step="0.1"
+                                                        Value="@_scanOptions.ContextPadSeconds"
+                                                        OnInput="@(e => SetOption(e.Value, v => _scanOptions = _scanOptions with { ContextPadSeconds = v }))" />
                                         </label>
                                         <label class="small">
                                             Longest candidate (s)
-                                            <input type="number" class="form-control form-control-sm" style="width:90px;"
-                                                   min="@EvpDetectionOptions.MaxEventRange.Min"
-                                                   max="@EvpDetectionOptions.MaxEventRange.Max"
-                                                   step="0.5"
-                                                   value="@_scanOptions.MaxEventSeconds"
-                                                   @oninput="@(e => SetOption(e.Value, v => _scanOptions = _scanOptions with { MaxEventSeconds = v }))" />
+                                            <BenTextBox type="number" class="form-control form-control-sm" style="width:90px;"
+                                                        min="@EvpDetectionOptions.MaxEventRange.Min"
+                                                        max="@EvpDetectionOptions.MaxEventRange.Max"
+                                                        step="0.5"
+                                                        Value="@_scanOptions.MaxEventSeconds"
+                                                        OnInput="@(e => SetOption(e.Value, v => _scanOptions = _scanOptions with { MaxEventSeconds = v }))" />
                                         </label>
                                     </div>
 
@@ -808,10 +808,10 @@ else
                    pushes its value on change/blur, which deadlocked this dialog: the Keep button
                    is gated on the label, so the only thing left to click was disabled, focus never
                    left the field, and the label never bound. *@
-                <input id="audiofilepreview-what-did-you-hear-83cf" type="text" class="form-control form-control-sm"
-                       placeholder="e.g. Whispered name?"
-                       value="@_confirmLabel"
-                       @oninput="@(e => _confirmLabel = e.Value?.ToString() ?? string.Empty)" />
+                <BenTextBox id="audiofilepreview-what-did-you-hear-83cf" type="text" class="form-control form-control-sm"
+                            placeholder="e.g. Whispered name?"
+                            Value="@_confirmLabel"
+                            OnInput="@(e => _confirmLabel = e.Value?.ToString() ?? string.Empty)" />
             </div>
             <div class="mb-2">
                 <label class="form-label fw-semibold">Confidence</label>
@@ -867,15 +867,15 @@ else
                     Lead-in (s)
                     @* Extra room either side of the marked sound. A clip trimmed exactly to the
                        words is hard to judge — you want a moment of the room before and after. *@
-                    <input type="number" class="form-control form-control-sm" style="width:90px;"
-                           min="0" max="10" step="0.1" value="@_clipPrePad"
-                           @oninput="@(e => SetOption(e.Value, v => _clipPrePad = Math.Clamp(v, 0, 10)))" />
+                    <BenTextBox type="number" class="form-control form-control-sm" style="width:90px;"
+                                min="0" max="10" step="0.1" Value="@_clipPrePad"
+                                OnInput="@(e => SetOption(e.Value, v => _clipPrePad = Math.Clamp(v, 0, 10)))" />
                 </label>
                 <label class="small mb-0">
                     Tail (s)
-                    <input type="number" class="form-control form-control-sm" style="width:90px;"
-                           min="0" max="10" step="0.1" value="@_clipPostPad"
-                           @oninput="@(e => SetOption(e.Value, v => _clipPostPad = Math.Clamp(v, 0, 10)))" />
+                    <BenTextBox type="number" class="form-control form-control-sm" style="width:90px;"
+                                min="0" max="10" step="0.1" Value="@_clipPostPad"
+                                OnInput="@(e => SetOption(e.Value, v => _clipPostPad = Math.Clamp(v, 0, 10)))" />
                 </label>
                 <label class="small mb-0 d-flex align-items-center gap-2">
                     <input type="checkbox" checked="@_clipNormalize"

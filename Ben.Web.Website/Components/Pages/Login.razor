@@ -70,13 +70,13 @@
                         <label class="form-label" for="login-2fa-code">
                             @(_useRecoveryCode ? "Recovery code" : "Authentication code")
                         </label>
-                        <input id="login-2fa-code" class="form-control"
-                               type="text" autocomplete="one-time-code"
-                               inputmode="@(_useRecoveryCode ? "text" : "numeric")"
-                               maxlength="@(_useRecoveryCode ? 20 : 6)"
-                               placeholder="@(_useRecoveryCode ? "xxxxx-xxxxx" : "000000")"
-                               value="@_twoFactorCode"
-                               @oninput="@(e => _twoFactorCode = e.Value?.ToString() ?? string.Empty)" />
+                        <BenTextBox id="login-2fa-code" class="form-control"
+                                    type="text" autocomplete="one-time-code"
+                                    inputmode="@(_useRecoveryCode ? "text" : "numeric")"
+                                    maxlength="@(_useRecoveryCode ? 20 : 6)"
+                                    placeholder="@(_useRecoveryCode ? "xxxxx-xxxxx" : "000000")"
+                                    Value="@_twoFactorCode"
+                                    OnInput="@(e => _twoFactorCode = e.Value?.ToString() ?? string.Empty)" />
                         <div class="form-text">
                             @if (_useRecoveryCode)
                             {

@@ -222,9 +222,9 @@
                         @* Plain textarea: this gates the Save button, and Telerik binds on blur —
                            somebody who types and clicks Save without leaving the box would be told
                            it is empty while looking at their own words. *@
-                        <textarea class="form-control" rows="4" value="@_narrative"
-                                  placeholder="What did you see, hear, or measure? Anything that struck you as ordinary is worth saying too."
-                                  @oninput="@(e => _narrative = e.Value?.ToString() ?? string.Empty)"></textarea>
+                        <BenTextArea class="form-control" rows="4" Value="@_narrative"
+                                     placeholder="What did you see, hear, or measure? Anything that struck you as ordinary is worth saying too."
+                                     OnInput="@(e => _narrative = e.Value?.ToString() ?? string.Empty)" />
 
                         <div class="d-flex gap-2 mt-2">
                             <button type="button" class="btn btn-primary"

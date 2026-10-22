@@ -94,6 +94,15 @@ public class FeedTests : BenTestBase
     }
 
     [Test]
+    [Description("The same, with all six deletes reaching the server before its first reply, as on a slow connection.")]
+    public async Task DeletingMidSentenceStaysPutWhenTheKeysOutrunTheServer()
+    {
+        await LoginAsync(UserEmail, UserPassword);
+        await GoToFeedAsync();
+        await TypingStaysPutTests.DeleteStairAndCheckAsync(Page, Page.Locator("#feed-composer"));
+    }
+
+    [Test]
     [Description("A post reaches the feed, and its @name and #tag come back as links.")]
     public async Task PostingLinkifiesMentionsAndTags()
     {

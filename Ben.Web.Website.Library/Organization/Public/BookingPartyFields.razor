@@ -22,17 +22,17 @@
                 <label class="form-label small mb-1" for="@($"{IdPrefix}-guest-name-{index}")">
                     @(index == 0 ? "Name" : $"Person {index + 1}")
                 </label>
-                <input id="@($"{IdPrefix}-guest-name-{index}")" class="form-control" maxlength="200"
-                       placeholder="@(index == 0 ? "Your name" : "Their name")"
-                       value="@person.Name" @oninput="e => Set(() => person.Name = Text(e))" />
+                <BenTextBox id="@($"{IdPrefix}-guest-name-{index}")" class="form-control" maxlength="200"
+                            placeholder="@(index == 0 ? "Your name" : "Their name")"
+                            Value="@person.Name" OnInput="e => Set(() => person.Name = Text(e))" />
             </div>
             <div class="col-12 col-md-7">
                 <label class="form-label small mb-1" for="@($"{IdPrefix}-guest-notes-{index}")">
                     Dietary needs
                 </label>
-                <input id="@($"{IdPrefix}-guest-notes-{index}")" class="form-control" maxlength="500"
-                       placeholder="Optional — vegan, nut allergy, no shellfish"
-                       value="@person.Notes" @oninput="e => Set(() => person.Notes = Text(e))" />
+                <BenTextBox id="@($"{IdPrefix}-guest-notes-{index}")" class="form-control" maxlength="500"
+                            placeholder="Optional — vegan, nut allergy, no shellfish"
+                            Value="@person.Notes" OnInput="e => Set(() => person.Notes = Text(e))" />
             </div>
         </div>
     }
