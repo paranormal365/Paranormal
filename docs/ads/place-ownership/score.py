@@ -80,7 +80,11 @@ class Bus:
         self.x[i:i + len(y), 0] += y[:, 0] * l; self.x[i:i + len(y), 1] += y[:, 1] * r
 
 MUS = {k: Bus() for k in range(1, 12)}      # one music bus per scene (11 = the ending), each its own room
-AMB = Bus()                                  # ambience and effects for the silent scenes and the ending
+# ambience and effects for the silent scenes and the ending: one bus per scene, so each is leveled as a
+# whole and a sound's fade past a cut keeps its own scene's level
+AMB = {k: Bus() for k in range(1, 12)}
+
+def scene_of(t): return max(k for k in range(1, 12) if B[k - 1] <= t + .3)
 
 EW = {   # the built-in instruments, replaced by the EastWest ones rendered in Logic (build/ew)
     'st_trumpet': 'ew_trumpets', 'st_trombone': 'ew_horns', 'tuba': 'ew_tuba', 'choir_f': 'ew_choir_f', 'choir_m': 'ew_choir_m',
@@ -124,7 +128,7 @@ def sfx(name, t, g=.6, pan=0.0, a=0.0, b=None, fi=.05, fo=.3, bus=None):
     x /= (np.abs(x).max() or 1)
     k = min(len(x), int(fi * SR)); x[:k] *= np.linspace(0, 1, k)[:, None]
     k = min(len(x), int(fo * SR)); x[len(x) - k:] *= np.linspace(1, 0, k)[:, None]
-    (bus or AMB).add(t, x, g, pan)
+    (bus or AMB[scene_of(t)]).add(t, x, g, pan)
 
 _strings = {}
 def strings(scene, inst, art, midi, t, dur, vel=.6, pan=0.0, att=0.0, rel=.4):
@@ -497,7 +501,7 @@ def main(out):
     stems = os.environ.get('STEMS')
     if stems: os.makedirs(os.path.join(HERE, 'build', 'stems'), exist_ok=True)
     mix = np.zeros((N, 2), np.float32)
-    amb = AMB.x.copy()
+    amb = np.zeros((N, 2), np.float32)
     for k in range(1, 12):
         x = MUS[k].x
         if not np.abs(x).max(): continue
@@ -511,10 +515,9 @@ def main(out):
         # whirs, but never so low it is lost; in a silent scene it carries the scene
         target = float(np.clip(rms_db(orig[a:b]) - 1.5, -24, -19)) + 20 * np.log10(LEVEL[k])
         y = y * (10 ** (target / 20) / (np.sqrt((y[a:b] ** 2).mean()) or 1)); mix += y
-        # added ambience: well under the music
-        if np.abs(amb[a:b]).max() > 0:
-            g = 10 ** ((target - 7) / 20) / (np.sqrt((amb[a:b] ** 2).mean()) or 1)
-            amb[a:b] *= g
+        # added ambience: well under the music, the scene's whole bus at one level
+        ax = AMB[k].x
+        if np.abs(ax[a:b]).max() > 0: amb += ax * (10 ** ((target - 7) / 20) / (np.sqrt((ax[a:b] ** 2).mean()) or 1))
         if stems: wavfile.write(os.path.join(HERE, 'build', 'stems', f'scene{k}.wav'), SR, (np.clip(y, -1, 1) * 32767).astype(np.int16))
     if stems:
         for nm, y in (('amb', amb), ('orig', orig), ('music', mix)):
