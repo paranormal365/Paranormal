@@ -19,6 +19,34 @@ namespace Ben.Web.Playwright.Tests.Oct16;
 [NonParallelizable]
 public class Oct16GoingToTests : Oct16TestBase
 {
+    private IAPIRequestContext? _sarah;
+    private string _orgId = "", _eventId = "";
+
+    /// <summary>
+    /// Daniel says he's coming to a public evening ten days out, made for this test. The countdown
+    /// tests used to lean on his seeded booking, which earlier tests in a full run take back
+    /// (10/22/2026: three failures with nothing wrong on the page).
+    /// </summary>
+    [SetUp]
+    public async Task DanielHasSomethingComingUp()
+    {
+        _orgId = await OrgIdBySlugAsync(GroupSlug);
+        _sarah = await ApiAsAsync(UserEmail, UserPassword);
+        var day = DateTime.UtcNow.Date.AddDays(10);
+        (_eventId, _) = await PublicCalendarEventAsync(_sarah, _orgId, $"Oct16 countdown {Guid.NewGuid():N}"[..24],
+            UtcFrom(day.AddHours(19), "America/Chicago"), UtcFrom(day.AddHours(22), "America/Chicago"));
+        var daniel = await ApiAsAsync(ClientEmail, ClientPassword);
+        await OkJsonAsync(await daniel.PostAsync($"/api/public/events/{_eventId}/rsvp", new() { DataObject = new { } }),
+            "Daniel saying he's coming");
+    }
+
+    [TearDown]
+    public async Task TakeTheEveningAway()
+    {
+        if (_sarah is not null && _eventId.Length > 0)
+            await _sarah.DeleteAsync($"/api/organizations/{_orgId}/calendar/{_eventId}");
+    }
+
     [Test]
     public async Task What_Im_going_to_lists_without_any_failure_line()
     {

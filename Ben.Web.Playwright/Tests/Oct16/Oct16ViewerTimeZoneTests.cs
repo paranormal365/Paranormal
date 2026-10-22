@@ -165,7 +165,7 @@ public class Oct16ViewerTimeZoneTests : Oct16TestBase
 
         await dialog.Locator("#newinvestigationwindow-title-48f3").FillAsync(title);
         await TypeIntoAsync(dialog.Locator("#newinvestigationwindow-when-60b5"), $"{day:MM/dd/yyyy} 07:00 PM");
-        await Expect(dialog.Locator("#newinvestigationwindow-when-60b5")).ToHaveValueAsync($"{day:MM/dd/yyyy} 07:00 PM");
+        await Expect(dialog.Locator("#newinvestigationwindow-when-60b5")).ToHaveValueAsync($"{day:MM/dd/yyyy} 7:00 PM");
         await Expect(Page.GetByTestId("newinvestigationwindow-zone"))
             .ToHaveTextAsync($"Times are in your time zone ({letters}).", new() { Timeout = 10_000 });
         await dialog.Locator("#newinvestigationwindow-ends-7c31").FillAsync("07:00");
