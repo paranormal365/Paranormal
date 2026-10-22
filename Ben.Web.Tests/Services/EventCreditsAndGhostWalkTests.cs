@@ -722,5 +722,23 @@ public sealed class EventCreditsAndGhostWalkTests
         }
     }
 
+    [Fact]
+    public void With_the_ghost_walk_subscription_off_no_help_document_names_it()
+    {
+        // Ben's rule: switched off, the subscription is not mentioned anywhere. A sentence about retiring a
+        // tour named it outside the passages, so the help still said "Ghost Walk Tour subscription" with the
+        // switch off (full e2e run, 10/21/2026). Every customer's help, up to a group's owner; the site
+        // administrator's own guide keeps describing the switch, since that is where it is turned on.
+        var off = HelpLiveValues.From(new PublicPricingExtras(2048,
+                new PublicEventOffer(true, 99m, 365, 20, 48, 2000, 90, 20m, 19.80m, [])),
+            m => $"${m:0.00}");
+        var service = new HelpContentService();
+        foreach (var doc in service.SectionsFor(new HelpViewer(HelpAudience.OrganizationAdministrator)).SelectMany(s => s.Documents))
+        {
+            var shown = HelpContentService.ApplyLiveValues(doc.Markdown, off);
+            Assert.DoesNotContain("Ghost Walk Tour subscription", shown);
+        }
+    }
+
     private static HelpViewer HelpViewerAll() => new(HelpAudience.AppAdministrator);
 }

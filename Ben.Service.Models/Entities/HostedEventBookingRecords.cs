@@ -761,6 +761,8 @@ public sealed record SetHostedEventDoorTicketsRequest(bool On);
 /// <param name="Url">What the QR code opens, absolute; null while off.</param>
 /// <param name="NotSellingSentence">Why the code leads nowhere useful right now, though it is on.</param>
 /// <param name="CanChange">Whether this person may turn it on or off (the door alone may not).</param>
+/// <param name="EventName">Which event this door is, so its screens can say so while the door is shut too.
+/// Trailing and defaulted: additive for the app.</param>
 public sealed record HostedEventDoorTicketsRecord(
     Guid HostedEventId,
     bool On,
@@ -768,7 +770,8 @@ public sealed record HostedEventDoorTicketsRecord(
     string? NotSellingSentence,
     decimal? DayPassPrice,
     bool CanChange,
-    IReadOnlyList<HostedEventDoorRequestRecord> Requests);
+    IReadOnlyList<HostedEventDoorRequestRecord> Requests,
+    string? EventName = null);
 
 /// <summary>Somebody who asked for a place by scanning the door's code.</summary>
 public sealed record HostedEventDoorRequestRecord(Guid BookingId, string Name, int PartySize, DateTime AskedUtc, bool IsConfirmed);

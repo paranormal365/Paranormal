@@ -848,9 +848,17 @@ press the button.
 
 {{/if}}
 **Retiring** a tour stops new dates from being added, and leaves the tour's past dates exactly as
-they are. With a Ghost Walk Tour subscription the route comes off your subscription, as above; on
+they are.
+{{#if ghost-walk}}
+With a Ghost Walk Tour subscription the route comes off your subscription, as above; on
 the per-tour business plan it drops from your next renewal, and nothing is refunded for the period
-already paid for. **Pausing** — turning off *Taking sign-ups* — is the lighter option for
+already paid for.
+{{/if}}
+{{#if no-ghost-walk}}
+On the per-tour business plan it drops from your next renewal, and nothing is refunded for the
+period already paid for.
+{{/if}}
+**Pausing** — turning off *Taking sign-ups* — is the lighter option for
 an off-season.
 
 ### Guides

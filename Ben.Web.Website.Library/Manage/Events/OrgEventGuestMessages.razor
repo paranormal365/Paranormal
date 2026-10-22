@@ -16,13 +16,18 @@
    waiting on an answer marked; choosing one opens it beside the list (below it on a phone) with a box to
    answer. The guest reads the answer on the event's page and in the app, and their bell says so. *@
 
-<PageTitle>Guest messages</PageTitle>
+<PageTitle>@(_eventName is { Length: > 0 } n ? $"Guest messages — {n}" : "Guest messages")</PageTitle>
 
 <div class="container-fluid py-3" style="max-width:1100px;">
     <div class="text-secondary small">
         <a href="@($"/organizations/{OrgId}/events/{EventId}")">Back to the event</a>
     </div>
     <h1 class="h4 mb-1">Guest messages</h1>
+    @* Which event these are about: the same guest can write about two weekends. *@
+    @if (_eventName is { Length: > 0 } name)
+    {
+        <div class="text-secondary mb-1" id="guest-messages-event">@name</div>
+    }
     <p class="text-secondary small mb-3">
         What guests with a booking have written to you about this event. Your answer goes to them on the event's page and in the app.
     </p>
@@ -105,11 +110,13 @@
     private Guid? _guestId;
     private bool _loading = true, _threadLoading, _busy;
     private string? _answer, _note, _error;
+    private string? _eventName;
 
     protected override async Task OnAfterRenderAsync(bool firstRender)
     {
         if (!firstRender) return;
         if (!await UserState.WaitUntilAuthReadyAsync(RendererInfo.IsInteractive)) return;
+        _eventName = (await AdminClient.GetHostedEventAsync(OrgId, EventId))?.Name;
         await LoadListAsync();
         if (Guest is { } guest) await OpenAsync(guest);
         StateHasChanged();

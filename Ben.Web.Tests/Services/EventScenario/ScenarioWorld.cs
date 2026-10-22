@@ -41,8 +41,14 @@ internal sealed class ScenarioWorld : IAsyncDisposable
     public readonly Guid MissedBookingId = Guid.NewGuid();
     public readonly Guid AskedBookingId = Guid.NewGuid();
 
-    /// <summary>The run: two days before today, so a test means the same next year.</summary>
-    public static readonly DateTime FirstDay = DateTime.UtcNow.Date.AddDays(-3);
+    /// <summary>The run: three days before today, so a test means the same next year.</summary>
+    /// <remarks>
+    /// Today on the VENUE's clock, not UTC's. The event is in Chicago, so between midnight UTC and the evening
+    /// in Chicago the UTC date is a day ahead, and "the last night ended two days ago" was only twenty-odd hours:
+    /// one day of evidence had not run out, and the window test failed every evening (10/21/2026, 8:46 PM CDT).
+    /// </remarks>
+    public static readonly DateTime FirstDay = TimeZoneInfo.ConvertTimeFromUtc(
+        DateTime.UtcNow, TimeZoneInfo.FindSystemTimeZoneById("America/Chicago")).Date.AddDays(-3);
     public static readonly DateTime LastDay = FirstDay.AddDays(1);
 
     /// <summary>When the last night ends on the venue's clock, in UTC.</summary>

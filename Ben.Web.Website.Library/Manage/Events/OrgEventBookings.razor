@@ -496,7 +496,7 @@
 
             _behalfSent = result.Sent
                 ? $"The ticket is on its way to {_behalfEmail.Trim()}. They appear on the board, confirmed, when they open it."
-                : $"Email isn't set up on this site, so the ticket for {_behalfEmail.Trim()} is waiting to go.";
+                : $"Email isn't set up on this site, so the ticket for {_behalfEmail.Trim()} is waiting to go. They appear on the board, confirmed, when they open it.";
             _behalfEmail = string.Empty;
             _behalfName = string.Empty;
             _behalfNote = string.Empty;
