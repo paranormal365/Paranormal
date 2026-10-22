@@ -27,7 +27,7 @@ and ideas behind running the site, goes under a `### Administration` sub-heading
 after the lines everybody reads. Only SuperAdmins see those lines. A version with nothing else in
 it is hidden from everybody else, but still takes its number. No other sub-heading is read.
 
-## Unreleased
+## 1.1.5 · 2026-10-22
 
 - An event shows its **Results**: the evidence the organizers accepted, the most positive votes
   first, and a link to the results page.
