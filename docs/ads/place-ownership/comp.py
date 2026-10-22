@@ -108,9 +108,10 @@ def look_of_the_shot(scene, n, f, warped, matte, inside, q):
         cast = f[ring].mean(0); cast = cast / (cast.mean() + 1e-6)
         out = out * (1 + .12 * (cast - 1))[None, None, :]
     # motion: smear along the screen's own travel since the last frame
-    c = q.mean(0); prev = _last_center.get(scene); _last_center[scene] = (n, c)
-    if prev is not None and prev[0] == n - 1:
-        v = c - prev[1]; L = int(min(40, np.hypot(*v) * .5))
+    N_, Q_ = track_of(scene); i_ = n - int(N_[0])
+    v = (Q_[min(i_ + 2, len(Q_) - 1)].mean(0) - Q_[max(i_ - 2, 0)].mean(0)) / 4 if 0 <= i_ < len(Q_) else np.zeros(2)
+    if True:
+        L = int(min(40, np.hypot(*v) * .5))
         if L >= 3:
             ker = np.zeros((2 * L + 1, 2 * L + 1), np.float32)
             d = v / (np.hypot(*v) + 1e-6)
@@ -154,9 +155,12 @@ def comp_scene(scene, n, frame, M=None):
     if scale < .5:
         k = int(.5 / max(scale, .05)) | 1
         page = cv2.GaussianBlur(page, (k, k), 0)
-    warped = cv2.warpPerspective(page, P, (W, H), flags=cv2.INTER_AREA, borderMode=cv2.BORDER_CONSTANT)
+    # the page's own dark edge carried a little past its outline: green just beyond the outline (a fast
+    # swing, a soft key edge) becomes page background rather than a colored band
+    warped = cv2.warpPerspective(page, P, (W, H), flags=cv2.INTER_AREA, borderMode=cv2.BORDER_REPLICATE)
     inside = cv2.warpPerspective(np.ones((h, w), np.float32), P, (W, H), flags=cv2.INTER_LINEAR)
-    inside = cv2.dilate(inside, np.ones((3, 3), np.uint8))
+    grow = max(5, int(.07 * np.sqrt(abs(cv2.contourArea(q)) + 1))) | 1
+    inside = cv2.dilate(inside, np.ones((grow, grow), np.uint8)) if cf.get('mode') != 'mint' else cv2.dilate(inside, np.ones((3, 3), np.uint8))
     near = cv2.dilate(inside, np.ones((15, 15), np.uint8))
     f = frame.astype(np.float32)
     k = key

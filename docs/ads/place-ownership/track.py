@@ -230,18 +230,22 @@ def rigid(P, ref, sigma=3.0, iters=3):
             sc = np.median(res) + 1.0
             w = 1 / (1 + (res / (2 * sc)) ** 2)
         A[i] = M.T.ravel()
-    # smoothed over time; reflected at the ends so the first and last frames are not pulled
-    k = int(3 * sigma); g = np.exp(-.5 * (np.arange(-k, k + 1) / sigma) ** 2); g /= g.sum()
-    pad = np.concatenate([A[k:0:-1], A, A[-2:-k - 2:-1]]) if n > k + 1 else np.concatenate([np.repeat(A[:1], k, 0), A, np.repeat(A[-1:], k, 0)])
-    As = np.stack([np.convolve(pad[:, c], g, 'valid') for c in range(6)], 1)[:n]
+    # smoothed over time, as much as the motion allows: heavily while the device is held still (where a
+    # wobble shows), lightly through a fast swing (where blur hides jitter and lag would show)
+    cen = P.mean(1); sp = np.r_[0, np.linalg.norm(np.diff(cen, axis=0), axis=1)]
+    sp = np.convolve(np.pad(sp, 2, mode='edge'), np.ones(5) / 5, 'same')[2:-2]
+    sig = sigma / (1 + (sp / 6) ** 1.5)
+    As = np.zeros_like(A); idx = np.arange(n)
+    for i in range(n):
+        g = np.exp(-.5 * ((idx - i) / max(sig[i], .3)) ** 2); g /= g.sum(); As[i] = g @ A
     base = np.array([X @ a.reshape(2, 3).T for a in As])
     # the perspective an affine cannot hold (a device tilting toward the lens) comes back slowly: the
     # corners' remaining difference, smoothed four times as long, so it follows a tilt and never twitches
     R = P - np.array([X @ a.reshape(2, 3).T for a in A])
-    s2 = sigma * 4; k2 = int(3 * s2); g2 = np.exp(-.5 * (np.arange(-k2, k2 + 1) / s2) ** 2); g2 /= g2.sum()
-    Rf = R.reshape(n, 8)
-    pad2 = np.concatenate([np.repeat(Rf[:1], k2, 0), Rf, np.repeat(Rf[-1:], k2, 0)])
-    Rs = np.stack([np.convolve(pad2[:, c], g2, 'valid') for c in range(8)], 1)[:n].reshape(n, 4, 2)
+    Rf = R.reshape(n, 8); Rs = np.zeros_like(Rf)
+    for i in range(n):
+        g = np.exp(-.5 * ((idx - i) / max(4 * sig[i], .5)) ** 2); g /= g.sum(); Rs[i] = g @ Rf
+    Rs = Rs.reshape(n, 4, 2)
     return base + Rs
 
 
@@ -467,6 +471,7 @@ def track(scene):
         mattes.append(cv2.resize(m, (640, 360), interpolation=cv2.INTER_AREA).astype(np.float16))
     Q = np.array(Q); F = np.array(F)
     Q = unclip(Q, f.shape[1], f.shape[0])
+    Qraw = Q.copy()
     if cf.get('planar'):
         imgs = [f2 for _, f2 in frames(cf['a'], cf['b'])]
         keys_ = [key(f2, cf['t'], cf.get('mode', 'green'), cf.get('gmin', 0)) for f2 in imgs]
@@ -509,6 +514,20 @@ def track(scene):
             q0 = settle(imgs[i0], keys_[i0], q0)
             P = planar(imgs[s0:s1], list(Q[s0:s1]), keys_[s0:s1], i0 - s0, q0, F[s0:s1])
             P = rigid(P, q0, cf.get('sigma', 3.0))
+            # where the screen is whole and unobstructed — its green fills its own outline, nothing in
+            # front, all of it in the picture — that frame's own outline is the truth: a tilting, swinging
+            # device changes shape faster than one rigid outline can follow
+            H_, W_ = imgs[0].shape[:2]; wt = np.zeros(len(P)); own = P.copy()
+            for i in range(len(P)):
+                r = Qraw[s0 + i]
+                if np.isnan(r[0, 0]): continue
+                kb = keys_[s0 + i] > .5
+                m = np.zeros(kb.shape, np.uint8); cv2.fillConvexPoly(m, np.round(r).astype(np.int32), 1)
+                ra = m.sum(); inside_g = (kb & m.astype(bool)).sum()
+                if ra > 400 and inside_g / ra > .93 and (kb & ~m.astype(bool)).sum() < .12 * kb.sum() and (kb & ~m.astype(bool)).sum() + .03 * kb.sum() < (kb & ~cv2.fillConvexPoly(np.zeros(kb.shape, np.uint8), np.round(P[i]).astype(np.int32), 1).astype(bool)).sum():
+                    own[i] = order_like(r, P[i]); wt[i] = 1.0
+            wt = np.convolve(np.pad(wt, 2, mode='edge'), np.hanning(5) / np.hanning(5).sum(), 'same')[2:-2]
+            P = P * (1 - wt[:, None, None]) + own * wt[:, None, None]
             # slow drift taken out where the device's whole screen is plainly visible: the difference from
             # the plain fit there, smoothed over a second, so it corrects drift but carries no jitter
             raw = Q[s0:s1]; D = np.full(P.shape, np.nan)
