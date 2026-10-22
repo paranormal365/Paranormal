@@ -29,13 +29,13 @@ CFG = {
     # tracking from each shot's clearest frame, so the page holds still on a tablet that holds still
     'soccer':     dict(a=212, b=280, t=80, up='landscape', win=2, cuts=[225], edges=True, planar=True, from_=225),
     # the iPad thrown up as he leaps: tracked afresh, the same page
-    'soccer2':    dict(a=281, b=332, t=80, gmin=130, up='landscape', win=3, screen='soccer'),   # bright: not the grass
+    'soccer2':    dict(planar=True, fit_only=[281], a=281, b=332, t=80, gmin=130, up='landscape', win=3, screen='soccer'),   # bright: not the grass
     'sistine':    dict(planar=True, a=420, b=556, t=40, up='landscape', win=5),
     'rubberball': dict(planar=True, a=551, b=724, t=40, up='portrait', win=5),
     'liberty':    dict(planar=True, a=767, b=893, t=40, up='portrait', win=5),
     'iss':        dict(planar=True, cuts=[1039], a=1030, b=1079, t=35, up='landscape', win=5),
     # not a green screen: the iPad shows a mint page of text, keyed as mint (text strokes closed over)
-    'hancock':    dict(planar=True, a=1141, b=1206, t=25, mode='mint', up='portrait', win=5, para=2),
+    'hancock':    dict(planar=True, cuts=[1184, 1197], fit_only=[1184], known={1197: 1183}, a=1141, b=1206, t=25, mode='mint', up='portrait', win=5),
     'mars':       dict(planar=True, a=1250, b=1422, t=24, ft=22, up='landscape', win=7),
     'sphinx':     dict(planar=True, a=1540, b=1596, t=30, up='portrait', win=5),
     'prairie':    dict(planar=True, a=1660, b=1766, t=70, up='portrait', win=5),
@@ -213,6 +213,137 @@ def edge_quad(frame, m, prev, ref=None, min_pts=25, dark=80, tol=.08):
     return q, seen
 
 
+def rigid(P, ref, sigma=3.0, iters=3):
+    """A shot's outlines as ONE rigid screen moving smoothly.
+
+    A device is a rigid thing in a hand: its shape does not wobble and it does not jump from one frame
+    to the next. So every frame's outline is replaced by the shot's reference shape carried by an affine
+    motion fitted to that frame's four corners (robustly: a corner far from the others' agreement is
+    down-weighted, as a corner under a finger would be), and those motions are smoothed over time."""
+    n = len(P); A = np.zeros((n, 6)); X = np.hstack([ref, np.ones((4, 1))])
+    for i in range(n):
+        w = np.ones(4)
+        for _ in range(iters):
+            W = np.diag(w)
+            M = np.linalg.lstsq(W @ X, W @ P[i], rcond=None)[0]           # 3x2
+            res = np.linalg.norm(X @ M - P[i], axis=1)
+            sc = np.median(res) + 1.0
+            w = 1 / (1 + (res / (2 * sc)) ** 2)
+        A[i] = M.T.ravel()
+    # smoothed over time; reflected at the ends so the first and last frames are not pulled
+    k = int(3 * sigma); g = np.exp(-.5 * (np.arange(-k, k + 1) / sigma) ** 2); g /= g.sum()
+    pad = np.concatenate([A[k:0:-1], A, A[-2:-k - 2:-1]]) if n > k + 1 else np.concatenate([np.repeat(A[:1], k, 0), A, np.repeat(A[-1:], k, 0)])
+    As = np.stack([np.convolve(pad[:, c], g, 'valid') for c in range(6)], 1)[:n]
+    base = np.array([X @ a.reshape(2, 3).T for a in As])
+    # the perspective an affine cannot hold (a device tilting toward the lens) comes back slowly: the
+    # corners' remaining difference, smoothed four times as long, so it follows a tilt and never twitches
+    R = P - np.array([X @ a.reshape(2, 3).T for a in A])
+    s2 = sigma * 4; k2 = int(3 * s2); g2 = np.exp(-.5 * (np.arange(-k2, k2 + 1) / s2) ** 2); g2 /= g2.sum()
+    Rf = R.reshape(n, 8)
+    pad2 = np.concatenate([np.repeat(Rf[:1], k2, 0), Rf, np.repeat(Rf[-1:], k2, 0)])
+    Rs = np.stack([np.convolve(pad2[:, c], g2, 'valid') for c in range(8)], 1)[:n].reshape(n, 4, 2)
+    return base + Rs
+
+
+def known_shape(frame, m, ref, init=None):
+    """The whole device, placed from the part of it that shows.
+
+    When most of the screen is behind something (a wig, an arm), the green's own outline is just the
+    visible piece. The device is still its whole self, so its known outline (ref) is moved and turned —
+    not resized — until every visible bit of screen lies inside it and its sides lie along the visible
+    bezel, where the screen meets the device's dark edge."""
+    from scipy.optimize import minimize
+    mb = (m > .5).astype(np.uint8)
+    if mb.sum() < 150: return None
+    ys, xs = np.nonzero(mb); G = np.stack([xs, ys], 1)[::3].astype(np.float64)
+    cs, _ = cv2.findContours(mb, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_NONE)
+    pts = np.vstack([c.reshape(-1, 2) for c in cs]).astype(np.float64)
+    g = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY).astype(np.float32)
+    blur = cv2.GaussianBlur(mb.astype(np.float32), (9, 9), 0)
+    gx = cv2.Sobel(blur, cv2.CV_32F, 1, 0, ksize=5); gy = cv2.Sobel(blur, cv2.CV_32F, 0, 1, ksize=5)
+    xi = pts[:, 0].astype(int); yi = pts[:, 1].astype(int)
+    nrm = -np.stack([gx[yi, xi], gy[yi, xi]], 1); nrm /= (np.linalg.norm(nrm, axis=1, keepdims=True) + 1e-9)
+    o = np.round(pts + nrm * 6).astype(int); o[:, 0] = np.clip(o[:, 0], 0, g.shape[1] - 1); o[:, 1] = np.clip(o[:, 1], 0, g.shape[0] - 1)
+    bez = pts[g[o[:, 1], o[:, 0]] < 60]
+    c0 = ref.mean(0); R0 = ref - c0
+    def quad(p):
+        th = p[2]; Rm = np.array([[np.cos(th), -np.sin(th)], [np.sin(th), np.cos(th)]])
+        return R0 @ Rm.T + c0 + p[:2]
+    def sdist(Pt, q):     # signed distance to the quad: positive outside
+        d = []
+        for k in range(4):
+            a, b = q[k], q[(k + 1) % 4]; e = b - a; nn = np.array([e[1], -e[0]]) / (np.hypot(*e) + 1e-9)
+            d.append((Pt - a) @ nn)
+        D = np.stack(d, 1)
+        cen = q.mean(0)
+        if (((cen - q[0]) @ np.array([q[1][1] - q[0][1], -(q[1][0] - q[0][0])])) > 0): D = -D
+        return D.max(1)
+    def cost(p):
+        q = quad(p); out = np.clip(sdist(G, q), 0, None)
+        c = (out ** 2).mean() * 4 + (out > 0).mean() * 400
+        if len(bez): c += (sdist(bez, q) ** 2).mean()
+        return c
+    start = init if init is not None else np.array([*(G.mean(0) - c0), 0.0])
+    best = None
+    for dth in (0, .08, -.08):
+        r = minimize(cost, start + np.array([0, 0, dth]), method='Nelder-Mead', options=dict(xatol=.3, fatol=.01, maxiter=600))
+        if best is None or r.fun < best.fun: best = r
+    return quad(best.x), best.x
+
+
+def corner_shape(frame, m, ref, prev=None):
+    """The whole device from one visible corner: the two strongest straight runs of visible bezel are
+    its two sides at that corner, they meet at the corner, and the rest of the device is drawn from
+    there at the known proportions (ref), its size taken from how long the sides already show."""
+    mb = (m > .5).astype(np.uint8)
+    if mb.sum() < 150: return None
+    cs, _ = cv2.findContours(mb, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_NONE)
+    pts = np.vstack([c.reshape(-1, 2) for c in cs]).astype(np.float64)
+    g = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY).astype(np.float32)
+    blur = cv2.GaussianBlur(mb.astype(np.float32), (9, 9), 0)
+    gx = cv2.Sobel(blur, cv2.CV_32F, 1, 0, ksize=5); gy = cv2.Sobel(blur, cv2.CV_32F, 0, 1, ksize=5)
+    xi = pts[:, 0].astype(int); yi = pts[:, 1].astype(int)
+    nrm = -np.stack([gx[yi, xi], gy[yi, xi]], 1); nrm /= (np.linalg.norm(nrm, axis=1, keepdims=True) + 1e-9)
+    o = np.round(pts + nrm * 6).astype(int); o[:, 0] = np.clip(o[:, 0], 0, g.shape[1] - 1); o[:, 1] = np.clip(o[:, 1], 0, g.shape[0] - 1)
+    bez = pts[g[o[:, 1], o[:, 0]] < 55]
+    if len(bez) < 30: return None
+    rng = np.random.default_rng(0)
+    def ransac(P):
+        best, bi = None, None
+        for _ in range(300):
+            a, b = P[rng.choice(len(P), 2, replace=False)]
+            if np.hypot(*(b - a)) < 8: continue
+            L = _line(a, b); inl = np.abs(P @ L[:2] + L[2]) < 2.5
+            if best is None or inl.sum() > best: best, bi = inl.sum(), inl
+        return bi
+    i1 = ransac(bez)
+    if i1 is None or i1.sum() < 15: return None
+    rest = bez[~i1]
+    if len(rest) < 15: return None
+    i2 = ransac(rest)
+    if i2 is None or i2.sum() < 15: return None
+    A_, B_ = bez[i1], rest[i2]
+    fit = lambda P: (lambda v: _line(np.array([v[2], v[3]]), np.array([v[2] + v[0], v[3] + v[1]])))(cv2.fitLine(P.astype(np.float32), cv2.DIST_HUBER, 0, .01, .01).ravel())
+    L1, L2 = fit(A_), fit(B_)
+    d1 = np.array([L1[1], -L1[0]]); d2 = np.array([L2[1], -L2[0]])
+    if abs(d1 @ d2) > .5: return None                         # not two sides of one corner
+    C = _meet(L1, L2)
+    if C is None: return None
+    # each side points from the corner toward where its visible bezel lies
+    if (A_.mean(0) - C) @ d1 < 0: d1 = -d1
+    if (B_.mean(0) - C) @ d2 < 0: d2 = -d2
+    # which visible side is the device's long one: by the reference's proportions and orientation
+    w = np.linalg.norm(ref[1] - ref[0]); h = np.linalg.norm(ref[3] - ref[0])
+    long_dir = (ref[3] - ref[0]) / h
+    if abs(d1 @ long_dir) < abs(d2 @ long_dir): d1, d2, A_, B_ = d2, d1, B_, A_
+    # size: at least as long as the bezel already shows, in the device's proportions
+    s1 = ((A_ - C) @ d1).max(); s2 = ((B_ - C) @ d2).max()
+    H_ = max(s1, s2 * h / w, .55 * h); W_ = H_ * w / h
+    q = np.array([C, C + d2 * W_, C + d2 * W_ + d1 * H_, C + d1 * H_])
+    if prev is not None: q = order_like(q, prev)
+    return q
+
+
 def settle(frame, m, q, steps=(.25, .18, .12, .08, .08, .08)):
     """An outline settled onto the device's bezel: each side refitted from bezel points only, the
     search narrowing. A hand over a corner bends the green's outline, never the bezel's."""
@@ -341,7 +472,28 @@ def track(scene):
         keys_ = [key(f2, cf['t'], cf.get('mode', 'green'), cf.get('gmin', 0)) for f2 in imgs]
         bounds = [0] + [c - N[0] for c in cf.get('cuts', []) if N[0] < c <= N[-1]] + [len(Q)]
         for s0, s1 in zip(bounds[:-1], bounds[1:]):
-            if s0 + N[0] < cf.get('from_', 0): continue        # shots before it fit fine on their own
+            if s0 + N[0] in cf.get('known', {}):
+                ref = Q[cf['known'][s0 + N[0]] - N[0]].copy(); p = None
+                for i in range(s0, s1):
+                    r_ = corner_shape(imgs[i], keys_[i], ref, Q[i - 1] if i > s0 and not np.isnan(Q[i - 1, 0, 0]) else ref)
+                    if r_ is not None: Q[i] = r_
+                    else: Q[i] = np.nan
+                okk = [i for i in range(s0, s1) if not np.isnan(Q[i, 0, 0])]
+                if okk:
+                    for k in range(4):
+                        for j in range(2): Q[s0:s1, k, j] = np.interp(np.arange(s0, s1), okk, Q[okk, k, j])
+                    Q[s0:s1] = rigid(Q[s0:s1].copy(), Q[okk[0]].copy(), 2.0)
+                continue
+            if s0 + N[0] < cf.get('from_', 0) or s0 + N[0] in cf.get('fit_only', []):
+                # a device turning into view too fast to track: its own per-frame fits, held to one rigid
+                # shape and smoothed, so they cannot bounce
+                okk = [i for i in range(s0, s1) if not np.isnan(Q[i, 0, 0])]
+                if len(okk) >= 3:
+                    for k in range(4):
+                        for j in range(2): Q[s0:s1, k, j] = np.interp(np.arange(s0, s1), okk, Q[okk, k, j])
+                    best = max(okk, key=lambda i: cv2.contourArea(Q[i].astype(np.float32)))
+                    Q[s0:s1] = rigid(Q[s0:s1].copy(), Q[best].copy(), 2.0)
+                continue
             st = cf.get('planar_start', {}).get(s0 + N[0])
             if st is None:     # the shot's best frame: the most green, cleanly fitted, wholly in the picture
                 H_, W_ = imgs[0].shape[:2]
@@ -356,6 +508,7 @@ def track(scene):
             # outline, never the bezel's
             q0 = settle(imgs[i0], keys_[i0], q0)
             P = planar(imgs[s0:s1], list(Q[s0:s1]), keys_[s0:s1], i0 - s0, q0, F[s0:s1])
+            P = rigid(P, q0, cf.get('sigma', 3.0))
             # slow drift taken out where the device's whole screen is plainly visible: the difference from
             # the plain fit there, smoothed over a second, so it corrects drift but carries no jitter
             raw = Q[s0:s1]; D = np.full(P.shape, np.nan)

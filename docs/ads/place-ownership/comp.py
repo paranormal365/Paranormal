@@ -38,9 +38,10 @@ BRIGHT = {'surgery': 1.05}
 ROT = {'soccer': 3, 'soccer2': 0, 'liberty': 1, 'prairie': 1}
 # where the old screen's green light is turned violet: the whole frame where nothing else is green
 # screens whose page should reach a little past the fitted edge (the fit stops short of the glass)
-GROW = {'hancock': 1.03, 'mars': 1.02}
+GROW = {'hancock': 1.03, 'mars': 1.045}
 # scenes where no other thing in frame is the screen's color: leftover screen color is recolored anywhere
 LEFT_ALL = {'hancock', 'soccer', 'soccer2'}
+LIME = {'mars'}
 RELIGHT_ALL = {'prairie', 'sistine', 'liberty', 'iss', 'sphinx', 'surgery'}                  # how bright the page is against the scene (1 = as rendered)
 
 _tracks, _pages = {}, {}
@@ -77,6 +78,52 @@ def screen_quad(scene, n):
     return Q[i] if 0 <= i < len(Q) else None
 
 
+# reference brightness of a screen's green when it is lit like the page should look (per key mode)
+LIT = {'green': 175.0, 'mint': 170.0}
+_last_center = {}
+
+def look_of_the_shot(scene, n, f, warped, matte, inside, q):
+    """The page as the camera would have seen it on that screen, in that light.
+
+    - light: the green records how light fell across the glass — a gradient, a shadowed end, a duller
+      screen in a dark hall — so the page is shaded by the green's own brightness, smoothed (the
+      green's noise is not light), relative to a screen lit full on;
+    - color: a little of the scene's own cast;
+    - softness and grain: the footage is soft and grainy, a rendered page is neither;
+    - motion: a device moving fast is smeared along its motion, as the green around it is."""
+    cf = TR.CFG[scene]; mode = cf.get('mode', 'green')
+    sel = (matte > .6) & (inside > .5)
+    if sel.sum() < 80: return warped
+    lum = (f[..., 1] if mode == 'green' else f.mean(2)).astype(np.float32)
+    # the green's brightness, filled across fingers and glare by normalized smoothing
+    rad = max(9, int(.12 * np.sqrt(abs(cv2.contourArea(q)) + 1))) | 1
+    num = cv2.GaussianBlur(np.where(sel, lum, 0).astype(np.float32), (0, 0), rad)
+    den = cv2.GaussianBlur(sel.astype(np.float32), (0, 0), rad)
+    shade = np.where(den > 1e-3, num / np.maximum(den, 1e-3), np.median(lum[sel])) / LIT[mode]
+    shade = np.clip(shade, .35, 1.25)
+    out = warped * shade[..., None]
+    # the scene's cast: the frame's average color around the device, a tenth of the way
+    ring = (cv2.dilate(inside, np.ones((61, 61), np.uint8)) > .5) & (inside < .5)
+    if ring.sum() > 200:
+        cast = f[ring].mean(0); cast = cast / (cast.mean() + 1e-6)
+        out = out * (1 + .12 * (cast - 1))[None, None, :]
+    # motion: smear along the screen's own travel since the last frame
+    c = q.mean(0); prev = _last_center.get(scene); _last_center[scene] = (n, c)
+    if prev is not None and prev[0] == n - 1:
+        v = c - prev[1]; L = int(min(40, np.hypot(*v) * .5))
+        if L >= 3:
+            ker = np.zeros((2 * L + 1, 2 * L + 1), np.float32)
+            d = v / (np.hypot(*v) + 1e-6)
+            for t in np.linspace(-L, L, 4 * L + 1):
+                ker[int(round(L + t * d[1])), int(round(L + t * d[0]))] = 1
+            out = cv2.filter2D(out, -1, ker / ker.sum())
+    # the footage's softness and grain
+    out = cv2.GaussianBlur(out, (0, 0), .7)
+    rng = np.random.default_rng(n * 7919 + hash(scene) % 1000)
+    out = out + rng.normal(0, 2.2, out.shape[:2]).astype(np.float32)[..., None]
+    return out
+
+
 def comp_scene(scene, n, frame, M=None):
     N, Q = track_of(scene)
     i = n - int(N[0])
@@ -89,7 +136,7 @@ def comp_scene(scene, n, frame, M=None):
     # A safeguard for every scene: where the tracked corners leave much of THIS frame's screen uncovered —
     # a screen half out of frame, half behind a shoulder, smeared by being thrown, filled in from
     # neighbors that were wrong — fit the corners from this frame's own green instead.
-    if cf.get('mode') != 'mint':
+    if cf.get('mode') != 'mint' and not cf.get('planar'):     # a tracked device is never re-fitted from a hand-bent green
         kb = key > .5; area = int(kb.sum())
         if area > 250:
             covered = np.zeros(kb.shape, np.uint8); cv2.fillConvexPoly(covered, q.astype(np.int32), 1)
@@ -113,9 +160,14 @@ def comp_scene(scene, n, frame, M=None):
     near = cv2.dilate(inside, np.ones((15, 15), np.uint8))
     f = frame.astype(np.float32)
     k = key
-    matte = (1 - TR.in_front(frame)) if TR.CFG[scene].get('mode') == 'mint' else k
+    if TR.CFG[scene].get('mode') == 'mint':
+        # the old page's own area (its text closed over), less the hands and cuff in front of it
+        page_area = cv2.dilate(cv2.morphologyEx((k > .3).astype(np.uint8), cv2.MORPH_CLOSE, np.ones((15, 15), np.uint8)), np.ones((3, 3), np.uint8))
+        matte = (1 - TR.in_front(frame)) * cv2.GaussianBlur(page_area.astype(np.float32), (5, 5), 0)
+    else:
+        matte = k
     a = (matte * inside)[..., None]
-    # the screen glows a little onto its own edge
+    warped = look_of_the_shot(scene, n, f, warped, matte, inside, q)
     out = f * (1 - a) + warped * a
     # what green is left — the key's edge, a blurred or reflected screen — is the page's dark violet now
     lm = ((np.clip(k * (1 - inside), 0, 1) + np.clip(k * inside - a[..., 0], 0, 1)) * (1.0 if scene in LEFT_ALL else near))[..., None]
@@ -130,6 +182,13 @@ def comp_scene(scene, n, frame, M=None):
     out[..., 1] = g_ - spill
     out[..., 2] = r_ + spill * .22
     out[..., 0] = b_ + spill * .38
+    if scene in LIME:     # a lime screen lights its surround yellow-green: that glow goes too
+        ring = cv2.dilate(inside, np.ones((25, 25), np.uint8)) > .5
+        hsv = cv2.cvtColor(np.clip(out, 0, 255).astype(np.uint8), cv2.COLOR_BGR2HSV).astype(np.float32)
+        lime = ring & (hsv[..., 0] >= 22) & (hsv[..., 0] <= 50) & (hsv[..., 1] > 110) & (hsv[..., 2] > 60)
+        w = cv2.GaussianBlur(lime.astype(np.float32), (7, 7), 0)[..., None]
+        grey = out.mean(2, keepdims=True) * .55 + np.array([40, 20, 28], np.float32) * .5
+        out = out * (1 - w) + grey * w
     return np.clip(out, 0, 255).astype(np.uint8)
 
 

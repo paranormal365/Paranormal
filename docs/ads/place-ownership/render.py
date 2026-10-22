@@ -212,13 +212,22 @@ def wordmark(out, tt, step=.035):
 
 
 # ── the surgery push-in ───────────────────────────────────────────────────────
+_focus = None
+def push_focus():
+    """Where the push-in ends up: the phone's average place over the move."""
+    global _focus
+    if _focus is None:
+        qs = [CP.screen_quad('surgery', n) for n in range(int(PUSH[0] * FPS), int(PUSH[1] * FPS))]
+        _focus = tuple(np.mean([q.mean(0) for q in qs if q is not None], 0))
+    return _focus
+
 def push(n, frame):
     """Ease in on the phone, keeping it where it is in frame, and draw its page sharp at the new size."""
     t = n / FPS
     z = 1 + (PUSH[2] - 1) * ease(seg(t, PUSH[0], PUSH[1]))
     q = CP.screen_quad('surgery', n)
     if z <= 1.001 or q is None: return CP.comp_frame(n, frame)
-    fx, fy = q.mean(0)
+    fx, fy = push_focus()          # one fixed point for the whole move: a camera does not follow a hand's tremor
     cw, ch = W / z, H / z
     x0 = clamp(fx - cw / 2, 0, W - cw); y0 = clamp(fy - ch / 2, 0, H - ch)
     M = np.float32([[z, 0, -x0 * z], [0, z, -y0 * z]])
