@@ -6,4 +6,4 @@ text and the ship steps are in `Ben.iOS/APP-STORE-1.1.5.md`; the help held back 
 
 - Version 1.1.5, build 16, in every configuration; the iOS changes heading is now **1.1.5**.
 - Build clean, no warnings, 621 BenKit tests pass.
-- Upload waits on Ben's go.
+- Submitted for review by Ben 10/22/2026.

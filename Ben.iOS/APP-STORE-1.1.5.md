@@ -1,6 +1,6 @@
 # App Store update: IsHaunted 1.1.5 (build 16)
 
-Started 10/22/2026 on branch `release/ios-1.1.5`, from master 94b83613.
+Started 10/22/2026 on branch `release/ios-1.1.5`, from master 94b83613. **Submitted for review 10/22/2026, build 16** (Ben).
 
 1.1.5 brings two things:
 - events: their results, the walk's room, writing to the organizers, and class attendance at the door;
