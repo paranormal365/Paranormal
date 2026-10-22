@@ -23,16 +23,20 @@ FPS = 30
 # scene: first frame, last frame, key threshold (green above max(red, blue)), which way is up at the
 # first frame ('portrait' = the longer side vertical), smoothing window
 CFG = {
-    'soccer':     dict(a=222, b=268, t=40, up='landscape', win=5),
+    # from the cut at 7.50 the glove covers the tablet's right-hand corner while he taps: that corner is
+    # completed from the other three, so the page holds still on a tablet that holds still
+    # the glove covers the tablet while he taps, then his shoulder does: the outline is carried by planar
+    # tracking from each shot's clearest frame, so the page holds still on a tablet that holds still
+    'soccer':     dict(a=212, b=280, t=80, up='landscape', win=2, cuts=[225], edges=True, planar=True, from_=225),
     # the iPad thrown up as he leaps: tracked afresh, the same page
-    'soccer2':    dict(a=281, b=318, t=60, gmin=150, up='landscape', win=3, screen='soccer'),   # bright: not the grass
-    'sistine':    dict(a=432, b=556, t=40, up='landscape', win=5),
-    'rubberball': dict(a=551, b=716, t=40, up='portrait', win=5),
+    'soccer2':    dict(a=281, b=332, t=80, gmin=130, up='landscape', win=3, screen='soccer'),   # bright: not the grass
+    'sistine':    dict(a=420, b=556, t=40, up='landscape', win=5),
+    'rubberball': dict(a=551, b=724, t=40, up='portrait', win=5),
     'liberty':    dict(a=767, b=893, t=40, up='portrait', win=5),
     'iss':        dict(a=1030, b=1079, t=35, up='landscape', win=5),
     # not a green screen: the iPad shows a mint page of text, keyed as mint (text strokes closed over)
     'hancock':    dict(a=1141, b=1206, t=25, mode='mint', up='portrait', win=5, para=2),
-    'mars':       dict(a=1258, b=1422, t=24, ft=22, up='landscape', win=7),
+    'mars':       dict(a=1250, b=1422, t=24, ft=22, up='landscape', win=7),
     'sphinx':     dict(a=1540, b=1596, t=30, up='portrait', win=5),
     'prairie':    dict(a=1660, b=1766, t=70, up='portrait', win=5),
     'surgery':    dict(a=1767, b=1943, t=35, up='portrait', win=15),
@@ -128,23 +132,199 @@ def unclip(Q, W, H, edge=4):
     return Q
 
 
+def _line(p, q):
+    d = q - p; n = np.array([-d[1], d[0]]) / (np.hypot(*d) + 1e-9); return np.array([n[0], n[1], -(n @ p)])
+
+def _meet(l1, l2):
+    a1, b1, c1 = l1; a2, b2, c2 = l2; dt = a1 * b2 - a2 * b1
+    if abs(dt) < 1e-9: return None
+    return np.array([(b1 * c2 - b2 * c1) / dt, (c1 * a2 - c2 * a1) / dt])
+
+
+def edge_quad(frame, m, prev, ref=None, min_pts=25, dark=75):
+    """The screen's corners from its EDGES, and only from edges that meet the device's dark bezel.
+
+    Where the green ends at a glove, a finger or a shoulder, that boundary says where the hand is, not
+    where the screen is; following it makes the page squeeze and slide as the hand moves over a device
+    that is holding still. So each boundary point looks a few pixels outward: dark there is bezel, and
+    only those points place the four sides. A side with too few (hidden behind a shoulder) keeps the
+    previous frame's line, moved as the opposite side moved. Returns (quad, which sides were seen)."""
+    mb = (m > .5).astype(np.uint8)
+    cs, _ = cv2.findContours(mb, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_NONE)
+    if not cs: return None, None
+    pts = max(cs, key=cv2.contourArea).reshape(-1, 2).astype(np.float64)
+    blur = cv2.GaussianBlur(mb.astype(np.float32), (9, 9), 0)
+    gx = cv2.Sobel(blur, cv2.CV_32F, 1, 0, ksize=5); gy = cv2.Sobel(blur, cv2.CV_32F, 0, 1, ksize=5)
+    xi = np.clip(pts[:, 0].astype(int), 0, mb.shape[1] - 1); yi = np.clip(pts[:, 1].astype(int), 0, mb.shape[0] - 1)
+    nrm = -np.stack([gx[yi, xi], gy[yi, xi]], 1); nrm /= (np.linalg.norm(nrm, axis=1, keepdims=True) + 1e-9)
+    v = frame.max(2).astype(np.float32)
+    outs = []
+    for step in (5, 8):
+        o = np.round(pts + nrm * step).astype(int)
+        o[:, 0] = np.clip(o[:, 0], 0, mb.shape[1] - 1); o[:, 1] = np.clip(o[:, 1], 0, mb.shape[0] - 1)
+        outs.append(v[o[:, 1], o[:, 0]])
+    bezel = (np.maximum(*outs) < dark)
+    # the frame's own edge is not bezel either
+    bezel &= (pts[:, 0] > 3) & (pts[:, 0] < mb.shape[1] - 4) & (pts[:, 1] > 3) & (pts[:, 1] < mb.shape[0] - 4)
+    lines, seen = [], []
+    for k in range(4):
+        a, b = prev[k], prev[(k + 1) % 4]; L = _line(a, b)
+        d = np.abs(pts @ L[:2] + L[2]); seg = b - a
+        t = ((pts - a) @ seg) / (seg @ seg + 1e-9)
+        sel = bezel & (d < max(10, .08 * np.hypot(*seg))) & (t > .05) & (t < .95)
+        if sel.sum() >= min_pts:
+            vx, vy, x0, y0 = cv2.fitLine(pts[sel].astype(np.float32), cv2.DIST_HUBER, 0, .01, .01).ravel()
+            nl = _line(np.array([x0, y0]), np.array([x0 + vx, y0 + vy]))
+            if nl[:2] @ L[:2] < 0: nl = -nl
+            lines.append(nl); seen.append(True)
+        else:
+            lines.append(None); seen.append(False)
+    hidden = [k for k in range(4) if lines[k] is None]
+    if len(hidden) == 1 and ref is not None:
+        # one side hidden (behind a glove, a shoulder): the other three sides are real, so the two corners
+        # away from it are exact; the two on it sit along their sides at the screen's own proportions,
+        # measured the last time all four sides were seen
+        k = hidden[0]; a, b, c, d = k, (k + 1) % 4, (k + 2) % 4, (k + 3) % 4
+        Cc = _meet(lines[b], lines[c]); Cd = _meet(lines[c], lines[d])
+        if Cc is not None and Cd is not None:
+            opp = np.linalg.norm(Cc - Cd); ropp = np.linalg.norm(ref[c] - ref[d]) + 1e-9
+            def along(line, frm, toward, length):
+                v = np.array([line[1], -line[0]])
+                if v @ (toward - frm) < 0: v = -v
+                return frm + v * length
+            Cb = along(lines[b], Cc, prev[b], opp * np.linalg.norm(ref[b] - ref[c]) / ropp)
+            Ca = along(lines[d], Cd, prev[a], opp * np.linalg.norm(ref[a] - ref[d]) / ropp)
+            q = np.zeros((4, 2)); q[a], q[b], q[c], q[d] = Ca, Cb, Cc, Cd
+            if cv2.isContourConvex(q.astype(np.float32)): return q, seen
+    for k in range(4):                       # a hidden side moves as the side opposite it moved
+        if lines[k] is None:
+            L = _line(prev[k], prev[(k + 1) % 4]); o = lines[(k + 2) % 4]
+            if o is not None:
+                po = _line(prev[(k + 2) % 4], prev[(k + 3) % 4])
+                # the opposite side's shift along this side's normal, from its old line to its new one
+                mid = (prev[(k + 2) % 4] + prev[(k + 3) % 4]) / 2
+                shift = -(o @ np.array([mid[0], mid[1], 1]))   # signed distance from old midpoint to new line
+                L = L.copy(); L[2] -= shift * (L[:2] @ o[:2])
+            lines[k] = L
+    q = [_meet(lines[(k - 1) % 4], lines[k]) for k in range(4)]
+    if any(c is None for c in q): return None, None
+    q = np.array(q)
+    if not cv2.isContourConvex(q.astype(np.float32)) or np.abs(q - prev).max() > 120: return None, None
+    return q, seen
+
+
+def planar(frames_bgr, quads, keys, start, start_q):
+    """Carry one good outline of the device through a shot by optical flow (planar tracking).
+
+    What moves with the device — its bezel, the hand holding it, the edges of the screen — is tracked
+    from frame to frame; a robust fit of how it moved (RANSAC throws out the tapping finger, which moves
+    on its own) moves the outline with it. The page then sits on the device as the device sits in the
+    frame, whatever hands pass over it. Forward and backward from the shot's clearest frame."""
+    n = len(frames_bgr); out = [None] * n; out[start] = start_q.copy()
+    gray = [cv2.cvtColor(f, cv2.COLOR_BGR2GRAY) for f in frames_bgr]
+    def step(i, j):
+        q = out[i]
+        region = np.zeros(gray[i].shape, np.uint8)
+        c = q.mean(0); big = c + (q - c) * 1.3
+        cv2.fillConvexPoly(region, np.round(big).astype(np.int32), 255)
+        region[keys[i] > .4] = 0                                   # no features on the flat green
+        p0 = cv2.goodFeaturesToTrack(gray[i], 300, .01, 6, mask=region)
+        if p0 is None or len(p0) < 8: out[j] = q.copy(); return
+        p1, st, _ = cv2.calcOpticalFlowPyrLK(gray[i], gray[j], p0, None, winSize=(21, 21), maxLevel=3)
+        good = st.ravel() == 1
+        if good.sum() < 8: out[j] = q.copy(); return
+        A, inl = cv2.estimateAffine2D(p0[good], p1[good], method=cv2.RANSAC, ransacReprojThreshold=2.0)
+        if A is None: out[j] = q.copy(); return
+        out[j] = q @ A[:, :2].T + A[:, 2]
+    for i in range(start, n - 1): step(i, i + 1)
+    for i in range(start, 0, -1): step(i, i - 1)
+    return np.array(out)
+
+
+def corner_support(m, q, r=.12):
+    """How much of the screen's green is really there just inside each corner (0..1): a corner under a
+    glove or a shoulder has little, and its fitted position is a guess."""
+    H, W = m.shape; c = q.mean(0); out = []
+    for k in range(4):
+        tri = np.array([q[k], q[k] + (q[(k + 1) % 4] - q[k]) * r, q[k] + (c - q[k]) * r * 1.6, q[k] + (q[(k - 1) % 4] - q[k]) * r])
+        mask = np.zeros((H, W), np.uint8); cv2.fillConvexPoly(mask, np.round(tri).astype(np.int32), 1)
+        a = mask.sum(); out.append(float((m * mask).sum() / a) if a else 0.0)
+    return np.array(out)
+
+
+def steady(Q, M, N, cuts, smooth=3.0):
+    """Corners that follow the device, not the hands on it: untrusted corners (little green around
+    them) are dropped, a single dropped corner is completed from the other three, and each corner's
+    path is a stiff smoothing spline through what is left, shot by shot."""
+    from scipy.interpolate import UnivariateSpline
+    T = np.full(Q.shape[:2], False)
+    for i, (q, m) in enumerate(zip(Q, M)):
+        if np.isnan(q[0, 0]): continue
+        sup = corner_support(m.astype(np.float32), q * (m.shape[1] / 1280))
+        T[i] = sup > .55
+    P = np.where(T[..., None], Q, np.nan)
+    for i in range(len(P)):                       # one corner covered: it is where the other three say
+        if T[i].sum() == 3:
+            k = int(np.flatnonzero(~T[i])[0])
+            P[i, k] = P[i, (k - 1) % 4] + P[i, (k + 1) % 4] - P[i, (k + 2) % 4]
+    S = Q.copy()
+    bounds = [0] + [c - N[0] for c in cuts if N[0] < c <= N[-1]] + [len(Q)]
+    for s0, s1 in zip(bounds[:-1], bounds[1:]):
+        t = np.arange(s0, s1)
+        for k in range(4):
+            for j in range(2):
+                v = P[s0:s1, k, j]; ok = ~np.isnan(v)
+                if ok.sum() >= 6:
+                    sp = UnivariateSpline(t[ok], v[ok], k=3, s=ok.sum() * smooth ** 2)
+                    S[s0:s1, k, j] = sp(t)
+                elif ok.sum() >= 1:
+                    S[s0:s1, k, j] = np.interp(t, t[ok], v[ok])
+    return S, T
+
+
 def track(scene):
     cf = CFG[scene]; os.makedirs(OUT, exist_ok=True)
     Q, F, N, mattes = [], [], [], []
-    prev = None
+    prev = ref = None
     for n, f in frames(cf['a'], cf['b']):
         m = key(f, cf['t'], cf.get('mode', 'green'), cf.get('gmin', 0))
         q, fill = fit_quad(key(f, cf.get('ft', cf['t']), cf.get('mode', 'green'), cf.get('gmin', 0)), None if prev is None else prev.mean(0))
         if q is not None:
             q = order_first(q, cf['up']) if prev is None else order_like(q, prev)
+            # refined from the bezel: the sides that meet the dark bezel place the screen, and a hidden one
+            # is placed by the screen's shape (ref: the last frame all four sides were seen). A cut, or a
+            # refinement that jumps, starts again from the plain fit, so a wrong lock never carries on.
+            if cf.get('edges') and prev is not None and n not in cf.get('cuts', []) and n >= cf.get('from_', 0):
+                qe, seen = edge_quad(f, key(f, cf.get('ft', cf['t']), cf.get('mode', 'green'), cf.get('gmin', 0)), prev, ref)
+                if qe is not None and np.abs(qe - prev).max() < 60:
+                    q = qe
+                    if all(seen): ref = qe.copy()
+            elif cf.get('edges'):
+                ref = None
             prev = q
         Q.append(q if q is not None else np.full((4, 2), np.nan)); F.append(fill); N.append(n)
         mattes.append(cv2.resize(m, (640, 360), interpolation=cv2.INTER_AREA).astype(np.float16))
     Q = np.array(Q); F = np.array(F)
     Q = unclip(Q, f.shape[1], f.shape[0])
+    if cf.get('planar'):
+        imgs = [f2 for _, f2 in frames(cf['a'], cf['b'])]
+        keys_ = [key(f2, cf['t'], cf.get('mode', 'green'), cf.get('gmin', 0)) for f2 in imgs]
+        bounds = [0] + [c - N[0] for c in cf.get('cuts', []) if N[0] < c <= N[-1]] + [len(Q)]
+        for s0, s1 in zip(bounds[:-1], bounds[1:]):
+            if s0 + N[0] < cf.get('from_', 0): continue        # shots before it fit fine on their own
+            st = cf.get('planar_start', {}).get(s0 + N[0])
+            if st is None:     # the shot's clearest frame: the most green, cleanly fitted
+                cand = [i for i in range(s0, s1) if not np.isnan(Q[i, 0, 0])]
+                if not cand: continue
+                i0 = max(cand, key=lambda i: F[i] * cv2.contourArea(Q[i].astype(np.float32)))
+                q0 = Q[i0]
+            else:
+                i0, q0 = st[0] - N[0], np.array(st[1], float)
+            Q[s0:s1] = planar(imgs[s0:s1], None, keys_[s0:s1], i0 - s0, q0)
+        F[max(0, cf.get('from_', 0) - N[0]):] = 1.0
     if 'para' in cf:     # a hand over this corner: complete it as a parallelogram from the other three
-        k = cf['para']
-        Q[:, k] = Q[:, (k - 1) % 4] + Q[:, (k + 1) % 4] - Q[:, (k + 2) % 4]
+        k = cf['para']; j0 = max(0, cf.get('para_from', N[0]) - N[0])
+        Q[j0:, k] = Q[j0:, (k - 1) % 4] + Q[j0:, (k + 1) % 4] - Q[j0:, (k + 2) % 4]
     # implausible fits: low fill (hull far from the green), sudden jumps or area changes
     ok = ~np.isnan(Q[:, 0, 0]) & (F > .55)
     area = np.array([cv2.contourArea(q.astype(np.float32)) if not np.isnan(q[0, 0]) else np.nan for q in Q])
@@ -158,11 +338,19 @@ def track(scene):
         for k in range(4):
             for j in range(2):
                 S[:, k, j] = np.interp(np.arange(len(Q)), good, Q[good, k, j])
-    w = cf['win']
+    if cf.get('steady'):
+        M = [cv2.resize(mm.astype(np.float32), (1280, 720)) for mm in mattes]
+        S, trusted = steady(Q, M, np.array(N), cf.get('cuts', []))
+        print(scene, 'corners trusted', int(trusted.sum()), 'of', trusted.size)
+    # smoothed shot by shot: never across a cut, or the page drifts from one shot's tablet to the next
+    w = 0 if cf.get('steady') else cf['win']
     if w > 1:
-        pad = np.concatenate([np.repeat(S[:1], w, 0), S, np.repeat(S[-1:], w, 0)])
+        bounds = [0] + [c - N[0] for c in cf.get('cuts', []) if N[0] < c <= N[-1]] + [len(S)]
         ker = np.hanning(2 * w + 1); ker /= ker.sum()
-        S = np.stack([np.convolve(pad[:, k, j], ker, 'same')[w:-w] for k in range(4) for j in range(2)], 1).reshape(-1, 4, 2)
+        for s0, s1 in zip(bounds[:-1], bounds[1:]):
+            seg = S[s0:s1]
+            pad = np.concatenate([np.repeat(seg[:1], w, 0), seg, np.repeat(seg[-1:], w, 0)])
+            S[s0:s1] = np.stack([np.convolve(pad[:, k, j], ker, 'same')[w:-w] for k in range(4) for j in range(2)], 1).reshape(-1, 4, 2)
     np.savez_compressed(os.path.join(OUT, f'{scene}.npz'), frames=np.array(N), raw=Q, quad=S, ok=ok, fill=F)
     print(scene, len(N), 'frames,', int(ok.sum()), 'fitted cleanly')
     return N, S, ok

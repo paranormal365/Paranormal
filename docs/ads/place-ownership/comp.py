@@ -40,7 +40,7 @@ ROT = {'soccer': 3, 'soccer2': 0, 'liberty': 1, 'prairie': 1}
 # screens whose page should reach a little past the fitted edge (the fit stops short of the glass)
 GROW = {'hancock': 1.03, 'mars': 1.02}
 # scenes where no other thing in frame is the screen's color: leftover screen color is recolored anywhere
-LEFT_ALL = {'hancock'}
+LEFT_ALL = {'hancock', 'soccer', 'soccer2'}
 RELIGHT_ALL = {'prairie', 'sistine', 'liberty', 'iss', 'sphinx', 'surgery'}                  # how bright the page is against the scene (1 = as rendered)
 
 _tracks, _pages = {}, {}
@@ -84,7 +84,19 @@ def comp_scene(scene, n, frame, M=None):
     q = np.roll(Q[i], -ROT.get(scene, 0), 0).astype(np.float32)
     if scene in GROW: c = q.mean(0); q = (c + (q - c) * GROW[scene]).astype(np.float32)
     if M is not None: q = (q @ M[:, :2].T + M[:, 2]).astype(np.float32)
-    sc = TR.CFG[scene].get('screen', scene)
+    cf = TR.CFG[scene]
+    key = TR.key(frame, cf['t'], cf.get('mode', 'green'), cf.get('gmin', 0))
+    # A safeguard for every scene: where the tracked corners leave much of THIS frame's screen uncovered —
+    # a screen half out of frame, half behind a shoulder, smeared by being thrown, filled in from
+    # neighbors that were wrong — fit the corners from this frame's own green instead.
+    if cf.get('mode') != 'mint':
+        kb = key > .5; area = int(kb.sum())
+        if area > 250:
+            covered = np.zeros(kb.shape, np.uint8); cv2.fillConvexPoly(covered, q.astype(np.int32), 1)
+            if (kb & ~covered.astype(bool)).sum() > .2 * area:
+                q2, _ = TR.fit_quad(key, q.mean(0))
+                if q2 is not None: q = TR.order_like(q2, q).astype(np.float32)
+    sc = cf.get('screen', scene)
     page = page_of(sc, state_at(sc, n / FPS)) * BRIGHT.get(sc, 1.0)
     h, w = page.shape[:2]      # which corner is the page's top-left is ROT's, never a guess from the shape
     src = np.float32([[0, 0], [w, 0], [w, h], [0, h]])
@@ -100,7 +112,7 @@ def comp_scene(scene, n, frame, M=None):
     inside = cv2.dilate(inside, np.ones((3, 3), np.uint8))
     near = cv2.dilate(inside, np.ones((15, 15), np.uint8))
     f = frame.astype(np.float32)
-    k = TR.key(frame, TR.CFG[scene]['t'], TR.CFG[scene].get('mode', 'green'), TR.CFG[scene].get('gmin', 0))
+    k = key
     matte = (1 - TR.in_front(frame)) if TR.CFG[scene].get('mode') == 'mint' else k
     a = (matte * inside)[..., None]
     # the screen glows a little onto its own edge
