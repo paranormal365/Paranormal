@@ -695,16 +695,16 @@ else
                     <div class="row g-2 align-items-end">
                         <div class="col-md-5">
                             <label class="form-label small mb-1" for="attend-email">Email address <span class="text-secondary">(required)</span></label>
-                            <input id="attend-email" class="form-control" type="email" maxlength="320"
-                                   autocomplete="email" aria-required="true"
-                                   placeholder="you@example.com" value="@_attendEmail"
-                                   @oninput="@(e => _attendEmail = e.Value?.ToString() ?? "")" />
+                            <BenTextBox id="attend-email" class="form-control" type="email" maxlength="320"
+                                        autocomplete="email" aria-required="true"
+                                        placeholder="you@example.com" Value="@_attendEmail"
+                                        OnInput="@(e => _attendEmail = e.Value?.ToString() ?? "")" />
                         </div>
                         <div class="col-md-4">
                             <label class="form-label small mb-1" for="attend-name">Your name <span class="text-secondary">(optional)</span></label>
-                            <input id="attend-name" class="form-control" maxlength="200" autocomplete="name"
-                                   value="@_attendName"
-                                   @oninput="@(e => _attendName = e.Value?.ToString() ?? "")" />
+                            <BenTextBox id="attend-name" class="form-control" maxlength="200" autocomplete="name"
+                                        Value="@_attendName"
+                                        OnInput="@(e => _attendName = e.Value?.ToString() ?? "")" />
                         </div>
                         <div class="col-md-3">
                             <button type="button" class="btn btn-primary w-100"

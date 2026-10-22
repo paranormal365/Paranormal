@@ -75,10 +75,10 @@
                    on blur; a Playwright test caught it.) *@
                 @* Stable id, because HomeHero above carries the identical placeholder — a
                    placeholder-based selector matches its box instead of this one. *@
-                <input id="nearby-location" class="form-control" style="max-width:280px;"
-                       placeholder="Enter your city, address, or zip code"
-                       value="@_manualQuery"
-                       @oninput="@(e => { _manualQuery = e.Value?.ToString() ?? string.Empty; _manualError = null; })" />
+                <BenTextBox id="nearby-location" class="form-control" style="max-width:280px;"
+                            placeholder="Enter your city, address, or zip code"
+                            Value="@_manualQuery"
+                            OnInput="@(e => { _manualQuery = e.Value?.ToString() ?? string.Empty; _manualError = null; })" />
                 <button type="button" class="btn btn-primary"
                         @onclick="SearchManualLocationAsync"
                         disabled="@(_searching || string.IsNullOrWhiteSpace(_manualQuery))">

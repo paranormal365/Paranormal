@@ -76,8 +76,8 @@
                         </div>
                         <div class="col-md-6">
                             <label class="form-label small fw-semibold mb-1" for="equipmentcheckoutdetail-why-optional-e5e7">Why (optional)</label>
-                            <input id="equipmentcheckoutdetail-why-optional-e5e7" class="form-control form-control-sm" maxlength="1000" value="@_requestNotes"
-                                   @oninput="@(e => _requestNotes = e.Value?.ToString() ?? string.Empty)" />
+                            <BenTextBox id="equipmentcheckoutdetail-why-optional-e5e7" class="form-control form-control-sm" maxlength="1000" Value="@_requestNotes"
+                                        OnInput="@(e => _requestNotes = e.Value?.ToString() ?? string.Empty)" />
                         </div>
                         <div class="col-md-2">
                             <button type="button" class="btn btn-primary btn-sm" @onclick="RequestRenewalAsync" disabled="@(!(!_busy && _requestedDate is not null))">Ask</button>
@@ -115,10 +115,10 @@
                                 @if (renewal.CanReview)
                                 {
                                     <div class="mt-2">
-                                        <input class="form-control form-control-sm mb-2" maxlength="1000"
-                                               placeholder="Reason (required to refuse)"
-                                               value="@GetReviewNote(renewal.Id)"
-                                               @oninput="@(e => _reviewNotes[renewal.Id] = e.Value?.ToString() ?? string.Empty)" />
+                                        <BenTextBox class="form-control form-control-sm mb-2" maxlength="1000"
+                                                    placeholder="Reason (required to refuse)"
+                                                    Value="@GetReviewNote(renewal.Id)"
+                                                    OnInput="@(e => _reviewNotes[renewal.Id] = e.Value?.ToString() ?? string.Empty)" />
                                         <div class="d-flex gap-2">
                                             <button type="button" class="btn btn-primary btn-sm" @onclick="@(() => ReviewAsync(renewal, true))" disabled="@(!(!_busy))">Grant</button>
                                             <button type="button" class="btn btn-danger btn-sm" @onclick="@(() => ReviewAsync(renewal, false))" disabled="@(!(!_busy && !string.IsNullOrWhiteSpace(GetReviewNote(renewal.Id))))">Refuse</button>

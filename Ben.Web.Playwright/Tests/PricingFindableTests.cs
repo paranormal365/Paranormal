@@ -13,11 +13,11 @@ namespace Ben.Web.Playwright.Tests;
 /// am finding it is going to Community then Pricing." And: "I don't see, as an administrator, how
 /// to configure event settings like pricing."</para>
 ///
-/// <para><b>What these check, on every screen type and in both themes:</b> the top bar has Pricing
-/// signed out and signed in, the home page has See pricing under the three ways in, the footer has
-/// Pricing, and Administration → Pricing shows the plans, the events and the Ghost Walk Tour
-/// subscription with a sentence each and refuses an ordinary member. Below 992px every control
-/// looked at is at least 44px each way.</para>
+/// <para><b>What these check, on every screen type and in both themes:</b> the top bar (the ☰
+/// drawer below 992px) has Pricing signed out and signed in, the home page has See pricing under
+/// the three ways in, the footer has Pricing, and Administration → Pricing shows the plans, the
+/// events and the Ghost Walk Tour subscription with a sentence each and refuses an ordinary member.
+/// Below 992px every control looked at is at least 44px each way.</para>
 ///
 /// <para><b>Running them:</b> <c>scripts/run-e2e.sh --filter TestCategory=PricingFindable</c>, with
 /// all three hosts up. Nothing here changes a setting: the selling switches are read, not moved,
@@ -30,6 +30,41 @@ public class PricingFindableTests : Oct16TestBase
 {
     /// <summary>The bar's own Pricing entry.</summary>
     private ILocator BarPricing => Page.Locator("#top-menu a.topnav-link[href='/pricing']");
+
+    /// <summary>The drawer's Pricing entry, which is where the bar's entries are below 992px.</summary>
+    private ILocator DrawerPricing => Page.Locator(".app-sidebar a[href='/pricing']");
+
+    /// <summary>
+    /// Pricing where this width shows the menu: on the bar from 992px, in the ☰ drawer below it.
+    /// </summary>
+    /// <remarks>
+    /// Below 992px the bar folds away and the drawer carries the same entries. The folded bar is
+    /// still in the page as a clipped sliver, so measuring its Pricing link there reported it
+    /// "past the screen" at every phone and tablet width (10/22/2026), with nothing wrong on screen.
+    /// </remarks>
+    private async Task<List<string>> LookAtPricingInTheMenuAsync(string name, string theme)
+    {
+        if ((Page.ViewportSize?.Width ?? 0) >= 992)
+        {
+            var onTheBar = await LookAtAsync(BarPricing, name, theme);
+            onTheBar.AddRange(await TouchTargetAsync(BarPricing, "Pricing on the bar", theme));
+            return onTheBar;
+        }
+
+        var toggle = Page.Locator("[data-action='toggle-swap'].mobile-menu-icon").First;
+        await toggle.ClickAsync();
+        await Expect(Page.Locator("html")).ToHaveClassAsync(new Regex("app-mobile-menu-open"));
+        // The drawer slides in from the left; measure it once it has arrived.
+        await DrawerPricing.EvaluateAsync(
+            "el => new Promise(done => { const at = () => el.getBoundingClientRect().left >= 0 ? done() : requestAnimationFrame(at); at(); })");
+
+        var inTheDrawer = await LookAtAsync(DrawerPricing, name + "-drawer", theme);
+        inTheDrawer.AddRange(await TouchTargetAsync(DrawerPricing, "Pricing in the menu", theme));
+
+        await toggle.ClickAsync();
+        await Expect(Page.Locator("html")).Not.ToHaveClassAsync(new Regex("app-mobile-menu-open"));
+        return inTheDrawer;
+    }
 
     private async Task OpenAsync(string path)
     {
@@ -50,8 +85,7 @@ public class PricingFindableTests : Oct16TestBase
         {
             await Page.SetViewportSizeAsync(width, height);
             await OpenAsync("/");
-            problems.AddRange(await LookAtAsync(BarPricing, "pricing-bar-visitor", theme));
-            problems.AddRange(await TouchTargetAsync(BarPricing, "Pricing on the bar", theme));
+            problems.AddRange(await LookAtPricingInTheMenuAsync("pricing-bar-visitor", theme));
         }
 
         NothingWrong(problems);
@@ -73,8 +107,7 @@ public class PricingFindableTests : Oct16TestBase
         {
             await Page.SetViewportSizeAsync(width, height);
             await OpenAsync("/feed");
-            problems.AddRange(await LookAtAsync(BarPricing, "pricing-bar-member", theme));
-            problems.AddRange(await TouchTargetAsync(BarPricing, "Pricing on the bar", theme));
+            problems.AddRange(await LookAtPricingInTheMenuAsync("pricing-bar-member", theme));
         }
 
         // One place for it: Community's rail no longer lists it.

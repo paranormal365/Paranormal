@@ -104,10 +104,10 @@
                     else
                     {
                         <div class="input-group">
-                            <input id="new-event-place" class="form-control" placeholder="@PlaceSearch.Placeholder"
-                                   value="@_placeSearch"
-                                   @oninput="e => _placeSearch = e.Value?.ToString() ?? string.Empty"
-                                   @onkeydown="@(e => PlaceSearch.IsSearchKey(e.Key, _placeSearch) ? SearchPlacesAsync() : Task.CompletedTask)" />
+                            <BenTextBox id="new-event-place" class="form-control" placeholder="@PlaceSearch.Placeholder"
+                                        Value="@_placeSearch"
+                                        OnInput="e => _placeSearch = e.Value?.ToString() ?? string.Empty"
+                                        @onkeydown="@(e => PlaceSearch.IsSearchKey(e.Key, _placeSearch) ? SearchPlacesAsync() : Task.CompletedTask)" />
                             <button type="button" class="btn btn-outline-secondary" id="search-event-place"
                                     disabled="@string.IsNullOrWhiteSpace(_placeSearch)"
                                     @onclick="SearchPlacesAsync">Search</button>

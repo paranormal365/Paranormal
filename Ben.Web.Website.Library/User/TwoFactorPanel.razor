@@ -113,11 +113,11 @@
                         <label class="visually-hidden" for="twofa-enable-code">
                             Six-digit code from your authenticator app
                         </label>
-                        <input id="twofa-enable-code" class="form-control" style="width:9rem;"
-                               type="text" inputmode="numeric" pattern="[0-9]*" maxlength="6"
-                               autocomplete="one-time-code" placeholder="000000"
-                               value="@_code"
-                               @oninput="@(e => _code = e.Value?.ToString() ?? string.Empty)" />
+                        <BenTextBox id="twofa-enable-code" class="form-control" style="width:9rem;"
+                                    type="text" inputmode="numeric" pattern="[0-9]*" maxlength="6"
+                                    autocomplete="one-time-code" placeholder="000000"
+                                    Value="@_code"
+                                    OnInput="@(e => _code = e.Value?.ToString() ?? string.Empty)" />
                         <button type="button" class="btn btn-primary" @onclick="EnableAsync" disabled="@_busy">
                             @(_busy ? "Checking…" : "Turn on")
                         </button>
@@ -146,11 +146,11 @@
                 <label class="visually-hidden" for="twofa-manage-code">
                     Six-digit code from your authenticator app
                 </label>
-                <input id="twofa-manage-code" class="form-control" style="width:9rem;"
-                       type="text" inputmode="numeric" pattern="[0-9]*" maxlength="6"
-                       autocomplete="one-time-code" placeholder="000000"
-                       value="@_code"
-                       @oninput="@(e => _code = e.Value?.ToString() ?? string.Empty)" />
+                <BenTextBox id="twofa-manage-code" class="form-control" style="width:9rem;"
+                            type="text" inputmode="numeric" pattern="[0-9]*" maxlength="6"
+                            autocomplete="one-time-code" placeholder="000000"
+                            Value="@_code"
+                            OnInput="@(e => _code = e.Value?.ToString() ?? string.Empty)" />
                 <button type="button" class="btn btn-outline-secondary btn-sm" @onclick="RegenerateAsync" disabled="@_busy">
                     New recovery codes
                 </button>

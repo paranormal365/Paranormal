@@ -45,6 +45,21 @@ public class SiteAnnouncementTests : BenTestBase
     }
 
     [Test]
+    [Description("Deleting in the middle of the announcement deletes there, not at the end (Ben, 10/15/2026 and 10/22/2026: where he first saw it).")]
+    public async Task Deleting_mid_sentence_in_the_announcement_stays_where_the_cursor_is()
+    {
+        await LoginAsync(SuperAdminEmail, SuperAdminPassword);
+        await Page.GotoAsync($"{BaseUrl}/admin/site-settings");
+        await Expect(AnnouncementCard).ToBeVisibleAsync(new() { Timeout = 20_000 });
+        await WaitForTheCircuitAsync();
+
+        var box = AnnouncementCard.Locator("textarea");
+        await box.FillAsync("");
+        // Nothing is saved: the draft is typed, checked, and left.
+        await TypingStaysPutTests.DeleteStairAndCheckAsync(Page, box);
+    }
+
+    [Test]
     public async Task The_announcement_banner_appears_everywhere_and_leaves_when_cleared()
     {
         await LoginAsync(SuperAdminEmail, SuperAdminPassword);

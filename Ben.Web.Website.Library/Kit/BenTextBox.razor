@@ -1,0 +1,8 @@
+@inherits BenTypedBox
+
+@*
+    A one-line box that keeps the cursor where it is while typing, however slow the connection.
+    Use it instead of <input value="@_field" @oninput="...">; see BenTypedBox for why.
+*@
+
+<input @attributes="AdditionalAttributes" @bind:get="Shown" @bind:set="OnTypedAsync" @bind:event="oninput" />

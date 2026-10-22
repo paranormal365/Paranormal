@@ -24,7 +24,7 @@
 
         @* Search *@
         <div class="icon-picker-search px-3 pt-2 d-flex align-items-center gap-2">
-            <input type="text" class="form-control" value="@_search" @oninput="@(e => { var v = e.Value?.ToString() ?? string.Empty; _search = v; })" />
+            <BenTextBox type="text" class="form-control" Value="@_search" OnInput="@(e => { var v = e.Value?.ToString() ?? string.Empty; _search = v; })" />
             @if (!string.IsNullOrEmpty(_search))
             {
                 <button type="button" class="btn @(ThemeConstants.Button.FillMode.Flat == ThemeConstants.Button.FillMode.Solid ? "btn-secondary" : "btn-outline-secondary") btn-sm" @onclick="@(() => _search = string.Empty)"><BenIcon Name="x" /></button>

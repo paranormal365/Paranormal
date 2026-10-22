@@ -65,8 +65,8 @@
                         </div>
                         <div class="col-md-5">
                             <label class="form-label small fw-semibold mb-1" for="orgequipmentservicelog-note-3fd9">Note</label>
-                            <input id="orgequipmentservicelog-note-3fd9" class="form-control" maxlength="2000" value="@_notes"
-                                   @oninput="@(e => _notes = e.Value?.ToString() ?? string.Empty)" />
+                            <BenTextBox id="orgequipmentservicelog-note-3fd9" class="form-control" maxlength="2000" Value="@_notes"
+                                        OnInput="@(e => _notes = e.Value?.ToString() ?? string.Empty)" />
                         </div>
                     </div>
                     <div class="mt-2 text-end">

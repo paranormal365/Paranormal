@@ -277,17 +277,17 @@
                 <div class="d-flex gap-2 align-items-start flex-wrap">
                     @if (s.IsMultiLine)
                     {
-                        <textarea class="form-control admin-pricing__box" rows="4" id="@id"
-                                  placeholder="3 = 249"
-                                  value="@_drafts.GetValueOrDefault(s.Key)"
-                                  @oninput="@(e => _drafts[s.Key] = e.Value?.ToString() ?? string.Empty)"></textarea>
+                        <BenTextArea class="form-control admin-pricing__box" rows="4" id="@id"
+                                     placeholder="3 = 249"
+                                     Value="@_drafts.GetValueOrDefault(s.Key)"
+                                     OnInput="@(e => _drafts[s.Key] = e.Value?.ToString() ?? string.Empty)" />
                     }
                     else
                     {
-                        <input class="form-control admin-pricing__box" id="@id" inputmode="decimal"
-                               placeholder="Leave blank to use the default"
-                               value="@_drafts.GetValueOrDefault(s.Key)"
-                               @oninput="@(e => _drafts[s.Key] = e.Value?.ToString() ?? string.Empty)" />
+                        <BenTextBox class="form-control admin-pricing__box" id="@id" inputmode="decimal"
+                                    placeholder="Leave blank to use the default"
+                                    Value="@_drafts.GetValueOrDefault(s.Key)"
+                                    OnInput="@(e => _drafts[s.Key] = e.Value?.ToString() ?? string.Empty)" />
                     }
                     <button type="button" class="btn btn-primary admin-pricing__touch"
                             disabled="@(_savingKey == s.Key)"

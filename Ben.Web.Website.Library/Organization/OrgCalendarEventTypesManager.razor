@@ -87,9 +87,9 @@
                             <label class="form-label small mb-1" for="orgcalendareventtypesmanager-name-5ed1">Name</label>
                             @* Plain input: Telerik text boxes commit on blur, which drops the last
                                keystroke when Save is clicked straight from the field. *@
-                            <input id="orgcalendareventtypesmanager-name-5ed1" class="form-control" maxlength="100" placeholder="e.g. Meeting"
-                                   value="@_formName"
-                                   @oninput="@(e => _formName = e.Value?.ToString() ?? string.Empty)" />
+                            <BenTextBox id="orgcalendareventtypesmanager-name-5ed1" class="form-control" maxlength="100" placeholder="e.g. Meeting"
+                                        Value="@_formName"
+                                        OnInput="@(e => _formName = e.Value?.ToString() ?? string.Empty)" />
                         </div>
                         <div class="col-sm-4">
                             <label class="form-label small mb-1" for="orgcalendareventtypesmanager-colour-2ebf">Color</label>
@@ -104,8 +104,8 @@
                         </div>
                         <div class="col-sm-2">
                             <label class="form-label small mb-1" for="orgcalendareventtypesmanager-order-c57e">Order</label>
-                            <input id="orgcalendareventtypesmanager-order-c57e" class="form-control" type="number" value="@_formSortOrder"
-                                   @oninput="@(e => _formSortOrder = int.TryParse(e.Value?.ToString(), out var n) ? n : 0)" />
+                            <BenTextBox id="orgcalendareventtypesmanager-order-c57e" class="form-control" type="number" Value="@_formSortOrder"
+                                        OnInput="@(e => _formSortOrder = int.TryParse(e.Value?.ToString(), out var n) ? n : 0)" />
                         </div>
                         <div class="col-12">
                             <label class="form-label small mb-1 d-block">Icon</label>

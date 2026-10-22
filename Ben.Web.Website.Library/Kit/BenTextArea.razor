@@ -1,0 +1,8 @@
+@inherits BenTypedBox
+
+@*
+    A multi-line box that keeps the cursor where it is while typing, however slow the connection.
+    Use it instead of <textarea value="@_field" @oninput="..."></textarea>; see BenTypedBox for why.
+*@
+
+<textarea @attributes="AdditionalAttributes" @bind:get="Shown" @bind:set="OnTypedAsync" @bind:event="oninput"></textarea>

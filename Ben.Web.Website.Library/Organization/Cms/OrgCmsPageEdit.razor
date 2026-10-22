@@ -57,13 +57,13 @@
             }
 
             <label class="form-label fw-semibold" for="orgcmspageedit-name-it-cd3e">Name it</label>
-            <input id="orgcmspageedit-name-it-cd3e" class="form-control mb-2" maxlength="200" value="@_layoutName"
-                   placeholder="e.g. Investigation Results"
-                   @oninput="@(e => _layoutName = e.Value?.ToString() ?? string.Empty)" />
+            <BenTextBox id="orgcmspageedit-name-it-cd3e" class="form-control mb-2" maxlength="200" Value="@_layoutName"
+                        placeholder="e.g. Investigation Results"
+                        OnInput="@(e => _layoutName = e.Value?.ToString() ?? string.Empty)" />
 
             <label class="form-label fw-semibold" for="orgcmspageedit-what-is-it-for-abf2">What is it for? (optional)</label>
-            <input id="orgcmspageedit-what-is-it-for-abf2" class="form-control" maxlength="500" value="@_layoutDescription"
-                   @oninput="@(e => _layoutDescription = e.Value?.ToString() ?? string.Empty)" />
+            <BenTextBox id="orgcmspageedit-what-is-it-for-abf2" class="form-control" maxlength="500" Value="@_layoutDescription"
+                        OnInput="@(e => _layoutDescription = e.Value?.ToString() ?? string.Empty)" />
 
             <div class="form-text mt-2">
                 Saves this page's <strong>@_sections.Count</strong>

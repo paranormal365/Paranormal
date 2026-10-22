@@ -12,8 +12,8 @@
 <form class="ben-store-search" action="/store/products" method="get" role="search">
     <div class="input-group">
         <label class="visually-hidden" for="@Id">Search the store</label>
-        <input id="@Id" name="q" type="search" class="form-control" placeholder="Search the store" autocomplete="off"
-               value="@_text" @oninput="OnInputAsync" @onkeydown="OnKeyDown" data-testid="store-search" />
+        <BenTextBox id="@Id" name="q" type="search" class="form-control" placeholder="Search the store" autocomplete="off"
+                    Value="@_text" OnInput="OnInputAsync" @onkeydown="OnKeyDown" data-testid="store-search" />
         <button type="submit" class="btn btn-primary" aria-label="Search"><BenIcon Name="search" /></button>
     </div>
     @if (_open && _suggestions.Count > 0)

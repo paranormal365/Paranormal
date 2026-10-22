@@ -107,9 +107,9 @@
                                         </div>
                                         <div class="mb-2">
                                             <label class="form-label small fw-semibold mb-1" for="mycheckouts-reason-required-to-decline-bd0c">Reason (required to decline)</label>
-                                            <input id="mycheckouts-reason-required-to-decline-bd0c" class="form-control form-control-sm" maxlength="1000"
-                                                   value="@GetNote(loan.Id)"
-                                                   @oninput="@(e => _reviewNotes[loan.Id] = e.Value?.ToString() ?? string.Empty)" />
+                                            <BenTextBox id="mycheckouts-reason-required-to-decline-bd0c" class="form-control form-control-sm" maxlength="1000"
+                                                        Value="@GetNote(loan.Id)"
+                                                        OnInput="@(e => _reviewNotes[loan.Id] = e.Value?.ToString() ?? string.Empty)" />
                                         </div>
                                         <div class="d-flex gap-2">
                                             <button type="button" class="btn btn-primary btn-sm" @onclick="@(() => ApproveAsync(loan))" disabled="@(!(!_busy))">Approve</button>
@@ -120,9 +120,9 @@
                                     {
                                         <div class="mb-2">
                                             <label class="form-label small fw-semibold mb-1" for="mycheckouts-condition-on-return-optional-a06a">Condition on return (optional)</label>
-                                            <input id="mycheckouts-condition-on-return-optional-a06a" class="form-control form-control-sm" maxlength="2000"
-                                                   value="@GetNote(loan.Id)"
-                                                   @oninput="@(e => _reviewNotes[loan.Id] = e.Value?.ToString() ?? string.Empty)" />
+                                            <BenTextBox id="mycheckouts-condition-on-return-optional-a06a" class="form-control form-control-sm" maxlength="2000"
+                                                        Value="@GetNote(loan.Id)"
+                                                        OnInput="@(e => _reviewNotes[loan.Id] = e.Value?.ToString() ?? string.Empty)" />
                                         </div>
                                         <button type="button" class="btn btn-primary btn-sm" @onclick="@(() => ReceiveReturnAsync(loan))" disabled="@(!(!_busy))">Got it back</button>
                                     }

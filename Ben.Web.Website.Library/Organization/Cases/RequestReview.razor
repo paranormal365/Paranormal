@@ -126,8 +126,8 @@ else
                                 disabled="@_busy" @onclick="@(() => VoteAsync(false))">
                             <BenIcon Name="thumbs-down" Class="me-1" />Pass@(_detail.MyVote?.InFavor == false ? " ✓" : "")
                         </button>
-                        <input class="form-control form-control-sm" style="max-width:340px;" placeholder="Optional comment with your vote"
-                               value="@_comment" @oninput="@(e => _comment = e.Value?.ToString() ?? "")" />
+                        <BenTextBox class="form-control form-control-sm" style="max-width:340px;" placeholder="Optional comment with your vote"
+                                    Value="@_comment" OnInput="@(e => _comment = e.Value?.ToString() ?? "")" />
                     </div>
                 }
                 else

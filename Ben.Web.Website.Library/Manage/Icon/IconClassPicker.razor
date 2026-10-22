@@ -26,7 +26,7 @@
     @if (_editingManually)
     {
         @* Manual edit mode — show textbox + Done + Clear *@
-        <input type="text" class="form-control" value="@_currentValue" @oninput="@(e => OnTextChanged(e.Value?.ToString() ?? string.Empty))" />
+        <BenTextBox type="text" class="form-control" Value="@_currentValue" OnInput="@(e => OnTextChanged(e.Value?.ToString() ?? string.Empty))" />
         <button type="button" class="btn btn-success btn-sm" @onclick="@(() => _editingManually = false)" title="Done"><BenIcon Name="check" /></button>
         <button type="button" class="btn @(ThemeConstants.Button.FillMode.Flat == ThemeConstants.Button.FillMode.Solid ? "btn-secondary" : "btn-outline-secondary") btn-sm" @onclick="@ClearAsync" title="Clear icon"><BenIcon Name="x" /></button>
     }

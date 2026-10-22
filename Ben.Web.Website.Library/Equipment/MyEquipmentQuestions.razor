@@ -85,9 +85,9 @@
                         {
                             @if (_answeringId == q.Id)
                             {
-                                <textarea class="form-control form-control-sm mt-2" rows="3" maxlength="4000"
-                                          value="@_answerText"
-                                          @oninput="@(e => _answerText = e.Value?.ToString() ?? string.Empty)"></textarea>
+                                <BenTextArea class="form-control form-control-sm mt-2" rows="3" maxlength="4000"
+                                             Value="@_answerText"
+                                             OnInput="@(e => _answerText = e.Value?.ToString() ?? string.Empty)" />
                                 <div class="d-flex gap-2 justify-content-end mt-2">
                                     <button type="button" class="btn btn-secondary btn-sm" @onclick="@(() => _answeringId = null)" disabled="@(!(!_busy))">Cancel</button>
                                     <button type="button" class="btn btn-secondary btn-sm" @onclick="@(() => AnswerAsync(q.Id, decline: true))" disabled="@(!(!_busy))">Decline</button>
@@ -107,12 +107,12 @@
                                    person rarely reads well as a public answer. *@
                                 <div class="border rounded p-2 mt-2">
                                     <label class="form-label fw-semibold small mb-1" for="myequipmentquestions-question-as-others-will-71e9">Question, as others will read it</label>
-                                    <input id="myequipmentquestions-question-as-others-will-71e9" class="form-control form-control-sm mb-2" maxlength="500" value="@_promoteQuestion"
-                                           @oninput="@(e => _promoteQuestion = e.Value?.ToString() ?? string.Empty)" />
+                                    <BenTextBox id="myequipmentquestions-question-as-others-will-71e9" class="form-control form-control-sm mb-2" maxlength="500" Value="@_promoteQuestion"
+                                                OnInput="@(e => _promoteQuestion = e.Value?.ToString() ?? string.Empty)" />
                                     <label class="form-label fw-semibold small mb-1" for="myequipmentquestions-answer-ef8c">Answer</label>
-                                    <textarea id="myequipmentquestions-answer-ef8c" class="form-control form-control-sm mb-2" rows="3" maxlength="4000"
-                                              value="@_promoteAnswer"
-                                              @oninput="@(e => _promoteAnswer = e.Value?.ToString() ?? string.Empty)"></textarea>
+                                    <BenTextArea id="myequipmentquestions-answer-ef8c" class="form-control form-control-sm mb-2" rows="3" maxlength="4000"
+                                                 Value="@_promoteAnswer"
+                                                 OnInput="@(e => _promoteAnswer = e.Value?.ToString() ?? string.Empty)" />
                                     <div class="d-flex gap-2 justify-content-end">
                                         <button type="button" class="btn btn-secondary btn-sm" @onclick="@(() => _promotingId = null)" disabled="@(!(!_busy))">Cancel</button>
                                         <button type="button" class="btn btn-primary btn-sm" @onclick="@(() => PromoteAsync(q.Id))" disabled="@(!(!_busy && !string.IsNullOrWhiteSpace(_promoteQuestion) && !string.IsNullOrWhiteSpace(_promoteAnswer)))">Publish</button>

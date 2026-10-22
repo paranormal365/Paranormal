@@ -277,8 +277,8 @@
             <div class="col-12">
                 <label class="form-label fw-semibold" for="orgcmseditor-title-5a77">Title <span class="text-danger">*</span></label>
                 <div class="input-group">
-                    <input id="orgcmseditor-title-5a77" type="text" class="form-control" placeholder="e.g. About us"
-                           value="@_pageForm.PageTitle" @oninput="@(e => OnTitleTyped(e.Value?.ToString()))" />
+                    <BenTextBox id="orgcmseditor-title-5a77" type="text" class="form-control" placeholder="e.g. About us"
+                                Value="@_pageForm.PageTitle" OnInput="@(e => OnTitleTyped(e.Value?.ToString()))" />
                     <BenDropdown ToggleClass="btn btn-outline-secondary" Title="Ideas for a title" MinWidth="320px" Class="cms-title-ideas" Floating="true">
                         <ToggleContent><BenIcon Name="zap" Class="me-1" />Ideas</ToggleContent>
                         <ChildContent>
@@ -305,8 +305,8 @@
             </div>
             <div class="col-12">
                 <label class="form-label fw-semibold" for="orgcmseditor-url-slug-d5ae">Web address <span class="text-danger">*</span></label>
-                <input id="orgcmseditor-url-slug-d5ae" type="text" class="form-control" value="@_pageForm.UrlName"
-                       @oninput="@(e => { _pageForm.UrlName = e.Value?.ToString() ?? ""; _slugTouched = true; })" />
+                <BenTextBox id="orgcmseditor-url-slug-d5ae" type="text" class="form-control" Value="@_pageForm.UrlName"
+                            OnInput="@(e => { _pageForm.UrlName = e.Value?.ToString() ?? ""; _slugTouched = true; })" />
                 <div class="form-text">
                     The page's address on this site: <code>@($"/o/{_orgUrlName ?? "your-group"}/{(string.IsNullOrWhiteSpace(_pageForm.UrlName) ? "…" : _pageForm.UrlName.Trim().ToLowerInvariant())}")</code>.
                     Use lowercase letters, numbers and hyphens. It is filled in from the title until you change it.

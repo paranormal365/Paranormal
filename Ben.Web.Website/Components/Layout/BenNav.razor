@@ -178,9 +178,9 @@ else
        the minified-sidebar rule is `.app-menu-filter-container #searchInput { visibility: hidden }`,
        so a differently-named wrapper leaves the box on screen when the sidebar shrinks to 70px. *@
     <form class="app-menu-filter-container px-4" @onsubmit:preventDefault="true">
-        <input type="text" class="form-control" id="searchInput" placeholder="Filter"
-               autocomplete="off" aria-label="Filter menu"
-               value="@_filter" @oninput="OnFilterInput" />
+        <BenTextBox type="text" class="form-control" id="searchInput" placeholder="Filter"
+                    autocomplete="off" aria-label="Filter menu"
+                    Value="@_filter" OnInput="OnFilterInput" />
     </form>
 
     <nav id="nav-menu" class="primary-nav flex-grow-1 custom-scroll">

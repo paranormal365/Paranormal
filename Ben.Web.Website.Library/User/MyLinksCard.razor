@@ -67,15 +67,15 @@
                     <div class="row g-2">
                         <div class="col-12">
                             <label class="form-label small mb-1" for="mylinkscard-address-8fc8">Address</label>
-                            <input id="mylinkscard-address-8fc8" class="form-control" maxlength="500" placeholder="https://example.com"
-                                   value="@_formUrl"
-                                   @oninput="@(e => _formUrl = e.Value?.ToString() ?? string.Empty)" />
+                            <BenTextBox id="mylinkscard-address-8fc8" class="form-control" maxlength="500" placeholder="https://example.com"
+                                        Value="@_formUrl"
+                                        OnInput="@(e => _formUrl = e.Value?.ToString() ?? string.Empty)" />
                         </div>
                         <div class="col-sm-7">
                             <label class="form-label small mb-1" for="mylinkscard-label-optional-2c98">Label (optional)</label>
-                            <input id="mylinkscard-label-optional-2c98" class="form-control" maxlength="200" placeholder="e.g. My site"
-                                   value="@_formText"
-                                   @oninput="@(e => _formText = e.Value?.ToString() ?? string.Empty)" />
+                            <BenTextBox id="mylinkscard-label-optional-2c98" class="form-control" maxlength="200" placeholder="e.g. My site"
+                                        Value="@_formText"
+                                        OnInput="@(e => _formText = e.Value?.ToString() ?? string.Empty)" />
                         </div>
                         <div class="col-sm-5">
                             <label class="form-label small mb-1" for="mylinkscard-type-291e">Type</label>

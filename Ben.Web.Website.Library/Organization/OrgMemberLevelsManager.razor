@@ -33,9 +33,9 @@
                     <li class="list-group-item d-flex align-items-center gap-2 py-2">
                         @if (_editingId == level.Id)
                         {
-                            <input class="form-control form-control-sm" style="max-width:220px;"
-                                   id="level-edit-name" value="@_formName"
-                                   @oninput="@(e => _formName = e.Value?.ToString() ?? "")" />
+                            <BenTextBox class="form-control form-control-sm" style="max-width:220px;"
+                                        id="level-edit-name" Value="@_formName"
+                                        OnInput="@(e => _formName = e.Value?.ToString() ?? "")" />
                             <button type="button" class="btn btn-primary btn-sm" @onclick="@(() => SaveEditAsync(level))">Save</button>
                             <button type="button" class="btn btn-outline-secondary btn-sm" @onclick="@(() => _editingId = null)">Cancel</button>
                         }
@@ -99,9 +99,9 @@
     </BenListState>
 
     <div class="d-flex gap-2 align-items-center" style="max-width:480px;">
-        <input class="form-control form-control-sm" placeholder="New title, e.g. Tech Specialist"
-               id="level-new-name" value="@_newName"
-               @oninput="@(e => _newName = e.Value?.ToString() ?? "")" />
+        <BenTextBox class="form-control form-control-sm" placeholder="New title, e.g. Tech Specialist"
+                    id="level-new-name" Value="@_newName"
+                    OnInput="@(e => _newName = e.Value?.ToString() ?? "")" />
         <button type="button" class="btn btn-primary btn-sm text-nowrap"
                 disabled="@(string.IsNullOrWhiteSpace(_newName))"
                 @onclick="AddAsync">Add title</button>

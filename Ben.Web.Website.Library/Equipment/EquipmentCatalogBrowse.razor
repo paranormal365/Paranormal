@@ -21,10 +21,10 @@
               Kicker="Equipment" Title="Equipment Catalog"
               Lede="Gear used for paranormal investigation. The makes and models grow as members add their own equipment. Nothing here shows who owns anything.">
         <div class="catalog-search">
-            <input class="form-control" placeholder="Search make or model…" aria-label="Search make or model"
-                   value="@_search"
-                   @oninput="@(e => _search = e.Value?.ToString() ?? string.Empty)"
-                   @onkeyup="@(async e => { if (e.Key == "Enter") await LoadAsync(); })" />
+            <BenTextBox class="form-control" placeholder="Search make or model…" aria-label="Search make or model"
+                        Value="@_search"
+                        OnInput="@(e => _search = e.Value?.ToString() ?? string.Empty)"
+                        @onkeyup="@(async e => { if (e.Key == "Enter") await LoadAsync(); })" />
             <div class="catalog-search__category">
                 <BenSelect Data="@_categories" Value="@_categoryId" ValueChanged="@((Guid? v) => OnCategoryChangedAsync(v))" TextField="@nameof(EquipmentCategoryRecord.Name)" ValueField="@nameof(EquipmentCategoryRecord.Id)" DefaultText="All categories" Width="100%" />
             </div>

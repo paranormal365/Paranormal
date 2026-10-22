@@ -216,6 +216,8 @@ day-by-day account of building it would say nothing to anyone using it now.
   its date.
 - Search boxes, an event's "Coming along?" email and name boxes, and the case page's Add member list
   are labeled for screen readers.
+- Deleting in the middle of what you've typed deletes there, in every box on the site. On a slow
+  connection the cursor used to jump to the end, so the next delete removed the end instead.
 
 ### Administration
 
