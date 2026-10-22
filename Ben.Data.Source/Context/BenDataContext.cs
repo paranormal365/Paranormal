@@ -793,7 +793,7 @@ namespace Ben.Data.Source.Context
             modelBuilder.Entity<SiteSetting>()
                 .HasIndex(e => e.Key).IsUnique();
             modelBuilder.Entity<SiteSetting>()
-                .Property(e => e.Description).HasMaxLength(512);
+                .Property(e => e.Description).HasMaxLength(SiteSetting.DescriptionMaxLength);
 
             // ── SignInEvent ──────────────────────────────────────────────────
             // NoAction on the user FK, and the column is nullable: deleting an account must not

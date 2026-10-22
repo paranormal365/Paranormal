@@ -28,6 +28,8 @@
         <ChildContent>
             @if (_classes.Item is { } all)
             {
+                @* Which event: a helper can be on the door at more than one, and the tab's title is not read on a phone. *@
+                <div class="text-secondary mb-2" id="classes-event">@all.EventName</div>
                 @if (all.Classes.Count == 0)
                 {
                     <p class="text-secondary" id="classes-none">No classes at this event take sign-ups, so there's nobody to mark.</p>

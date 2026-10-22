@@ -1,33 +1,33 @@
 {
   "hostedEventId": "40000002-0000-0000-0000-000000000002",
-  "name": "Overnight at The Factory",
+  "name": "Thomas House S\u00E9ance Weekend",
   "collectsEvidence": true,
-  "resultsUrl": "https://ishaunted.com/o/jims-group/events/overnight-at-the-factory#event-evidence",
+  "resultsUrl": "http://localhost:5078/o/paranormal365/events/thomas-house-seance-weekend#event-evidence",
   "asksForVotes": true,
-  "evidenceSentence": "We're accepting evidence for three days, until 11:00 PM on 11/02/2026. The event's evidence will be ready to see in about a week.",
-  "resultsSentUtc": "2026-11-06T15:04:05.123456",
+  "evidenceSentence": "We\u0027re accepting evidence for three days, until 2:00 AM on 12/01/2026. The event\u0027s evidence will be ready to see in about a week.",
+  "resultsSentUtc": null,
   "items": [
     {
-      "submissionId": "6b1c1f0e-9a6d-4c55-b0a1-1d2f3e4a5b6c",
-      "uploadFileId": "0d9e8f7a-6b5c-4d3e-8f2a-1b0c9d8e7f6a",
-      "fileName": "Stairwell whisper.m4a",
-      "contentType": "audio/mp4",
+      "submissionId": "58122c90-b02d-4736-9e2a-056f6866157e",
+      "uploadFileId": "05071158-ecc6-4561-855e-d4cdaa854485",
+      "fileName": "Stairwell whisper.mp3",
+      "contentType": "audio/mpeg",
       "by": "Daniel Park",
       "note": "Second floor, just after two.",
-      "positiveVotes": 4,
-      "caughtUtc": "2026-10-31T07:12:00",
-      "fileUrl": "https://api.ishaunted.com/api/events/7a6b5c4d-3e2f-1a0b-9c8d-7e6f5a4b3c2d/evidence/6b1c1f0e-9a6d-4c55-b0a1-1d2f3e4a5b6c/file"
+      "positiveVotes": 2,
+      "caughtUtc": "2026-10-22T01:52:43.503263",
+      "fileUrl": "/api/events/68bd15fd-bfa6-476a-a132-46118fa460a5/evidence/58122c90-b02d-4736-9e2a-056f6866157e/file"
     },
     {
-      "submissionId": "1a2b3c4d-5e6f-4a1b-8c2d-3e4f5a6b7c8d",
-      "uploadFileId": "8c7b6a5d-4e3f-4a2b-9c1d-0e9f8a7b6c5d",
+      "submissionId": "da3c4909-5c1a-4c67-9b07-324bad4bb268",
+      "uploadFileId": "7bd6f5b3-16cf-44d0-b0ba-0cae1aaff23f",
       "fileName": "Loading dock.jpg",
       "contentType": "image/jpeg",
-      "by": "Sam Ortiz",
+      "by": "Daniel Park",
       "note": null,
       "positiveVotes": 0,
-      "caughtUtc": "2026-10-31T05:40:00",
-      "fileUrl": "https://api.ishaunted.com/api/events/7a6b5c4d-3e2f-1a0b-9c8d-7e6f5a4b3c2d/evidence/1a2b3c4d-5e6f-4a1b-8c2d-3e4f5a6b7c8d/file"
+      "caughtUtc": "2026-10-22T01:52:43.28705",
+      "fileUrl": "/api/events/68bd15fd-bfa6-476a-a132-46118fa460a5/evidence/da3c4909-5c1a-4c67-9b07-324bad4bb268/file"
     }
   ]
 }

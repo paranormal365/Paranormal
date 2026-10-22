@@ -730,7 +730,7 @@ public sealed class SiteSettingsService
             {
                 Id                 = Guid.NewGuid(),
                 Key                = key,
-                Description        = DescriptionFor(key),
+                Description        = StoredDescriptionFor(key),
                 DateCreated        = DateTime.UtcNow,
                 CreatedByAppUserId = userId,
             };
@@ -754,6 +754,15 @@ public sealed class SiteSettingsService
 
     private static string? DescriptionFor(string key)
         => SiteSettingKeys.Seed.FirstOrDefault(s => s.Key == key).Description;
+
+    /// <summary>
+    /// The description as it fits the column. Reads always show the full declaration, so the
+    /// stored copy may be clipped; a long explanation must never stop the setting being saved.
+    /// </summary>
+    public static string? StoredDescriptionFor(string key)
+        => DescriptionFor(key) is { Length: > SiteSetting.DescriptionMaxLength } longer
+            ? longer[..SiteSetting.DescriptionMaxLength]
+            : DescriptionFor(key);
 
     /// <summary>The human-readable name for a key.</summary>
     public static string LabelFor(string key)

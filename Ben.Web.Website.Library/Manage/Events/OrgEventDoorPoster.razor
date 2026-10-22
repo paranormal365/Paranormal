@@ -11,7 +11,7 @@
 @* The door's poster (event-scenario-gaps): a big QR code to print, or to leave on a tablet by the door.
    Nothing on it names anybody; the code only asks for a place, and the door still confirms each one. *@
 
-<PageTitle>Tickets at the door</PageTitle>
+<PageTitle>@(_eventName is { Length: > 0 } n ? $"Tickets at the door — {n}" : "Tickets at the door")</PageTitle>
 
 <div class="container py-4 door-poster" style="max-width:720px;">
     <div class="d-print-none mb-3 d-flex flex-wrap gap-2">
@@ -29,6 +29,11 @@
     }
     else if (_tickets.Item is not { On: true, Url: { } url } t)
     {
+        @* Which event, while the door is shut too: an organizer with two weekends opens this from either. *@
+        @if (_eventName is { Length: > 0 } shutFor)
+        {
+            <h1 class="h4 mb-2" id="door-poster-event">@shutFor</h1>
+        }
         <div class="alert alert-secondary" id="door-poster-off">
             The door isn't selling tickets. Turn it on from <a href="@($"/organizations/{OrgId}/events/{EventId}/door")">the door</a> first.
         </div>
@@ -68,8 +73,7 @@
         if (!firstRender) return;
         if (!await UserState.WaitUntilAuthReadyAsync(RendererInfo.IsInteractive)) return;
         _tickets = await AdminClient.GetDoorTicketsAsync(OrgId, EventId);
-        if (_tickets.Item is { Url: { } url } && url.LastIndexOf('/') is var slash and >= 0)
-            _eventName = (await AdminClient.GetDoorTicketAsync(url[(slash + 1)..])).Item?.Name;
+        _eventName = _tickets.Item?.EventName;
         _loading = false;
         StateHasChanged();
     }

@@ -93,7 +93,10 @@ public class GhostWalkPerRouteTests : Oct16TestBase
         {
             await Page.SetViewportSizeAsync(width, height);
 
+            // The prerendered page is replaced when the circuit starts; looking at it before then
+            // finds an element that is gone a moment later ("not attached to the DOM").
             await Page.GotoAsync(BaseUrl);
+            await WaitForTheCircuitAsync();
             var line = Page.Locator("[data-testid='home-join-ghost-walk']");
             await Expect(line).ToContainTextAsync("$29", new() { Timeout = 30_000 });
             await Expect(line).ToContainTextAsync("a month per tour route");
@@ -101,6 +104,7 @@ public class GhostWalkPerRouteTests : Oct16TestBase
             problems.AddRange(await LookAtAsync(line, "home-ghost-walk-per-route", theme));
 
             await Page.GotoAsync($"{BaseUrl}/pricing");
+            await WaitForTheCircuitAsync();
             var offer = Page.Locator("[data-testid='pricing-ghost-walk-offer']");
             await Expect(offer).ToContainTextAsync("a month per tour route", new() { Timeout = 30_000 });
             await Expect(Page.Locator("[data-testid='pricing-ghost-walk']")).ToContainTextAsync("Unlimited walks");

@@ -281,6 +281,7 @@ public sealed class HostedEventDoorTicketsController : OrgCmsControllerBase
             WhyTheDoorIsNotSelling(ev, DateTime.UtcNow) is { } why && ev.DoorTicketToken is not null ? why : null,
             ev.DayPassPrice,
             await _access.CanEditEventAsync(userId, orgId, ct),
-            waiting);
+            waiting,
+            ev.Name);
     }
 }
