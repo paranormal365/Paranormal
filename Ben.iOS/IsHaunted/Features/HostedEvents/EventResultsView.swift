@@ -36,7 +36,7 @@ struct EventResultsView: View {
                             .accessibilityIdentifier("results-empty")
                     }
                     ForEach(Array(results.items.enumerated()), id: \.element.id) { index, item in
-                        Button { open = URL(string: item.fileUrl) } label: { row(index + 1, item) }
+                        Button { open = dependencies.environment.resolve(item.fileUrl) } label: { row(index + 1, item) }
                             .accessibilityIdentifier("results-item")
                     }
                 } header: {

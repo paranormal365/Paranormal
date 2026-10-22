@@ -47,6 +47,17 @@ public struct APIEnvironment: Sendable, Equatable, Codable, Hashable {
         }
     }
 
+    /// A link the API handed back, made openable: an absolute address is kept as it is, and a
+    /// server-relative one ("/api/events/…", given when the server has no public base address
+    /// configured) is put under this environment's host. Opening a relative path on its own does
+    /// nothing, which is how event results' files failed to open on a test server (10/21/2026).
+    public func resolve(_ link: String) -> URL? {
+        let trimmed = link.trimmingCharacters(in: .whitespaces)
+        guard !trimmed.isEmpty else { return nil }
+        if let absolute = URL(string: trimmed), absolute.scheme != nil { return absolute }
+        return URL(string: trimmed, relativeTo: baseURL)?.absoluteURL
+    }
+
     public static let presets: [APIEnvironment] = [.dev, .production]
 
     /// The environment a build falls back to when the user has chosen nothing.
