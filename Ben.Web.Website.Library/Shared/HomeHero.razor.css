@@ -3,7 +3,8 @@
 
 .home-hero__search-box { width: 100%; max-width: 34rem; }
 .home-hero__search-row { display: flex; gap: .5rem; }
-.home-hero__search-input { flex: 1; min-width: 0; }
+/* ::deep because the box is drawn by BenTextBox, which this file's scope does not reach. */
+::deep .home-hero__search-input { flex: 1; min-width: 0; }
 .home-hero__ctas { display: flex; flex-wrap: wrap; gap: .6rem; }
 
 @media (max-width: 575.98px) {
