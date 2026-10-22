@@ -82,14 +82,39 @@ class Bus:
 MUS = {k: Bus() for k in range(1, 12)}      # one music bus per scene (11 = the ending), each its own room
 AMB = Bus()                                  # ambience and effects for the silent scenes and the ending
 
+EW = {   # the built-in instruments, replaced by the EastWest ones rendered in Logic (build/ew)
+    'st_trumpet': 'ew_trumpets', 'st_trombone': 'ew_horns', 'tuba': 'ew_tuba', 'choir_f': 'ew_choir_f', 'choir_m': 'ew_choir_m',
+    'lute': 'ew_lutes', 'woodflute': 'ew_renflutes', 'dulcimer': 'ew_banjo', 'ac_guitar': 'ew_gtr_pick',
+    'st_violins': 'ew_violins', 'st_violas': 'ew_violas', 'st_cellos': 'ew_cellos', 'st_basses': 'ew_basses',
+    'celesta': 'ew_celesta', 'erhu': 'ew_erhu', 'guzheng': 'ew_guzheng', 'pipa': 'ew_pipa', 'steinway': 'ew_steinway',
+    'harp': 'ew_harp', 'steel': 'ew_harmonica', 'lowflute': 'ew_ney',
+}
+SCENE_EW = {   # per scene, where the same built-in name means a different EW instrument
+    6: {'ew_renflutes': 'ew_whistle'},                         # the fife
+    8: {'ew_pipa': 'ew_oud'},                                  # the oud
+    9: {'ew_gtr_pick': 'ew_gtr_fngr'},                         # fingerpicked cowboy guitar
+}
+
 def play(scene, name, midi, t, dur, vel=.7, pan=0.0, **kw):
-    MUS[scene].add(t, I.get(name).note(midi, dur, 1.0, **kw), vel, pan)
+    name = EW.get(name, name); name = SCENE_EW.get(scene, {}).get(name, name)
+    ins = I.get(name); lo, hi = ins.range()
+    while midi < lo - .5: midi += 12                           # out of the instrument's range: the octave that is in it
+    while midi > hi + .5: midi -= 12
+    MUS[scene].add(t, ins.note(midi, dur, 1.0, **kw), vel, pan)
 
 def chord(scene, name, notes, t, dur, vel=.5, pan=0.0, spread=0.0, **kw):
     for k, n in enumerate(notes): play(scene, name, n, t + k * spread, dur, vel / math.sqrt(len(notes)), pan, **kw)
 
 KITDIR = f'{LEG}/Orchestral/Orchestral Kit'
+# the orchestral kit's files, played on the EastWest drums: (instrument, key, gain)
+KIT_EW = [('Field drum w/Field-S_ES_p', 'ew_fielddrum', 38, .45), ('Field drum w/Field-S_ES_mf', 'ew_fielddrum', 38, .7),
+          ('Field drum w/', 'ew_fielddrum', 36, 1.0), ('Snare/KTr_ES-L1_p', 'ew_fielddrum', 41, .45), ('Snare/', 'ew_fielddrum', 41, .8),
+          ('Gran casa/GTr1_ES-mufa', 'ew_bassdrum', 60, .8), ('Gran casa/', 'ew_bassdrum', 80, 1.0), ('Piatti/', 'ew_cymbals', 60, 1.0)]
+
 def kit(scene, f, t, g=.8, pan=0.0, bus=None):
+    for prefix, name, key, k in KIT_EW:
+        if f.startswith(prefix):
+            notes = dict(I.get(name).notes); (bus or MUS[scene]).add(t, notes[float(key)], g * k, pan); return
     (bus or MUS[scene]).add(t, hit(f'{KITDIR}/{f}'), g, pan)
 
 def sfx(name, t, g=.6, pan=0.0, a=0.0, b=None, fi=.05, fo=.3, bus=None):
@@ -126,7 +151,7 @@ def s1():
     for k, ch in enumerate(CHORD):
         tb = t0 + k * bt
         play(S, 'tuba', ROOT[ch] + 12 * (ROOT[ch] < 40), tb, bt * .5, .55, -.1)
-        chord(S, 'st_trombone', [n - 12 for n in TONES[ch][:3]], tb, bt * .9, .4, .25)
+        chord(S, 'ew_trombones', [n - 12 for n in TONES[ch][:3]], tb, bt * .9, .4, .25)
         kit(S, 'Gran casa/GTr1_ES_mf1.wav' if k % 2 == 0 else 'Snare/KTr_ES-L1_mf.wav', tb, .45, 0)
         kit(S, 'Snare/KTr_ES-L1_p.wav', tb + bt / 2, .2, .1)
     # the ball comes: trumpets hammer the A, a roll swells, the bass climbs
@@ -141,7 +166,7 @@ def s1():
     kit(S, 'Gran casa/GTr1_ES_ff1.wav', ts, 1.0); kit(S, 'Piatti/BE_a-due_20Is_ff.wav', ts, .7, .1)
     kit(S, 'Taiko drum/Tai_ES_fff_1_L1.wav', ts, .6, -.2)
     chord(S, 'st_trumpet', [74, 78, 81], ts, 1.4, .9, .2); chord(S, 'st_trombone', [62, 66, 69], ts, 1.6, .8, -.2)
-    chord(S, 'st_trombone', [50, 57, 62], ts, 1.6, .7, .1); play(S, 'tuba', 38, ts, 1.6, .7, -.1)
+    chord(S, 'ew_trombones', [50, 57, 62], ts, 1.6, .7, .1); play(S, 'tuba', 38, ts, 1.6, .7, -.1)
     # the wink (11.5): the tune's cadence, softly, on one horn
     play(S, 'st_trombone', 66, 11.35, .35, .4, -.2); play(S, 'st_trombone', 62, 11.7, .9, .4, -.2)
     play(S, 'harp', 74, 11.7, .9, .35, .3)
@@ -174,11 +199,9 @@ ROLL = {'D': (57, 62, 66, 57, 62, 69, 66, 62), 'G': (55, 59, 62, 55, 59, 67, 62,
 def s3():
     S = 3; bt = 60 / 112; t0 = 18.95
     # the fiddle: the solo violin, bowed short and bright, double stops on the long notes
-    strings(S, STR.SVN, STR.SPC[STR.SVN], 57, t0 - .5 * bt, .5 * bt * .9, .6, -.15)
-    for t, d, n in tune(t0, bt, pickup=False):
-        art = STR.SPC[STR.SVN] if d < bt else STR.SUS[STR.SVN]
-        strings(S, STR.SVN, art, n, t, d * .95, .62, -.15, rel=.15)
-        if d >= bt: strings(S, STR.SVN, art, n - 5 if n - 5 >= 55 else n + 4, t, d * .95, .3, -.15, rel=.15)
+    play(S, 'ew_fiddle', 69, t0 - .5 * bt, .5 * bt * .9, .6, -.15)
+    for t, d, n in tune(t0, bt, 12, pickup=False):
+        play(S, 'ew_fiddle', n, t, d * .95, .62, -.15)
     for k, ch in enumerate(CHORD + ['D', 'D']):
         tb = t0 + k * bt
         for j in range(2):   # banjo: a forward roll, eighths
@@ -203,21 +226,21 @@ def s4():
     S = 4; bt = 60 / 168; t0 = 24.55
     for b_, d, n in WALTZ:
         t = t0 + b_ * bt
-        play(S, 'st_violins', n + 12 if n < 62 else n, t, d * bt * .95, .6, .15)
-        play(S, 'clarinet', n - 12 + 12 * (n < 62), t, d * bt * .9, .25, -.3)
+        play(S, 'ew_accordion', n + 12 if n < 62 else n, t, d * bt * .95, .6, .15)
+        play(S, 'st_violins', n + 12 if n < 62 else n, t, d * bt * .9, .2, -.3)
     for k, ch in enumerate(WBARS + ['D']):
         tb = t0 + 3 * k * bt
         if k == 2:  # bar 3: G, then the A7 on its third beat
-            play(S, 'st_basses', ROOT['G'], tb, bt * .8, .6, -.1)
-            chord(S, 'st_violas', [59, 62, 67], tb + bt, bt * .5, .35, .25)
-            chord(S, 'st_violas', [61, 64, 67], tb + 2 * bt, bt * .5, .35, .25)
+            play(S, 'ew_tuba', ROOT['G'], tb, bt * .5, .6, -.1)
+            chord(S, 'ew_accordion', [59, 62, 67], tb + bt, bt * .5, .35, .25)
+            chord(S, 'ew_accordion', [61, 64, 67], tb + 2 * bt, bt * .5, .35, .25)
             continue
-        play(S, 'st_basses', ROOT[ch], tb, bt * .8, .6, -.1)
+        play(S, 'ew_tuba', ROOT[ch], tb, bt * .5, .6, -.1)
         if k < 4:
-            for j in (1, 2): chord(S, 'st_violas', [62, 66, 69] if ch == 'D' else [62, 67, 71], tb + j * bt, bt * .5, .3, .25)
+            for j in (1, 2): chord(S, 'ew_accordion', [62, 66, 69] if ch == 'D' else [62, 67, 71], tb + j * bt, bt * .5, .3, .25)
     for j, n in enumerate((62, 66, 69, 74, 78, 81)): play(S, 'harp', n, t0 + 15 * bt + j * .05, 1.2, .3, -.3 + .1 * j)
-    chord(S, 'st_violins', [74, 78, 81], t0 + 15 * bt, 1.4, .5, .15)
-    play(S, 'st_basses', 38, t0 + 15 * bt, .8, .5, -.1)
+    chord(S, 'ew_accordion', [74, 78, 81], t0 + 15 * bt, 1.4, .5, .15)
+    play(S, 'ew_tuba', 38, t0 + 15 * bt, .8, .5, -.1)
     kit(S, 'Triangle/TG1_ES_di_f_mu_1.wav', t0 + 15 * bt, .3, .5)
 
 
@@ -291,7 +314,7 @@ def s8():
     for t, d, n in tune(t0, bt, 0, HIJAZ):
         play(S, 'pipa', n, t, d * .9, .6, .1)                     # a real lute, plucked, with tremolo
         if d >= bt: # the oud's tremolo on the long notes
-            for j in range(1, int(d / .09)): play(S, 'pipa', n, t + j * .09, .08, .2, .1)
+            play(S, 'ew_oud_trem', n, t + .09, d * .9 - .09, .35, .1)
         play(S, 'lowflute', n - 12 if n > 69 else n, t, d * 1.0, .28, -.3, att=.06)       # the ney, low and breathy
     # the darbuka: maqsum — DUM tek _ tek DUM _ tek _ — doum on the low hits, tek on the rim
     darb = I.decode(I.loops('Egyptian Nile Darbouka')[0])
@@ -307,7 +330,7 @@ def s8():
             h = (dum if c == 'D' else tek)[k % len(dum if c == 'D' else tek)]
             MUS[S].add(t0 + k * bt / 2, h / (np.abs(h).max() or 1), .55 if c == 'D' else .35, -.15)
     play(S, 'pipa', 50, t0 - 1.2, 1.0, .5, .1)
-    for j in range(int(1.0 / .09)): play(S, 'pipa', 50, t0 - 1.2 + j * .09, .08, .18, .1)
+    play(S, 'ew_oud_trem', 50, t0 - 1.2, 1.0, .35, .1)
     chord(S, 'pipa', [50, 54, 57], t0 + 8 * bt, 1.0, .5, .1, spread=.03)
 
 
@@ -326,7 +349,7 @@ def s9():
             kit(S, f'Woodblocks/HBL{4 if j else 3}_Ho_ES1_mf.wav', tb + j * bt / 2, .22, .3)
     # the dobro slides in under the long notes; the grin and the wink
     for t, n in ((54.0 - .4, 50), (t0 + 2 * bt - .1, 50), (t0 + 6 * bt - .1, 45)):
-        play(S, 'st_cellos', n, t, .9, .35, -.3, att=.1)
+        play(S, 'ew_dobro', n, t, .9, .4, -.3)
     play(S, 'steel', 74, t0 + 8 * bt + .2, .7, .4, .2)
 
 

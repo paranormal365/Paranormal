@@ -51,6 +51,13 @@ Ben.Web.Playwright once, or point PW_DRIVER at a Playwright driver).
 - **The ending** (`render.py`, `pieces.py`): the icon's paths from wwwroot/static/images/is-haunted-mark.svg,
   grouped (arc, crescent, four windows, ghost, face), on the icon's violet tile; the wordmark in Irish
   Grover as the browser sets it (Cairo's own text drops the font's kerning).
+- **EastWest instruments** (10/22/2026): 33 Opus instruments from Ben's ComposerCloud subscription (Hollywood
+  Brass/Strings, Goliath, Ra, Silk, Hollywood Fantasy, Hollywood Orchestral Percussion) are rendered in Logic
+  through Opus, one track each, every semitone C1–C7 held 3 s (`build/ew/notes-C1-C7.mid`), exported to
+  `build/ew/Inst N.aif`. `instruments.EW_TRACKS` names which track is which; the Logic project is
+  ~/Music/Logic/IsHaunted EW Note Sets.logicx. Opus will not load inside Python (its copy protection ends the
+  process), which is why Logic renders them. Notes are played from their own key, never repitched; a note
+  outside an instrument's range moves by octaves into it.
 - **Music** (`score.py`, `instruments.py`): every note is a real recording — Logic's orchestral, guitar,
   piano, mallet, synth and Chinese string samples; banjo, harmonica, accordion, oud and dobro notes cut
   out of Apple Loops (kept only where two pitch methods agree, so a ringing neighbor string can't pass

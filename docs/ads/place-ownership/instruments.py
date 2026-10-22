@@ -180,6 +180,36 @@ def bank_labeled(name, paths, pick=None):
     return notes
 
 
+# ── EastWest instruments, rendered through Opus in Logic ───────────────────
+# build/ew/Inst N.aif: every semitone C1..C7 (MIDI 24-96), note n held 3 s from 2 + (n-24)*4 s, then 1 s to
+# ring out (build/ew/notes-C1-C7.mid). EW_TRACKS says which instrument each Logic track holds.
+EW_DIR = os.path.join(HERE, 'build', 'ew')
+EW_TRACKS = {
+    'ew_banjo': 1, 'ew_harmonica': 2, 'ew_accordion': 3, 'ew_oud': 4, 'ew_oud_trem': 5, 'ew_ney': 6, 'ew_erhu': 7,
+    'ew_guzheng': 8, 'ew_pipa': 9, 'ew_dizi': 10, 'ew_fiddle': 11, 'ew_horns': 12, 'ew_trumpets': 13, 'ew_trombones': 14,
+    'ew_tuba': 15, 'ew_choir_m': 16, 'ew_choir_f': 17, 'ew_renflutes': 18, 'ew_whistle': 19, 'ew_gtr_pick': 20,
+    'ew_gtr_fngr': 21, 'ew_dobro': 22, 'ew_violins': 23, 'ew_violas': 24, 'ew_cellos': 25, 'ew_basses': 26,
+    'ew_steinway': 27, 'ew_harp': 28, 'ew_celesta': 29, 'ew_lutes': 30, 'ew_fielddrum': 31, 'ew_bassdrum': 32, 'ew_cymbals': 33,
+}
+
+def ew_notes(track):
+    """[(midi, audio)] for every key of an EW track that sounds."""
+    cache = os.path.join(SND, 'banks', f'ew{track}.pkl')
+    if os.path.exists(cache): return pickle.load(open(cache, 'rb'))
+    x = decode(os.path.join(EW_DIR, f'Inst {track}.aif'))
+    notes = []
+    for n in range(24, 97):
+        a = int((2 + (n - 24) * 4) * SR); b = a + int(4 * SR)
+        y = x[a:b]
+        if len(y) < SR or np.abs(y).max() < .003: continue
+        # trim the silence before the attack (a few ms of latency)
+        e = np.abs(y).max(1); on = int(np.argmax(e > .02 * e.max()))
+        y = y[max(0, on - 32):]
+        notes.append((float(n), (y / np.abs(y).max()).astype(np.float32)))
+    os.makedirs(os.path.dirname(cache), exist_ok=True); pickle.dump(notes, open(cache, 'wb'))
+    return notes
+
+
 # ── playing ───────────────────────────────────────────────────────────────────
 def repitch(x, semis):
     if abs(semis) < 1e-3: return x
@@ -262,6 +292,12 @@ def several_per_semitone(notes, n=3):
 
 @functools.lru_cache(None)
 def get(name):
+    if name in EW_TRACKS:
+        held = {'ew_harmonica', 'ew_accordion', 'ew_ney', 'ew_erhu', 'ew_dizi', 'ew_fiddle', 'ew_horns', 'ew_trumpets',
+                'ew_trombones', 'ew_choir_m', 'ew_choir_f', 'ew_renflutes', 'ew_whistle', 'ew_violins', 'ew_violas',
+                'ew_cellos', 'ew_basses', 'ew_oud_trem'}
+        return Instrument(ew_notes(EW_TRACKS[name]), sustain=name in held, att=.0, rel=.35 if name in held else .6,
+                          prefer_long=name in held)
     O = f'{LEG}/Orchestral'
     folder = lambda d: bank_labeled(name, files(d))
     if name == 'trumpets':   return Instrument(folder(f'{O}/Trumpets/Trumpets_nA_sus_f'), sustain=True, att=.03, rel=.3)
