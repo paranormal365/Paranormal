@@ -33,6 +33,10 @@ public sealed class GoogleAdsConsentTests
         var services = new ServiceCollection();
         services.AddSingleton(config);
         services.AddSingleton(Microsoft.Extensions.Options.Options.Create(new SiteIdentity()));
+        // The footer asks whether to link to Pricing (10/22/2026); unprimed, it reads the defaults.
+        services.AddSingleton<Ben.Web.Services.SiteFeaturesProvider>();
+        services.AddScoped(_ => new Moq.Mock<Ben.Web.Services.IBenAdminClient>().Object);
+        services.AddLogging();
         await using var provider = services.BuildServiceProvider();
         await using var renderer = new HtmlRenderer(provider, NullLoggerFactory.Instance);
         return await renderer.Dispatcher.InvokeAsync(async () =>

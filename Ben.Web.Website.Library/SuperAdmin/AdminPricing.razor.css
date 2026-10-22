@@ -1,0 +1,27 @@
+/* Administration → Pricing (10/22/2026). Tokens only, so it follows the theme. */
+
+.admin-pricing__preview {
+    font-size: 1.02rem;
+    font-weight: 600;
+    margin-bottom: .75rem;
+}
+
+.admin-pricing__setting {
+    padding: .75rem 0;
+    border-top: 1px solid var(--bs-border-color);
+}
+.admin-pricing__setting:first-of-type { border-top: 0; }
+
+.admin-pricing__box { max-width: 420px; flex: 1 1 14rem; min-width: 0; }
+
+.admin-pricing__touch { display: inline-flex; align-items: center; justify-content: center; gap: .4rem; }
+
+/* Below 992px every control is a finger's target: 44px each way at least. */
+@media (max-width: 991.98px) {
+    .admin-pricing__touch,
+    .admin-pricing__box { min-height: 44px; }
+    .admin-pricing__touch { min-width: 44px; }
+    .admin-pricing__switch { display: flex; align-items: center; gap: .6rem; min-height: 44px; padding-left: 0; }
+    .admin-pricing__switch .form-check-input { width: 3rem; height: 1.6rem; margin: 0; float: none; flex: 0 0 auto; }
+    .admin-pricing__switch .form-check-label { line-height: 1.3; }
+}

@@ -1,0 +1,344 @@
+@page "/admin/pricing"
+@namespace Ben.Web.Website.Library.SuperAdmin
+@using Ben.Service.Models
+@inject IBenAdminClient AdminClient
+@inject IBenUserState UserState
+@inject NavigationManager NavManager
+@inject SiteFeaturesProvider Features
+
+<PageTitle>SuperAdmin — Pricing</PageTitle>
+
+@*
+    Every price the site charges, on one page (Ben, 10/22/2026: "I don't see, as an administrator,
+    how to configure event settings like pricing").
+
+    Nothing here is stored separately. The plans are the tier rows, edited on Price Bands; the
+    event and Ghost Walk Tour prices are the same site settings Site Settings shows under its Events
+    and Ghost Walk Tour subscription tabs, saved through the same endpoint, so the server checks each
+    value the same way and its refusal sentence is what is shown. The preview sentences come from
+    the public price list, which is what the Pricing page and checkout read.
+*@
+
+<div class="container-fluid py-3 admin-pricing" style="max-width:900px;">
+    <div class="d-flex flex-wrap align-items-start justify-content-between gap-2 mb-1">
+        <h3 class="mb-0">Pricing<HelpLink Slug="site-administration" Anchor="prices-in-one-place" /></h3>
+        <a class="btn btn-outline-secondary admin-pricing__touch" href="/pricing" target="_blank" rel="noopener"
+           data-testid="admin-pricing-public">
+            <BenIcon Name="external-link" /> See what visitors see
+        </a>
+    </div>
+    <p class="text-secondary small mb-3">
+        What groups and visitors pay. A change here takes effect straight away, on the Pricing page,
+        the billing pages and at checkout. Anything already paid for keeps its price.
+    </p>
+
+    @if (_error is not null)
+    {
+        <div class="alert alert-danger" role="alert" data-testid="admin-pricing-refusal">@_error</div>
+    }
+    @if (_saved)
+    {
+        <div class="alert alert-success py-2" role="status">Saved.</div>
+    }
+
+    <BenListState TItem="SiteSettingRecord" Result="@_result" Loading="@_loading"
+                  LoadingText="Loading prices…"
+                  EmptyText="No price settings are defined yet"
+                  OnRetry="@LoadAsync">
+        <ChildContent>
+            <p class="small mb-3" data-testid="admin-pricing-menus">
+                @PricingPreview.Menus(SwitchOn(PlanPurchasesKey), SwitchOn(EventCreditsKey))
+            </p>
+
+            @* ── Plans ───────────────────────────────────────────────────── *@
+            <section class="card mb-3" id="pricing-plans" data-testid="admin-pricing-plans">
+                <div class="card-body">
+                    <h4 class="h5 mb-1">Plans</h4>
+                    <p class="admin-pricing__preview" data-testid="admin-pricing-plans-preview">
+                        @(_tiers.Failed ? "The plans couldn't be read just now." : PricingPreview.Plans(_tiers.Items, SwitchOn(PlanPurchasesKey)))
+                    </p>
+
+                    @Setting(PlanPurchasesKey)
+
+                    @if (_tiers.Failed)
+                    {
+                        <div class="alert alert-warning py-2 small mb-2" data-testid="admin-pricing-plans-refusal">
+                            @(_tiers.Reason ?? "The plans couldn't be loaded.")
+                        </div>
+                    }
+                    else if (LiveTiers.Count > 0)
+                    {
+                        <div class="table-responsive mb-2">
+                            <table class="table table-sm align-middle mb-0" data-testid="admin-pricing-bands">
+                                <thead>
+                                    <tr>
+                                        <th scope="col">Plan</th>
+                                        <th scope="col">Members</th>
+                                        <th scope="col" class="text-end">Monthly</th>
+                                        <th scope="col" class="text-end">Yearly</th>
+                                        <th scope="col" class="text-end">Groups</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    @foreach (var tier in LiveTiers)
+                                    {
+                                        <tr>
+                                            <td>@tier.Name</td>
+                                            <td class="text-nowrap">@Members(tier)</td>
+                                            <td class="text-end text-nowrap">@PriceAt(tier, BillingInterval.Monthly)</td>
+                                            <td class="text-end text-nowrap">@PriceAt(tier, BillingInterval.Yearly)</td>
+                                            <td class="text-end">@tier.OrganizationCount</td>
+                                        </tr>
+                                    }
+                                </tbody>
+                            </table>
+                        </div>
+                    }
+
+                    <a class="btn btn-primary admin-pricing__touch" href="/admin/subscription-tiers" data-testid="admin-pricing-edit-plans">
+                        Edit plans and prices
+                    </a>
+                    <span class="text-secondary small ms-sm-2 d-block d-sm-inline mt-2 mt-sm-0">
+                        Also at Administration → Billing → Price Bands.
+                    </span>
+                </div>
+            </section>
+
+            @* ── Events ──────────────────────────────────────────────────── *@
+            <section class="card mb-3" id="pricing-events" data-testid="admin-pricing-events">
+                <div class="card-body">
+                    <h4 class="h5 mb-1">Events</h4>
+                    <p class="admin-pricing__preview" data-testid="admin-pricing-events-preview">
+                        @PricingPreview.Events(_extras?.Events)
+                    </p>
+                    <p class="text-secondary small mb-3">
+                        No plan includes events, so every event uses one credit.
+                    </p>
+                    @Setting(EventCreditsKey)
+                    @Setting(EventCreditPriceKey)
+                    @Setting(EventCreditPercentKey)
+                    @Setting(EventCreditBundlesKey)
+                </div>
+            </section>
+
+            @* ── Ghost Walk Tour subscription ────────────────────────────── *@
+            <section class="card mb-3" id="pricing-ghost-walk" data-testid="admin-pricing-ghost-walk">
+                <div class="card-body">
+                    <h4 class="h5 mb-1">Ghost Walk Tour subscription</h4>
+                    <p class="admin-pricing__preview" data-testid="admin-pricing-ghost-walk-preview">
+                        @PricingPreview.GhostWalk(_extras?.GhostWalk, SwitchOn(GhostWalkKey), _extras is not null)
+                    </p>
+                    <p class="text-secondary small mb-3">
+                        A monthly subscription of its own, separate from the plans, priced per tour route.
+                    </p>
+                    @Setting(GhostWalkKey)
+                    @Setting(GhostWalkPriceKey)
+                </div>
+            </section>
+
+            <p class="text-secondary small">
+                These are the same settings as Administration → Site Settings → Events and Ghost Walk
+                Tour subscription. Changing one in either place changes it in both.
+            </p>
+        </ChildContent>
+    </BenListState>
+</div>
+
+@code {
+    // The keys, as the API names them. The website cannot reference the API's SiteSettingKeys, so
+    // AdminPricingTests compares these to it: a renamed key fails a test rather than editing nothing.
+    internal const string PlanPurchasesKey      = "billing.purchases-enabled";
+    internal const string EventCreditsKey       = "events.credits-enabled";
+    internal const string EventCreditPriceKey   = "events.credit-price-usd";
+    internal const string EventCreditPercentKey = "events.credit-subscriber-percent";
+    internal const string EventCreditBundlesKey = "events.credit-bundles";
+    internal const string GhostWalkKey          = "tours.ghost-walk-enabled";
+    internal const string GhostWalkPriceKey     = "tours.ghost-walk-monthly-price-usd";
+
+    /// <summary>Every setting this page edits, in the order it shows them.</summary>
+    internal static readonly IReadOnlyList<string> Keys =
+    [
+        PlanPurchasesKey, EventCreditsKey, EventCreditPriceKey, EventCreditPercentKey,
+        EventCreditBundlesKey, GhostWalkKey, GhostWalkPriceKey,
+    ];
+
+    private LoadResult<SiteSettingRecord> _result;
+    private List<SiteSettingRecord> _settings = [];
+    private LoadResult<SubscriptionTierAdminRecord> _tiers = LoadResult<SubscriptionTierAdminRecord>.Ok([]);
+    private PublicPricingExtras? _extras;
+    private bool _loading = true;
+    private readonly Dictionary<string, string> _drafts = [];
+    private string? _savingKey;
+    private bool _saved;
+    private string? _error;
+
+    private List<SubscriptionTierAdminRecord> LiveTiers
+        => _tiers.Items.Where(t => t.IsActive).OrderBy(t => t.SortOrder).ThenBy(t => t.MinMembers).ToList();
+
+    protected override async Task OnInitializedAsync()
+    {
+        if (!await UserState.WaitUntilAuthReadyAsync(RendererInfo.IsInteractive)) return;
+        if (!UserState.IsSuperAdmin || UserState.IsImpersonating)
+        {
+            NavManager.NavigateTo(SignInLink.ForRefusal(NavManager, UserState));
+            return;
+        }
+        await LoadAsync();
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (!firstRender || !_loading) return;
+        if (!await UserState.WaitUntilAuthReadyAsync(RendererInfo.IsInteractive)) return;
+        if (!UserState.IsSuperAdmin || UserState.IsImpersonating) return;
+        await LoadAsync();
+        StateHasChanged();
+    }
+
+    private async Task LoadAsync()
+    {
+        _loading = true;
+        try
+        {
+            var settings = AdminClient.GetSiteSettingsAsync();
+            var tiers = AdminClient.GetSubscriptionTiersAsync();
+            var extras = AdminClient.GetPublicPricingExtrasAsync();
+            await Task.WhenAll(settings, tiers, extras);
+
+            _tiers = tiers.Result;
+            _extras = extras.Result;
+
+            // Only the price settings, and a refusal kept as a refusal: BenListState says why and
+            // offers a retry, rather than the page drawing three empty cards.
+            _result = settings.Result.Failed
+                ? settings.Result
+                : LoadResult<SiteSettingRecord>.Ok(settings.Result.Items.Where(s => Keys.Contains(s.Key)).ToList());
+
+            if (!_result.Failed)
+            {
+                _settings = _result.Items.ToList();
+                foreach (var s in _settings) _drafts[s.Key] = s.Value ?? string.Empty;
+            }
+        }
+        catch { _result = LoadResult<SiteSettingRecord>.Failure(); }
+        finally { _loading = false; }
+    }
+
+    private SiteSettingRecord? Find(string key) => _settings.FirstOrDefault(s => s.Key == key);
+
+    /// <summary>A switch as the site reads it: the stored value, or what an unset one does.</summary>
+    private bool SwitchOn(string key)
+    {
+        if (Find(key) is not { } s) return false;
+        var raw = _drafts.GetValueOrDefault(key);
+        return string.IsNullOrWhiteSpace(raw) ? s.DefaultWhenUnset : bool.TryParse(raw, out var on) && on;
+    }
+
+    private static string Members(SubscriptionTierAdminRecord tier)
+        => !tier.IsBandedByMembers ? "Chosen, not by size"
+         : tier.MaxMembers is { } max ? $"{tier.MinMembers}–{max}"
+         : $"{tier.MinMembers}+";
+
+    private static string PriceAt(SubscriptionTierAdminRecord tier, BillingInterval interval)
+        => tier.Prices.FirstOrDefault(p => p.IsActive && p.Interval == interval) is { } price
+            ? PricingPreview.Money(price.Price)
+            : "—";
+
+    /// <summary>
+    /// One setting's editor: a switch for on/off, otherwise a box with Save and Clear. The same
+    /// controls Site Settings draws, against the same endpoint.
+    /// </summary>
+    private RenderFragment Setting(string key) => __builder =>
+    {
+        if (Find(key) is not { } s) return;
+        var id = $"pricing-{key.Replace('.', '-')}";
+        <div class="admin-pricing__setting" data-testid="admin-pricing-setting" data-key="@s.Key">
+            @if (s.IsBoolean)
+            {
+                <div class="form-check form-switch admin-pricing__switch mb-1">
+                    <input class="form-check-input" type="checkbox" role="switch" id="@id"
+                           checked="@SwitchOn(s.Key)"
+                           disabled="@(_savingKey == s.Key)"
+                           @onchange="@(e => ToggleAsync(s.Key, e.Value is true))" />
+                    <label class="form-check-label fw-semibold" for="@id">
+                        @s.Label: @(SwitchOn(s.Key) ? "On" : "Off")
+                        @if (string.IsNullOrWhiteSpace(_drafts.GetValueOrDefault(s.Key)))
+                        {
+                            <span class="text-secondary small fw-normal ms-1">(default)</span>
+                        }
+                    </label>
+                </div>
+                <div class="text-secondary small">@s.Description</div>
+            }
+            else
+            {
+                <label class="form-label fw-semibold mb-1" for="@id">@s.Label</label>
+                <div class="text-secondary small mb-2">@s.Description</div>
+                <div class="d-flex gap-2 align-items-start flex-wrap">
+                    @if (s.IsMultiLine)
+                    {
+                        <textarea class="form-control admin-pricing__box" rows="4" id="@id"
+                                  placeholder="3 = 249"
+                                  value="@_drafts.GetValueOrDefault(s.Key)"
+                                  @oninput="@(e => _drafts[s.Key] = e.Value?.ToString() ?? string.Empty)"></textarea>
+                    }
+                    else
+                    {
+                        <input class="form-control admin-pricing__box" id="@id" inputmode="decimal"
+                               placeholder="Leave blank to use the default"
+                               value="@_drafts.GetValueOrDefault(s.Key)"
+                               @oninput="@(e => _drafts[s.Key] = e.Value?.ToString() ?? string.Empty)" />
+                    }
+                    <button type="button" class="btn btn-primary admin-pricing__touch"
+                            disabled="@(_savingKey == s.Key)"
+                            @onclick="@(() => SaveAsync(s.Key))">Save</button>
+                    @if (!string.IsNullOrWhiteSpace(s.Value))
+                    {
+                        <button type="button" class="btn btn-outline-secondary admin-pricing__touch"
+                                disabled="@(_savingKey == s.Key)"
+                                @onclick="@(() => ClearAsync(s.Key))">Clear</button>
+                    }
+                </div>
+            }
+        </div>
+    };
+
+    private async Task SaveAsync(string key)
+    {
+        _savingKey = key; _error = null; _saved = false;
+        try
+        {
+            // The server checks every price and says what is wrong with one it refuses; that
+            // sentence is shown as it is, the same as on Site Settings.
+            var (updated, refusal) = await AdminClient.SetSiteSettingWithReasonAsync(
+                key, new SetSiteSettingRequest(_drafts.GetValueOrDefault(key)));
+            if (updated is null) { _error = refusal ?? "Couldn't save that price."; return; }
+
+            var idx = _settings.FindIndex(s => s.Key == key);
+            if (idx >= 0) _settings[idx] = updated;
+            _drafts[key] = updated.Value ?? string.Empty;
+            _saved = true;
+
+            // The previews read what the site now charges, and the menus' Pricing link reads the
+            // selling switches: both are refreshed so this page and the next one agree with the save.
+            _extras = await AdminClient.GetPublicPricingExtrasAsync();
+            await Features.PrimeAsync();
+        }
+        catch { _error = "Couldn't save that price."; }
+        finally { _savingKey = null; StateHasChanged(); }
+    }
+
+    private async Task ToggleAsync(string key, bool on)
+    {
+        _drafts[key] = on ? "true" : "false";
+        await SaveAsync(key);
+        // A refused switch goes back to what is stored, so it never reads as done when it is not.
+        if (_error is not null) _drafts[key] = Find(key)?.Value ?? string.Empty;
+    }
+
+    private async Task ClearAsync(string key)
+    {
+        _drafts[key] = string.Empty;
+        await SaveAsync(key);
+    }
+}

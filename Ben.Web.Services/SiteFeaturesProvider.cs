@@ -62,6 +62,7 @@ public sealed class SiteFeaturesProvider
     private volatile bool _allowOrgSelfRegistration = true;
     private volatile bool _allowTourBusinessSignUps = true;
     private volatile bool _planPurchasesEnabled = true;
+    private volatile bool _eventCreditsEnabled = true;
     private long _nextRefreshTicks;
     private int _refreshing;
 
@@ -134,6 +135,22 @@ public sealed class SiteFeaturesProvider
         get { EnsureFresh(); return _planPurchasesEnabled; }
     }
 
+    /// <summary>Whether event credits are on sale (10/22/2026). True until told otherwise, like the switch above.</summary>
+    public bool EventCreditsEnabled
+    {
+        get { EnsureFresh(); return _eventCreditsEnabled; }
+    }
+
+    /// <summary>
+    /// Whether the menus, the home page and the footer link to Pricing (Ben, 10/22/2026).
+    /// </summary>
+    /// <remarks>
+    /// Hidden only when nothing is on sale: plans and seats off AND event credits off. Either one on
+    /// is something a visitor can buy, and the Pricing page is where they find out what it costs.
+    /// One owner, so the top bar, the drawer, the home page and the footer cannot disagree.
+    /// </remarks>
+    public bool PricingIsShown => PlanPurchasesEnabled || EventCreditsEnabled;
+
     /// <summary>
     /// Forces the next read to refetch. Called after a SuperAdmin saves a setting so they see
     /// their own change immediately rather than up to <see cref="RefreshInterval"/> later.
@@ -186,6 +203,7 @@ public sealed class SiteFeaturesProvider
                 _allowOrgSelfRegistration = info.AllowOrganizationSelfRegistration;
                 _allowTourBusinessSignUps = info.AllowTourBusinessSignUps;
                 _planPurchasesEnabled = info.PlanPurchasesEnabled;
+                _eventCreditsEnabled = info.EventCreditsEnabled;
             }
         }
         catch (Exception ex)

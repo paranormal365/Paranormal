@@ -72,6 +72,14 @@
                         ? "Settings the site has not filed under a heading."
                         : section.First().GroupBlurb)
                 </p>
+                @if (IsAlsoOnPricing(section.Key))
+                {
+                    @* Ben couldn't find the prices from Administration (10/22/2026); they now have a
+                       page of their own as well, editing these same settings. *@
+                    <p class="small mb-3" data-testid="settings-also-on-pricing">
+                        Also on <a href="/admin/pricing">Administration → Pricing</a>, with every other price.
+                    </p>
+                }
             </div>
         @if (IsEditedElsewhere(section.Key))
         {
@@ -252,6 +260,12 @@
     /// (storefront S1.1: the store's settings are edited on /admin/store/settings).
     /// </summary>
     internal static bool IsEditedElsewhere(string section) => section == StoreSettingsReadOnly.GroupName;
+
+    /// <summary>
+    /// Sections whose settings Administration → Pricing also edits (10/22/2026), which say so.
+    /// </summary>
+    internal static bool IsAlsoOnPricing(string section)
+        => section is "Selling plans" or "Events" or "Ghost Walk Tour subscription";
 
     /// <summary>A section's name as an element id.</summary>
     private static string Slug(string name)

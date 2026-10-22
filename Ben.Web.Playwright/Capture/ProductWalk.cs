@@ -616,6 +616,7 @@ public sealed class ProductWalk : BenTestBase
         foreach (var route in new[]
                  {
                      "/admin/users", "/admin/cases", "/admin/investigations", "/admin/events", "/admin/event-credits",
+                     "/admin/pricing",
                      "/admin/org-subscriptions", "/admin/subscription-tiers", "/admin/member-seats", "/admin/coupons",
                      "/admin/billing-ledger", "/admin/tax-rates", "/admin/referrals", "/admin/org-ads", "/admin/roles",
                      "/admin/site-settings", "/admin/rate-limits", "/admin/mail", "/admin/email-templates",

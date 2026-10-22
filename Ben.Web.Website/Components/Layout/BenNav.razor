@@ -501,6 +501,12 @@ else
                 main.Add(new NavItem("Request Investigation", "file-plus", "/my-requests/new"));
                 main.Add(new NavItem("Join a Group", "map-pin", "/find"));
 
+                // Pricing on the bar itself (Ben, 10/22/2026: "There is no direct menu link to
+                // prices"). Early in the list, because a visitor deciding whether to sign up is the
+                // reader it matters to most. See PricingEntry for when it hides.
+                if (PricingEntry is { } visitorPricing)
+                    main.Add(visitorPricing);
+
                 // Item 186: the feed is the front door, so a visitor gets the link to it. No
                 // badge — a badge counts mentions, and nobody can be mentioned without an account.
                 if (Features.IsOn(SiteFeatures.PublicFeed))
@@ -628,10 +634,16 @@ else
                     community.Add(new NavItem("What's On", "calendar", "/events"));
 
                 community.Add(new NavItem("Join a Group", "map-pin", "/find"));
-                community.Add(new NavItem("Pricing", "dollar-sign", "/pricing"));
+                // Pricing used to be here, and Ben found prices only by going Community → Pricing
+                // (10/22/2026). It is on the bar now, after Community, and NOT also in it: the
+                // same address in two places lights both entries as the current page, and
+                // "Pricing" is not a community thing to look for in the first place.
                 community.Add(new NavItem("Request Investigation", "file-plus", "/my-requests/new"));
 
                 main.Add(Group("Community", "users", community.ToArray()));
+
+                if (PricingEntry is { } memberPricing)
+                    main.Add(memberPricing);
             }
 
             // No Login entry here: the header carries a Sign In control on every page, and a
@@ -695,6 +707,17 @@ else
     }
 
     /// <summary>
+    /// The Pricing entry on the bar, or null when there is nothing on sale to price.
+    /// </summary>
+    /// <remarks>
+    /// Shown signed out and signed in (Ben, 10/22/2026). Hidden only when plans and seats AND event
+    /// credits are both switched off, which <see cref="SiteFeaturesProvider.PricingIsShown"/> owns
+    /// for the home page and the footer too.
+    /// </remarks>
+    private NavItem? PricingEntry
+        => Features.PricingIsShown ? new NavItem("Pricing", "dollar-sign", "/pricing") : null;
+
+    /// <summary>
     /// The former right-hand admin drawer, as expandable groups. Same destinations and grouping,
     /// so muscle memory carries over.
     /// </summary>
@@ -704,6 +727,10 @@ else
         // Top and ungrouped: it is the overview the rest of this menu drills into, so burying it
         // in a group would put the summary below the detail.
         new NavItem("Dashboard", "bar-chart-2", "/admin/dashboard"),
+        // Ungrouped, beside the Dashboard (Ben, 10/22/2026: "I don't see, as an administrator, how
+        // to configure event settings like pricing"). Every price the site charges, on one page;
+        // the settings themselves still live where they always did.
+        new NavItem("Pricing", "dollar-sign", "/admin/pricing"),
         new NavItem("Users", "users", bucket: CountBadge(_userCount), badgeNoun: "people", children: new[]
         {
             new NavItem("Manage Users", "user", "/admin/users"),

@@ -33,6 +33,8 @@ day-by-day account of building it would say nothing to anyone using it now.
 
 ## Unreleased
 
+- Pricing is on the menu bar, signed in or not, with a **See pricing** button on the home page and a
+  Pricing link in the footer. It's no longer tucked under Community.
 - Hosted events: **Invite people by email** takes a whole pasted list and your own message, and hands
   back anything that isn't an email address.
 - On the bookings board, **Send somebody a ticket** emails a person who has paid you a link that
@@ -215,6 +217,9 @@ day-by-day account of building it would say nothing to anyone using it now.
 
 ### Administration
 
+- Administration → **Pricing** shows every price on one page: the plans with a link to their editor,
+  and the event and Ghost Walk Tour prices, editable there, each with a sentence saying what a group
+  pays. The price tabs in Site Settings point to it.
 - Site Settings sets the event credit price, the share a paid subscriber pays (20% unless changed)
   and up to six bundles, and turns the Ghost Walk Tour subscription on with its monthly price. A
   price the site can't use is refused with a sentence saying why.

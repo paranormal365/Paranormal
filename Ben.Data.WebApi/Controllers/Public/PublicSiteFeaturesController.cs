@@ -75,6 +75,13 @@ public sealed class PublicSiteFeaturesController : ControllerBase
             || !bool.TryParse(rawPurchases, out var parsedPurchases)
             || parsedPurchases;
 
-        return Ok(new SiteFeaturesInfo(features, announcement, allowSelfRegistration, allowTourSignUps, planPurchases));
+        // 10/22/2026: the menus show Pricing while anything is on sale, so they need this one too.
+        var eventCredits =
+            !stored.TryGetValue(SiteSettingKeys.EventCreditsEnabled, out var rawCredits)
+            || !bool.TryParse(rawCredits, out var parsedCredits)
+            || parsedCredits;
+
+        return Ok(new SiteFeaturesInfo(features, announcement, allowSelfRegistration, allowTourSignUps,
+                                       planPurchases, eventCredits));
     }
 }

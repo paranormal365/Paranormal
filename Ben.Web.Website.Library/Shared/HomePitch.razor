@@ -1,6 +1,7 @@
 @namespace Ben.Web.Website.Library.Shared
 @inject Microsoft.Extensions.Options.IOptions<Ben.Data.Common.SiteIdentity> SiteOptions
 @inject NavigationManager Nav
+@inject SiteFeaturesProvider Features
 
 @*
     The visitor's Home, selling the site (Ben, 2026-10-01: "The home page should sell the site").
@@ -35,6 +36,17 @@
             </a>
         }
     </div>
+    @* The prices, straight from the promise that it starts free (Ben, 10/22/2026: "There should be
+       a more direct path"). Hidden only while nothing is on sale. *@
+    @if (Features.PricingIsShown)
+    {
+        <div class="pitch__pricing">
+            <a class="btn btn-primary" href="/pricing" data-testid="home-see-pricing">
+                <BenIcon Name="dollar-sign" /> See pricing
+            </a>
+            <span class="pitch__pricing-note">Free plans, paid plans and events, with every price.</span>
+        </div>
+    }
 
     @* ── Everything it does ───────────────────────────────────────────────── *@
     <div class="ben-section-head">

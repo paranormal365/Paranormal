@@ -43,6 +43,7 @@ public sealed class SiteSettingConsumerGuardTests
     [
         "SiteSettingsService.cs",       // the declaration itself
         "AdminSiteSettings.razor",      // edits every setting; consuming none
+        "AdminPricing.razor",           // edits the price settings (10/22/2026); consuming none
     ];
 
     /// <summary>Strips comments — this file's own prose names every key it guards.</summary>

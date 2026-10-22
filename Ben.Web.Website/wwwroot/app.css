@@ -74,8 +74,10 @@
 
 /* On a phone the copyright and five links did not fit one line: the footer is a flex row that does not wrap, and "Terms"
    sat past the right edge where nobody could reach it (UI test pass, 2026-09-14). It wraps, the copyright on a line of
-   its own and the links spaced evenly beneath. */
-@media (max-width: 575.98px) {
+   its own and the links spaced evenly beneath.
+   Up to 991px since 10/22/2026: a Pricing link made the row longer than a tablet is wide, and below
+   992px every link is a finger's target, so each is at least 44px tall. */
+@media (max-width: 991.98px) {
     .app-footer {
         flex-wrap: wrap;
         row-gap: .35rem;
@@ -91,6 +93,9 @@
         margin-left: 0 !important;   /* Bootstrap's ms-3 utility is !important */
         margin-right: 1rem;
         white-space: nowrap;
+        display: inline-flex;
+        align-items: center;
+        min-height: 44px;
     }
 }
 
