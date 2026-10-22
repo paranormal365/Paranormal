@@ -1,27 +1,27 @@
 {
-  "dateId": "5c4b3a29-1807-4f6e-9d5c-4b3a29180706",
+  "dateId": "c0f4cef9-111e-48bb-a149-41aa76c7e6d2",
   "title": "Printers Alley After Dark",
   "canPost": true,
   "whyNotPost": null,
   "myRole": null,
   "messages": [
     {
-      "id": "2f3e4d5c-6b7a-4891-a0b1-c2d3e4f5a6b7",
-      "authorId": "60327bd2-2d42-4d77-c60d-08df10411452",
-      "authorName": "Marcy Guide",
-      "body": "Meet at the corner of Church and 4th in five minutes.",
-      "postedUtc": "2026-10-24T01:05:00.5",
-      "isMine": false,
-      "authorRole": "Guide"
-    },
-    {
-      "id": "9a8b7c6d-5e4f-4a3b-8c2d-1e0f9a8b7c6d",
-      "authorId": "7f6e5d4c-3b2a-4190-8f7e-6d5c4b3a2918",
+      "id": "0750a2d2-b496-4d2a-9c46-187a8a43989a",
+      "authorId": "90b138f1-4c3d-4aa2-aa0b-08df2fdf1836",
       "authorName": "Daniel Park",
       "body": "Thanks, everyone. That basement!",
-      "postedUtc": "2026-10-24T00:58:00",
+      "postedUtc": "2026-10-22T01:52:44.69634",
       "isMine": true,
       "authorRole": null
+    },
+    {
+      "id": "7145881b-c1c4-4894-b798-600ef96941f7",
+      "authorId": "a380e291-3268-4728-aa08-08df2fdf1836",
+      "authorName": "Sarah Mitchell",
+      "body": "Meet at the corner of Church and 4th in five minutes.",
+      "postedUtc": "2026-10-22T01:52:44.637551",
+      "isMine": false,
+      "authorRole": "Guide"
     }
   ],
   "note": null

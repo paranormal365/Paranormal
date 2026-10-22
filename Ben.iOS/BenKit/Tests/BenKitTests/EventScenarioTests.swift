@@ -6,9 +6,9 @@ import BenKitTestSupport
 /// Jim's overnight conference on the phone (event-scenario-gaps, 10/21/2026): the event's results, a tour
 /// date's room, and the organizer's posts standing out in an event's room.
 ///
-/// The fixtures are written from the API's records (`PublicHostedEventResultsRecord`,
-/// `TourRoomRecord`) because the endpoints are new on this branch; capture them from a running API when
-/// the branch is next run end to end.
+/// The fixtures are what the API answered on the harness database (`IosFixtureCapture.Capture_EventScenarioFixtures`,
+/// 10/21/2026), not written from the records: the seeded séance weekend, Daniel's two files and his class,
+/// his question to the organizers, and a walk on the seeded group.
 @Suite("Events — results and the tour room")
 @MainActor
 struct EventScenarioTests {
@@ -16,7 +16,7 @@ struct EventScenarioTests {
     private func fixture(_ name: String) throws -> Data { try Fixtures.data(name, in: Bundle.module) }
 
     private static let eventId = UUID(uuidString: "40000002-0000-0000-0000-000000000002")!
-    private static let dateId = UUID(uuidString: "5c4b3a29-1807-4f6e-9d5c-4b3a29180706")!
+    private static let dateId = UUID(uuidString: "c0f4cef9-111e-48bb-a149-41aa76c7e6d2")!
 
     private static func store(_ transport: MockTransport) -> HostedEventsStore {
         let tokens = TokenSession(
@@ -37,9 +37,11 @@ struct EventScenarioTests {
         #expect(results.asksForVotes)
         #expect(results.hasSomething)
         #expect(results.evidenceSentence?.contains("three days") == true)
-        // Most positive votes first, even though the second was caught earlier.
-        #expect(results.items.map(\.fileName) == ["Stairwell whisper.m4a", "Loading dock.jpg"])
-        #expect(results.items[0].positiveVotes == 4)
+        // Most positive votes first, even though the photo was caught earlier.
+        #expect(results.items.map(\.fileName) == ["Stairwell whisper.mp3", "Loading dock.jpg"])
+        #expect(results.items[0].positiveVotes == 2)
+        #expect(results.items[1].positiveVotes == 0)
+        #expect(results.items[1].caughtUtc < results.items[0].caughtUtc)
         #expect(results.items[0].isAudio)
         #expect(results.items[1].isImage)
         #expect(results.items[1].note == nil)
@@ -79,9 +81,12 @@ struct EventScenarioTests {
         #expect(room.dateId == Self.dateId)
         #expect(room.canPost)
         #expect(room.myRole == nil)
-        #expect(room.messages.first?.authorRole == "Guide")
-        #expect(room.messages.last?.authorRole == nil)
-        #expect(room.messages.last?.isMine == true)
+        // Newest first, as the server sends them: the guest answered the guide.
+        #expect(room.messages.map(\.postedUtc) == room.messages.map(\.postedUtc).sorted(by: >))
+        let guide = try #require(room.messages.first { $0.authorRole == "Guide" })
+        #expect(!guide.isMine)
+        let mine = try #require(room.messages.first { $0.isMine })
+        #expect(mine.authorRole == nil)
     }
 
     @Test func somebodyNotCheckedInHasNoRoomAndThatIsNotAFailure() async {
@@ -124,11 +129,11 @@ struct EventScenarioTests {
         let classes = try BenJSON.decoder.decode(HostedEventClasses.self, from: fixture("hosted-classes"))
         #expect(classes.timeZone.identifier == "America/Chicago")
         let ovilus = try #require(classes.classes.first)
-        #expect(ovilus.where == "The loading dock")
+        #expect(ovilus.where == "The parlour")
         #expect(ovilus.roster.in.map(\.isHere) == [true, false])
         #expect(ovilus.roster.peopleIn == 3)
         #expect(ovilus.roster.peopleThere == 2)
-        #expect(ovilus.roster.waiting.count == 1)
+        #expect(ovilus.roster.waiting.isEmpty)
     }
 
     @Test func markingSomebodyHereSendsTheSwitchAndKeepsTheServersRefusal() async throws {
@@ -167,7 +172,8 @@ struct EventScenarioTests {
         #expect(thread.canWrite)
         #expect(thread.messages.map(\.fromOrganizer) == [false, true])
         #expect(thread.messages[0].isMine)
-        #expect(thread.messages[1].authorName == "Jim for Jim's Investigations")
+        // The answer is signed by the person, for the group.
+        #expect(thread.messages[1].authorName.hasSuffix(" for \(thread.organizerName)"))
     }
 
     @Test func somebodyWithNoBookingHasNoThreadAndAWriteKeepsTheServersRefusal() async throws {
