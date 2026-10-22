@@ -65,10 +65,10 @@ def scenes_at(n):
     return [s for s, cf in TR.CFG.items() if cf['a'] <= n <= cf['b']]
 
 
-def comp_frame(n, frame, M=None):
+def comp_frame(n, frame, M=None, src=None):
     """Every scene whose window covers frame n — two of them through a dissolve. M: a 2x3 affine the
     frame has already been through (the surgery push-in), so the page is drawn sharp at the new size."""
-    for scene in scenes_at(n): frame = comp_scene(scene, n, frame, M)
+    for scene in scenes_at(n): frame = comp_scene(scene, n, frame, M, src)
     return frame
 
 
@@ -125,7 +125,7 @@ def look_of_the_shot(scene, n, f, warped, matte, inside, q):
     return out
 
 
-def comp_scene(scene, n, frame, M=None):
+def comp_scene(scene, n, frame, M=None, src=None):
     N, Q = track_of(scene)
     i = n - int(N[0])
     if i < 0 or i >= len(Q): return frame
@@ -133,7 +133,11 @@ def comp_scene(scene, n, frame, M=None):
     if scene in GROW: c = q.mean(0); q = (c + (q - c) * GROW[scene]).astype(np.float32)
     if M is not None: q = (q @ M[:, :2].T + M[:, 2]).astype(np.float32)
     cf = TR.CFG[scene]
-    key = TR.key(frame, cf['t'], cf.get('mode', 'green'), cf.get('gmin', 0))
+    if src is not None and M is not None:   # zoomed: key the sharp original, then zoom the key with it
+        key = cv2.warpAffine(cv2.GaussianBlur(TR.key(src, cf['t'], cf.get('mode', 'green'), cf.get('gmin', 0)), (0, 0), .8), M,
+                             (frame.shape[1], frame.shape[0]), flags=cv2.INTER_LINEAR)
+    else:
+        key = TR.key(frame, cf['t'], cf.get('mode', 'green'), cf.get('gmin', 0))
     # A safeguard for every scene: where the tracked corners leave much of THIS frame's screen uncovered —
     # a screen half out of frame, half behind a shoulder, smeared by being thrown, filled in from
     # neighbors that were wrong — fit the corners from this frame's own green instead.
@@ -170,7 +174,18 @@ def comp_scene(scene, n, frame, M=None):
         matte = (1 - TR.in_front(frame)) * cv2.GaussianBlur(page_area.astype(np.float32), (5, 5), 0)
     else:
         matte = k
-    a = (matte * inside)[..., None]
+    # the whole screen: every patch of its green that touches the device's outline gets the page (its
+    # dark edge carried outward), so an outline a few pixels short never leaves a band of old screen
+    rr = max(9, int(.25 * np.sqrt(abs(cv2.contourArea(q)) + 1))) | 1
+    reach = cv2.dilate(inside, np.ones((rr, rr), np.uint8)) > .5
+    if cf.get('mode') != 'mint':
+        nl, lab = cv2.connectedComponents(((k > .3) & reach).astype(np.uint8))
+        touch = np.unique(lab[(inside > .5) & (lab > 0)])
+        screen = np.isin(lab, touch) & (lab > 0)
+        screen = cv2.dilate(screen.astype(np.uint8), np.ones((3, 3), np.uint8)).astype(np.float32)
+        a = np.maximum(matte * inside, k * screen)[..., None]
+    else:
+        a = (matte * inside)[..., None]
     warped = look_of_the_shot(scene, n, f, warped, matte, inside, q)
     out = f * (1 - a) + warped * a
     # what green is left — the key's edge, a blurred or reflected screen — is the page's dark violet now

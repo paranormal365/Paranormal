@@ -46,6 +46,11 @@ Ben.Web.Playwright once, or point PW_DRIVER at a Playwright driver).
 - **The name tag** (`tag.py`): the card is unwarped flat, "John Handook." is inpainted away, "John
   Hancock." is set in Palatino at the old line's place, width and ink, and the card is warped back —
   through the dissolve into Mars too.
+- **The receiver's kit** (`kit.py`): the footage dressed the player the goalie watches (8.3–11 s) in red,
+  though he plays in his teammate's blue. His shirt is told apart by color — a big, very saturated, true
+  red, where the goalkeeper's shirt folds are red-orange and the banners paler — and his shorts and socks
+  by sitting just below it; a motion-blurred frame borrows where his shirt was a moment ago. Those pixels
+  turn blue with their own shading.
 - **The surgery** (`render.py`): the camera eases in on the phone (×5.2) while the page is drawn sharp at
   the new size, then fades into the site's dark background.
 - **The ending** (`render.py`, `pieces.py`): the icon's paths from wwwroot/static/images/is-haunted-mark.svg,

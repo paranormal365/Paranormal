@@ -19,7 +19,7 @@ import cairo, cv2, numpy as np
 
 HERE = os.path.dirname(os.path.abspath(__file__)); sys.path.insert(0, HERE)
 sys.path.insert(0, os.path.join(HERE, '..', 'ishaunted-ad'))
-import comp as CP, tag as TG, track as TR, pieces as PC
+import comp as CP, tag as TG, track as TR, pieces as PC, kit as KT
 from common import hx, ease, ease_out, ease_in, ease_out_back, seg, clamp, lerp, glow, font, text_w, setc
 
 W, H, FPS = 1280, 720, 30
@@ -234,12 +234,13 @@ def push(n, frame):
     big = cv2.warpAffine(frame, M, (W, H), flags=cv2.INTER_CUBIC, borderMode=cv2.BORDER_REPLICATE)
     soft = (z - 1) * .9            # the room goes soft as the phone fills the frame — and hides the upscale
     if soft > .2: big = cv2.GaussianBlur(big, (0, 0), soft)
-    return CP.comp_frame(n, big, M)
+    return CP.comp_frame(n, big, M, frame)
 
 
 def frame_at(n, src, sparks):
     t = n / FPS
     if n < SRC_FRAMES:
+        src = KT.fix_frame(n, src)
         f = CP.comp_frame(n, src) if not ('surgery' in CP.scenes_at(n)) else push(n, src)
         f = TG.fix_frame(n, f)
         if t >= FADE[0]:

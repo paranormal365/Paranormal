@@ -37,7 +37,7 @@ CFG = {
     # not a green screen: the iPad shows a mint page of text, keyed as mint (text strokes closed over)
     'hancock':    dict(planar=True, cuts=[1184, 1197], fit_only=[1184], known={1197: 1183}, a=1141, b=1206, t=25, mode='mint', up='portrait', win=5),
     'mars':       dict(planar=True, a=1250, b=1422, t=24, ft=22, up='landscape', win=7),
-    'sphinx':     dict(planar=True, a=1540, b=1596, t=30, up='portrait', win=5),
+    'sphinx':     dict(planar=True, a=1536, b=1597, t=14, up='portrait', win=5),
     'prairie':    dict(planar=True, a=1660, b=1766, t=70, up='portrait', win=5),
     'surgery':    dict(planar=True, a=1767, b=1943, t=35, up='portrait', win=15),
 }
@@ -70,7 +70,7 @@ def in_front(f):
     b, g, r = [f[..., i].astype(np.float32) for i in range(3)]
     front = ((r - g > 6) | ((g - r < 12) & (r > 165))).astype(np.float32)
     front = cv2.morphologyEx(front, cv2.MORPH_OPEN, np.ones((5, 5), np.uint8))
-    return cv2.GaussianBlur(cv2.erode(front, np.ones((3, 3), np.uint8)), (5, 5), 0)
+    return cv2.GaussianBlur(cv2.erode(front, np.ones((3, 3), np.uint8)), (0, 0), 1.6)
 
 
 def fit_quad(m, prev_center=None):
