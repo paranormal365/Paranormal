@@ -94,3 +94,15 @@ Browser runs on the **old** `IsHauntedDb_e2e`, without recreating it:
 | The 28 failures from 10/22 | 2 checked, both failed ("This event is over"; no Ask form) | 27 passed; the 28th was the group journey, then fixed |
 | Group journey + the other subscription-page tests | failed (group not on page 1) | 10 passed, 1 skipped |
 
+Full suite on the **old** `IsHauntedDb_e2e`, 10/22:
+
+| Run | Passed | Failed |
+|---|---|---|
+| Before this branch (from `fix/text-box-cursor`) | 1,028 | 28 |
+| With the seeder fix | 1,053 | 2 (the home blink, the joined address) |
+| With everything here | 1,057 | 1: `StoreProductTests.Product_description_is_styled` |
+
+That last one read a paragraph at the moment the live page replaced it (NaN). It had passed in the
+six earlier full runs. It now looks the paragraph up afresh on each read and reads again if it
+catches the swap; the store product tests pass (5 of 5).
+
