@@ -194,6 +194,8 @@ public class EventScenarioSecondPassTests : Oct16TestBase
                     await Page.SetViewportSizeAsync(width, height);
                     await Page.GotoAsync(EventPage($"/guest-messages?guest={guestId}"));
                     await Expect(Page.Locator("#guest-message-thread")).ToContainTextAsync(words, new() { Timeout = 30_000 });
+                    // Where the guest stands, for whoever answers: he holds a place, so never "Not signed up".
+                    await Expect(Page.Locator("#guest-message-standing")).Not.ToHaveTextAsync("Not signed up");
                     problems.AddRange(await LookAtAsync(Page.Locator("#guest-messages-list"), "scenario-guest-messages", theme,
                                                         Page.Locator("#guest-message-thread")));
                 }
@@ -228,19 +230,42 @@ public class EventScenarioSecondPassTests : Oct16TestBase
         return mine.Ok && (await mine.TextAsync()).Trim().Length > 2;
     }
 
+    /// <summary>
+    /// Ben, 10/23/2026: "People can write questions to the event organizers before the event." Somebody with
+    /// no booking asks on the event's page, and the organizers see that they are not signed up.
+    /// </summary>
     [Test]
-    public async Task Somebody_with_no_booking_is_not_offered_the_organizers_thread()
+    public async Task Somebody_with_no_booking_can_ask_before_the_event_and_the_organizers_see_they_are_not_signed_up()
     {
         var (_, page) = await TheEventAsync();
         var stranger = await ApiAsAsync(MemberEmail, MemberPassword);
-        var answer = await stranger.GetAsync($"/api/public/hosted-events/{RoomsEventId}/organizer-thread");
-        if (answer.Status == 200) Assert.Ignore("The member has a booking at the seeded weekend today.");
-        Assert.That(answer.Status, Is.EqualTo(204));
+        if (await HoldsABookingAsync(stranger)) Assert.Ignore("The member has a booking at the seeded weekend today.");
+        var offered = await stranger.GetAsync($"/api/public/hosted-events/{RoomsEventId}/organizer-thread");
+        if (offered.Status == 204) Assert.Ignore("The seeded weekend has started, so questions without a booking are closed.");
+        Assert.That(offered.Status, Is.EqualTo(200));
 
+        var words = $"Is it suitable for a twelve-year-old? {Guid.NewGuid():N}"[..52];
+        var problems = new List<string>();
         await LoginAsync(MemberEmail, MemberPassword);
-        await Page.GotoAsync(page);
-        await Expect(Page.Locator("h1").First).ToBeVisibleAsync(new() { Timeout = 30_000 });
-        await Expect(Page.Locator("#event-organizer-thread")).ToHaveCountAsync(0);
+        await Page.GotoAsync($"{page}#event-organizer-thread");
+        await Page.Locator("#organizer-thread-body").FillAsync(words, new() { Timeout = 30_000 });
+        await Page.Locator("#organizer-thread-send").ClickAsync();
+        await Expect(Page.Locator("#organizer-thread-note")).ToContainTextAsync("Sent.", new() { Timeout = 30_000 });
+        problems.AddRange(await LookAtAsync(Page.Locator("#event-organizer-thread"), "stranger-organizer-thread", "light"));
+
+        var strangerId = await MyUserIdAsync(stranger);
+        await LoginAsync(SuperAdminEmail, SuperAdminPassword);
+        foreach (var (width, height) in Widths)
+        {
+            await Page.SetViewportSizeAsync(width, height);
+            await Page.GotoAsync(EventPage($"/guest-messages?guest={strangerId}"));
+            await Expect(Page.Locator("#guest-message-thread")).ToContainTextAsync(words, new() { Timeout = 30_000 });
+            await Expect(Page.Locator("#guest-message-standing")).ToHaveTextAsync("Not signed up");
+            await Expect(Page.Locator($"#guest-messages-list [data-guest='{strangerId}'] [data-testid=guest-standing]"))
+                .ToHaveTextAsync("Not signed up");
+            problems.AddRange(await LookAtAsync(Page.Locator("#guest-message-thread"), "stranger-guest-messages", "light"));
+        }
+        NothingWrong(problems);
     }
 
     // ── sessions in the results ──────────────────────────────────────────────
