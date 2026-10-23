@@ -784,6 +784,48 @@ public sealed class EventGuestMailer
     }
 
     /// <summary>
+    /// Tells everybody with a place that the dates, the usual times or the venue changed (10/23/2026: an
+    /// organizer could move a published weekend and nobody holding a place was told).
+    /// </summary>
+    /// <param name="changes">What changed, one plain sentence each.</param>
+    /// <returns>How many letters went.</returns>
+    public async Task<int> SendEventChangedAsync(
+        BenDataContext db, Guid hostedEventId, IReadOnlyList<string> changes, CancellationToken ct)
+    {
+        if (!_email.IsConfigured || changes.Count == 0) return 0;
+
+        var sent = 0;
+        foreach (var booking in await LiveBookingsAsync(db, hostedEventId, ct))
+        {
+            if (booking.LeadAppUser?.Email is not { Length: > 0 } to) continue;
+
+            var ev = booking.HostedEvent;
+            var name = Safe(ev?.Name ?? "the event");
+            var body = new System.Text.StringBuilder();
+            body.Append($"<p>{Greeting(booking)}</p>");
+            body.Append($"<p><strong>{name} has changed.</strong></p><ul>");
+            foreach (var change in changes) body.Append($"<li>{Safe(change)}</li>");
+            body.Append("</ul>");
+            body.Append("<p>Your booking still stands. If this no longer works for you, you can let your "
+                      + "places go from the event's page.</p>");
+
+            try
+            {
+                await _email.SendAsync(new EmailMessage(
+                    to, $"{ev?.Name ?? "An event"} has changed", body.ToString(),
+                    ReplyTo: ev?.Organization?.PublicEmail, Kind: MailKinds.EventChanged.Key,
+                    Payload: MailRows.For(MailKinds.EventChanged, booking.LeadAppUser, ev, ev?.Organization, booking)), ct);
+                sent++;
+            }
+            catch (Exception e) when (e is not OperationCanceledException)
+            {
+                _log.LogWarning(e, "Could not tell {BookingId} that its event changed.", booking.Id);
+            }
+        }
+        return sent;
+    }
+
+    /// <summary>
     /// Tells everybody with a place that the venue has withdrawn, and so the event is off
     /// (item 235 phase 9).
     /// </summary>

@@ -122,6 +122,9 @@ public sealed class EveryMailerGoesThroughTheOutboxTests
         ["EventGuestMailer.cs: SendCalledOffAsync"] =
             "after the cancellation is saved; the guest's own page shows it called off. THE ONE MOST "
           + "WORTH MOVING — a guest who is not told turns up to nothing.",
+        ["EventGuestMailer.cs: SendEventChangedAsync"] =
+            "after the new dates, times or venue are saved, like the called-off letter; the event's page "
+          + "shows them as they now are. WORTH MOVING — a guest not told may arrive on the old date.",
         ["EventGuestMailer.cs: SendGoingAheadAsync"] =
             "after the go decision is saved; a lost one leaves a guest unsure, not misled.",
         ["EventGuestMailer.cs: SendHoldLapsedAsync"] =

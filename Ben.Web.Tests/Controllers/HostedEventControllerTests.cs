@@ -177,6 +177,17 @@ public sealed class HostedEventControllerTests
                // that fact over and over instead of the thing it is named for.
                ContactLine: "Call the hotel on (615) 555-0142 to settle up.");
 
+    /// <summary>A weekend a month out, for tests that must stay true after 11/01/2026.</summary>
+    private static UpsertHostedEventRequest UpcomingWeekend()
+        => Weekend(from: DateTime.UtcNow.Date.AddDays(30), to: DateTime.UtcNow.Date.AddDays(32));
+
+    private static async Task SetAsync(IDbContextFactory<BenDataContext> f, Guid eventId, Action<HostedEvent> change)
+    {
+        await using var db = await f.CreateDbContextAsync();
+        change(await db.HostedEvents.FirstAsync(e => e.Id == eventId));
+        await db.SaveChangesAsync();
+    }
+
     private static HostedEventRecord Created(ActionResult<HostedEventRecord> result)
     {
         // Says WHAT was refused rather than "not a CreatedAtActionResult", because the refusals
@@ -286,7 +297,7 @@ public sealed class HostedEventControllerTests
     {
         var f = await SeedAsync();
         var controller = Build(f);
-        var record = Created(await controller.Create(OrgId, Weekend(), default));
+        var record = Created(await controller.Create(OrgId, UpcomingWeekend(), default));
         await controller.Publish(OrgId, record.Id, default);
 
         await controller.Cancel(OrgId, record.Id, new CancelHostedEventRequest("Burst pipe"), NoMail(), default);
@@ -312,7 +323,7 @@ public sealed class HostedEventControllerTests
         services.AddSingleton(audit.Object);
         controller.ControllerContext.HttpContext.RequestServices = services.BuildServiceProvider();
 
-        var record = Created(await controller.Create(OrgId, Weekend(), default));
+        var record = Created(await controller.Create(OrgId, UpcomingWeekend(), default));
         await controller.Publish(OrgId, record.Id, default);
         await controller.Cancel(OrgId, record.Id, new CancelHostedEventRequest("Burst pipe"), NoMail(), default);
 
@@ -324,6 +335,158 @@ public sealed class HostedEventControllerTests
             It.Is<object>(before => ((HostedEvent)before).LifecycleState == HostedEventLifecycleState.Published),
             It.Is<object>(after => ((HostedEvent)after).CancelledReason == "Burst pipe"),
             OwnerId, It.IsAny<string>()), Times.Once);
+    }
+
+    /// <summary>10/23/2026: "Call it off" mailed "called off" to everybody who came, after the fact.</summary>
+    [Theory]
+    [InlineData(HostedEventLifecycleState.Published)]
+    [InlineData(HostedEventLifecycleState.Ended)]
+    [InlineData(HostedEventLifecycleState.Archived)]
+    public async Task An_event_that_has_happened_cannot_be_called_off(HostedEventLifecycleState state)
+    {
+        var f = await SeedAsync();
+        var controller = Build(f);
+        var record = Created(await controller.Create(OrgId, UpcomingWeekend(), default));
+        await SetAsync(f, record.Id, e => e.LifecycleState = state);
+        await MoveTheNightsAsync(f, record.Id, -40);
+
+        var refusal = Assert.IsType<ConflictObjectResult>(
+            (await controller.Cancel(OrgId, record.Id, new CancelHostedEventRequest("Too late"), NoMail(), default)).Result);
+        Assert.Equal("This event has already happened, so it can't be called off.", refusal.Value);
+        await using var db = await f.CreateDbContextAsync();
+        Assert.Null((await db.HostedEvents.FirstAsync(e => e.Id == record.Id)).CancelledAtUtc);
+    }
+
+    [Fact]
+    public async Task Whether_it_goes_ahead_is_not_decided_once_it_has_started()
+    {
+        var f = await SeedAsync();
+        var controller = Build(f);
+        var record = Created(await controller.Create(OrgId, UpcomingWeekend(), default));
+        await SetAsync(f, record.Id, e => { e.LifecycleState = HostedEventLifecycleState.Live; e.MinimumGuests = 10; });
+
+        var refusal = Assert.IsType<ConflictObjectResult>((await controller.NoGo(OrgId, record.Id, NoMail(), default)).Result);
+        Assert.Contains("already started", Assert.IsType<string>(refusal.Value));
+    }
+
+    // ── changing the dates once people have booked (10/23/2026) ─────────────
+
+    /// <summary>A party booked on the event's last night, in the given state.</summary>
+    private static async Task<Guid> BookTheLastNightAsync(
+        IDbContextFactory<BenDataContext> f, Guid eventId, HostedEventBookingStatus status)
+    {
+        await using var db = await f.CreateDbContextAsync();
+        var last = await db.HostedEventNights.Where(n => n.HostedEventId == eventId).OrderByDescending(n => n.Date).FirstAsync();
+        var guest = new AppUser
+        {
+            Id = Guid.NewGuid(), Email = "guest@example.com", UserName = "guest@example.com",
+            DisplayName = "A Guest", DateCreated = DateTime.UtcNow,
+        };
+        db.Users.Add(guest);
+        var booking = new HostedEventBooking
+        {
+            Id = Guid.NewGuid(), HostedEventId = eventId, LeadAppUserId = guest.Id, PartySize = 2,
+            Kind = HostedEventBookingKind.DayPass, Status = status,
+            DateCreated = DateTime.UtcNow, CreatedByAppUserId = guest.Id,
+        };
+        booking.Nights.Add(new HostedEventBookingNight
+        {
+            Id = Guid.NewGuid(), HostedEventBookingId = booking.Id, HostedEventNightId = last.Id, DateCreated = DateTime.UtcNow,
+        });
+        db.HostedEventBookings.Add(booking);
+        await db.SaveChangesAsync();
+        return booking.Id;
+    }
+
+    /// <summary>The save used to fail with a bare error in the database instead of saying why.</summary>
+    [Fact]
+    public async Task Taking_off_a_date_somebody_is_booked_on_is_refused_naming_the_date()
+    {
+        var f = await SeedAsync();
+        var controller = Build(f);
+        var weekend = UpcomingWeekend();
+        var record = Created(await controller.Create(OrgId, weekend, default));
+        await BookTheLastNightAsync(f, record.Id, HostedEventBookingStatus.Confirmed);
+
+        var refusal = Assert.IsType<ConflictObjectResult>(
+            (await controller.Update(OrgId, record.Id, weekend with { EndsOn = weekend.StartsOn.AddDays(1) }, default)).Result);
+        var last = weekend.EndsOn.ToString("ddd MM/dd", System.Globalization.CultureInfo.InvariantCulture);
+        Assert.Equal($"{last} can't come off: 1 party is booked on it. Move or release them on the booking board first.", refusal.Value);
+
+        await using var db = await f.CreateDbContextAsync();
+        Assert.Equal(3, await db.HostedEventNights.CountAsync(n => n.HostedEventId == record.Id));
+    }
+
+    [Fact]
+    public async Task A_date_only_a_turned_down_party_asked_for_can_come_off()
+    {
+        var f = await SeedAsync();
+        var controller = Build(f);
+        var weekend = UpcomingWeekend();
+        var record = Created(await controller.Create(OrgId, weekend, default));
+        var bookingId = await BookTheLastNightAsync(f, record.Id, HostedEventBookingStatus.TurnedDown);
+
+        Assert.IsType<OkObjectResult>(
+            (await controller.Update(OrgId, record.Id, weekend with { EndsOn = weekend.StartsOn.AddDays(1) }, default)).Result);
+
+        await using var db = await f.CreateDbContextAsync();
+        Assert.Equal(2, await db.HostedEventNights.CountAsync(n => n.HostedEventId == record.Id));
+        Assert.Empty(await db.HostedEventBookingNights.Where(n => n.HostedEventBookingId == bookingId).ToListAsync());
+        Assert.True(await db.HostedEventBookings.AnyAsync(b => b.Id == bookingId), "The answer itself stays on record.");
+    }
+
+    [Fact]
+    public async Task Moving_a_published_event_tells_everybody_holding_a_place()
+    {
+        var f = await SeedAsync();
+        var controller = Build(f);
+        var weekend = UpcomingWeekend();
+        var record = Created(await controller.Create(OrgId, weekend, default));
+        await SetAsync(f, record.Id, e => e.LifecycleState = HostedEventLifecycleState.Published);
+        await BookTheLastNightAsync(f, record.Id, HostedEventBookingStatus.Confirmed);
+
+        var sent = new List<Ben.Data.Common.Interfaces.EmailMessage>();
+        var email = new Mock<Ben.Data.Common.Interfaces.IEmailService>();
+        email.SetupGet(e => e.IsConfigured).Returns(true);
+        email.Setup(e => e.SendAsync(It.IsAny<Ben.Data.Common.Interfaces.EmailMessage>(), It.IsAny<CancellationToken>()))
+             .Callback<Ben.Data.Common.Interfaces.EmailMessage, CancellationToken>((m, _) => sent.Add(m))
+             .Returns(Task.CompletedTask);
+        var services = new Microsoft.Extensions.DependencyInjection.ServiceCollection();
+        services.AddSingleton(new EventGuestMailer(email.Object,
+            Microsoft.Extensions.Options.Options.Create(new Ben.Data.Common.SiteIdentity()),
+            Microsoft.Extensions.Logging.Abstractions.NullLogger<EventGuestMailer>.Instance));
+        controller.ControllerContext.HttpContext.RequestServices = services.BuildServiceProvider();
+
+        // A day later, and an hour later each evening. The booked night is still on it.
+        Assert.IsType<OkObjectResult>((await controller.Update(OrgId, record.Id, weekend with
+        {
+            StartsOn = weekend.StartsOn.AddDays(1), EndsOn = weekend.EndsOn.AddDays(1),
+            DefaultStartLocal = new TimeSpan(20, 0, 0),
+        }, default)).Result);
+
+        var letter = Assert.Single(sent);
+        Assert.Equal(("guest@example.com", "event-changed"), (letter.To, letter.Kind));
+        Assert.Contains("It now runs", letter.HtmlBody);
+        Assert.Contains("starts at 8:00 PM", letter.HtmlBody);
+
+        // A save that changes none of that writes to nobody.
+        sent.Clear();
+        await controller.Update(OrgId, record.Id, weekend with
+        {
+            StartsOn = weekend.StartsOn.AddDays(1), EndsOn = weekend.EndsOn.AddDays(1),
+            DefaultStartLocal = new TimeSpan(20, 0, 0), Tagline = "Now with a tagline",
+        }, default);
+        Assert.Empty(sent);
+    }
+
+    private static async Task MoveTheNightsAsync(IDbContextFactory<BenDataContext> f, Guid eventId, int days)
+    {
+        await using var db = await f.CreateDbContextAsync();
+        var ev = await db.HostedEvents.Include(e => e.Nights).FirstAsync(e => e.Id == eventId);
+        ev.StartsOn = ev.StartsOn.AddDays(days);
+        ev.EndsOn = ev.EndsOn.AddDays(days);
+        foreach (var n in ev.Nights) n.Date = n.Date.AddDays(days);
+        await db.SaveChangesAsync();
     }
 
     // ── a run of separate dates ──────────────────────────────────────────────

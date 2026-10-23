@@ -33,6 +33,15 @@ day-by-day account of building it would say nothing to anyone using it now.
 
 ## Unreleased
 
+- Changing a published event's dates, usual times or venue writes to everybody holding a place to say
+  what changed.
+- A date somebody is booked on can't be taken off an event by accident: the page names the date and how
+  many parties are on it, instead of failing to save.
+- A guest an event turned down can **Ask again**, as the page has always offered.
+- An event can't be called off once it has happened.
+- Events stay open for reviews and evidence until those close, two months after the last date, before
+  they're archived.
+- An event's own menu now has **Guest messages**.
 - On a phone, the search boxes on Find a Group, What's on and Help show their whole hint instead of cutting it off.
 - The home page's **Public Investigations** count says how many public cases there are. Signed in, the
   cases of your own that aren't public are counted apart, instead of being added to the public total.

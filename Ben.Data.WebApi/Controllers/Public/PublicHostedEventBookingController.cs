@@ -647,12 +647,15 @@ public sealed class PublicHostedEventBookingController : BenControllerBase
             db, userId, request.FirstName, request.LastName, request.Phone, ct);
         if (contact is null) return BadRequest(missing);
 
-        // Pressing the button twice is the same statement, not a second party.
+        // Pressing the button twice is the same statement, not a second party. A "no" is not a request
+        // still standing: the card offers "Ask again" after one, and this used to refuse it with "You have
+        // already asked" (10/23/2026). The turned-down booking stays as the record of that answer.
         var existing = await db.HostedEventBookings
             .Include(b => b.Nights).Include(b => b.Guests)
             .FirstOrDefaultAsync(b => b.HostedEventId == eventId && b.LeadAppUserId == userId
                                    && b.Status != HostedEventBookingStatus.Cancelled
-                                   && b.Status != HostedEventBookingStatus.Expired, ct);
+                                   && b.Status != HostedEventBookingStatus.Expired
+                                   && b.Status != HostedEventBookingStatus.TurnedDown, ct);
         if (existing is not null)
             return Conflict("You have already asked for a place at this event.");
 
@@ -721,11 +724,14 @@ public sealed class PublicHostedEventBookingController : BenControllerBase
 
         await using var db = await _db.CreateDbContextAsync(ct);
 
-        var booking = await db.HostedEventBookings
+        // The standing booking first: after a "no" and an "Ask again" there are two, and this must act
+        // on the new one.
+        var booking = await Newest(db.HostedEventBookings
             .Include(b => b.Nights).Include(b => b.Guests)
-            .FirstOrDefaultAsync(b => b.HostedEventId == eventId && b.LeadAppUserId == userId
-                                   && b.Status != HostedEventBookingStatus.Cancelled
-                                   && b.Status != HostedEventBookingStatus.Expired, ct);
+            .Where(b => b.HostedEventId == eventId && b.LeadAppUserId == userId
+                     && b.Status != HostedEventBookingStatus.Cancelled
+                     && b.Status != HostedEventBookingStatus.Expired))
+            .FirstOrDefaultAsync(ct);
         if (booking is null) return NotFound();
         if (booking.Status == HostedEventBookingStatus.TurnedDown)
             return Conflict("This booking was turned down. Ask the venue if anything has changed.");
@@ -847,11 +853,14 @@ public sealed class PublicHostedEventBookingController : BenControllerBase
 
         await using var db = await _db.CreateDbContextAsync(ct);
 
-        var booking = await db.HostedEventBookings
+        // The standing booking first: after a "no" and an "Ask again" there are two, and this must act
+        // on the new one.
+        var booking = await Newest(db.HostedEventBookings
             .Include(b => b.Nights).Include(b => b.Guests)
-            .FirstOrDefaultAsync(b => b.HostedEventId == eventId && b.LeadAppUserId == userId
-                                   && b.Status != HostedEventBookingStatus.Cancelled
-                                   && b.Status != HostedEventBookingStatus.Expired, ct);
+            .Where(b => b.HostedEventId == eventId && b.LeadAppUserId == userId
+                     && b.Status != HostedEventBookingStatus.Cancelled
+                     && b.Status != HostedEventBookingStatus.Expired))
+            .FirstOrDefaultAsync(ct);
         if (booking is null) return NotFound();
 
         if (booking.Status == HostedEventBookingStatus.Requested)

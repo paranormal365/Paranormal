@@ -96,8 +96,19 @@ public sealed class HostedEventLifecycleJobTests
     }
 
     [Fact]
-    public void A_fortnight_is_what_stands_between_over_and_filed_away()
-        => Assert.Equal(TimeSpan.FromDays(14), HostedEventLifecycleJob.ArchiveAfter);
+    public void A_fortnight_answers_whoever_is_waiting()
+        => Assert.Equal(TimeSpan.FromDays(14), HostedEventLifecycleJob.CloseWaitingAfter);
+
+    /// <summary>
+    /// 10/23/2026: filing an event away took its page, results link and evidence form while reviews and
+    /// evidence were still open for sixty days.
+    /// </summary>
+    [Fact]
+    public void An_event_is_not_filed_away_while_its_reviews_or_evidence_are_still_open()
+    {
+        Assert.True(HostedEventLifecycleJob.ArchiveAfter > HostedEventReviews.OpenFor + TimeSpan.FromDays(1));
+        Assert.True(HostedEventLifecycleJob.ArchiveAfter > TimeSpan.FromDays(HostedEventEvidence.MaxEvidenceDays));
+    }
 
     // ── what the states themselves promise ───────────────────────────────────
 
@@ -253,7 +264,7 @@ public sealed class HostedEventLifecycleJobTests
         // doing four inside one loop means three of them happen with no chance to fail safely in
         // between. So a long-finished event needs several passes, and gets there.
         var hosted = Weekend(HostedEventLifecycleState.Published);
-        Shift(hosted, DateTime.UtcNow.AddDays(-30));
+        Shift(hosted, DateTime.UtcNow.AddDays(-90));
 
         await using var db = await WithAsync(hosted);
         var job = Build(db);
@@ -320,11 +331,38 @@ public sealed class HostedEventLifecycleJobTests
         }
 
         // Telling them and filing it away are separate passes, so a failure in the first cannot
-        // silently lose the second.
+        // silently lose the second. A month after, it isn't filed away at all: its reviews and
+        // evidence are still open.
         Assert.Equal(HostedEventLifecycleState.Ended, (await ReadAsync(db, hosted.Id)).LifecycleState);
 
         await job.RunAsync(default);
+        Assert.Equal(HostedEventLifecycleState.Ended, (await ReadAsync(db, hosted.Id)).LifecycleState);
+    }
+
+    [Fact]
+    public async Task Filing_an_event_away_takes_its_calendar_entry_off_the_public_lists()
+    {
+        var hosted = Weekend(HostedEventLifecycleState.Ended);
+        Shift(hosted, DateTime.UtcNow.AddDays(-90));
+        hosted.EndedAtUtc = DateTime.UtcNow.AddDays(-80);
+
+        await using var db = await WithAsync(hosted);
+        await using (var context = await db.NewContextAsync())
+        {
+            context.OrgCalendarEvents.Add(new OrgCalendarEvent
+            {
+                Id = Guid.NewGuid(), OrganizationId = hosted.OrganizationId, HostedEventId = hosted.Id,
+                Title = hosted.Name, IsPublic = true, StartDateTime = DateTime.UtcNow.AddDays(-90),
+                EndDateTime = DateTime.UtcNow.AddDays(-89), DateCreated = DateTime.UtcNow, CreatedByAppUserId = OwnerId,
+            });
+            await context.SaveChangesAsync();
+        }
+
+        await Build(db).RunAsync(default);
+
         Assert.Equal(HostedEventLifecycleState.Archived, (await ReadAsync(db, hosted.Id)).LifecycleState);
+        await using var check = await db.NewContextAsync();
+        Assert.False((await check.OrgCalendarEvents.SingleAsync(c => c.HostedEventId == hosted.Id)).IsPublic);
     }
 
     [Fact]
