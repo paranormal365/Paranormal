@@ -7,6 +7,7 @@
 @inject SiteFeaturesProvider Features
 @inject IBenAdminClient AdminClient
 @inject Ben.Web.Website.Library.Kit.RailMenuState RailMenus
+@inject Ben.Web.Website.Services.NavGroupsMemory GroupsMemory
 
 @*
     The template's sidebar, driven by data instead of hand-maintained markup.
@@ -859,6 +860,9 @@ else
         // Sections are recomputed on every render, so the badges only need a re-render to update.
         Notifications.Changed += OnNotificationsChanged;
         TokenStore.StateChanged += OnAuthChanged;
+        // Drawn with the groups this person had last time, so "Your groups" doesn't arrive late and
+        // push everything below it down a row (item 259). Refreshed in the background as before.
+        if (TokenStore.IsAuthenticated) _myOrgs = GroupsMemory.Recall(TokenStore.UserId);
     }
 
     protected override async Task OnAfterRenderAsync(bool firstRender)
@@ -920,7 +924,12 @@ else
             var counts = AdminClient.GetMyNavCountsAsync();
             await Task.WhenAll(myOrgs, counts);
 
-            _myOrgs = myOrgs.Result.Items;
+            // A failed fetch keeps what was remembered rather than taking "Your groups" away.
+            if (!myOrgs.Result.Failed)
+            {
+                _myOrgs = myOrgs.Result.Items;
+                GroupsMemory.Remember(TokenStore.UserId, _myOrgs);
+            }
 
             // Counted by the database (10/14/2026). This used to download every group — with its
             // member, case and investigation counts and permissions, for a SuperAdmin — and every
@@ -1081,8 +1090,9 @@ else
     {
         // Identity changed — sign-in, sign-out, impersonation either way. The org links and
         // counts on screen belong to the previous identity; refetch under the new token rather
-        // than re-rendering stale numbers next to a new name (item 159).
-        _myOrgs = [];
+        // than re-rendering stale numbers next to a new name (item 159). The new identity's own
+        // groups from last time are drawn meanwhile (item 259); signed out, there are none.
+        _myOrgs = TokenStore.IsAuthenticated ? GroupsMemory.Recall(TokenStore.UserId) : [];
         _organizationCount = null;
         StateHasChanged();
         await LoadNavCountsAsync();

@@ -33,6 +33,8 @@ day-by-day account of building it would say nothing to anyone using it now.
 
 ## Unreleased
 
+- The menu no longer jumps down a row a moment after a page opens, so a click lands on what you
+  aimed at. Your groups are shown straight away instead of arriving late.
 - Before an event starts, anybody signed in can write a question to its organizers, even without a
   booking. The organizers see beside each message whether that person is confirmed, signed up, or not
   signed up.

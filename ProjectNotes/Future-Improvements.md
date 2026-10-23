@@ -13843,7 +13843,7 @@ is not there yet. If people report that, show the recording's buffered fraction 
 duration) on the stage — "Loading the recording… 40%" — while it is behind, and hide it once it is in
 step. Watch the API's slow-request log (any data call over 5 s) and field reports before building it.
 
-## 259. The menu shifts down a row when "Your groups" arrives (OPEN)
+## 259. The menu shifts down a row when "Your groups" arrives (CLOSED 10/23/2026 — fix/menu-groups-no-shift-259)
 
 Found 10/14/2026 by the full browser run (The_admin_menu_reads_as_groups failed; passed alone). The menu
 draws first and asks for the person's groups afterwards; when they arrive, "Your groups" is inserted
@@ -13857,6 +13857,13 @@ few minutes on the website (memory cache keyed by user id, cleared on sign-out a
 a group), render "Your groups" from it at once, and refresh in the background as now. The very first
 load after signing in still shifts; every later page does not. The browser suite waits it out meanwhile
 (BenTestBase.WaitForYourGroupsInTheMenuAsync).
+
+**Closed 10/23/2026.** Built as described: `NavGroupsMemory` (website singleton over IMemoryCache, 10
+minutes per user) is read in `BenNav.OnInitialized` and on every identity change, and written after
+every successful fetch; a failed fetch keeps what was remembered. A group joined or left is wrong for
+one page at most. `NavGroupsMemoryTests` renders the menu's first draw: the group is under Home with the
+memory, and missing without the fix. The browser suite's wait stays: the first page after signing in
+still has nothing to remember.
 
 ## 260. IsHaunted on Apple TV, Apple Watch and Apple Vision Pro (FUTURE — Ben, 10/15/2026)
 

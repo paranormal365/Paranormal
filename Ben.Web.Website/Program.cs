@@ -133,6 +133,7 @@ builder.Services.AddScoped<IWebApiTokenStore, WebApiTokenStore>();
 // those URLs are gone anyway (item 201).
 builder.Services.AddMemoryCache();
 builder.Services.AddSingleton<Ben.Web.Website.Services.BrowserTicketStore>();
+builder.Services.AddSingleton<Ben.Web.Website.Services.NavGroupsMemory>();
 builder.Services.AddSingleton<Ben.Web.Website.Services.MediaTicketService>();
 
 // Points the video editor's Server tab at the media relay above, so a clip streams from the API
