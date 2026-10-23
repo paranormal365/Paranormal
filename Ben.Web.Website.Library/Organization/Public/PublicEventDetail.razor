@@ -399,6 +399,19 @@ else
                 <HostedEventRoom HostedEventId="withProgramme.Id" />
                 <HostedEventOrganizerThread HostedEventId="withProgramme.Id" />
             }
+            else if (_event.StartDateTime > DateTime.UtcNow)
+            {
+                @* Anybody signed in may ask before the event starts (Ben, 10/23/2026); somebody signed
+                   out is told so, rather than finding nothing. *@
+                <section class="mb-4" id="event-organizer-ask-sign-in">
+                    <BenSectionHeading Text="Write to the organizers" />
+                    <p class="small text-secondary mb-0">
+                        A question before you decide?
+                        <a href="@($"/login?returnUrl={Uri.EscapeDataString("/" + NavManager.ToBaseRelativePath(NavManager.Uri).Split('#')[0] + "#event-organizer-thread")}")">Sign in</a>
+                        and write to @_event.OrganizationName here. You don't need a booking.
+                    </p>
+                </section>
+            }
         }
         else if (_isAuthenticated && _event.TourName is not null)
         {

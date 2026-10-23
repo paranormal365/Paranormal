@@ -243,6 +243,19 @@ public class EventScenarioSecondPassTests : Oct16TestBase
         await Expect(Page.Locator("#event-organizer-thread")).ToHaveCountAsync(0);
     }
 
+    /// <summary>Somebody signed out is told they can sign in and ask, before the event starts.</summary>
+    [Test]
+    public async Task Signed_out_the_event_page_says_you_can_sign_in_and_ask_the_organizers()
+    {
+        var (_, page) = await TheEventAsync();
+        await Page.GotoAsync(page);
+        await Expect(Page.Locator("h1").First).ToBeVisibleAsync(new() { Timeout = 30_000 });
+        var started = await Page.Locator("#event-organizer-ask-sign-in").CountAsync() == 0;
+        if (started) Assert.Ignore("The seeded weekend has started, so the line is rightly not shown.");
+        await Expect(Page.Locator("#event-organizer-ask-sign-in a[href^='/login?returnUrl=']")).ToBeVisibleAsync();
+        await Expect(Page.Locator("#event-organizer-ask-sign-in")).ToContainTextAsync("You don't need a booking.");
+    }
+
     // ── sessions in the results ──────────────────────────────────────────────
 
     [Test]
