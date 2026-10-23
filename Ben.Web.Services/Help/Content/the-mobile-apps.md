@@ -324,13 +324,21 @@ point to the exact spot in the recording, so reviewing later means working throu
 to listen instead of scrubbing through hours of audio. Asking the next question ends the previous
 wait. Recording keeps running when the screen locks.
 
-On iPhone Duo, the microphone in the side column does the same in fewer steps: press it while you
-ask, and the phone writes down what you say if typing is on (in the session's levels; it happens on
-the phone, and nothing is sent). Press it again to stop writing and start listening, and a strip
-across the top counts how long the room has had to answer. Press it again for the next question,
-or **Done listening** when you've finished.
+One large button takes you through it, and always says what pressing it will do: **Ask a
+question**, then **Done asking — listening** when you've finished speaking, then **Ask the next
+question**. The screen shows red while you ask, with the question as it's written down, and green
+while you listen, with how long the room has had to answer. The magnetic field and sound readings
+stay on screen the whole time. You can type the question as you ask it, or cancel a question you
+didn't ask after all.
 
-![EVP mode: one large control, and the wait timing itself](/help/media/the-mobile-apps/iphone-evp.png)
+On iPhone Duo, the microphone in the side column takes the same three steps without leaving the
+session: press it when you start to ask, and the phone writes down what you say if typing is on (in
+the session's levels; it happens on the phone, and nothing is sent). Press it again to stop writing
+and start listening, and a strip across the top counts how long the room has had to answer. Press it
+again for the next question, or **Done listening** when you've finished. The strip names the next
+step on a button of its own and shows the readings too.
+
+![EVP mode while listening: green, with how long the room has had to answer](/help/media/the-mobile-apps/iphone-evp.png)
 
 ### Blacking out the screen
 

@@ -258,7 +258,12 @@ moment.</p>
 
     ("EVP", "47-evp-mode", """
 <p>Question, silence, question — the shape of an EVP session, and this screen is built for doing it
-in the dark while talking to a room: two controls, both large enough to hit without looking.</p>
+in the dark while talking to a room. One large button takes each step and says what pressing it will
+do: <b>Ask a question</b>, then <b>Done asking — listening</b>, then <b>Ask the next question</b>.
+The screen is red while somebody asks, with the question as it is written down, and green while the
+room has the floor, with how long it has had to answer. The magnetic field and the sound stay on
+screen throughout, so nobody has to leave the wait to see whether something changed. The pictured
+screen is listening (version 1.1.5).</p>
 
 <p><b>The wait is what is being recorded, not the question.</b> Marking only the moment somebody
 spoke would leave a reviewer hunting through hours of tape; bracketing the silence after each
