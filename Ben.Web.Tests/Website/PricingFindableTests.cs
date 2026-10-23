@@ -85,6 +85,7 @@ public sealed class PricingFindableTests
         services.AddSingleton(new NotificationState(client.Object, userState.Object, nav));
         services.AddSingleton(features);
         services.AddSingleton(new RailMenuState());
+        services.AddSingleton(new Ben.Web.Website.Services.NavGroupsMemory(new Microsoft.Extensions.Caching.Memory.MemoryCache(new Microsoft.Extensions.Caching.Memory.MemoryCacheOptions())));
         services.AddSingleton(new Mock<IJSRuntime>().Object);
         services.AddSingleton<IOptions<Ben.Data.Common.SiteIdentity>>(Options.Create(new Ben.Data.Common.SiteIdentity()));
         services.AddSingleton<IConfiguration>(new ConfigurationBuilder().Build());
