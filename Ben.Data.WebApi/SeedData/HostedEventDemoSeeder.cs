@@ -86,6 +86,7 @@ internal static class HostedEventDemoSeeder
         await SeedTheVenueOnTheSiteAsync(db, host, owner.Id, now);
         await SeedRoomsEventAsync(db, host, owner.Id, now);
         await SeedSeatsEventAsync(db, host, owner.Id, now);
+        await KeepThemAheadAsync(scope.ServiceProvider, db, owner.Id, now);
         await PutThemOnThePublicSiteAsync(scope.ServiceProvider, db, owner.Id);
         await SeedWhatTheVenueKeepsAsync(db, owner.Id, now);
         await SeedWhatIsServedAsync(db, owner.Id, now);
@@ -879,6 +880,119 @@ internal static class HostedEventDemoSeeder
 
         if (published == 0)
             Console.WriteLine("[HostedEventDemoSeeder] Nothing was published; the demo events are still drafts.");
+    }
+
+    /// <summary>How far ahead each demo event is put, in days: where the seeder first puts it.</summary>
+    private static readonly Dictionary<Guid, int> LeadDays = new()
+    {
+        [RoomsEventId] = 30,
+        [SeatsEventId] = 45,
+    };
+
+    /// <summary>An event whose last night is closer than this is moved on before it can end.</summary>
+    internal const int MinimumLeadDays = 14;
+
+    /// <summary>
+    /// Moves a demo event that has passed, or is about to, back to its usual distance ahead.
+    /// </summary>
+    /// <remarks>
+    /// <para><b>Why.</b> Both events are created once, 30 and 45 days after the day a database is
+    /// first seeded, and never again. A database kept for longer than that, as the browser suite's
+    /// is, ends up with both in the past: on 10/22/2026, twenty tests failed with "This event is
+    /// over" and "This event isn't taking bookings" on a database built in September, and passed on
+    /// a new one.</para>
+    ///
+    /// <para><b>What moves.</b> Whole weeks, so the weekend is still a Friday and Saturday: the
+    /// dates, the nights, the program (in the event's own time zone, so 9 PM stays 9 PM across a
+    /// clock change) and any booking or go/no-go deadline. An event the scheduled job has already
+    /// moved on (live, ended or archived) is put back on the public site as it was when published,
+    /// with the after-the-event letters marked unsent. Its calendar entry is rewritten to match.</para>
+    ///
+    /// <para><b>Left alone:</b> an event that was called off, by its organizer, its venue or the site,
+    /// and anything people added to it (bookings, check-ins, posts), which keep their own times.
+    /// Development only, like the rest of this seeder.</para>
+    /// </remarks>
+    private static async Task KeepThemAheadAsync(
+        IServiceProvider scoped, BenDataContext db, Guid ownerId, DateTime now)
+    {
+        var ids = LeadDays.Keys.ToArray();
+        var events = await db.HostedEvents
+            .Include(e => e.Nights)
+            .Where(e => ids.Contains(e.Id)
+                     && e.LifecycleState != HostedEventLifecycleState.Cancelled
+                     && e.LifecycleState != HostedEventLifecycleState.VenueWithdrawn
+                     && e.LifecycleState != HostedEventLifecycleState.Removed)
+            .ToListAsync();
+        if (events.Count == 0) return;
+
+        var sync = scoped.GetRequiredService<HostedEventCalendarSync>();
+        var today = now.Date;
+
+        foreach (var hosted in events)
+        {
+            var lastNight = hosted.Nights.Count > 0 ? hosted.Nights.Max(n => n.Date) : hosted.EndsOn;
+            var movedOn = hosted.LifecycleState is HostedEventLifecycleState.Live
+                                                 or HostedEventLifecycleState.Ended
+                                                 or HostedEventLifecycleState.Archived;
+            if (!movedOn && lastNight.Date >= today.AddDays(MinimumLeadDays)) continue;
+
+            var shift = WeeksToMove(hosted.StartsOn, today, LeadDays[hosted.Id]);
+
+            hosted.StartsOn += shift;
+            hosted.EndsOn += shift;
+            foreach (var night in hosted.Nights) night.Date += shift;
+            if (hosted.BookingsCloseAtUtc is { } closes) hosted.BookingsCloseAtUtc = closes + shift;
+            if (hosted.GoNoGoDeadlineUtc is { } deadline) hosted.GoNoGoDeadlineUtc = deadline + shift;
+
+            var zone = HostedEventCalendarSync.ZoneOf(hosted.TimeZoneId);
+            var sessions = await db.HostedEventSessions.Where(s => s.HostedEventId == hosted.Id).ToListAsync();
+            foreach (var session in sessions)
+            {
+                session.StartsAtUtc = MoveInZone(session.StartsAtUtc, shift, zone);
+                session.EndsAtUtc = MoveInZone(session.EndsAtUtc, shift, zone);
+            }
+
+            if (movedOn && hosted.FirstPublishedUtc is not null)
+            {
+                hosted.LifecycleState = HostedEventLifecycleState.Published;
+                hosted.LiveAtUtc = null;
+                hosted.EndedAtUtc = null;
+                hosted.ArchivedAtUtc = null;
+                hosted.RoomClosedUtc = null;
+                hosted.ThankYouSentUtc = null;
+                hosted.ResultsSentUtc = null;
+                hosted.RetentionWarnedMonthUtc = null;
+                hosted.RetentionWarnedWeekUtc = null;
+            }
+
+            hosted.DateUpdated = now;
+            hosted.UpdatedByAppUserId = ownerId;
+            await sync.SyncAsync(db, hosted, ownerId);
+            await db.SaveChangesAsync();
+
+            Console.WriteLine(
+                $"[HostedEventDemoSeeder] Moved \"{hosted.Name}\" {shift.Days / 7} week(s) on, to {hosted.StartsOn:MM/dd/yyyy}.");
+        }
+    }
+
+    /// <summary>
+    /// Whole weeks that put <paramref name="startsOn"/> at least <paramref name="leadDays"/> after
+    /// <paramref name="today"/>, and never less than one.
+    /// </summary>
+    internal static TimeSpan WeeksToMove(DateTime startsOn, DateTime today, int leadDays)
+    {
+        var behind = (today.Date.AddDays(leadDays) - startsOn.Date).Days;
+        var weeks = Math.Max(1, (behind + 6) / 7);
+        return TimeSpan.FromDays(weeks * 7);
+    }
+
+    /// <summary>Moves a UTC time by whole days as the event's own clock reads it.</summary>
+    internal static DateTime MoveInZone(DateTime utc, TimeSpan shift, TimeZoneInfo zone)
+    {
+        var local = TimeZoneInfo.ConvertTimeFromUtc(DateTime.SpecifyKind(utc, DateTimeKind.Utc), zone) + shift;
+        local = DateTime.SpecifyKind(local, DateTimeKind.Unspecified);
+        if (zone.IsInvalidTime(local)) local = local.AddHours(1);
+        return TimeZoneInfo.ConvertTimeToUtc(local, zone);
     }
 
     /// <summary>

@@ -61,11 +61,20 @@ public class StoreProductTests : BenTestBase
         var paragraph = Page.Locator("[data-testid=product-description] p").First;
         await Expect(paragraph).ToBeVisibleAsync(new() { Timeout = 30_000 });
         // The live page replaces the server's copy of the page; a paragraph read in that moment is
-        // detached and has no style at all (NaN). Measure the live one.
+        // detached and has no style at all (NaN). Waiting for the circuit was not enough: the swap
+        // can still come after it (10/22/2026). So each read looks the paragraph up afresh, inside
+        // the page, and a detached moment is simply read again.
         await WaitForTheCircuitAsync();
 
-        var ratio = await paragraph.EvaluateAsync<double>(
-            "e => { const s = getComputedStyle(e); return parseFloat(s.lineHeight) / parseFloat(s.fontSize); }");
+        var ratio = double.NaN;
+        for (var attempt = 0; attempt < 20 && double.IsNaN(ratio); attempt++)
+        {
+            if (attempt > 0) await Page.WaitForTimeoutAsync(250);
+            ratio = await Page.EvaluateAsync<double>(
+                "() => { const e = document.querySelector('[data-testid=product-description] p'); "
+                + "if (!e || !e.isConnected) return NaN; const s = getComputedStyle(e); "
+                + "return parseFloat(s.lineHeight) / parseFloat(s.fontSize); }");
+        }
         Assert.That(ratio, Is.EqualTo(1.65).Within(0.02), "ben-store-description's line height did not reach the paragraph.");
     }
 

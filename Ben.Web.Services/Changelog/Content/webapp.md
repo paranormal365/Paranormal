@@ -218,8 +218,14 @@ day-by-day account of building it would say nothing to anyone using it now.
   are labeled for screen readers.
 - Deleting in the middle of what you've typed deletes there, in every box on the site. On a slow
   connection the cursor used to jump to the end, so the next delete removed the end instead.
+- A new page in your group's site suggests its web address from the title, in gray. Leave it empty
+  to use that, or type your own. What you type is no longer joined onto the suggestion on a slow
+  connection.
+- The prices on the home page no longer disappear for a moment as the page finishes loading.
 
 ### Administration
+
+- Administration → Group subscriptions has a search box, so a group can be found without paging.
 
 - Administration → **Pricing** shows every price on one page: the plans with a link to their editor,
   and the event and Ghost Walk Tour prices, editable there, each with a sentence saying what a group

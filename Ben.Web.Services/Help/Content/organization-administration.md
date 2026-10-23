@@ -568,9 +568,9 @@ property*, *House rules* and more. An idea you already have a page for is grayed
 ![Ideas for a page title](help-media:organization-administration/cms-title-ideas.png)
 *Ideas, grouped by what the page is about. Picking one fills in the title; you can still change it.*
 
-The page's address is filled in from the title as you type (*Our Team* becomes `our-team`) until
-you edit the address yourself. Once a page exists, renaming it doesn't change its address, so
-links people have saved keep working.
+The address box suggests one made from the title as you type (*Our Team* becomes `our-team`).
+Leave it empty to use that, or type your own. Once a page exists, renaming it doesn't change its
+address, so links people have saved keep working.
 
 **Summary / Intro** is a few sentences shown at the top of the page, under its title and above its
 sections.

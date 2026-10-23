@@ -59,8 +59,25 @@
     private string GroupPrice { get; set; } = "$19.99";
     private Ben.Service.Models.PublicPricingExtras? _extras;
 
+    // ── Carried from the server render (PagesDoNotBlinkTests) ────────────────
+    // The server draws the prices, then the live connection builds this section again with none of
+    // that data. It used to fetch them again, so the ghost walk and event lines vanished for a moment
+    // and came back on every visit (10/22/2026: a test grabbed the line just before it went). What
+    // the server fetched now rides into the page and is used once.
+    [PersistentState] public string? RenderedGroupPrice { get; set; }
+    [PersistentState] public Ben.Service.Models.PublicPricingExtras? RenderedExtras { get; set; }
+
     protected override async Task OnInitializedAsync()
     {
+        if (RenderedGroupPrice is { } carriedPrice)
+        {
+            GroupPrice = carriedPrice;
+            _extras = RenderedExtras;
+            RenderedGroupPrice = null;
+            RenderedExtras = null;
+            return;
+        }
+
         // Anonymous, so no AuthReady wait: the prerender a visitor and a search engine read carries it.
         var tiers = await Client.GetPublicPricingAsync();
         var cheapest = tiers.Items
@@ -73,6 +90,12 @@
             GroupPrice = BenMoney.Format(price);
 
         _extras = await Client.GetPublicPricingExtrasAsync();
+
+        if (!RendererInfo.IsInteractive)
+        {
+            RenderedGroupPrice = GroupPrice;
+            RenderedExtras = _extras;
+        }
     }
 
     protected override async Task OnAfterRenderAsync(bool firstRender)
