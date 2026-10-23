@@ -2254,11 +2254,14 @@ tell red from green.
 ### When a guest writes to you
 
 Anybody with a booking at the event can **write to the organizers** from the event's page or the
-app. Their message arrives in your group's **Messages** as *Guest Message*, one thread per guest,
+app. Until the event starts, so can anybody signed in who has a question before deciding to come;
+once it starts, they can still read your answer but can't write again. Their message arrives in your group's **Messages** as *Guest Message*, one thread per guest,
 addressed to everyone who can say yes or no to bookings, and your bell counts it.
 
 **Guest messages**, on the event page, lists every guest who has written, the newest first, with
-*Waiting on you* beside the ones you haven't answered. Choose one to read it and answer. The guest
+*Waiting on you* beside the ones you haven't answered. Each one says where that person stands:
+*Confirmed*, *Signed up, not confirmed yet*, *Not signed up*, and so on, so you know who you're
+answering. Choose one to read it and answer. The guest
 sees your answer on the event's page and in the app, and their bell tells them. Messages are words
 only, and the event stops taking them a month after it ends.
 

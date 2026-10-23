@@ -899,7 +899,8 @@ public sealed record PostTourRoomMessageRequest(string? Body);
 
 /// <summary>A guest's conversation with the people running an event, as either side reads it, oldest first.</summary>
 /// <param name="ThreadId">Null before the guest's first message.</param>
-/// <param name="CanWrite">False once the event is off the site or a month past its end.</param>
+/// <param name="Standing">For the organizers only: whether the guest is signed up, confirmed, or not booked at all.</param>
+/// <param name="CanWrite">False once the event is off the site or a month past its end, and for somebody without a booking once it starts.</param>
 public sealed record EventGuestThreadRecord(
     Guid HostedEventId,
     Guid? ThreadId,
@@ -910,7 +911,8 @@ public sealed record EventGuestThreadRecord(
     bool CanWrite,
     string? WhyNotWrite,
     IReadOnlyList<EventGuestThreadMessageRecord> Messages,
-    string? Note = null);
+    string? Note = null,
+    string? Standing = null);
 
 /// <summary>One message: plain words, never markup.</summary>
 /// <param name="FromOrganizer">True for an answer from the people running the event.</param>
@@ -919,8 +921,16 @@ public sealed record EventGuestThreadMessageRecord(
 
 /// <summary>One guest's conversation in the organizers' list, newest first.</summary>
 /// <param name="WaitingOnUs">The guest wrote last.</param>
+/// <param name="Standing">Whether they are signed up, confirmed, or not booked at all.</param>
 public sealed record EventGuestThreadSummaryRecord(
-    Guid ThreadId, Guid GuestId, string GuestName, string LastBody, DateTime LastUtc, bool WaitingOnUs, int Count);
+    Guid ThreadId, Guid GuestId, string GuestName, string LastBody, DateTime LastUtc, bool WaitingOnUs, int Count,
+    string Standing = EventGuestThreadStanding.NotSignedUp);
+
+/// <summary>The words for somebody writing with no booking at the event.</summary>
+public static class EventGuestThreadStanding
+{
+    public const string NotSignedUp = "Not signed up";
+}
 
 /// <summary>A message to (or from) the organizers. Words only.</summary>
 public sealed record PostEventGuestThreadRequest(string? Body);

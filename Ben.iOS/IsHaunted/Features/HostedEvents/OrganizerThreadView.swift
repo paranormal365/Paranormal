@@ -5,8 +5,8 @@ import BenKit
 /// app"). The same conversation as on the event's page on the website, oldest first, with the organizers'
 /// answers standing out.
 ///
-/// Words only. Offered from the event's screen to somebody with a booking there; the server tells anybody
-/// else nothing.
+/// Words only. Offered from the event's screen to somebody with a booking there, and before the event starts
+/// to anybody signed in with a question; the server tells anybody else nothing.
 struct OrganizerThreadView: View {
     let hostedEventId: UUID
 
@@ -37,7 +37,7 @@ struct OrganizerThreadView: View {
 
                 Section {
                     if thread.canWrite {
-                        TextField("A question about the event or your booking", text: $draft, axis: .vertical)
+                        TextField("A question about the event", text: $draft, axis: .vertical)
                             .lineLimit(2...6)
                             .accessibilityIdentifier("organizer-thread-body")
                         Button {
@@ -59,7 +59,7 @@ struct OrganizerThreadView: View {
                     if let error {
                         Text(error).foregroundStyle(Theme.danger)
                     } else {
-                        Text("Writing to the organizers is for people with a booking at this event.").foregroundStyle(Theme.fog)
+                        Text("Questions to the organizers close when the event starts, except for people with a booking.").foregroundStyle(Theme.fog)
                     }
                 }
             }

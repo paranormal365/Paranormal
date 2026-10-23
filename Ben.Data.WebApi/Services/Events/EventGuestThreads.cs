@@ -21,7 +21,10 @@ namespace Ben.Data.WebApi.Services.Events;
 /// markup; the one piece of markup is the root's own link, built here from encoded names.</para>
 ///
 /// <para><b>Who may write.</b> Anybody with a booking at the event, whatever became of it (a guest turned down
-/// is the one most likely to ask why), as its lead or named on it. Anybody else is told nothing.</para>
+/// is the one most likely to ask why), as its lead or named on it. And, until the event starts, anybody signed
+/// in who is thinking of coming (Ben, 10/23/2026: "People can write questions to the event organizers before
+/// the event"). Once it starts, somebody without a booking can still read what they were told, and cannot
+/// write; somebody without a booking who never wrote is told nothing.</para>
 ///
 /// <para><b>Who hears.</b> A guest's message marks the root unread for the group's people, which is what puts
 /// it on their bell. An answer marks it unread for the guest, which the bell counts on its own row, never
@@ -39,6 +42,71 @@ public static class EventGuestThreads
         => db.HostedEventBookings.AsNoTracking()
             .AnyAsync(b => b.HostedEventId == eventId
                         && (b.LeadAppUserId == userId || b.Guests.Any(g => g.AppUserId == userId)), ct);
+
+    /// <summary>
+    /// Where each person stands at the event, in the organizers' words, so whoever answers knows who they are
+    /// answering (Ben, 10/23/2026: "if they are signed up for the event or confirmed ... notate it for the
+    /// organizer to see"). A person with several bookings is shown by the one that counts most.
+    /// </summary>
+    public static async Task<Dictionary<Guid, string>> StandingsAsync(
+        BenDataContext db, Guid eventId, IReadOnlyCollection<Guid> people, CancellationToken ct)
+    {
+        var rows = await db.HostedEventBookings.AsNoTracking()
+            .Where(b => b.HostedEventId == eventId)
+            .Select(b => new { b.Status, b.LeadAppUserId, Named = b.Guests.Select(g => g.AppUserId) })
+            .ToListAsync(ct);
+
+        var best = new Dictionary<Guid, HostedEventBookingStatus>();
+        foreach (var row in rows)
+            foreach (var person in row.Named.OfType<Guid>().Append(row.LeadAppUserId).Where(people.Contains))
+                if (!best.TryGetValue(person, out var held) || Rank(row.Status) < Rank(held)) best[person] = row.Status;
+
+        return people.Distinct().ToDictionary(p => p, p => best.TryGetValue(p, out var s) ? Standing(s) : NotSignedUp);
+    }
+
+    public const string NotSignedUp = EventGuestThreadStanding.NotSignedUp;
+
+    /// <summary>A booking's state, as the organizers read it beside a message.</summary>
+    public static string Standing(HostedEventBookingStatus status) => status switch
+    {
+        HostedEventBookingStatus.Confirmed => "Confirmed",
+        HostedEventBookingStatus.Held => "Signed up, places held",
+        HostedEventBookingStatus.Requested => "Signed up, not confirmed yet",
+        HostedEventBookingStatus.Expired => "Signed up, the hold ran out",
+        HostedEventBookingStatus.TurnedDown => "Turned down",
+        HostedEventBookingStatus.Cancelled => "Booking cancelled",
+        _ => NotSignedUp,
+    };
+
+    private static int Rank(HostedEventBookingStatus status) => status switch
+    {
+        HostedEventBookingStatus.Confirmed => 0,
+        HostedEventBookingStatus.Held => 1,
+        HostedEventBookingStatus.Requested => 2,
+        HostedEventBookingStatus.Expired => 3,
+        HostedEventBookingStatus.TurnedDown => 4,
+        _ => 5,
+    };
+
+    /// <summary>When the event's first night starts, by its own window rule.</summary>
+    public static async Task<DateTime> StartsAtUtcAsync(BenDataContext db, HostedEvent ev, CancellationToken ct)
+    {
+        var nights = await db.HostedEventNights.AsNoTracking()
+            .Where(n => n.HostedEventId == ev.Id).OrderBy(n => n.Date).ToListAsync(ct);
+        return HostedEventCalendarSync.Window(ev, nights).StartUtc;
+    }
+
+    /// <summary>
+    /// Why this person can't write now, or null when they can: the event's own rule, and for somebody
+    /// without a booking, the event having started.
+    /// </summary>
+    public static string? WhyClosedFor(HostedEvent ev, DateTime now, bool isGuest, DateTime startsAtUtc)
+    {
+        if (WhyClosed(ev, now) is { } closed) return closed;
+        if (!isGuest && now >= startsAtUtc)
+            return "Questions from people without a booking close when the event starts.";
+        return null;
+    }
 
     /// <summary>Why a message can't be written now, or null when it can.</summary>
     public static string? WhyClosed(HostedEvent ev, DateTime now)
@@ -138,7 +206,8 @@ public static class EventGuestThreads
 
     /// <summary>The conversation, oldest first, as either side reads it.</summary>
     public static async Task<EventGuestThreadRecord> RecordAsync(
-        BenDataContext db, HostedEvent ev, Guid guestId, OrgMessage? root, Guid viewerId, string? note, CancellationToken ct)
+        BenDataContext db, HostedEvent ev, Guid guestId, OrgMessage? root, Guid viewerId, string? note, CancellationToken ct,
+        string? whyClosed = null, string? standing = null)
     {
         var guestName = await db.Users.AsNoTracking().Where(u => u.Id == guestId)
             .Select(u => u.DisplayName).FirstOrDefaultAsync(ct) ?? "A guest";
@@ -153,13 +222,13 @@ public static class EventGuestThreads
                 .Select(m => new { m.Id, m.AuthorAppUserId, Name = m.AuthorAppUser.DisplayName, m.Body, m.DateCreated })
                 .ToListAsync(ct);
 
-        var why = WhyClosed(ev, DateTime.UtcNow);
+        var why = whyClosed ?? WhyClosed(ev, DateTime.UtcNow);
         return new EventGuestThreadRecord(
             ev.Id, root?.Id, guestId, guestName, ev.Name, organizer, why is null, why,
             [.. messages.Select(m => new EventGuestThreadMessageRecord(
                 m.Id,
                 m.AuthorAppUserId == guestId ? guestName : $"{m.Name ?? "Somebody"} for {organizer}",
                 m.Body, m.DateCreated, m.AuthorAppUserId != guestId, m.AuthorAppUserId == viewerId))],
-            note);
+            note, standing);
     }
 }
