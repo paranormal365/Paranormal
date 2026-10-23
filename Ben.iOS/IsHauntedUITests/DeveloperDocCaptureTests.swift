@@ -258,8 +258,24 @@ final class DeveloperDocCaptureTests: XCTestCase {
                     }
 
                     if tap("open-evp") {
-                        settle(2); snap("47-evp-mode")
-                        if tap("evp-start-recording") { settle(3); snap("48-evp-recording") }
+                        settle(2)
+                        if tap("evp-start-recording", timeout: 2) { settle(3) }
+                        // 1.1.5's screen is pictured LISTENING: green, the wait's clock running and
+                        // the readings moving, which is the state the help describes. Ask (red),
+                        // type the question, then Done asking — listening, and let the clock run.
+                        if tap("evp-primary") {
+                            settle(2)
+                            let question = app.descendants(matching: .any)
+                                .matching(identifier: "evp-question-text").firstMatch
+                            if question.waitForExistence(timeout: 3) {
+                                question.tap(); question.typeText("Is anyone here with us?")
+                                settle(1)
+                            }
+                            snap("47a-evp-asking")
+                            if tap("evp-primary") { settle(9) }
+                        }
+                        snap("47-evp-mode")
+                        if tap("evp-stop-listening", timeout: 2) { settle(1) }
                         tapLabel("Done"); settle(1)
                     }
 

@@ -1,5 +1,10 @@
 # Help to restore when iOS 1.1.5 is released
 
+**DONE 10/23/2026** (branch `help/ios-115-live`): iOS 1.1.5 was released on 10/23/2026. The paragraph
+is in, the iPhone Duo paragraph is brought in line with it, the EVP pictures are retaken (listening)
+on `IsHauntedDb_ios115help1023`, and the product PDF and app guides are rebuilt. See
+`ProjectNotes/branches/ios-115-help.md`.
+
 Asking questions changed on the phone (10/20–10/21/2026): one button in three steps, with the readings on
 screen. 1.1.4, the version in the App Store, still has the old EVP screen, so
 `Ben.Web.Services/Help/Content/the-mobile-apps.md` still describes it. When 1.1.5 is live, edit
