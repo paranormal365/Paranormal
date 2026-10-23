@@ -74,6 +74,39 @@ public sealed class ABookingRequestCommitsWithItsLetterTests
     }
 
     /// <summary>
+    /// A guest turned down can ask again, as the card's "Ask again" offers, and the new request is the one
+    /// they then act on (10/23/2026: it was refused with "You have already asked").
+    /// </summary>
+    [Fact]
+    public async Task A_guest_turned_down_can_ask_again_and_the_new_request_is_the_one_they_act_on()
+    {
+        await using var sqlite = await SqliteTestDb.CreateAsync();
+        await SeedAsync(sqlite);
+        Guid turnedDownId;
+        await using (var db = await sqlite.NewContextAsync())
+        {
+            var no = new HostedEventBooking
+            {
+                Id = Guid.NewGuid(), HostedEventId = EventId, LeadAppUserId = GuestId, PartySize = 2,
+                Kind = HostedEventBookingKind.DayPass, Status = HostedEventBookingStatus.TurnedDown,
+                DateCreated = DateTime.UtcNow.AddDays(-1), CreatedByAppUserId = GuestId,
+            };
+            turnedDownId = no.Id;
+            db.HostedEventBookings.Add(no);
+            await db.SaveChangesAsync();
+        }
+
+        var asked = await Guest(sqlite).RequestAPlace(EventId, ADayPass, Mailer(Outbox(sqlite.Factory)), default);
+        Assert.IsType<OkObjectResult>(asked.Result);
+
+        // Withdrawing now takes back the new request, and the "no" stays as the record of that answer.
+        Assert.IsType<NoContentResult>((await Guest(sqlite).Withdraw(EventId, null, default)).Result);
+        await using var check = await sqlite.NewContextAsync();
+        var left = Assert.Single(await check.HostedEventBookings.Where(b => b.HostedEventId == EventId).ToListAsync());
+        Assert.Equal((turnedDownId, HostedEventBookingStatus.TurnedDown), (left.Id, left.Status));
+    }
+
+    /// <summary>
     /// And when the letter cannot be queued, the request is not left behind without it.
     /// </summary>
     /// <remarks>

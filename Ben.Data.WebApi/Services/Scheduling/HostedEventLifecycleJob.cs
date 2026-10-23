@@ -38,12 +38,25 @@ public sealed class HostedEventLifecycleJob : IScheduledJob
 {
     public string Name => "hosted-event-lifecycle";
 
-    /// <summary>How long an ended event stays on the lists before it is filed away.</summary>
+    /// <summary>How long after an event ends a request nobody answered is answered for them.</summary>
     /// <remarks>
-    /// A fortnight, which is long enough for the organizer to work through what happened and short
-    /// enough that last month's weekend is not still advertising itself.
+    /// A fortnight, which is long enough for the organizer to work through what happened.
     /// </remarks>
-    internal static readonly TimeSpan ArchiveAfter = TimeSpan.FromDays(14);
+    internal static readonly TimeSpan CloseWaitingAfter = TimeSpan.FromDays(14);
+
+    /// <summary>How long an ended event stays readable before it is filed away.</summary>
+    /// <remarks>
+    /// Until its reviews and its evidence have both closed (10/23/2026). It used to be a fortnight,
+    /// and filing an event away takes its page, its results link and its evidence form with it, while
+    /// reviews and evidence stay open for sixty days: a guest following the thank-you letter's link in
+    /// week three found nothing. An ended event isn't advertised either way — the lists show only what
+    /// is still to come.
+    ///
+    /// Two days past the longer of the two: reviews count from the day after the last date, and the
+    /// last night can end after midnight.
+    /// </remarks>
+    internal static readonly TimeSpan ArchiveAfter = TimeSpan.FromDays(
+        Math.Max(HostedEventReviews.OpenFor.TotalDays, HostedEventEvidence.MaxEvidenceDays) + 2);
 
     private readonly IDbContextFactory<BenDataContext> _dbFactory;
     private readonly IEmailService _email;
@@ -138,17 +151,21 @@ public sealed class HostedEventLifecycleJob : IScheduledJob
                 hosted.LiveAtUtc = now;
                 break;
 
-            // A fortnight after the event ENDED, not a fortnight after the job noticed it had. The
-            // stamp records when the state was written and can be days late for an event nobody
-            // published until afterwards; the last night is the fact somebody would name.
-            case HostedEventLifecycleState.Ended when now >= endUtc + ArchiveAfter:
-                // Anybody still waiting is answered FIRST, and the filing happens on the next pass.
+            // Counted from when the event ENDED, not from when the job noticed it had. The stamp
+            // records when the state was written and can be days late for an event nobody published
+            // until afterwards; the last night is the fact somebody would name.
+            case HostedEventLifecycleState.Ended when now >= endUtc + CloseWaitingAfter:
+                // Anybody still waiting is answered FIRST, and the filing happens on a later pass.
                 // Folding the two together means a failure to tell them silently files the event
                 // anyway, and they never hear.
                 if (await CloseWhatIsStillWaitingAsync(db, hosted, now, ct)) return true;
+                if (now < endUtc + ArchiveAfter) return false;
 
                 hosted.LifecycleState = HostedEventLifecycleState.Archived;
                 hosted.ArchivedAtUtc = now;
+                // The calendar row follows, as it does for an archive by hand: left public, it went on
+                // offering an event whose page no longer opened (10/23/2026).
+                await _sync.SyncAsync(db, hosted, hosted.CreatedByAppUserId, ct);
                 break;
 
             default:

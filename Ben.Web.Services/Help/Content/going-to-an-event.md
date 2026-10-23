@@ -116,7 +116,7 @@ Your booking appears on the event's page and always shows one of these:
 | **Asked for** | The venue has your request and hasn't answered yet. Nothing is held. |
 | **Held for you** | Nobody else can take your places until the time runs out. |
 | **You're coming** | The venue has confirmed you, and your pass is on the page. |
-| **Not this time** | The venue couldn't take this request. Another date may have room. |
+| **Not this time** | The venue couldn't take this request. Another date may have room, and **Ask again** sends a new request. |
 | **Hold ran out** | Nobody answered in time, so the places were released. You can choose again. |
 
 **A hold that runs out is not a refusal.** It just means time ran out before anyone looked at it.
@@ -370,7 +370,11 @@ password right away instead of leaving you to find out later.
 - **A minimum number.** Some events only go ahead if enough people come. When that's the case, the
   page shows the number and the date the venue will decide by, from the first time you look — so
   you never find out on the day.
-- **Called off.** You're told, and anything you were holding is released.
+- **New dates, times or a new venue.** We write to you saying what changed. Your booking still
+  stands; if the change doesn't work for you, let your places go from the event's page. A date you're
+  booked on can't be taken off until the organizers have moved or released your booking.
+- **Called off.** You're told, and anything you were holding is released. An event can't be called
+  off once it has happened.
 - **The venue withdraws.** This is rare, and it's handled the same way: everything is released and
   everyone is told.
 

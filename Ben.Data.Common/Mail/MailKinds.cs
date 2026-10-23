@@ -251,6 +251,11 @@ public static class MailKinds
         ["AppUsers", "HostedEvents", "HostedEventBookings", "Organizations"],
         CanDecline: true);
 
+    public static readonly MailKindInfo EventChanged = new(
+        "event-changed", "The event has changed",
+        "Tells everybody holding a booking that the dates, the times or the venue changed.",
+        ["AppUsers", "HostedEvents", "HostedEventBookings", "Organizations"]);
+
     public static readonly MailKindInfo EventAnnouncement = new(
         "event-announcement", "A message from the organizers",
         "Whatever the organizers wrote to everybody coming.",
@@ -503,7 +508,7 @@ public static class MailKinds
         RequestOpenedForReview, RequestAccepted, RequestNoLongerAvailable,
         TourSignUp, TourReminder,
         BookingAsked, BookingDecided, HoldPlaced, HoldLapsed,
-        EventGoingAhead, EventCalledOff, EventAnnouncement,
+        EventGoingAhead, EventCalledOff, EventChanged, EventAnnouncement,
         SessionMoved, SessionCancelled, SessionPromoted,
         EventThankYou, EventMissedYou, EventResults, StaffInvite, GuestRemoved, AppealAnswered, HoldYourPlaces,
         BookingsArrived, BookingsDigest,

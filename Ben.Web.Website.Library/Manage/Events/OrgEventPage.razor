@@ -802,7 +802,9 @@
                             @if (ev.MinimumGuests is not null)
                             {
                                 <div class="col-12" id="event-decision">
-                                    @if (ev.GoNoGoDecision is HostedEventGoNoGo.Undecided)
+                                    @if (ev.GoNoGoDecision is HostedEventGoNoGo.Undecided
+                                         && ev.LifecycleState is not (HostedEventLifecycleState.Live or HostedEventLifecycleState.Ended
+                                                                      or HostedEventLifecycleState.Archived))
                                     {
                                         <div class="fw-semibold mb-1">Is it going ahead?</div>
                                         <div class="d-flex gap-2 flex-wrap">
@@ -821,6 +823,10 @@
                                             Calling it off here tells everybody who has a place, and
                                             follows the same credit rule as any other cancellation.
                                         </div>
+                                    }
+                                    else if (ev.GoNoGoDecision is HostedEventGoNoGo.Undecided)
+                                    {
+                                        <p class="mb-0 text-secondary">It started without a decision, so it went ahead.</p>
                                     }
                                     else
                                     {
@@ -898,11 +904,13 @@
                                    id="event-cancel-effect">@effect.Sentence</p>
                             }
                             <p class="text-secondary">
-                                <strong>Archiving</strong> stops it counting and takes it off your
-                                list; everything that happened stays. It happens by itself
-                                two weeks after the last @ev.DateNoun.
+                                <strong>Archiving</strong> takes it off your list and closes its page,
+                                its results, its reviews and the evidence guests send; everything that
+                                happened stays. It happens by itself two months after the last
+                                @ev.DateNoun, once reviews and evidence have closed.
                                 <strong>Calling it off</strong> is for one that was going to happen
                                 and now is not — the listing says so, and the people coming are told.
+                                Once it has happened, it can't be called off.
                             </p>
                             <div class="d-flex gap-2 flex-wrap align-items-start">
                                 @if (ev.LifecycleState is not HostedEventLifecycleState.Archived)
@@ -919,12 +927,17 @@
                                         Bring it back
                                     </button>
                                 }
-                                <div class="input-group" style="max-width:26rem;">
-                                    <input class="form-control" placeholder="Why it's off — guests read this"
-                                           @bind="_cancelReason" />
-                                    <button type="button" class="btn btn-outline-danger" id="cancel-event"
-                                            disabled="@_busy" @onclick="CancelAsync">Call it off</button>
-                                </div>
+                                @* Not once it has happened: the server refuses, and the letter would tell
+                                   the people who came that it was off (10/23/2026). *@
+                                @if (ev.LifecycleState is not (HostedEventLifecycleState.Ended or HostedEventLifecycleState.Archived))
+                                {
+                                    <div class="input-group" style="max-width:26rem;">
+                                        <input class="form-control" placeholder="Why it's off — guests read this"
+                                               @bind="_cancelReason" />
+                                        <button type="button" class="btn btn-outline-danger" id="cancel-event"
+                                                disabled="@_busy" @onclick="CancelAsync">Call it off</button>
+                                    </div>
+                                }
                             </div>
                         }
                     </div>

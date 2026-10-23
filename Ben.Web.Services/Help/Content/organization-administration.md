@@ -1165,18 +1165,28 @@ A credit marked **Given to you** instead of a price is one we gave you, for exam
 that didn't go through, or to make up for something we owed you. It works exactly like one you
 bought.
 
+### Changing the dates, times or venue
+
+You can change a published event's dates, usual times or venue at any time. Everybody holding a
+place, or still waiting for an answer, gets a letter saying what changed. A date somebody is booked on
+can't be taken off until you've moved or released their booking on the booking board; the page names
+the date and how many parties are on it. A date with people checked in on it stays, because that's
+the record of who came.
+
 ### Taking it down, archiving it, calling it off
 
 **Un-publish** removes the event from the public site. Nothing is deleted and nothing is refunded.
 
-**Archive** stops the event counting against your plan and removes it from your list. Everything
-about it stays exactly as it is. Events are archived automatically two weeks after their last date,
-so you never keep paying for last Halloween.
+**Archive** removes the event from your list and closes its page, its results, its reviews and the
+evidence guests send. Everything about it stays exactly as it is. Events are archived automatically
+two months after their last date, once the time for reviews and evidence has run out, so a guest
+following the thank-you letter's link still finds the page.
 
 **Cancel** is for an event that was going to happen and now won't. The listing adds CANCELED to its
 title — the one line everyone actually reads, whether on your page, a shared link or a phone — and
 the reason you give is shown to people who had places. The event is kept rather than deleted, so
-anyone who was planning to come can see that it is off.
+anyone who was planning to come can see that it is off. Once the event has happened, it can't be
+called off, and whether it goes ahead can only be decided before it starts.
 
 ### If the event is called off, your credit
 

@@ -1,3 +1,4 @@
+using System.Globalization;
 using AutoMapper;
 using Ben.Data.Common.Enums;
 using Ben.Data.Common.Constants;
@@ -204,6 +205,10 @@ public sealed class HostedEventController : OrgCmsControllerBase
         if (await ValidateAsync(db, orgId, request, venue!, eventId, ct) is string refusal)
             return BadRequest(refusal);
 
+        // What a guest holding a place would want to hear about, as it was before this save.
+        var before = (Dates: hosted.Nights.Select(n => n.Date.Date).OrderBy(d => d).ToList(),
+                      hosted.DefaultStartLocal, hosted.DefaultEndLocal, hosted.PlaceId, hosted.TimeZoneId);
+
         // The slug is not regenerated. Every link already shared points at it, and fixing a typo in
         // a name must not break a poster.
         hosted.Name = request.Name.Trim();
@@ -239,11 +244,108 @@ public sealed class HostedEventController : OrgCmsControllerBase
         hosted.DateUpdated = DateTime.UtcNow;
         hosted.UpdatedByAppUserId = userId.Value;
 
+        if (await WhyDatesCannotGoAsync(db, hosted, WantedDates(hosted, request.Dates), ct) is { } blocked)
+            return Conflict(blocked);
+
         await ReconcileNightsAsync(db, hosted, request.Dates, userId.Value, ct);
         await _sync.SyncAsync(db, hosted, userId.Value, ct);
         await db.SaveChangesAsync(ct);
 
+        // Told after the save, so a letter never describes a change that didn't happen. Only for an event
+        // people can be holding places at.
+        if (HostedEventStates.TakingBookings.Contains(hosted.LifecycleState)
+            && HttpContext?.RequestServices?.GetService(typeof(Services.Events.EventGuestMailer)) is Services.Events.EventGuestMailer mail)
+        {
+            var changes = await WhatGuestsShouldHearAsync(db, hosted, before.Dates, before.DefaultStartLocal,
+                before.DefaultEndLocal, before.PlaceId, before.TimeZoneId, ct);
+            if (changes.Count > 0) await mail.SendEventChangedAsync(db, hosted.Id, changes, ct);
+        }
+
         return Ok((await LoadAsync(db, orgId, eventId, ct))[0]);
+    }
+
+    /// <summary>The dates the event will have once this save lands.</summary>
+    private static List<DateTime> WantedDates(HostedEvent hosted, IReadOnlyList<DateTime>? dates)
+        => (hosted.DatesAreSeparate
+                ? (dates ?? hosted.Nights.Select(n => n.Date).ToList()).Select(d => d.Date)
+                : HostedEventCalendarSync.DatesOfAStay(hosted.StartsOn, hosted.EndsOn))
+            .Distinct().OrderBy(d => d).ToList();
+
+    /// <summary>
+    /// Why a date can't come off the event, or null. A date with people on it is refused in words, naming
+    /// the date and what is on it, rather than failing in the database (10/23/2026: the save answered with
+    /// a bare error). Leftovers of bookings that are over — turned down, canceled, let go — don't hold a
+    /// date; they are cleared with it.
+    /// </summary>
+    private static async Task<string?> WhyDatesCannotGoAsync(
+        BenDataContext db, HostedEvent hosted, List<DateTime> wanted, CancellationToken ct)
+    {
+        var gone = hosted.Nights.Where(n => !wanted.Contains(n.Date.Date)).ToList();
+        if (gone.Count == 0) return null;
+        var ids = gone.Select(n => n.Id).ToList();
+
+        var booked = await db.HostedEventBookingNights.AsNoTracking()
+            .Where(n => ids.Contains(n.HostedEventNightId) && n.ReleasedUtc == null
+                     && (n.HostedEventBooking.Status == HostedEventBookingStatus.Requested
+                      || n.HostedEventBooking.Status == HostedEventBookingStatus.Held
+                      || n.HostedEventBooking.Status == HostedEventBookingStatus.Confirmed))
+            .Select(n => new { n.HostedEventNightId, n.HostedEventBookingId })
+            .ToListAsync(ct);
+        var arrived = await db.HostedEventCheckIns.AsNoTracking().Where(c => ids.Contains(c.HostedEventNightId))
+            .Select(c => c.HostedEventNightId).ToListAsync(ct);
+        var walkUps = await db.HostedEventWalkUps.AsNoTracking().Where(w => ids.Contains(w.HostedEventNightId))
+            .Select(w => w.HostedEventNightId).ToListAsync(ct);
+
+        foreach (var night in gone.OrderBy(n => n.Date))
+        {
+            var day = night.Date.ToString("ddd MM/dd", CultureInfo.InvariantCulture);
+            var parties = booked.Where(b => b.HostedEventNightId == night.Id).Select(b => b.HostedEventBookingId).Distinct().Count();
+            if (parties > 0)
+                return $"{day} can't come off: {parties} {(parties == 1 ? "party is" : "parties are")} booked on it. "
+                     + "Move or release them on the booking board first.";
+            if (arrived.Contains(night.Id) || walkUps.Contains(night.Id))
+                return $"{day} can't come off: people were checked in on it, and that record stays.";
+        }
+
+        // Nothing live on them: what's left belongs to bookings that are over, or to rooms blocked that night.
+        db.HostedEventBookingNights.RemoveRange(
+            await db.HostedEventBookingNights.Where(n => ids.Contains(n.HostedEventNightId)).ToListAsync(ct));
+        db.HostedEventUnitBlocks.RemoveRange(
+            await db.HostedEventUnitBlocks.Where(b => b.HostedEventNightId != null && ids.Contains(b.HostedEventNightId.Value)).ToListAsync(ct));
+        db.HostedEventEmailPickPlaces.RemoveRange(
+            await db.HostedEventEmailPickPlaces.Where(p => ids.Contains(p.HostedEventNightId)).ToListAsync(ct));
+        return null;
+    }
+
+    /// <summary>What changed that somebody holding a place needs to know, one plain sentence each.</summary>
+    private static async Task<List<string>> WhatGuestsShouldHearAsync(
+        BenDataContext db, HostedEvent hosted, List<DateTime> datesBefore, TimeSpan? startBefore, TimeSpan? endBefore,
+        Guid placeBefore, string zoneBefore, CancellationToken ct)
+    {
+        var said = new List<string>();
+        var datesNow = hosted.Nights.Select(n => n.Date.Date).OrderBy(d => d).ToList();
+        if (!datesNow.SequenceEqual(datesBefore) && datesNow.Count > 0)
+        {
+            static string D(DateTime d) => d.ToString("ddd MM/dd", CultureInfo.InvariantCulture);
+            said.Add(datesNow.Count == 1 ? $"It is now on {D(datesNow[0])}."
+                   : hosted.DatesAreSeparate ? $"Its dates are now {string.Join(", ", datesNow.Select(D))}."
+                   : $"It now runs {D(datesNow[0])} to {D(datesNow[^1])}.");
+        }
+        if (hosted.DefaultStartLocal != startBefore || hosted.DefaultEndLocal != endBefore || hosted.TimeZoneId != zoneBefore)
+        {
+            static string T(TimeSpan t) => DateTime.Today.Add(t).ToString("h:mm tt", CultureInfo.InvariantCulture);
+            if (hosted.DefaultStartLocal is { } from && hosted.DefaultEndLocal is { } to)
+                said.Add($"It now usually starts at {T(from)} and ends at {T(to)}.");
+            else
+                said.Add("Its times have changed. The event's page has them.");
+        }
+        if (hosted.PlaceId != placeBefore)
+        {
+            var place = await db.Places.AsNoTracking().Where(p => p.Id == hosted.PlaceId)
+                .Select(p => p.Name).FirstOrDefaultAsync(ct);
+            said.Add($"It has moved to {place ?? "a different venue"}.");
+        }
+        return said;
     }
 
     /// <summary>Changing one date: what it is called, when it runs, what to say about it.</summary>
@@ -490,6 +592,11 @@ public sealed class HostedEventController : OrgCmsControllerBase
             return Ok((await LoadAsync(db, orgId, eventId, ct))[0]);
 
         var now = DateTime.UtcNow;
+        // Not once it has happened (10/23/2026): this mailed "called off" to everybody who came, after the
+        // fact. An event under way can still be stopped — a storm on the Saturday of a weekend is real.
+        if (hosted.LifecycleState is HostedEventLifecycleState.Ended or HostedEventLifecycleState.Archived
+            || now >= HostedEventCalendarSync.Window(hosted, [.. hosted.Nights.OrderBy(n => n.Date)]).EndUtc)
+            return Conflict("This event has already happened, so it can't be called off.");
 
         // Both, and the state is the one anything reads. The stamp says when; it is not the answer
         // to "is this off", which is what it used to be and what let the door go on taking bookings
@@ -635,6 +742,13 @@ public sealed class HostedEventController : OrgCmsControllerBase
                             + "It runs whatever the numbers come to.");
 
         var now = DateTime.UtcNow;
+        // Going ahead or not is decided before it starts; afterwards a no-go would tell the people who came
+        // that it isn't happening (10/23/2026). Calling off one under way is "Call it off".
+        if (HostedEventStates.CalledOff.Contains(hosted.LifecycleState)
+            || hosted.LifecycleState is HostedEventLifecycleState.Live or HostedEventLifecycleState.Ended
+                                     or HostedEventLifecycleState.Archived
+            || now >= HostedEventCalendarSync.Window(hosted, [.. hosted.Nights.OrderBy(n => n.Date)]).StartUtc)
+            return Conflict("This event has already started, so whether it goes ahead has been decided.");
         hosted.GoNoGoDecision = decision;
         hosted.GoNoGoDecidedUtc = now;
         hosted.GoNoGoDecidedByAppUserId = userId.Value;
@@ -1400,10 +1514,7 @@ public sealed class HostedEventController : OrgCmsControllerBase
         BenDataContext db, HostedEvent hosted, IReadOnlyList<DateTime>? dates, Guid userId,
         CancellationToken ct)
     {
-        var wanted = (hosted.DatesAreSeparate
-                ? (dates ?? hosted.Nights.Select(n => n.Date).ToList()).Select(d => d.Date)
-                : HostedEventCalendarSync.DatesOfAStay(hosted.StartsOn, hosted.EndsOn))
-            .Distinct().OrderBy(d => d).ToList();
+        var wanted = WantedDates(hosted, dates);
 
         var existing = hosted.Nights.ToList();
         var now = DateTime.UtcNow;
