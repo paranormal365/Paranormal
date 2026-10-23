@@ -40,6 +40,11 @@ protocol MicrophoneTapSharing: AnyObject, Sendable {
 /// - the file is written by `SessionAudioWriter`, which converts a buffer whose format has
 ///   changed, writes a gap as silence, and reports the sound actually in the file.
 ///
+/// **The meter ending does not end the recording (10/23/2026).** Ben's first session on 1.1.5 had
+/// video and a moving sound reading, and no sound at all. The sensor feeds restart whenever a
+/// setting changes mid-session, and the old meter feed ending used to close the open recording
+/// with it. Who still wants the microphone is now `MicrophoneDemand`'s to say.
+///
 /// Interruptions are watched for and reported. A call, or another app taking the microphone,
 /// stops a recording; somebody who believes they are recording and is not has lost the night, so
 /// this is surfaced rather than swallowed.
@@ -56,6 +61,8 @@ final class LiveAudioCapture: AudioLevelSource, AudioRecording, MicrophoneTapSha
     private var tapInstalled = false
     /// The meter, kept so the tap can be rebuilt after the microphone comes back.
     private var meter: (@Sendable (AudioLevelSample) -> Void)?
+    /// Which meter feed is running and whether a recording is open. See `MicrophoneDemand`.
+    private var demand = MicrophoneDemand()
     /// Whether something wants the microphone running: the meter, or a recording.
     private var wanted = false
     /// True while a video clip has been lent the microphone, so nothing here fights it for one.
@@ -105,14 +112,20 @@ final class LiveAudioCapture: AudioLevelSource, AudioRecording, MicrophoneTapSha
     private func isWanted() -> Bool { locked { wanted } }
 
     private func adopt(_ created: SessionAudioWriter) {
-        locked { writer = created }
+        locked {
+            writer = created
+            demand.recordingStarted()
+        }
     }
 
     /// Releases the file — which is what finalises the container — and reports how much sound it
     /// holds.
     private func releaseFile() -> TimeInterval {
         let finished = locked { () -> SessionAudioWriter? in
-            defer { writer = nil }
+            defer {
+                writer = nil
+                demand.recordingEnded()
+            }
             return writer
         }
         return finished?.close() ?? 0
@@ -122,17 +135,21 @@ final class LiveAudioCapture: AudioLevelSource, AudioRecording, MicrophoneTapSha
 
     func levels() -> AsyncStream<AudioLevelSample> {
         AsyncStream { continuation in
-            locked {
+            let feed = locked { () -> UUID in
                 meter = { continuation.yield($0) }
                 wanted = true
+                return demand.meterStarted()
             }
             do {
                 try configureSession()
-                try startEngine()
+                if !hasTap() || !engine.isRunning { try startEngine() }
             } catch {
                 // No microphone, or permission refused: the session carries on without sound.
                 // A missing channel narrows a reading; it never stops one.
-                locked { meter = nil }
+                locked {
+                    if demand.meterFeed == feed { meter = nil }
+                    demand.meterEnded(feed)
+                }
                 continuation.finish()
                 return
             }
@@ -140,7 +157,7 @@ final class LiveAudioCapture: AudioLevelSource, AudioRecording, MicrophoneTapSha
             // somebody takes a video is what Ben saw first, and the meter runs whether a clip is
             // being written or not.
             watchForInterruptions()
-            continuation.onTermination = { [weak self] _ in self?.teardown() }
+            continuation.onTermination = { [weak self] _ in self?.meterEnded(feed) }
         }
     }
 
@@ -189,7 +206,8 @@ final class LiveAudioCapture: AudioLevelSource, AudioRecording, MicrophoneTapSha
         // Releasing the AVAudioFile is what finalises the container. Dropped without this, an
         // m4a has no moov atom and will not play anywhere.
         let seconds = releaseFile()
-        if !keepingWatch, locked({ meter == nil }) { stopWatching() }
+        // Nothing left that wants the microphone: put it away, as the meter ending would have.
+        if !keepingWatch, locked({ !demand.wantsMicrophone }) { teardown() }
         return seconds
     }
 
@@ -452,10 +470,24 @@ final class LiveAudioCapture: AudioLevelSource, AudioRecording, MicrophoneTapSha
         microphoneReturned()
     }
 
+    /// One meter feed has ended — the session restarting its sensors, or the session ending.
+    ///
+    /// Only that feed goes. A recording still open keeps the microphone (the session closes it
+    /// with `endRecording`, which finalises the file), and so does a newer feed.
+    private func meterEnded(_ feed: UUID) {
+        let nobodyWantsIt = locked { () -> Bool in
+            if demand.meterFeed == feed { meter = nil }
+            return demand.meterEnded(feed)
+        }
+        if nobodyWantsIt { teardown() }
+    }
+
+    /// Nothing wants the microphone any more: the file (if any) is finalised and everything goes.
     private func teardown() {
         _ = releaseFile()
         locked {
             meter = nil
+            demand.reset()
             wanted = false
             listeners = [:]
         }
