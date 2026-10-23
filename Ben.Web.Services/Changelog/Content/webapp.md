@@ -38,6 +38,8 @@ day-by-day account of building it would say nothing to anyone using it now.
 - Before an event starts, anybody signed in can write a question to its organizers, even without a
   booking. The organizers see beside each message whether that person is confirmed, signed up, or not
   signed up.
+- Signed out, an upcoming event's page says you can sign in and write to its organizers, with no booking
+  needed.
 - The help for the iPhone and iPad app now covers version 1.1.5: asking a question and listening
   for the answer with one button that says what it will do, with the readings on screen. Its
   picture, the printable guides and the app's screens on the home page show the new screen.

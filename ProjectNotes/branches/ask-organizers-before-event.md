@@ -25,3 +25,10 @@ might notate it for the organizer to see."
 `WritingToTheOrganizersTests`: a stranger asks ten days out, Jim answers, the event starts, the stranger
 reads and can't write, Jim and a guest still can; standings on the list and the thread. The new test and
 the updated first test fail on the old controller.
+
+## Follow-up (feature/ask-organizers-signed-out)
+
+Signed out, an upcoming hosted event's page shows a short "Write to the organizers" section: sign in
+(returning to `#event-organizer-thread`) and write, no booking needed. Hidden once the event starts.
+Playwright `Signed_out_the_event_page_says_you_can_sign_in_and_ask_the_organizers`, not yet run (test
+database unreachable 10/23).
