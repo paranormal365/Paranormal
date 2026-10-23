@@ -27,7 +27,7 @@ and ideas behind running the site, goes under a `### Administration` sub-heading
 after the lines everybody reads. Only SuperAdmins see those lines. A version with nothing else in
 it is hidden from everybody else, but still takes its number. No other sub-heading is read.
 
-## Unreleased
+## 1.1.6
 
 - A session's sound recording is kept when you change a setting partway through — turning Watch for Motion on or off, switching a channel, or arming the sentry. Before, the sound meter kept moving but the recording stopped, and the session ended with no sound.
 
