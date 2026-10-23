@@ -49,7 +49,9 @@
                     }
                     else
                     {
-                        @($"{_totalCount} case{(_totalCount == 1 ? "" : "s")} worldwide")
+                        @* Public cases only: a member's own private cases are listed below with "Not public", and
+                           counting them here put "2 cases worldwide" over a section with none (10/23/2026). *@
+                        <span id="public-cases-count">@CountLine(_totalCount, _ownShown)</span>
                     }
                 </span>
             </div>
@@ -280,6 +282,19 @@
     /// </summary>
     private bool   _refreshing;
     private int    _totalCount = 0;
+    /// <summary>Cases in the answer shown only because this person can open them.</summary>
+    private int    _ownShown = 0;
+
+    /// <summary>
+    /// "3 public cases worldwide", and for a member, how many of their own private ones are listed too.
+    /// </summary>
+    public static string CountLine(int total, int ownShown)
+    {
+        var shown = Math.Max(0, ownShown);
+        var publicCount = Math.Max(0, total - shown);
+        var line = $"{publicCount} public case{(publicCount == 1 ? "" : "s")} worldwide";
+        return shown > 0 ? $"{line} · {shown} of yours, not public" : line;
+    }
     private int    _page       = 1;
     private int    _pageSize   = 18;
     private string _sort       = "votes";
@@ -381,6 +396,7 @@
 
         _totalCount  = response.TotalCount;
         var allItems = response.Items.ToList();
+        _ownShown    = allItems.Count(i => !i.IsPublic);
 
         // Fetched once, alongside the cases, so the map is drawn from one pass rather than
         // repainting when a second answer arrives.
