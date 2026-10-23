@@ -69,7 +69,16 @@
             </div>
         </div>
     }
-    <div><a class="btn btn-sm btn-outline-light" href="/help/organization-administration#your-groups-plan">How plans work</a></div>
+    <div class="pricing-hero-links d-flex flex-wrap gap-2">
+        <a class="btn btn-sm btn-outline-light" href="/help/organization-administration#your-groups-plan">How plans work</a>
+        @* Hosted events and the Ghost Walk Tour subscription sit below every plan, where nobody
+           looking at the plans finds them (Ben, 10/23/2026). Shown only while one of them is for
+           sale. A plain link, so it works before the page is live, and the browser scrolls. *@
+        @if (JumpBelow is { } jump)
+        {
+            <a class="btn btn-sm btn-outline-light" href="@jump.Href" data-testid="pricing-jump-below">@jump.Label</a>
+        }
+    </div>
 </PageHero>
 
 <div class="home-band">
@@ -670,6 +679,25 @@
 
     private PublicPricingExtras? _extras;
     [PersistentState] public PublicPricingExtras? RenderedExtras { get; set; }
+
+    /// <summary>Whether hosted events can be bought here now: the section is shown and on sale.</summary>
+    private bool EventsForSale => Features.IsOn(SiteFeatures.Events) && _tiersResult.Items.Count > 0
+                               && _extras?.Events.OnSale == true;
+
+    /// <summary>Whether the Ghost Walk Tour subscription is on sale (the API sends it only then).</summary>
+    private bool GhostWalkForSale => _extras?.GhostWalk is not null;
+
+    /// <summary>
+    /// The hero's link down to what is sold outside the plans, naming what is there. It goes to the
+    /// first of the two sections on the page; the other follows straight after it.
+    /// </summary>
+    private (string Href, string Label)? JumpBelow => (EventsForSale, GhostWalkForSale) switch
+    {
+        (true, true) => ("/pricing#events", "Events and ghost walks"),
+        (true, false) => ("/pricing#events", "Hosted events"),
+        (false, true) => ("/pricing#ghost-walk", "Ghost walk tours"),
+        _ => null,
+    };
 
     private int _eventQuantity = 1;
     private int? _eventBundle;

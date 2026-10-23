@@ -222,6 +222,8 @@ day-by-day account of building it would say nothing to anyone using it now.
   to use that, or type your own. What you type is no longer joined onto the suggestion on a slow
   connection.
 - The prices on the home page no longer disappear for a moment as the page finishes loading.
+- While hosted events or ghost walk tours are on sale, the top of the Pricing page has a button
+  that takes you straight down to them.
 
 ### Administration
 

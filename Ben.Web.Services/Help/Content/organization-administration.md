@@ -2625,7 +2625,10 @@ site, so a part of the site that's turned off isn't offered on any plan.
 
 ![What each plan includes: the first plan in full, and the others by how they differ](help-media:organization-administration/pricing-whats-included.png)
 
-Below that, **Hosted events** says what an event includes: the rooms or seats plan, bookings and the
+While something outside the plans is on sale, a button at the top of the page, beside **How plans
+work**, names it and takes you straight down to it.
+
+Below the plans, **Hosted events** says what an event includes: the rooms or seats plan, bookings and the
 booking board, the program, menus, dining tables and the dietary sheet, passes and the door, staff,
 the event's page, files, the guests' room, and the thank-you afterwards. It also says what an event
 costs. No plan includes events, so every event is bought on its own: **{{price.event-credit}}**, or
