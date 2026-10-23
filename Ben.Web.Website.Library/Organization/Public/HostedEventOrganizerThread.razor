@@ -8,9 +8,9 @@
 @* Writing to the people running the event (event-scenario-gaps; Ben's scenario: "contact Jim either on our
    app").
 
-   FOR ITS GUESTS ONLY. Anybody with a booking here, whatever became of it, as its lead or named on it.
-   The server tells anybody else nothing, and the page draws nothing for them. The same conversation is in
-   the app, under the event. *@
+   Anybody with a booking here, whatever became of it, as its lead or named on it; and before the event
+   starts, anybody signed in (Ben, 10/23/2026). The server tells anybody else nothing, and the page draws
+   nothing for them. The same conversation is in the app, under the event. *@
 
 @if (_thread.Failed)
 {
@@ -38,7 +38,7 @@ else if (_thread.Item is { } thread)
         {
             <label class="visually-hidden" for="organizer-thread-body">Your message</label>
             <textarea class="form-control mb-2" id="organizer-thread-body" rows="3" maxlength="2000"
-                      placeholder="A question about the event, your booking, or anything else" @bind="_body" @bind:event="oninput"></textarea>
+                      placeholder="A question about the event, or anything else" @bind="_body" @bind:event="oninput"></textarea>
             <button type="button" class="btn btn-primary btn-sm" id="organizer-thread-send"
                     disabled="@(_busy || string.IsNullOrWhiteSpace(_body))" @onclick="SendAsync">Send</button>
         }

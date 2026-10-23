@@ -38,11 +38,13 @@ public sealed class WritingToTheOrganizersTests
     {
         await using var w = await ScenarioWorld.CreateAsync();
 
-        // Before writing: an empty conversation for the guest, nothing at all for a stranger.
+        // Before writing: an empty conversation for the guest. The event has started, so a stranger is told
+        // nothing and can't write.
         var empty = Thread(await Guest(w, ScenarioWorld.Came).Get(w.EventId, default));
         Assert.Equal((null, true, "Jim's Investigations"), (empty.ThreadId, empty.CanWrite, empty.OrganizerName));
         Assert.IsType<NoContentResult>((await Guest(w, ScenarioWorld.Stranger).Get(w.EventId, default)).Result);
-        Assert.IsType<NotFoundResult>((await Guest(w, ScenarioWorld.Stranger).Post(w.EventId, new("hello?"), default)).Result);
+        var late = Assert.IsType<ConflictObjectResult>((await Guest(w, ScenarioWorld.Stranger).Post(w.EventId, new("hello?"), default)).Result);
+        Assert.Equal("Questions from people without a booking close when the event starts.", late.Value);
 
         var sent = Thread(await Guest(w, ScenarioWorld.Came).Post(w.EventId, new("Is there parking at the loading dock?"), default));
         Assert.StartsWith("Sent.", sent.Note);
@@ -56,8 +58,11 @@ public sealed class WritingToTheOrganizersTests
         var list = Assert.IsAssignableFrom<IReadOnlyList<EventGuestThreadSummaryRecord>>(
             Assert.IsType<OkObjectResult>((await Organizer(w, ScenarioWorld.Jim).List(w.OrgId, w.EventId, default)).Result).Value);
         var row = Assert.Single(list);
-        Assert.Equal((ScenarioWorld.Came, "Came", true, 1), (row.GuestId, row.GuestName, row.WaitingOnUs, row.Count));
+        Assert.Equal((ScenarioWorld.Came, "Came", true, 1, "Confirmed"), (row.GuestId, row.GuestName, row.WaitingOnUs, row.Count, row.Standing));
 
+        Assert.Equal("Confirmed", Thread(await Organizer(w, ScenarioWorld.Jim).Get(w.OrgId, w.EventId, ScenarioWorld.Came, default)).Standing);
+        // The guest never sees it: it is for the people answering.
+        Assert.Null(Thread(await Guest(w, ScenarioWorld.Came).Get(w.EventId, default)).Standing);
         // Opening it marks it read for Jim; answering puts it on the guest's bell, on its own row.
         Thread(await Organizer(w, ScenarioWorld.Jim).Get(w.OrgId, w.EventId, ScenarioWorld.Came, default));
         Assert.Equal(0, (await BellAsync(w, ScenarioWorld.Jim)).OrgMessages.Count);
@@ -97,6 +102,11 @@ public sealed class WritingToTheOrganizersTests
         Thread(await Guest(w, ScenarioWorld.Asked).Post(w.EventId, new("Is there room for one more?"), default));
         Thread(await Guest(w, ScenarioWorld.CameGuest).Post(w.EventId, new("Can I bring a camera?"), default));
         Assert.Equal(2, (await BellAsync(w, ScenarioWorld.Jim)).OrgMessages.Count);
+        var standings = Assert.IsAssignableFrom<IReadOnlyList<EventGuestThreadSummaryRecord>>(
+            Assert.IsType<OkObjectResult>((await Organizer(w, ScenarioWorld.Jim).List(w.OrgId, w.EventId, default)).Result).Value)
+            .ToDictionary(t => t.GuestId, t => t.Standing);
+        Assert.Equal("Signed up, not confirmed yet", standings[ScenarioWorld.Asked]);
+        Assert.Equal("Confirmed", standings[ScenarioWorld.CameGuest]);
 
         var blank = Assert.IsType<BadRequestObjectResult>((await Guest(w, ScenarioWorld.Came).Post(w.EventId, new("   "), default)).Result);
         Assert.Equal("Write something first.", blank.Value);
@@ -107,6 +117,49 @@ public sealed class WritingToTheOrganizersTests
         var reply = Assert.IsType<ConflictObjectResult>((await Organizer(w, ScenarioWorld.Jim).Answer(
             w.OrgId, w.EventId, ScenarioWorld.Asked, new("Sorry"), default)).Result);
         Assert.StartsWith("This event isn't on the site", (string)reply.Value!);
+    }
+
+    /// <summary>Moves the run to start in <paramref name="days"/> days, nights and all.</summary>
+    private static async Task MoveTheRunAsync(ScenarioWorld w, int days)
+    {
+        await using var db = await w.Sqlite.NewContextAsync();
+        var ev = await db.HostedEvents.SingleAsync(e => e.Id == w.EventId);
+        ev.StartsOn = ev.StartsOn.AddDays(days);
+        ev.EndsOn = ev.EndsOn.AddDays(days);
+        foreach (var night in await db.HostedEventNights.Where(n => n.HostedEventId == w.EventId).ToListAsync())
+            night.Date = night.Date.AddDays(days);
+        await db.SaveChangesAsync();
+    }
+
+    /// <summary>
+    /// Ben, 10/23/2026: "People can write questions to the event organizers before the event." Somebody with
+    /// no booking asks, Jim answers, and once the event starts they can read the answer and not write again.
+    /// </summary>
+    [Fact]
+    public async Task Anybody_signed_in_may_ask_before_the_event_starts_and_keeps_the_answer_after()
+    {
+        await using var w = await ScenarioWorld.CreateAsync();
+        await MoveTheRunAsync(w, 10);
+
+        var empty = Thread(await Guest(w, ScenarioWorld.Stranger).Get(w.EventId, default));
+        Assert.Equal((null, true, null), (empty.ThreadId, empty.CanWrite, empty.WhyNotWrite));
+
+        var sent = Thread(await Guest(w, ScenarioWorld.Stranger).Post(w.EventId, new("Is it suitable for a twelve-year-old?"), default));
+        Assert.StartsWith("Sent.", sent.Note);
+        Assert.Equal(1, (await BellAsync(w, ScenarioWorld.Jim)).OrgMessages.Count);
+        var answered = Thread(await Organizer(w, ScenarioWorld.Jim).Answer(w.OrgId, w.EventId, ScenarioWorld.Stranger, new("Thirteen and up, sorry."), default));
+        Assert.Equal("Not signed up", answered.Standing);
+
+        // The event starts: the conversation stays readable, and is closed to them.
+        await MoveTheRunAsync(w, -10);
+        var after = Thread(await Guest(w, ScenarioWorld.Stranger).Get(w.EventId, default));
+        Assert.Equal(["Is it suitable for a twelve-year-old?", "Thirteen and up, sorry."], after.Messages.Select(m => m.Body));
+        Assert.Equal((false, "Questions from people without a booking close when the event starts."), (after.CanWrite, after.WhyNotWrite));
+        Assert.IsType<ConflictObjectResult>((await Guest(w, ScenarioWorld.Stranger).Post(w.EventId, new("And fourteen?"), default)).Result);
+
+        // Jim can still answer them, and a guest can still write.
+        Thread(await Organizer(w, ScenarioWorld.Jim).Answer(w.OrgId, w.EventId, ScenarioWorld.Stranger, new("Fourteen is fine."), default));
+        Thread(await Guest(w, ScenarioWorld.Came).Post(w.EventId, new("Is there parking?"), default));
     }
 
     [Fact]

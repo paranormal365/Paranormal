@@ -12,8 +12,9 @@ namespace Ben.Data.WebApi.Controllers.Public;
 /// (event-scenario-gaps). See <see cref="EventGuestThreads"/>.
 /// </summary>
 /// <remarks>
-/// Somebody with no booking at the event is told nothing (204), so the event page can ask for every reader
-/// and draw the conversation only for its guests.
+/// Anybody signed in may write until the event starts; a guest, while the event takes messages at all. Somebody
+/// with no booking who can't write and never did is told nothing (204), so the event page can ask for every
+/// reader and draw the conversation only where there is one to have.
 /// </remarks>
 [ApiController]
 [Authorize]
@@ -26,7 +27,7 @@ public sealed class PublicEventGuestThreadController : BenControllerBase
     public PublicEventGuestThreadController(IDbContextFactory<BenDataContext> dbFactory, Services.Access.HostedEventAccess access)
     { _dbFactory = dbFactory; _access = access; }
 
-    /// <summary>The guest's conversation (empty before their first message), or nothing for anybody else.</summary>
+    /// <summary>The reader's conversation (empty before their first message), or nothing when they have none and may not start one.</summary>
     [HttpGet]
     public async Task<ActionResult<EventGuestThreadRecord>> Get(Guid eventId, CancellationToken ct)
     {
@@ -34,11 +35,16 @@ public sealed class PublicEventGuestThreadController : BenControllerBase
         await using var db = await _dbFactory.CreateDbContextAsync(ct);
         var ev = await db.HostedEvents.AsNoTracking().FirstOrDefaultAsync(e => e.Id == eventId, ct);
         if (ev is null) return NotFound();
-        if (userId == Guid.Empty || !await EventGuestThreads.IsGuestAsync(db, eventId, userId, ct)) return NoContent();
+        if (userId == Guid.Empty) return NoContent();
 
+        var now = DateTime.UtcNow;
+        var isGuest = await EventGuestThreads.IsGuestAsync(db, eventId, userId, ct);
+        var why = EventGuestThreads.WhyClosedFor(ev, now, isGuest, await EventGuestThreads.StartsAtUtcAsync(db, ev, ct));
         var root = await EventGuestThreads.RootAsync(db, eventId, userId, ct);
-        if (root is not null) await EventGuestThreads.MarkReadAsync(db, root, userId, DateTime.UtcNow, ct);
-        return Ok(await EventGuestThreads.RecordAsync(db, ev, userId, root, userId, null, ct));
+        if (!isGuest && root is null && why is not null) return NoContent();
+
+        if (root is not null) await EventGuestThreads.MarkReadAsync(db, root, userId, now, ct);
+        return Ok(await EventGuestThreads.RecordAsync(db, ev, userId, root, userId, null, ct, why));
     }
 
     /// <summary>Writes to the organizers.</summary>
@@ -49,10 +55,12 @@ public sealed class PublicEventGuestThreadController : BenControllerBase
         var userId = GetCurrentUserId();
         await using var db = await _dbFactory.CreateDbContextAsync(ct);
         var ev = await db.HostedEvents.AsNoTracking().FirstOrDefaultAsync(e => e.Id == eventId, ct);
-        if (ev is null || userId == Guid.Empty || !await EventGuestThreads.IsGuestAsync(db, eventId, userId, ct)) return NotFound();
+        if (ev is null || userId == Guid.Empty) return NotFound();
 
         var now = DateTime.UtcNow;
-        if (EventGuestThreads.WhyClosed(ev, now) is { } closed) return Conflict(closed);
+        var isGuest = await EventGuestThreads.IsGuestAsync(db, eventId, userId, ct);
+        if (EventGuestThreads.WhyClosedFor(ev, now, isGuest, await EventGuestThreads.StartsAtUtcAsync(db, ev, ct)) is { } closed)
+            return Conflict(closed);
         var (body, refusal) = EventGuestThreads.Clean(request.Body);
         if (body is null) return BadRequest(refusal);
 

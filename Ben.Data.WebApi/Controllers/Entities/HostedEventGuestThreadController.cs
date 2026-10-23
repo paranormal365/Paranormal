@@ -45,11 +45,12 @@ public sealed class HostedEventGuestThreadController : BenControllerBase
             })
             .ToListAsync(ct);
 
+        var standings = await EventGuestThreads.StandingsAsync(db, eventId, [.. threads.Select(t => t.AuthorAppUserId)], ct);
         return Ok(threads.Where(t => t.Last is not null)
             .OrderByDescending(t => t.Last!.DateCreated)
             .Select(t => new EventGuestThreadSummaryRecord(
                 t.Id, t.AuthorAppUserId, t.Name ?? "A guest", t.Last!.Body, t.Last.DateCreated,
-                t.Last.AuthorAppUserId == t.AuthorAppUserId, t.Count))
+                t.Last.AuthorAppUserId == t.AuthorAppUserId, t.Count, standings[t.AuthorAppUserId]))
             .ToList());
     }
 
@@ -65,7 +66,8 @@ public sealed class HostedEventGuestThreadController : BenControllerBase
         if (root is null) return NotFound();
         var userId = GetCurrentUserId();
         await EventGuestThreads.MarkReadAsync(db, root, userId, DateTime.UtcNow, ct);
-        return Ok(await EventGuestThreads.RecordAsync(db, ev, guestId, root, userId, null, ct));
+        return Ok(await EventGuestThreads.RecordAsync(db, ev, guestId, root, userId, null, ct,
+            standing: await StandingAsync(db, eventId, guestId, ct)));
     }
 
     /// <summary>Answers a guest.</summary>
@@ -87,8 +89,12 @@ public sealed class HostedEventGuestThreadController : BenControllerBase
         var userId = GetCurrentUserId();
         var audience = (await EventBookingRecipients.ForAsync(db, _access, ev, ct)).Select(r => r.AppUserId).ToList();
         root = await EventGuestThreads.WriteAsync(db, ev, guestId, guestName: "", root, userId, body, audience, now, ct);
-        return Ok(await EventGuestThreads.RecordAsync(db, ev, guestId, root, userId, "Sent. They'll see it on the event's page and in the app.", ct));
+        return Ok(await EventGuestThreads.RecordAsync(db, ev, guestId, root, userId, "Sent. They'll see it on the event's page and in the app.", ct,
+            standing: await StandingAsync(db, eventId, guestId, ct)));
     }
+
+    private static async Task<string> StandingAsync(BenDataContext db, Guid eventId, Guid guestId, CancellationToken ct)
+        => (await EventGuestThreads.StandingsAsync(db, eventId, [guestId], ct))[guestId];
 
     private async Task<ActionResult?> GateAsync(BenDataContext db, Guid orgId, Guid eventId, CancellationToken ct)
     {

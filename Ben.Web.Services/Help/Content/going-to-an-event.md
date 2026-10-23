@@ -238,7 +238,10 @@ week after the walk.
 ## Writing to the organizers
 
 If you have a booking at an event, whatever became of it, the event's page has **Write to the
-organizers**. Ask about parking, your booking, what to bring, or anything else. Only the group
+organizers**. Ask about parking, your booking, what to bring, or anything else. Before an event
+starts, you can ask its organizers a question even without a booking. Sign in and it's on the
+event's page. Once the event starts, you can still read their answer, but only people with a booking
+can write. Only the group
 running the event, and the people they've asked to answer bookings, see what you write. Nobody else
 does, and it never appears on the feed or in the room.
 

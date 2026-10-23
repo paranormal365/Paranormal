@@ -29,7 +29,8 @@
         <div class="text-secondary mb-1" id="guest-messages-event">@name</div>
     }
     <p class="text-secondary small mb-3">
-        What guests with a booking have written to you about this event. Your answer goes to them on the event's page and in the app.
+        What people have written to you about this event: anybody with a booking, and before it starts, anybody
+        signed in with a question. Each says whether they're signed up. Your answer goes to them on the event's page and in the app.
     </p>
 
     @if (_note is { Length: > 0 }) { <div class="alert alert-success py-2" role="status" id="guest-messages-note">@_note</div> }
@@ -52,6 +53,7 @@
                                     <span class="badge text-bg-warning flex-shrink-0" data-testid="waiting-on-us">Waiting on you</span>
                                 }
                             </div>
+                            <div class="small" data-testid="guest-standing">@thread.Standing</div>
                             <div class="small text-truncate">@thread.LastBody</div>
                             <div class="small opacity-75">@thread.LastUtc.ToViewerLocalTime(UserState).ToDisplayDateTime()</div>
                         </button>
@@ -75,7 +77,13 @@
                         @if (_thread.Item is { } open)
                         {
                             <div class="card" id="guest-message-thread">
-                                <div class="card-header fw-semibold" style="overflow-wrap:anywhere;">@open.GuestName</div>
+                                <div class="card-header d-flex flex-wrap justify-content-between gap-2">
+                                    <span class="fw-semibold" style="overflow-wrap:anywhere;">@open.GuestName</span>
+                                    @if (open.Standing is { Length: > 0 } standing)
+                                    {
+                                        <span class="small" id="guest-message-standing">@standing</span>
+                                    }
+                                </div>
                                 <div class="card-body">
                                     <EventGuestThreadMessages Messages="@open.Messages" />
                                     @if (open.CanWrite)
