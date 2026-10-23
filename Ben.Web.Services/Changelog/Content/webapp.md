@@ -33,6 +33,9 @@ day-by-day account of building it would say nothing to anyone using it now.
 
 ## Unreleased
 
+- The help for the iPhone and iPad app now covers version 1.1.5: asking a question and listening
+  for the answer with one button that says what it will do, with the readings on screen. Its
+  picture, the printable guides and the app's screens on the home page show the new screen.
 - A new short film on the home page: people through history claim famous places, from the Sistine
   Chapel to the Sphinx to an operating room.
 - Pricing is on the menu bar, signed in or not, with a **See pricing** button on the home page and a
