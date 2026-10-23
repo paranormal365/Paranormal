@@ -33,7 +33,7 @@
     <form class="d-flex flex-wrap gap-2 mb-3" role="search" @onsubmit="SearchAsync" id="events-search">
         <label class="visually-hidden" for="events-search-words">Search events</label>
         <input id="events-search-words" class="form-control" style="max-width:28rem;flex:1 1 12rem;min-height:44px;"
-               type="search" maxlength="100" placeholder="An event, a group, a tour or a town"
+               type="search" maxlength="100" placeholder="Event, group or town"
                @bind="_query" @bind:event="oninput" />
         <button type="submit" class="btn btn-primary" style="min-height:44px;" id="events-search-go">Search</button>
         @if (_searched is { Length: > 0 })

@@ -259,10 +259,10 @@ public sealed class ProductWalk : BenTestBase
 
         await StepAsync("home", () => GoAsync("/"), expect: "Haunted");
         await StepAsync("a case from the home page", () => FollowAsync("/o/"));
-        await StepAsync("find a group", () => GoAsync("/find"), Main.GetByPlaceholder("Enter city, address, or zip code"));
+        await StepAsync("find a group", () => GoAsync("/find"), Main.GetByPlaceholder("City, address or zip code"));
         await StepAsync("search Nashville", async () =>
         {
-            await Main.GetByPlaceholder("Enter city, address, or zip code").FillAsync("Nashville, TN");
+            await Main.GetByPlaceholder("City, address or zip code").FillAsync("Nashville, TN");
             // The answer, not a card: every group is already listed as cards before anybody searches.
             await ClickUntilAsync(Main.GetByRole(AriaRole.Button, new() { Name = "Search" }),
                 Main.GetByText("Results near", new() { Exact = false }).Or(Main.Locator(".alert")));

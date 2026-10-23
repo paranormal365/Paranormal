@@ -30,7 +30,7 @@ public class OrgSearchTests : BenTestBase
     [Test]
     public async Task SearchButton_IsEnabledAfterInput()
     {
-        var input = Page.GetByPlaceholder("Enter city, address, or zip code");
+        var input = Page.GetByPlaceholder("City, address or zip code");
         await input.FillAsync("Nashville TN");
         var btn = Page.GetByRole(AriaRole.Button, new() { Name = "Find Groups", Exact = false })
                       .Or(Page.GetByRole(AriaRole.Button, new() { Name = "Search" }))
@@ -41,7 +41,7 @@ public class OrgSearchTests : BenTestBase
     [Test]
     public async Task Search_NashvilleTn_ReturnsResults()
     {
-        var input = Page.GetByPlaceholder("Enter city, address, or zip code");
+        var input = Page.GetByPlaceholder("City, address or zip code");
         await input.FillAsync("Nashville, TN");
         var btn = Page.GetByRole(AriaRole.Button, new() { Name = "Find Groups", Exact = false })
                       .Or(Page.GetByRole(AriaRole.Button, new() { Name = "Search" }))
@@ -58,7 +58,7 @@ public class OrgSearchTests : BenTestBase
     [Description("A search result is a card that opens the group.")]
     public async Task Search_RenderedOrgCard_HasViewGroupLink()
     {
-        var input = Page.GetByPlaceholder("Enter city, address, or zip code");
+        var input = Page.GetByPlaceholder("City, address or zip code");
         await input.FillAsync("Nashville, TN");
         var btn = Page.GetByRole(AriaRole.Button, new() { Name = "Find Groups", Exact = false })
                       .Or(Page.GetByRole(AriaRole.Button, new() { Name = "Search" }))
@@ -78,7 +78,7 @@ public class OrgSearchTests : BenTestBase
     [Test]
     public async Task Search_UnknownCity_ShowsEmptyState()
     {
-        var input = Page.GetByPlaceholder("Enter city, address, or zip code");
+        var input = Page.GetByPlaceholder("City, address or zip code");
         await input.FillAsync("Zxyqwerty, XX 99999");
         var btn = Page.GetByRole(AriaRole.Button, new() { Name = "Find Groups", Exact = false })
                       .Or(Page.GetByRole(AriaRole.Button, new() { Name = "Search" }))

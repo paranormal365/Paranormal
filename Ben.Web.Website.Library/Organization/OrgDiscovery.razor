@@ -19,7 +19,7 @@
     <div class="find-search">
         <label class="visually-hidden" for="orgdiscovery-your-location-3e6b">Your Location</label>
         <input id="orgdiscovery-your-location-3e6b" type="search" class="form-control"
-               placeholder="Enter city, address, or zip code"
+               placeholder="City, address or zip code"
                @bind="_query" @bind:event="oninput" @onkeydown="OnQueryKeyDown" />
         <button type="button" class="btn btn-primary" @onclick="SearchAsync" disabled="@(!(!_searching && !string.IsNullOrWhiteSpace(_query)))">
             @(_searching ? "Searching…" : "Search")
