@@ -338,3 +338,8 @@
         transition: none;
     }
 }
+
+/* The hero's links are a finger's target on a phone or tablet, like every other control here. */
+@media (max-width: 991.98px) {
+    .pricing-hero-links .btn { display: inline-flex; align-items: center; min-height: 44px; }
+}

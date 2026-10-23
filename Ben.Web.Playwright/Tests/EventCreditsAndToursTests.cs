@@ -218,6 +218,67 @@ public class EventCreditsAndToursTests : Oct16TestBase
         NothingWrong(problems);
     }
 
+    // ── The Pricing page's link down to them (Ben, 10/23/2026) ─────────────────────────────────
+
+    private const string CreditsOnKey = "events.credits-enabled";
+    private ILocator JumpBelow => Page.GetByTestId("pricing-jump-below");
+
+    private async Task OpenPricingAsync()
+    {
+        await Page.SetViewportSizeAsync(1440, 900);
+        await Page.GotoAsync($"{BaseUrl}/pricing");
+        await WaitForTheCircuitAsync();
+        await Expect(Page.Locator("[data-testid='pricing-band']").First).ToBeVisibleAsync(new() { Timeout = 30_000 });
+    }
+
+    [Test]
+    public async Task With_events_and_ghost_walks_on_sale_the_top_of_Pricing_takes_you_to_them()
+    {
+        await SetAsync(CreditsOnKey, "true");
+        await SetAsync(PriceKey, "29");
+        await SetAsync(WalkPriceKey, "34");
+        await SetAsync(WalkOnKey, "true");
+        await OpenPricingAsync();
+
+        await Expect(JumpBelow).ToHaveTextAsync("Events and ghost walks");
+        await Expect(Page.GetByTestId("pricing-events")).Not.ToBeInViewportAsync();
+
+        await JumpBelow.ClickAsync();
+        await Expect(Page.GetByTestId("pricing-events")).ToBeInViewportAsync(new() { Timeout = 10_000 });
+        Assert.That(new Uri(Page.Url).AbsolutePath, Is.EqualTo("/pricing"), "the link left the Pricing page");
+
+        // On a phone it, and How plans work beside it, are a finger's size.
+        await Page.SetViewportSizeAsync(375, 812);
+        await Page.GotoAsync($"{BaseUrl}/pricing");
+        await WaitForTheCircuitAsync();
+        var problems = await TouchTargetAsync(JumpBelow, "the link to events", "dark");
+        problems.AddRange(await TouchTargetAsync(Page.GetByRole(AriaRole.Link, new() { Name = "How plans work" }), "How plans work", "dark"));
+        NothingWrong(problems);
+    }
+
+    [Test]
+    public async Task With_only_ghost_walks_on_sale_the_link_says_so_and_goes_to_them()
+    {
+        await SetAsync(CreditsOnKey, "false");
+        await SetAsync(WalkPriceKey, "34");
+        await SetAsync(WalkOnKey, "true");
+        await OpenPricingAsync();
+
+        await Expect(JumpBelow).ToHaveTextAsync("Ghost walk tours");
+        await JumpBelow.ClickAsync();
+        await Expect(Page.GetByTestId("pricing-ghost-walk")).ToBeInViewportAsync(new() { Timeout = 10_000 });
+    }
+
+    [Test]
+    public async Task With_neither_on_sale_there_is_no_link()
+    {
+        await SetAsync(CreditsOnKey, "false");
+        await SetAsync(WalkOnKey, "false");
+        await OpenPricingAsync();
+
+        await Expect(JumpBelow).ToHaveCountAsync(0);
+    }
+
     /// <summary>
     /// The home page's price lines stay drawn when the page comes alive (10/22/2026).
     /// </summary>
