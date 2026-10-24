@@ -33,6 +33,7 @@ day-by-day account of building it would say nothing to anyone using it now.
 
 ## Unreleased
 
+- The brochures at the bottom of the home page show today's prices and the app as it is now, in more colors, with titles that are easy to read.
 - The help for the iPhone and iPad app now covers version 1.1.7: asking an event's organizers a question before you book.
 - Changing a published event's dates, usual times or venue writes to everybody holding a place to say
   what changed.
