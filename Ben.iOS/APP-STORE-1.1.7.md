@@ -1,7 +1,6 @@
 # App Store update: IsHaunted 1.1.7 (build 18)
 
-Started 10/23/2026 on branch `release/ios-1.1.7`, from develop 58c86ef1. **Not yet submitted. Upload only after
-1.1.6 (17) is approved.**
+Started 10/23/2026 on branch `release/ios-1.1.7`, from develop 58c86ef1. **Not yet submitted.** 1.1.6 (17) was approved by 10/24/2026, so this can be uploaded now.
 
 1.1.7 brings one thing: asking an event's organizers a question before the event, without a booking.
 
@@ -9,7 +8,7 @@ Started 10/23/2026 on branch `release/ios-1.1.7`, from develop 58c86ef1. **Not y
 |---|---|
 | Version | **1.1.7** (`MARKETING_VERSION`) |
 | Build | **18** (`CURRENT_PROJECT_VERSION`). 1.1.6 was 17. |
-| Replaces | 1.1.6 (17), in review since 10/23/2026 |
+| Replaces | 1.1.6 (17), approved by 10/24/2026 |
 | Server work first | **Deploy the site from master 58c86ef1 or later first.** Before that, the server never offers the conversation to anybody without a booking, and the button doesn't appear. |
 | Screenshots | **Unchanged.** |
 | Help | `APP-STORE-1.1.7-HELP.md`, when it's live. |

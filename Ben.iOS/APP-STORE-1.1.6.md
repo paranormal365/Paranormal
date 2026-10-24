@@ -1,6 +1,6 @@
 # App Store update: IsHaunted 1.1.6 (build 17)
 
-Started 10/23/2026 on branch `release/ios-1.1.6`, from master f5481e26. **Submitted for review 10/23/2026, build 17** (Ben).
+Started 10/23/2026 on branch `release/ios-1.1.6`, from master f5481e26. **Submitted for review 10/23/2026, build 17** (Ben). **Approved; Ready for Distribution by 10/24/2026.** Still owed: Ben's phone check of a session with a setting changed mid-session (section 2).
 
 1.1.6 fixes one thing: a session's sound was lost if a setting changed after Start.
 
