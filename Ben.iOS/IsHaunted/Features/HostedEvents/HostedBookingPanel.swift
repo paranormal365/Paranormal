@@ -20,6 +20,10 @@ struct HostedBookingPanel: View {
     @State private var openOnWebsite: URL?
     @State private var confirmLetGo = false
     @State private var bookingUnreadable = false
+    /// Offered by the server to somebody with no booking until the event starts (Ben, 10/23/2026: "People
+    /// can write questions to the event organizers before the event"), or afterwards to somebody who
+    /// already asked. Nil when it offers none.
+    @State private var questionThread: EventGuestThread?
 
     private var signedIn: Bool { dependencies.session.me != nil }
 
@@ -127,6 +131,13 @@ struct HostedBookingPanel: View {
             Text("This event's booking details couldn't be read just now.")
                 .font(.footnote).foregroundStyle(Theme.fog)
         }
+        if questionThread != nil {
+            NavigationLink(value: AppRoute.eventOrganizerThread(hostedEventId)) {
+                Label("Ask the organizers a question", systemImage: "envelope")
+            }
+            .buttonStyle(.signalSecondary)
+            .accessibilityIdentifier("hosted-booking-ask-organizers")
+        }
     }
 
     private func websiteButton(_ title: String) -> some View {
@@ -149,6 +160,12 @@ struct HostedBookingPanel: View {
             case .ok(let mine):
                 booking = mine
                 bookingUnreadable = false
+                // Only without a booking: a guest has the conversation under the event, and reading it marks
+                // it read, which opening this screen shouldn't do.
+                questionThread = nil
+                if mine == nil, case .ok(let thread) = await store.loadOrganizerThread(hostedEventId) {
+                    questionThread = thread
+                }
             case .failed, .sessionEnded, .rateLimited:
                 // Never fall through to "Ask for a place" for somebody who may already have one.
                 bookingUnreadable = booking == nil
@@ -156,6 +173,7 @@ struct HostedBookingPanel: View {
         } else {
             booking = nil
             bookingUnreadable = false
+            questionThread = nil
         }
         loaded = true
     }

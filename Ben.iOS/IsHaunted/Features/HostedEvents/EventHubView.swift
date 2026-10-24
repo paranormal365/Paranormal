@@ -20,9 +20,6 @@ struct EventHubView: View {
     @State private var files: [HostedEventFile] = []
     @State private var room: EventRoom?
     @State private var results: HostedEventResults?
-    /// For somebody with no booking: the conversation the server offers them — before the event, anybody
-    /// signed in may ask a question (Ben, 10/23/2026) — or nil when it offers none.
-    @State private var questionThread: EventGuestThread?
     @State private var loaded = false
     @State private var unreachable = false
     @State private var openOnWebsite: URL?
@@ -72,12 +69,10 @@ struct EventHubView: View {
                         }
                         .accessibilityIdentifier("hub-room")
                     }
-                    if booking != nil || questionThread != nil {
+                    if booking != nil {
                         // Ben's scenario: "contact Jim either on our app".
                         NavigationLink(value: AppRoute.eventOrganizerThread(hostedEventId)) {
-                            row("Write to the organizers",
-                                detail: booking != nil ? "Ask about the event or your booking" : "Ask a question before the event",
-                                icon: "envelope")
+                            row("Write to the organizers", detail: "Ask about the event or your booking", icon: "envelope")
                         }
                         .accessibilityIdentifier("hub-organizer-thread")
                     }
@@ -189,11 +184,6 @@ struct EventHubView: View {
         switch await filesRead { case .ok(let value): files = value; default: missed = true }
         switch await roomRead { case .ok(let value): room = value; default: missed = true }
         switch await resultsRead { case .ok(let value): results = value; default: missed = true }
-        // Asked only when there is no booking: a guest always has the row, and reading the conversation
-        // marks it read, which opening the hub shouldn't do for them.
-        if booking == nil, case .ok(let thread) = await store.loadOrganizerThread(hostedEventId) {
-            questionThread = thread
-        }
         unreachable = missed
         loaded = true
     }

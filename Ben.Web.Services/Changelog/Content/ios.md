@@ -27,7 +27,7 @@ and ideas behind running the site, goes under a `### Administration` sub-heading
 after the lines everybody reads. Only SuperAdmins see those lines. A version with nothing else in
 it is hidden from everybody else, but still takes its number. No other sub-heading is read.
 
-## Unreleased
+## 1.1.7
 
 - Before an event starts, you can write a question to its organizers from the event, even without a booking.
 
