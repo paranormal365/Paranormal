@@ -14,7 +14,7 @@ body { font-family: "Avenir Next", Avenir, "Helvetica Neue", sans-serif; color: 
 .page { width: 8.5in; height: 11in; position: relative; overflow: hidden; background: var(--base);
   display: flex; flex-direction: column; page-break-after: always; break-after: page; }
 .page:last-child { page-break-after: auto; break-after: auto; }
-@media screen { .page { margin: 0 auto 26px; box-shadow: 0 10px 40px rgba(0,0,0,.55); } }
+@media screen { .page { margin: 0 auto 26px; box-shadow: none; } }
 body.only-front .back, body.only-back .front { display: none; }
 body.only-front .page, body.only-back .page { margin: 0; }
 
@@ -25,7 +25,7 @@ em { font-style: normal; color: var(--accent); }
 
 /* ── a browser window drawn around a real screenshot ───────── */
 .win { border-radius: .09in; overflow: hidden; background: #0e0e12; position: relative; flex: none;
-  box-shadow: 0 12px 28px rgba(0,0,0,.5), 0 0 0 1px rgba(255,255,255,.13); }
+  box-shadow: 0 0 0 1px rgba(255,255,255,.13); }
 .win::before { content: ""; position: absolute; top: 0; left: 0; right: 0; height: .12in;
   background: #26262b; z-index: 2; }
 .win::after { content: "● ● ●"; position: absolute; top: 0; left: .06in; font-size: 4.6pt;
@@ -36,7 +36,7 @@ em { font-style: normal; color: var(--accent); }
 
 /* ── a phone drawn around a real screenshot ────────────────── */
 .ph { border-radius: .2in; background: #050505; padding: .045in; position: relative; flex: none;
-  box-shadow: 0 14px 32px rgba(0,0,0,.6), 0 0 0 1.1px rgba(255,255,255,.17); }
+  box-shadow: 0 0 0 1.1px rgba(255,255,255,.17); }
 .ph img { width: 100%; height: 100%; object-fit: cover; object-position: top center;
   border-radius: .16in; display: block; }
 
@@ -45,21 +45,25 @@ em { font-style: normal; color: var(--accent); }
 .hero { position: absolute; inset: 0; background-size: cover; background-position: center 42%; }
 .hero::after { content: ""; position: absolute; inset: 0; background: linear-gradient(180deg,
   rgba(0,0,0,.55) 0%, rgba(0,0,0,.12) 18%, rgba(12,16,23,0) 32%, rgba(12,16,23,.82) 68%, var(--base) 100%); }
+/* A scrim from the left behind the headline (10/24/2026), the same as the one-sheets. */
+.hero::before { content: ""; position: absolute; inset: 0; z-index: 1;
+  background: linear-gradient(180deg, rgba(12,16,23,0) 80%, rgb(12,16,23) 100%),
+    linear-gradient(90deg, rgba(12,16,23,.82) 0%, rgba(12,16,23,.6) 42%, rgba(12,16,23,0) 70%); }
+.hero::after { z-index: 2; bottom: -.06in; }  /* past the photo's edge, which otherwise prints as a hairline */
 .brandbar { position: absolute; top: .4in; left: .5in; right: .5in; display: flex; align-items: center;
   justify-content: space-between; z-index: 6; }
 .brand { display: flex; align-items: center; gap: .13in; font-weight: 700; font-size: 15pt; }
-.brand img { width: .5in; height: .5in; filter: drop-shadow(0 2px 7px rgba(0,0,0,.65)); }
+.brand img { width: .5in; height: .5in; }
 .brand small { display: block; font-weight: 500; font-size: 7.4pt; letter-spacing: .2em;
   text-transform: uppercase; opacity: .85; }
 .pill { font-size: 8pt; font-weight: 700; letter-spacing: .15em; text-transform: uppercase;
   color: #fff; background: var(--fill); padding: .07in .17in; border-radius: 99px;
-  box-shadow: 0 4px 14px rgba(0,0,0,.45); }
-.headline { position: absolute; left: .5in; bottom: .34in; width: 4.55in; z-index: 5; }
+  box-shadow: none; }
+.headline { position: absolute; left: .5in; bottom: .34in; width: 4.55in; z-index: 7; }  /* in front of everything (10/24/2026) */
 .kicker { font-size: 8.4pt; font-weight: 700; letter-spacing: .22em; text-transform: uppercase;
   color: var(--accent); margin-bottom: .09in; }
-.headline h1 { font-size: 36pt; line-height: 1.0; margin: 0 0 .13in; letter-spacing: -.014em;
-  text-shadow: 0 3px 20px rgba(0,0,0,.6); }
-.headline p { font-size: 11.6pt; line-height: 1.35; margin: 0; color: rgba(255,255,255,.92); }
+.headline h1 { font-size: 36pt; line-height: 1.0; margin: 0 0 .13in; letter-spacing: -.014em; }
+.headline p { font-size: 11.6pt; line-height: 1.35; margin: 0; color: rgba(255,255,255,.94); }
 .montage { position: absolute; right: .44in; top: 1.15in; width: 3.35in; height: 3.5in; z-index: 4; }
 .montage .win { position: absolute; left: 0; top: .44in; width: 2.5in; height: 1.72in; transform: rotate(-2.4deg); }
 .montage .ph { position: absolute; right: 0; top: 0; width: 1.6in; height: 3.3in; transform: rotate(3.5deg); z-index: 2; }
@@ -69,7 +73,7 @@ em { font-style: normal; color: var(--accent); }
 .pillar { display: grid; grid-template-columns: .4in 1fr; gap: .11in; align-items: start; }
 .pillar .badge { width: .4in; height: .4in; border-radius: .11in; display: grid; place-items: center;
   color: #fff; background: var(--fill);
-  box-shadow: 0 5px 14px rgba(124,92,255,.38); }
+  box-shadow: none; }
 .pillar h3 { margin: 0 0 .03in; font-size: 11pt; font-weight: 700; }
 .pillar p { margin: 0; font-size: 8.3pt; line-height: 1.34; color: var(--muted); }
 .glimpse { margin-top: .26in; }
@@ -105,6 +109,17 @@ em { font-style: normal; color: var(--accent); }
 .tile .th .ic { color: var(--accent); flex: none; margin-top: .012in; }
 .tile h4 { margin: 0; font-size: 8.9pt; font-weight: 700; line-height: 1.14; }
 .tile p { margin: 0; font-size: 6.8pt; line-height: 1.28; color: var(--muted); }
+/* The SmartApp template's own colors (Ben, 10/24/2026), the same as the one-sheets: one per pillar, and the
+   twelve tiles' icons round the six. */
+.pillar:nth-child(1) .badge { background: linear-gradient(135deg, #4089e0, #20a0e7); }
+.pillar:nth-child(2) .badge { background: linear-gradient(135deg, #fe7e6b, #fd5484); }
+.pillar:nth-child(3) .badge { background: linear-gradient(135deg, #77c688, #1fb0d5); }
+.tile:nth-child(6n+1) .th .ic { color: #ffd274; }
+.tile:nth-child(6n+2) .th .ic { color: #1fb0d5; }
+.tile:nth-child(6n+3) .th .ic { color: #fe7e6b; }
+.tile:nth-child(6n+4) .th .ic { color: #77c688; }
+.tile:nth-child(6n+5) .th .ic { color: #c55d9e; }
+.tile:nth-child(6n+6) .th .ic { color: #4089e0; }
 
 .chain { margin-top: .16in; }
 .chain .lab { color: var(--accent); }
@@ -118,7 +133,7 @@ em { font-style: normal; color: var(--accent); }
 
 .offer { margin-top: auto; height: 1.06in; flex: none; border-radius: .13in; display: grid;
   grid-template-columns: .9in 1.8fr 1fr; overflow: hidden; background: #122742;
-  box-shadow: 0 0 0 1.4px #7C5CFF, 0 14px 36px rgba(0,0,0,.45); }
+  box-shadow: 0 0 0 1.4px #7C5CFF; }
 .offer .shotcell { background-size: cover; background-position: top left; border-right: 1px solid var(--line); }
 .offer .words { padding: .12in .19in; display: flex; flex-direction: column; justify-content: center; }
 .offer .big { font-size: 14.5pt; line-height: 1.06; }
@@ -195,7 +210,7 @@ em { font-style: normal; color: var(--accent); }
       <div class="words">
         <div class="big">Free to <em>explore</em>. Pay only for what you run.</div>
         <div class="small">Enthusiasts: free, with the Paranormal Platform and 2&nbsp;GB of your own files · Groups from
-          $19.99 a month · Ghost walks $29 a month per tour route · Hosted events $99 each ($19.80 with a paid plan), however
+          $20 a month · Ghost walks $29 a month per tour route · Hosted events $99 each ($19.80 with a paid plan), however
           many nights · Investigations of public places stay free on every plan.</div>
       </div>
       <div class="url"><b>ishaunted.com</b><span>Have a look tonight</span></div>

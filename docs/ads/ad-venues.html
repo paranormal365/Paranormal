@@ -17,25 +17,31 @@ body.only-front .page, body.only-back .page { margin: 0; }
 .hero { position: absolute; inset: 0 0 auto 0; height: 7.05in; background-size: cover; background-position: var(--focus, center); }
 .hero::after { content: ""; position: absolute; inset: 0;
   background: linear-gradient(180deg, rgba(0,0,0,.45) 0%, rgba(0,0,0,0) 22%, var(--base-a0) 42%, var(--base-a70) 72%, var(--base) 100%); }
+/* Behind the headline, a scrim from the left (10/24/2026: "make sure the titles are not obscured by the
+   darker shading"). The photo stays bright on the right, where the phone sits. */
+.hero::before { content: ""; position: absolute; inset: 0; z-index: 1;
+  background: linear-gradient(180deg, rgba(12,16,23,0) 80%, rgb(12,16,23) 100%),
+    linear-gradient(90deg, rgba(12,16,23,.82) 0%, rgba(12,16,23,.6) 42%, rgba(12,16,23,0) 70%); }
+.hero::after { z-index: 2; bottom: -.06in; }  /* past the photo's edge, which otherwise prints as a hairline */
 .brandbar { position: absolute; top: .42in; left: .55in; right: .55in; display: flex; align-items: center; justify-content: space-between; z-index: 3; }
 .brand { display: flex; align-items: center; gap: .12in; color: #fff; font-weight: 700; letter-spacing: .02em; font-size: 15pt; }
-.brand img { width: .46in; height: .46in; filter: drop-shadow(0 2px 6px rgba(0,0,0,.5)); }
+.brand img { width: .46in; height: .46in; }
 .brand small { display: block; font-weight: 500; font-size: 8pt; letter-spacing: .22em; text-transform: uppercase; opacity: .8; }
 .pill { font-size: 8.5pt; font-weight: 700; letter-spacing: .16em; text-transform: uppercase; color: #fff;
-        background: var(--fill); padding: .07in .16in; border-radius: 99px; box-shadow: 0 4px 14px rgba(0,0,0,.35); }
-.headline { position: absolute; left: .55in; right: 3.1in; top: 4.05in; z-index: 3; color: #fff; }
+        background: var(--fill); padding: .07in .16in; border-radius: 99px; box-shadow: none; }
+.headline { position: absolute; left: .55in; right: 3.1in; top: 4.05in; z-index: 6; color: #fff; }  /* in front of the phone: a title is never under anything (Ben, 10/24/2026) */
 .kicker { font-size: 9pt; font-weight: 700; letter-spacing: .24em; text-transform: uppercase; color: var(--accent); margin-bottom: .1in; }
 .headline h1 { font-family: Futura, "Avenir Next", sans-serif; font-weight: 800; font-size: 40pt; line-height: 1.02;
-               margin: 0 0 .16in; letter-spacing: -.01em; text-shadow: 0 3px 18px rgba(0,0,0,.45); }
+               margin: 0 0 .16in; letter-spacing: -.01em; }
 .headline h1 em { font-style: normal; color: var(--accent); }
-.headline p { font-size: 13.5pt; line-height: 1.38; margin: 0; color: rgba(255,255,255,.9); max-width: 4.6in; }
+.headline p { font-size: 13.5pt; line-height: 1.38; margin: 0; color: rgba(255,255,255,.94); max-width: 4.6in; }
 .phone { position: absolute; z-index: 4; right: .6in; top: 3.25in; width: 2.3in; height: 4.95in; border-radius: .34in;
-         background: #050505; padding: .075in; box-shadow: 0 30px 60px rgba(0,0,0,.6), 0 0 0 1.5px rgba(255,255,255,.14), 0 0 60px var(--glow); transform: rotate(3deg); }
+         background: #050505; padding: .075in; box-shadow: 0 0 0 1.5px rgba(255,255,255,.14); transform: rotate(3deg); }
 .phone img { width: 100%; height: 100%; object-fit: cover; object-position: top; border-radius: .27in; display: block; }
 .pillars { position: absolute; left: .55in; right: 3.2in; top: 7.2in; display: grid; gap: .16in; z-index: 3; }
 .pillar { display: grid; grid-template-columns: .5in 1fr; gap: .14in; align-items: start; }
 .pillar .badge { width: .5in; height: .5in; border-radius: .14in; display: grid; place-items: center; color: #fff;
-                 background: var(--fill); box-shadow: 0 6px 16px var(--glow); }
+                 background: var(--fill); box-shadow: none; }
 .pillar h3 { margin: .02in 0 .03in; font-size: 12.5pt; color: #fff; font-weight: 700; }
 .pillar p { margin: 0; font-size: 9.6pt; line-height: 1.38; color: var(--muted); }
 .cta { position: absolute; left: 0; right: 0; bottom: 0; height: 1.02in; display: flex; align-items: center; justify-content: space-between;
@@ -49,17 +55,30 @@ body.only-front .page, body.only-back .page { margin: 0; }
 .back { background: radial-gradient(120% 60% at 100% 0%, var(--base2) 0%, var(--base) 60%); color: #fff; }
 .back-top { height: 2.55in; display: grid; grid-template-columns: 1.55fr 1fr 1fr; gap: .07in; }
 .back-top div { background-size: cover; background-position: center; position: relative; }
-.back-top div::after { content: ""; position: absolute; inset: 0; background: linear-gradient(180deg, rgba(0,0,0,0) 45%, var(--base-a70) 100%); }
-.back-head { position: absolute; top: 1.72in; left: .55in; right: .55in; z-index: 2; }
-.back-head h2 { font-family: Futura, sans-serif; font-weight: 800; font-size: 25pt; margin: 0; line-height: 1.05; text-shadow: 0 3px 14px rgba(0,0,0,.6); }
+.back-top div::after { content: ""; position: absolute; inset: 0; background: linear-gradient(180deg, rgba(0,0,0,0) 25%, rgba(8,10,16,.55) 55%, rgba(8,10,16,.88) 100%); }
+.back-head { position: absolute; top: 1.72in; left: .55in; right: .55in; z-index: 6; }
+.back-head h2 { font-family: Futura, sans-serif; font-weight: 800; font-size: 25pt; margin: 0; line-height: 1.05; }
 .back-head h2 em { font-style: normal; color: var(--accent); }
 .grid { position: absolute; top: 2.95in; left: .55in; right: .55in; display: grid; grid-template-columns: repeat(3, 1fr); gap: .14in; }
 .card { background: var(--card); border: 1px solid var(--line); border-radius: .14in; padding: .15in .16in .14in; }
 .card .ic { color: var(--accent); }
+/* The SmartApp template's own colors (Ben, 10/24/2026: "more colors like the ones we used in the template"):
+   each pillar and card takes one, so a page reads as several things rather than one violet. The gradient
+   stays for the bands and buttons, which are the site's. */
+.pillar:nth-child(1) .badge { background: linear-gradient(135deg, #4089e0, #20a0e7); box-shadow: none; }
+.pillar:nth-child(2) .badge { background: linear-gradient(135deg, #fe7e6b, #fd5484); box-shadow: none; }
+.pillar:nth-child(3) .badge { background: linear-gradient(135deg, #77c688, #1fb0d5); box-shadow: none; }
+.card .ic { padding: .05in; border-radius: .09in; box-sizing: content-box; }
+.card:nth-child(6n+1) .ic { color: #ffd274; background: rgba(255,210,116,.14); }
+.card:nth-child(6n+2) .ic { color: #1fb0d5; background: rgba(31,176,213,.15); }
+.card:nth-child(6n+3) .ic { color: #fe7e6b; background: rgba(254,126,107,.15); }
+.card:nth-child(6n+4) .ic { color: #77c688; background: rgba(119,198,136,.15); }
+.card:nth-child(6n+5) .ic { color: #c55d9e; background: rgba(197,93,158,.17); }
+.card:nth-child(6n+6) .ic { color: #4089e0; background: rgba(64,137,224,.16); }
 .card h4 { margin: .06in 0 .04in; font-size: 10.6pt; font-weight: 700; }
 .card p { margin: 0; font-size: 8.5pt; line-height: 1.4; color: var(--muted); }
 .shots { position: absolute; top: 6.05in; left: .55in; right: .55in; height: 2.45in; display: grid; grid-template-columns: 1.9fr 1fr; gap: .2in; align-items: stretch; }
-.screen { border-radius: .12in; overflow: hidden; background: #111; box-shadow: 0 18px 40px rgba(0,0,0,.5), 0 0 0 1px rgba(255,255,255,.1); position: relative; }
+.screen { border-radius: .12in; overflow: hidden; background: #111; box-shadow: 0 0 0 1px rgba(255,255,255,.1); position: relative; }
 .screen::before { content: ""; position: absolute; top: 0; left: 0; right: 0; height: .17in; background: #2a2a2e; z-index: 1; }
 .screen::after { content: "● ● ●"; position: absolute; top: .012in; left: .1in; font-size: 6pt; letter-spacing: .02in; color: #6d6d74; z-index: 2; }
 .screen img { position: absolute; top: .17in; left: 0; width: 100%; height: calc(100% - .17in); object-fit: cover; object-position: var(--shot-focus, top left); }
@@ -71,8 +90,11 @@ body.only-front .page, body.only-back .page { margin: 0; }
 .step b { font-family: Futura, sans-serif; font-weight: 800; font-size: 20pt; color: var(--accent); line-height: 1; }
 .step h5 { margin: 0 0 .02in; font-size: 10pt; }
 .step p { margin: 0; font-size: 8.4pt; color: var(--muted); line-height: 1.35; }
+.step:nth-child(1) b { color: #4089e0; }
+.step:nth-child(2) b { color: #fe7e6b; }
+.step:nth-child(3) b { color: #77c688; }
 .offer { position: absolute; left: .55in; right: .55in; bottom: .4in; height: 1.1in; border-radius: .16in; display: grid;
-         grid-template-columns: 1.6fr 1fr; overflow: hidden; background: var(--card-solid); box-shadow: 0 0 0 1.5px #7C5CFF, 0 16px 40px rgba(0,0,0,.45); }
+         grid-template-columns: 1.6fr 1fr; overflow: hidden; background: var(--card-solid); box-shadow: 0 0 0 1.5px #7C5CFF; }
 .offer > div:first-child { padding: .16in .28in; display: flex; flex-direction: column; justify-content: center; }
 .offer .big { font-family: Futura, sans-serif; font-weight: 800; font-size: 16.5pt; color: #fff; line-height: 1.08; }
 .offer .big em { font-style: normal; color: var(--accent); }
@@ -92,7 +114,7 @@ body.only-front .page, body.only-back .page { margin: 0; }
     <div class="pill">For haunted venues</div>
   </div>
   <div class="headline">
-    <div class="kicker">Hotels · theatres · historic homes</div>
+    <div class="kicker">Hotels · theaters · historic homes</div>
     <h1>Your building has a <em>story</em>. Book it.</h1>
     <p>Show the history, the rooms and the house rules — and decide which organizers may host events under your roof.</p>
   </div>
@@ -107,10 +129,10 @@ body.only-front .page, body.only-back .page { margin: 0; }
   <div class="grid"><div class="card"><svg class="ic" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg><h4>Claim the building</h4><p>Confirm you run the place, so nobody publishes there without you.</p></div><div class="card"><svg class="ic" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/></svg><h4>Host your own</h4><p>Séance weekends, dinners and hunts under your own name.</p></div><div class="card"><svg class="ic" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 2v7a3 3 0 0 0 3 3v10M9 2v7M6 2v4M18 22V2c-2.5 1.5-4 4-4 8h4"/></svg><h4>Menus and dining</h4><p>Meals by night, dietary sheets for the kitchen, tables by party.</p></div><div class="card"><svg class="ic" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/></svg><h4>Photos offered to you</h4><p>Organizers offer their best shots; you choose what joins your page.</p></div><div class="card"><svg class="ic" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75"/></svg><h4>Lend your staff</h4><p>Your people can run the door at events you&#x27;ve approved.</p></div><div class="card"><svg class="ic" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="m12 2 3.1 6.3 6.9 1-5 4.9 1.2 6.8L12 17.8 5.8 21l1.2-6.8-5-4.9 6.9-1z"/></svg><h4>Withdraw fairly</h4><p>Pull out with a reason and the organizer&#x27;s credit goes back.</p></div></div>
   <div class="shots">
     <div class="screen" style="--shot-focus:top center"><img src="../media/hosted-events/walk/43-public-venue.png" alt=""></div>
-    <div class="side"><div class="quote">“Guests have been reporting the second-floor landing for decades. Now they can book it.”</div><div class="who">Haunted hotels, theatres and historic homes</div></div>
+    <div class="side"><div class="quote">“Guests have been reporting the second-floor landing for decades. Now they can book it.”</div><div class="who">Haunted hotels, theaters and historic homes</div></div>
   </div>
   <div class="steps"><div class="step"><b>1</b><div><h5>Describe the place</h5><p>History, rooms and what each one sleeps.</p></div></div><div class="step"><b>2</b><div><h5>Approve organizers</h5><p>Say yes to the nights and what you&#x27;ll lend.</p></div></div><div class="step"><b>3</b><div><h5>Open the doors</h5><p>Guests arrive with a pass; your staff check them in.</p></div></div></div>
-  <div class="offer"><div><div class="big">Your venue page, <em>free</em>.</div><div class="small">Publish your own event with an event credit, good for a year — less with a paid plan, and cheaper in bundles.</div></div>
+  <div class="offer"><div><div class="big">Your venue page, <em>free</em>.</div><div class="small">Publish your own event with an event credit, good for a year: $99, or $19.80 with a paid plan.</div></div>
     <div class="url"><b>ishaunted.com</b><span>Claim your building</span></div></div>
   <div class="fine">IsHaunted.com · Nashville, Tennessee · Photographs: Unsplash · Features shown are live on the website; the iPhone and iPad app is on the App Store · Prices in USD, subject to change</div>
 </section>

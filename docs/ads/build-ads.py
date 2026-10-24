@@ -76,25 +76,31 @@ body.only-front .page, body.only-back .page { margin: 0; }
 .hero { position: absolute; inset: 0 0 auto 0; height: 7.05in; background-size: cover; background-position: var(--focus, center); }
 .hero::after { content: ""; position: absolute; inset: 0;
   background: linear-gradient(180deg, rgba(0,0,0,.45) 0%, rgba(0,0,0,0) 22%, var(--base-a0) 42%, var(--base-a70) 72%, var(--base) 100%); }
+/* Behind the headline, a scrim from the left (10/24/2026: "make sure the titles are not obscured by the
+   darker shading"). The photo stays bright on the right, where the phone sits. */
+.hero::before { content: ""; position: absolute; inset: 0; z-index: 1;
+  background: linear-gradient(180deg, rgba(12,16,23,0) 80%, rgb(12,16,23) 100%),
+    linear-gradient(90deg, rgba(12,16,23,.82) 0%, rgba(12,16,23,.6) 42%, rgba(12,16,23,0) 70%); }
+.hero::after { z-index: 2; bottom: -.06in; }  /* past the photo's edge, which otherwise prints as a hairline */
 .brandbar { position: absolute; top: .42in; left: .55in; right: .55in; display: flex; align-items: center; justify-content: space-between; z-index: 3; }
 .brand { display: flex; align-items: center; gap: .12in; color: #fff; font-weight: 700; letter-spacing: .02em; font-size: 15pt; }
-.brand img { width: .46in; height: .46in; filter: drop-shadow(0 2px 6px rgba(0,0,0,.5)); }
+.brand img { width: .46in; height: .46in; }
 .brand small { display: block; font-weight: 500; font-size: 8pt; letter-spacing: .22em; text-transform: uppercase; opacity: .8; }
 .pill { font-size: 8.5pt; font-weight: 700; letter-spacing: .16em; text-transform: uppercase; color: #fff;
-        background: var(--fill); padding: .07in .16in; border-radius: 99px; box-shadow: 0 4px 14px rgba(0,0,0,.35); }
-.headline { position: absolute; left: .55in; right: 3.1in; top: 4.05in; z-index: 3; color: #fff; }
+        background: var(--fill); padding: .07in .16in; border-radius: 99px; box-shadow: none; }
+.headline { position: absolute; left: .55in; right: 3.1in; top: 4.05in; z-index: 6; color: #fff; }  /* in front of the phone: a title is never under anything (Ben, 10/24/2026) */
 .kicker { font-size: 9pt; font-weight: 700; letter-spacing: .24em; text-transform: uppercase; color: var(--accent); margin-bottom: .1in; }
 .headline h1 { font-family: Futura, "Avenir Next", sans-serif; font-weight: 800; font-size: 40pt; line-height: 1.02;
-               margin: 0 0 .16in; letter-spacing: -.01em; text-shadow: 0 3px 18px rgba(0,0,0,.45); }
+               margin: 0 0 .16in; letter-spacing: -.01em; }
 .headline h1 em { font-style: normal; color: var(--accent); }
-.headline p { font-size: 13.5pt; line-height: 1.38; margin: 0; color: rgba(255,255,255,.9); max-width: 4.6in; }
+.headline p { font-size: 13.5pt; line-height: 1.38; margin: 0; color: rgba(255,255,255,.94); max-width: 4.6in; }
 .phone { position: absolute; z-index: 4; right: .6in; top: 3.25in; width: 2.3in; height: 4.95in; border-radius: .34in;
-         background: #050505; padding: .075in; box-shadow: 0 30px 60px rgba(0,0,0,.6), 0 0 0 1.5px rgba(255,255,255,.14), 0 0 60px var(--glow); transform: rotate(3deg); }
+         background: #050505; padding: .075in; box-shadow: 0 0 0 1.5px rgba(255,255,255,.14); transform: rotate(3deg); }
 .phone img { width: 100%; height: 100%; object-fit: cover; object-position: top; border-radius: .27in; display: block; }
 .pillars { position: absolute; left: .55in; right: 3.2in; top: 7.2in; display: grid; gap: .16in; z-index: 3; }
 .pillar { display: grid; grid-template-columns: .5in 1fr; gap: .14in; align-items: start; }
 .pillar .badge { width: .5in; height: .5in; border-radius: .14in; display: grid; place-items: center; color: #fff;
-                 background: var(--fill); box-shadow: 0 6px 16px var(--glow); }
+                 background: var(--fill); box-shadow: none; }
 .pillar h3 { margin: .02in 0 .03in; font-size: 12.5pt; color: #fff; font-weight: 700; }
 .pillar p { margin: 0; font-size: 9.6pt; line-height: 1.38; color: var(--muted); }
 .cta { position: absolute; left: 0; right: 0; bottom: 0; height: 1.02in; display: flex; align-items: center; justify-content: space-between;
@@ -108,17 +114,30 @@ body.only-front .page, body.only-back .page { margin: 0; }
 .back { background: radial-gradient(120% 60% at 100% 0%, var(--base2) 0%, var(--base) 60%); color: #fff; }
 .back-top { height: 2.55in; display: grid; grid-template-columns: 1.55fr 1fr 1fr; gap: .07in; }
 .back-top div { background-size: cover; background-position: center; position: relative; }
-.back-top div::after { content: ""; position: absolute; inset: 0; background: linear-gradient(180deg, rgba(0,0,0,0) 45%, var(--base-a70) 100%); }
-.back-head { position: absolute; top: 1.72in; left: .55in; right: .55in; z-index: 2; }
-.back-head h2 { font-family: Futura, sans-serif; font-weight: 800; font-size: 25pt; margin: 0; line-height: 1.05; text-shadow: 0 3px 14px rgba(0,0,0,.6); }
+.back-top div::after { content: ""; position: absolute; inset: 0; background: linear-gradient(180deg, rgba(0,0,0,0) 25%, rgba(8,10,16,.55) 55%, rgba(8,10,16,.88) 100%); }
+.back-head { position: absolute; top: 1.72in; left: .55in; right: .55in; z-index: 6; }
+.back-head h2 { font-family: Futura, sans-serif; font-weight: 800; font-size: 25pt; margin: 0; line-height: 1.05; }
 .back-head h2 em { font-style: normal; color: var(--accent); }
 .grid { position: absolute; top: 2.95in; left: .55in; right: .55in; display: grid; grid-template-columns: repeat(3, 1fr); gap: .14in; }
 .card { background: var(--card); border: 1px solid var(--line); border-radius: .14in; padding: .15in .16in .14in; }
 .card .ic { color: var(--accent); }
+/* The SmartApp template's own colors (Ben, 10/24/2026: "more colors like the ones we used in the template"):
+   each pillar and card takes one, so a page reads as several things rather than one violet. The gradient
+   stays for the bands and buttons, which are the site's. */
+.pillar:nth-child(1) .badge { background: linear-gradient(135deg, #4089e0, #20a0e7); box-shadow: none; }
+.pillar:nth-child(2) .badge { background: linear-gradient(135deg, #fe7e6b, #fd5484); box-shadow: none; }
+.pillar:nth-child(3) .badge { background: linear-gradient(135deg, #77c688, #1fb0d5); box-shadow: none; }
+.card .ic { padding: .05in; border-radius: .09in; box-sizing: content-box; }
+.card:nth-child(6n+1) .ic { color: #ffd274; background: rgba(255,210,116,.14); }
+.card:nth-child(6n+2) .ic { color: #1fb0d5; background: rgba(31,176,213,.15); }
+.card:nth-child(6n+3) .ic { color: #fe7e6b; background: rgba(254,126,107,.15); }
+.card:nth-child(6n+4) .ic { color: #77c688; background: rgba(119,198,136,.15); }
+.card:nth-child(6n+5) .ic { color: #c55d9e; background: rgba(197,93,158,.17); }
+.card:nth-child(6n+6) .ic { color: #4089e0; background: rgba(64,137,224,.16); }
 .card h4 { margin: .06in 0 .04in; font-size: 10.6pt; font-weight: 700; }
 .card p { margin: 0; font-size: 8.5pt; line-height: 1.4; color: var(--muted); }
 .shots { position: absolute; top: 6.05in; left: .55in; right: .55in; height: 2.45in; display: grid; grid-template-columns: 1.9fr 1fr; gap: .2in; align-items: stretch; }
-.screen { border-radius: .12in; overflow: hidden; background: #111; box-shadow: 0 18px 40px rgba(0,0,0,.5), 0 0 0 1px rgba(255,255,255,.1); position: relative; }
+.screen { border-radius: .12in; overflow: hidden; background: #111; box-shadow: 0 0 0 1px rgba(255,255,255,.1); position: relative; }
 .screen::before { content: ""; position: absolute; top: 0; left: 0; right: 0; height: .17in; background: #2a2a2e; z-index: 1; }
 .screen::after { content: "● ● ●"; position: absolute; top: .012in; left: .1in; font-size: 6pt; letter-spacing: .02in; color: #6d6d74; z-index: 2; }
 .screen img { position: absolute; top: .17in; left: 0; width: 100%; height: calc(100% - .17in); object-fit: cover; object-position: var(--shot-focus, top left); }
@@ -130,8 +149,11 @@ body.only-front .page, body.only-back .page { margin: 0; }
 .step b { font-family: Futura, sans-serif; font-weight: 800; font-size: 20pt; color: var(--accent); line-height: 1; }
 .step h5 { margin: 0 0 .02in; font-size: 10pt; }
 .step p { margin: 0; font-size: 8.4pt; color: var(--muted); line-height: 1.35; }
+.step:nth-child(1) b { color: #4089e0; }
+.step:nth-child(2) b { color: #fe7e6b; }
+.step:nth-child(3) b { color: #77c688; }
 .offer { position: absolute; left: .55in; right: .55in; bottom: .4in; height: 1.1in; border-radius: .16in; display: grid;
-         grid-template-columns: 1.6fr 1fr; overflow: hidden; background: var(--card-solid); box-shadow: 0 0 0 1.5px #7C5CFF, 0 16px 40px rgba(0,0,0,.45); }
+         grid-template-columns: 1.6fr 1fr; overflow: hidden; background: var(--card-solid); box-shadow: 0 0 0 1.5px #7C5CFF; }
 .offer > div:first-child { padding: .16in .28in; display: flex; flex-direction: column; justify-content: center; }
 .offer .big { font-family: Futura, sans-serif; font-weight: 800; font-size: 16.5pt; color: #fff; line-height: 1.08; }
 .offer .big em { font-style: normal; color: var(--accent); }
@@ -235,7 +257,7 @@ ADS = [
                ("Find your people", "Follow the feed, join a group or book an event near you."),
                ("Bring your night", "Start a group, list a tour, or host an event of your own.")],
         offer="Free to <em>explore</em>.",
-        offer_small="Groups from $19.99 a month · ghost walks $29 a month per tour route · hosted events $99 each ($19.80 with a paid plan)",
+        offer_small="Groups from $20 a month · ghost walks $29 a month per tour route · hosted events $99 each ($19.80 with a paid plan)",
         url_small="Web · iPhone & iPad app", fine=FINE,
     ),
     dict(
@@ -285,7 +307,7 @@ ADS = [
             ("users", "Your people, your rules", "Roles and permissions, duties, member titles and equipment you lend."),
         ],
         cta="Start your group at ishaunted.com", cta_small="Public places stay free",
-        price="$19.99", price_small="a month, 1–3 members",
+        price="$20", price_small="a month, 2–3 members",
         back_headline="The whole operation. <em>One login.</em>",
         strip=["i2-dark-hallway.jpg", "s2-ouija.jpg", "v5-hotel-bedroom.jpg"],
         cards=[
@@ -302,7 +324,7 @@ ADS = [
         steps=[("Start a group", "Pick a name and invite your team."),
                ("Take a case", "Requests land in one queue with the client's details."),
                ("Publish safely", "Share findings with redaction done for you.")],
-        offer="Plans <em>from $19.99</em> a month.",
+        offer="Plans <em>from $20</em> a month.",
         offer_small="Pay yearly and get two months free. Investigations of public places stay free on every plan.",
         url_small="Start today", fine=FINE,
     ),
@@ -324,9 +346,9 @@ ADS = [
         strip=["w2-cobblestone-night.jpg", "w3-foggy-graveyard.jpg", "i1-flashlight-silhouette.jpg"],
         cards=[
             ("calendar", "Dates and capacity", "Open a date, cap it, and close it when the street is full."),
-            ("users", "Walk-ups welcome", "Sign somebody up on the pavement — no account needed."),
+            ("users", "Walk-ups welcome", "Sign somebody up on the sidewalk — no account needed."),
             ("star", "Reviews that count", "Only people who came can rate the walk."),
-            ("ticket", "Seat plans", "Trolleys and theatres get a seat map guests pick from."),
+            ("ticket", "Seat plans", "Trolleys and theaters get a seat map guests pick from."),
             ("globe", "Found by visitors", "Tours show on the home map and in “near you” searches."),
             ("phone", "Free app for guests", "Their phone becomes an instrument on your walk."),
         ],
@@ -343,7 +365,7 @@ ADS = [
     dict(
         slug="Venues", title="IsHaunted for venues", pill="For haunted venues",
         base="#0C1017", base2="#1E1650", accent="#B6A2FF", accent2="#67E8F9", hero="v6-ballroom.jpg", focus="center 50%",
-        kicker="Hotels · theatres · historic homes",
+        kicker="Hotels · theaters · historic homes",
         headline="Your building has a <em>story</em>. Book it.",
         sub="Show the history, the rooms and the house rules — and decide which organizers may host events under your roof.",
         phone=WALK + "44-public-venue-phone.png",
@@ -368,12 +390,12 @@ ADS = [
         # Never a real business's words (10/05/2026): the demo venue shares its name with a real hotel
         # whose owner is now interested, so the line is in our own voice and names nobody.
         quote="“Guests have been reporting the second-floor landing for decades. Now they can book it.”",
-        quote_who="Haunted hotels, theatres and historic homes",
+        quote_who="Haunted hotels, theaters and historic homes",
         steps=[("Describe the place", "History, rooms and what each one sleeps."),
                ("Approve organizers", "Say yes to the nights and what you'll lend."),
                ("Open the doors", "Guests arrive with a pass; your staff check them in.")],
         offer="Your venue page, <em>free</em>.",
-        offer_small="Publish your own event with an event credit, good for a year — less with a paid plan, and cheaper in bundles.",
+        offer_small="Publish your own event with an event credit, good for a year: $99, or $19.80 with a paid plan.",
         url_small="Claim your building", fine=FINE,
     ),
     dict(
@@ -436,12 +458,12 @@ h2 { font-size: 27pt; line-height: 1.04; margin: .06in 0 .1in; }
 .lede { font-size: 11.5pt; line-height: 1.45; color: var(--muted); max-width: 6.2in; margin: 0; }
 .folio { position: absolute; bottom: .28in; left: .6in; right: .6in; display: flex; justify-content: space-between;
          font-size: 7.5pt; letter-spacing: .14em; text-transform: uppercase; color: rgba(255,255,255,.42); }
-.shot { border-radius: .1in; overflow: hidden; background: #0d0d10; box-shadow: 0 16px 36px rgba(0,0,0,.5), 0 0 0 1px rgba(255,255,255,.1); }
+.shot { border-radius: .1in; overflow: hidden; background: #0d0d10; box-shadow: 0 0 0 1px rgba(255,255,255,.1); }
 .shot img { display: block; width: 100%; height: auto; }
-.laptop { border-radius: .12in; overflow: hidden; background: #0d0d10; box-shadow: 0 22px 50px rgba(0,0,0,.55), 0 0 0 1px rgba(255,255,255,.12); position: relative; }
+.laptop { border-radius: .12in; overflow: hidden; background: #0d0d10; box-shadow: 0 0 0 1px rgba(255,255,255,.12); position: relative; }
 .laptop::before { content: "●  ●  ●"; display: block; height: .19in; line-height: .19in; padding-left: .1in; font-size: 6pt; color: #6b6b73; background: #26262c; }
 .laptop img { display: block; width: 100%; height: auto; }
-.phone { border-radius: .3in; background: #040404; padding: .065in; box-shadow: 0 24px 50px rgba(0,0,0,.6), 0 0 0 1.4px rgba(255,255,255,.14), 0 0 50px rgba(247,184,75,.18); }
+.phone { border-radius: .3in; background: #040404; padding: .065in; box-shadow: 0 0 0 1.4px rgba(255,255,255,.14); }
 .phone img { display: block; width: 100%; height: auto; border-radius: .24in; }
 .cap { display: grid; grid-template-columns: .3in 1fr; gap: .08in; align-items: start; }
 .cap b { width: .3in; height: .3in; border-radius: 50%; display: grid; place-items: center; font-size: 10pt; color: #fff;
@@ -458,7 +480,7 @@ h2 { font-size: 27pt; line-height: 1.04; margin: .06in 0 .1in; }
 .person h3 { margin: .03in 0 .04in; font-size: 13pt; }
 .person p { margin: 0; font-size: 8.8pt; line-height: 1.42; color: var(--muted); }
 .person .role { font-size: 7.5pt; font-weight: 700; letter-spacing: .18em; text-transform: uppercase; color: var(--accent); }
-.mail { border-radius: .08in; overflow: hidden; background: #fff; box-shadow: 0 12px 30px rgba(0,0,0,.45); }
+.mail { border-radius: .08in; overflow: hidden; background: #fff; box-shadow: none; }
 .mail img { display: block; width: 100%; height: auto; }
 .mails { display: grid; grid-template-columns: repeat(3, 1fr); gap: .22in .2in; margin: .14in 0 .3in; align-items: start; }
 .mails .mail { height: 2.3in; position: relative; }
@@ -470,7 +492,7 @@ h2 { font-size: 27pt; line-height: 1.04; margin: .06in 0 .1in; }
 .stack { display: flex; flex-direction: column; gap: .14in; }
 .mailcap { font-size: 7.8pt; color: var(--muted); margin-top: .05in; line-height: 1.3; }
 .mailcap strong { color: #fff; display: block; font-size: 8.4pt; }
-.price { margin-top: auto; border-radius: .18in; overflow: hidden; display: grid; grid-template-columns: 1.4fr 1fr; background: var(--base2); box-shadow: 0 0 0 1.5px #7C5CFF, 0 18px 40px rgba(0,0,0,.45); }
+.price { margin-top: auto; border-radius: .18in; overflow: hidden; display: grid; grid-template-columns: 1.4fr 1fr; background: var(--base2); box-shadow: 0 0 0 1.5px #7C5CFF; }
 .price > div:first-child { padding: .2in .26in; }
 .price .big { font-family: Futura, sans-serif; font-weight: 800; font-size: 30pt; line-height: 1; }
 .price .big em { font-style: normal; color: var(--accent); }
@@ -487,7 +509,7 @@ h2 { font-size: 27pt; line-height: 1.04; margin: .06in 0 .1in; }
 .brand img { width: .44in; height: .44in; }
 .brand small { display: block; font-size: 7.5pt; letter-spacing: .22em; text-transform: uppercase; font-weight: 600; opacity: .8; }
 .cover-title { position: absolute; left: .6in; right: .6in; top: 2.35in; z-index: 2; }
-.cover-title h1 { font-size: 44pt; line-height: 1; margin: .1in 0 .16in; text-shadow: 0 4px 20px rgba(0,0,0,.5); }
+.cover-title h1 { font-size: 44pt; line-height: 1; margin: .1in 0 .16in; }
 .cover-devices { position: absolute; left: 1.2in; right: .55in; top: 5.55in; height: 3.6in; z-index: 3; }
 .cover-title p { font-size: 13.5pt; line-height: 1.4; color: rgba(255,255,255,.9); max-width: 4.9in; margin: 0; }
 .facts { position: absolute; left: .6in; right: .6in; bottom: .5in; z-index: 4; display: grid; grid-template-columns: repeat(3, 1fr); gap: .16in; }
