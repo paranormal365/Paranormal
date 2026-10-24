@@ -747,7 +747,9 @@ event's own page, and the app shows you where your booking stands.
 *Waiting for the venue*, *Held for you*, *Confirmed*, *Turned down* — with what you asked for
 underneath. You can let go of a request or a hold you no longer want from there. If you don't have a
 booking yet, **Ask for a place** (or **Choose your places**, if the venue uses a seating plan) opens
-the event's page inside the app; when you close it, the panel updates with your booking.
+the event's page inside the app; when you close it, the panel updates with your booking. Until
+the event starts, **Ask the organizers a question** is there too, so you can ask before you book. Their
+answer appears in the same conversation, and you can still read it after the event starts.
 
 **What I'm going to.** Under **Profile**, this lists every hosted event you've asked for, one row
 each, with its dates, the venue, what you've booked and a link to your pass.

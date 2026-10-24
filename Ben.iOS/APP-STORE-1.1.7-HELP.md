@@ -1,5 +1,8 @@
 # Help to add when IsHaunted 1.1.7 is live
 
+**Done 10/24/2026** (1.1.7 approved and released). Worded for what the app does: the button shows only to somebody
+with no booking; a guest has "Write to the organizers" under the event.
+
 Held back until the App Store has 1.1.7: the help is read by people on 1.1.6, who don't have the button yet.
 
 ## the-mobile-apps.md, "On the event."
