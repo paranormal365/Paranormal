@@ -242,6 +242,14 @@ page it sends somebody to read as one product. (They used to take a palette each
 photograph — indigo with candle amber, oxblood with champagne.) Every frame is sized from its image's
 own proportions, so no screenshot is ever cropped mid-sentence.
 
+**10/24/2026 additions.** Icons, step numbers and the full flyer's tiles take the SmartApp template's own
+colors (blue `#4089e0`, coral `#fe7e6b`, green `#77c688`, yellow `#ffd274`, teal `#1fb0d5`, pink `#c55d9e`);
+the violet-to-cyan gradient stays for the bands and buttons. **No blurred shadow anywhere** — `box-shadow`
+with a blur, `text-shadow` and `drop-shadow` all print as hard dark boxes over the words. A title is read
+against a left-to-right scrim in the page's own base color, sits in front of the phone and every picture,
+and the hero's fade runs past the photo's edge so it doesn't print as a hairline. Check the real PDF with
+`qlmanage -t -s 1400 -o <dir> <file>.pdf` (what Preview draws), not only the screen render.
+
 **Where the pictures come from:**
 
 - **Photographs** — `docs/media/stock/`, from Unsplash, credited in
