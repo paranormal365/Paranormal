@@ -1,6 +1,6 @@
 # App Store update: IsHaunted 1.1.7 (build 18)
 
-Started 10/23/2026 on branch `release/ios-1.1.7`, from develop 58c86ef1. **Submitted for review 10/24/2026, build 18** (Ben).
+Started 10/23/2026 on branch `release/ios-1.1.7`, from develop 58c86ef1. **Submitted for review 10/24/2026, build 18** (Ben). **Approved and released 10/24/2026.**
 
 1.1.7 brings one thing: asking an event's organizers a question before the event, without a booking.
 

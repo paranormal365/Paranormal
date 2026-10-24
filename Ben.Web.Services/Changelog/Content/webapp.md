@@ -33,6 +33,7 @@ day-by-day account of building it would say nothing to anyone using it now.
 
 ## Unreleased
 
+- The help for the iPhone and iPad app now covers version 1.1.7: asking an event's organizers a question before you book.
 - Changing a published event's dates, usual times or venue writes to everybody holding a place to say
   what changed.
 - A date somebody is booked on can't be taken off an event by accident: the page names the date and how
