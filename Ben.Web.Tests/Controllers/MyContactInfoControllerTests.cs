@@ -273,7 +273,7 @@ public class MyContactInfoControllerTests
     }
 
     [Fact]
-    public async Task Reissuing_a_link_retires_the_previous_token()
+    public async Task Sending_again_sends_the_same_link_while_it_is_still_good()
     {
         var factory = await SeedAsync();
         var userId = Guid.NewGuid();
@@ -295,11 +295,36 @@ public class MyContactInfoControllerTests
 
         var second = Value(await Build(factory, userId).SendValidation(created.Id, UnconfiguredEmail(), Config(), default));
 
-        Assert.NotEqual(first.ValidationLink, second.ValidationLink);
+        // 10/25/2026: a new link retired the one in the email that arrived first, and it said "We can't find
+        // that link". Every email for the address now carries the same link until it expires.
+        Assert.Equal(first.ValidationLink, second.ValidationLink);
 
         await using var check = await factory.CreateDbContextAsync();
         var stored = await check.UserEmails.FirstAsync(e => e.Id == created.Id);
-        Assert.DoesNotContain(stored.ValidationToken!, first.ValidationLink);
+        Assert.EndsWith(stored.ValidationToken!, first.ValidationLink);
+        Assert.True(DateTime.UtcNow - stored.DateValidationSent!.Value < TimeSpan.FromMinutes(1), "sending again restarts the week");
+    }
+
+    [Fact]
+    public async Task An_expired_link_is_replaced_when_sent_again()
+    {
+        var factory = await SeedAsync();
+        var userId = Guid.NewGuid();
+
+        var created = Value(await Build(factory, userId).CreateEmail(
+            new UpsertMyEmailRequest(EmailTypeId, "expired@example.test", false, false),
+            UnconfiguredEmail(), Config(), default));
+        await AgeAsync(factory, created.Id);
+        var first = Value(await Build(factory, userId).SendValidation(created.Id, UnconfiguredEmail(), Config(), default));
+
+        await using (var db = await factory.CreateDbContextAsync())
+        {
+            (await db.UserEmails.FirstAsync(e => e.Id == created.Id)).DateValidationSent = DateTime.UtcNow.AddDays(-8);
+            await db.SaveChangesAsync();
+        }
+
+        var second = Value(await Build(factory, userId).SendValidation(created.Id, UnconfiguredEmail(), Config(), default));
+        Assert.NotEqual(first.ValidationLink, second.ValidationLink);
     }
 
     [Fact]
