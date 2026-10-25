@@ -1,7 +1,17 @@
 using Ben.Data.Common.Enums;
 using Ben.Data.Source.Context;
 using Ben.Data.Source.Entities;
+using Ben.Data.WebApi.Controllers.Entities;
 using Ben.Data.WebApi.Controllers.Public;
+using Ben.Data.WebApi.Services;
+using Ben.Data.WebApi.Services.Access;
+using Ben.Service.Models.Entities;
+using Ben.Service.RepositoryService.GenericInterfaces;
+using Microsoft.AspNetCore.Http;
+using Microsoft.AspNetCore.Mvc;
+using Microsoft.Extensions.DependencyInjection;
+using Moq;
+using System.Security.Claims;
 using Ben.Data.WebApi.Services.Events;
 using Microsoft.EntityFrameworkCore;
 using Xunit;
@@ -227,6 +237,71 @@ public sealed class EventFindingsTests
 
         ev.LifecycleState = HostedEventStates.CalledOff.First();
         Assert.NotNull(EventFindings.WhyNotPublish(ev, PlaceKind.PublicLocation, now.AddDays(-1), now));
+    }
+
+    // ── the organizer's controls ─────────────────────────────────────────────
+
+    private static HostedEventFindingsController Organizer(World w, Guid who, IAuditLogService audit)
+    {
+        var security = new Mock<IOrganizationSecurityService>();
+        security.Setup(x => x.HasAccessAsync(It.IsAny<Guid>(), It.IsAny<Guid>(), It.IsAny<OrganizationSecurityTable>(),
+                It.IsAny<OrganizationSecurityAction>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync((Guid user, Guid _, OrganizationSecurityTable _, OrganizationSecurityAction _, CancellationToken _) => user == w.MemberId);
+        var services = new ServiceCollection().AddSingleton(audit).BuildServiceProvider();
+        return new HostedEventFindingsController(w.F, new Mock<AutoMapper.IMapper>().Object, security.Object, new HostedEventAccess(security.Object))
+        {
+            ControllerContext = new ControllerContext
+            {
+                HttpContext = new DefaultHttpContext
+                {
+                    RequestServices = services,
+                    User = new ClaimsPrincipal(new ClaimsIdentity([new Claim(ClaimTypes.NameIdentifier, who.ToString())], "Bearer")),
+                },
+            },
+        };
+    }
+
+    /// <summary>10/25/2026: publishing and choosing for the place's page leave an audit record of who and what.</summary>
+    [Fact]
+    public async Task Publishing_and_choosing_a_piece_are_audited_and_the_guest_is_told()
+    {
+        var w = await SeedAsync();
+        var audit = new Mock<IAuditLogService>();
+
+        var published = await Organizer(w, w.MemberId, audit.Object).Publish(w.OrgId, w.HostedId, "publish", default);
+        var record = Assert.IsType<EventFindingsRecord>(Assert.IsType<OkObjectResult>(published.Result).Value);
+        Assert.NotNull(record.PublishedUtc);
+        audit.Verify(a => a.LogUpdateAsync(nameof(HostedEvent), w.HostedId, It.IsAny<object>(), It.IsAny<object>(), w.MemberId, It.IsAny<string>()), Times.Once);
+
+        var chosen = await Organizer(w, w.MemberId, audit.Object).ChoosePiece(w.OrgId, w.HostedId, "evidence", w.SubmissionId, true,
+            new PlatformMessageService(w.F), default);
+        Assert.IsType<OkObjectResult>(chosen.Result);
+        audit.Verify(a => a.LogUpdateAsync(nameof(EventEvidenceSubmission), w.SubmissionId, It.IsAny<object>(), It.IsAny<object>(), w.MemberId, It.IsAny<string>()), Times.Once);
+
+        await using var db = await w.F.CreateDbContextAsync();
+        Assert.Equal(1, await db.UserMessageTos.CountAsync(t => t.ToAppUserId == w.GuestId));
+        Assert.Equal(FindingsOnPlace.Chosen, (await db.HostedEvents.SingleAsync()).FindingsOnPlace);
+    }
+
+    [Fact]
+    public async Task Somebody_who_cant_edit_the_event_can_neither_publish_nor_choose()
+    {
+        var w = await SeedAsync();
+        var audit = new Mock<IAuditLogService>().Object;
+
+        Assert.IsType<ForbidResult>((await Organizer(w, w.GuestId, audit).Publish(w.OrgId, w.HostedId, "publish", default)).Result);
+        Assert.IsType<ForbidResult>((await Organizer(w, w.StrangerId, audit).ChoosePiece(w.OrgId, w.HostedId, "evidence", w.SubmissionId, true,
+            new PlatformMessageService(w.F), default)).Result);
+    }
+
+    [Fact]
+    public async Task The_place_page_needs_public_findings_first()
+    {
+        var w = await SeedAsync();
+        var refused = await Organizer(w, w.MemberId, new Mock<IAuditLogService>().Object)
+            .SetPlace(w.OrgId, w.HostedId, FindingsOnPlace.AllPublic, new PlatformMessageService(w.F), default);
+
+        Assert.StartsWith("Make the findings public first", (string)Assert.IsType<BadRequestObjectResult>(refused.Result).Value!);
     }
 
     // ── the place's page ──────────────────────────────────────────────────────
