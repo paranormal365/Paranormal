@@ -227,6 +227,44 @@ public sealed class EventEvidenceTests
         Assert.Equal(1, await db.UserMessageTos.CountAsync(t => t.ToAppUserId == w.AttendeeId));
     }
 
+    /// <summary>
+    /// 10/25/2026: accepted evidence from an event at a private home was public on the event page — the place's
+    /// kind was never checked. It now goes only to the people who were there, and the file is never made public.
+    /// </summary>
+    [Fact]
+    public async Task Findings_from_a_private_home_go_only_to_the_people_who_were_there()
+    {
+        var w = await SeedAsync();
+        var homeId = Guid.NewGuid();
+        await using (var db = await w.F.CreateDbContextAsync())
+        {
+            db.Places.Add(new Place { Id = homeId, Name = "A family home", Kind = PlaceKind.PrivateResidence,
+                DateCreated = DateTime.UtcNow, CreatedByAppUserId = w.MemberId });
+            (await db.OrgCalendarEvents.SingleAsync(e => e.Id == w.EventId)).PlaceId = homeId;
+            await db.SaveChangesAsync();
+        }
+        var id = await SubmitAsync(w, w.AttendeeId);
+        Assert.IsType<OkObjectResult>((await Controller(w.F, w.MemberId).Review(w.OrgId, id,
+            new EventEvidenceController.ReviewEvidenceRequest(true, null), default)).Result);
+
+        await using (var db = await w.F.CreateDbContextAsync())
+            Assert.False((await db.EventEvidenceSubmissions.Include(s => s.UploadFile).SingleAsync()).UploadFile.IsPublic);
+
+        Assert.IsType<NotFoundResult>((await Controller(w.F, null).Accepted(w.EventId, default)).Result);
+        Assert.IsType<NotFoundResult>((await Controller(w.F, w.StrangerId).Accepted(w.EventId, default)).Result);
+        Assert.IsType<OkObjectResult>((await Controller(w.F, w.AttendeeId).Accepted(w.EventId, default)).Result);
+        Assert.IsType<OkObjectResult>((await Controller(w.F, w.MemberId).Accepted(w.EventId, default)).Result);
+    }
+
+    [Fact]
+    public async Task Findings_from_a_public_place_stay_open_to_anybody()
+    {
+        var w = await SeedAsync();
+        var id = await SubmitAsync(w, w.AttendeeId);
+        await Controller(w.F, w.MemberId).Review(w.OrgId, id, new EventEvidenceController.ReviewEvidenceRequest(true, null), default);
+        Assert.IsType<OkObjectResult>((await Controller(w.F, null).Accepted(w.EventId, default)).Result);
+    }
+
     [Fact]
     public async Task Rejection_requires_a_reason_and_keeps_the_file_private()
     {
