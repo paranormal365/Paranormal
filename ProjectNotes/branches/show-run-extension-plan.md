@@ -14,7 +14,11 @@ Branch: `feature/show-run-extensions` (from develop after `feature/one-credit-on
 5. "The discount only applies if they select the show to extend and it matches one currently running or in
    the future."
 6. Answered 10/24: **half their own price** ($49.50; $9.90 for a group with a paid plan) · **published shows
-   that aren't over** (a draft is published first) · **returned like the credit** (48-hour rule).
+   that aren't over** (a draft is published first).
+7. Ben, 10/24 (replaces "returned like the credit"): "If they cancel after buying an extended month or months,
+   the extra credit purchased is still tied to that record of an event and when they plan it, the dates can
+   extend the allotted amount of time based on the credits applied." **Months never leave the show.** The
+   show's own credit still follows the 48-hour rule as today.
 
 ## The model
 
@@ -33,20 +37,19 @@ filter publishes an event on half a credit. Separate rows cost a little duplicat
 
 ## Phase 1 — data (migration owed at deploy)
 
-- [ ] 1.1 Entity `EventRunMonth`: `Id`, `HostedEventId` (required; bought for one show), `OwnerOrganizationId`
-      / `OwnerAppUserId` (exactly one, check constraint, as `EventCredit`), `PriceAtPurchase`, `Currency`,
-      `PurchasedUtc`, `ExpiresUtc` (a year, used only once it comes back), `SpentUtc`,
-      `SpentOnHostedEventId`, `GrantedReason`, `RefundedUtc` / `RefundedByAppUserId` / `RefundedReason`,
-      `ProviderCheckoutRef`, `ProviderPaymentRef`, `ReceiptNumber`, audit columns.
-- [ ] 1.2 Indexes: (`SpentOnHostedEventId`, `SpentUtc`); (`OwnerOrganizationId`), (`OwnerAppUserId`);
-      `ProviderPaymentRef`.
+- [ ] 1.1 Entity `EventRunMonth`: `Id`, `HostedEventId` (required; the show it belongs to, for good),
+      `PaidByOrganizationId` / `PaidByAppUserId` (exactly one, check constraint), `PriceAtPurchase`,
+      `Currency`, `PurchasedUtc`, `GrantedReason`, `RefundedUtc` / `RefundedByAppUserId` / `RefundedReason`,
+      `ProviderCheckoutRef`, `ProviderPaymentRef`, `ReceiptNumber`, audit columns. No expiry and no
+      "spent": a month is the show's from the moment it is paid for.
+- [ ] 1.2 Indexes: (`HostedEventId`, `RefundedUtc`); `ProviderPaymentRef`.
 - [ ] 1.3 Migration `EventRunMonths`; add it to the deploy SQL script for Ben.
 - [ ] 1.4 Site setting `EventRunMonthPercent` (default 50) beside the credit price; `/admin/pricing` edits it.
 - [ ] 1.5 Tests: the check constraint (two owners or none refused); the setting's default.
 
 ## Phase 2 — the rule that uses them
 
-- [ ] 2.1 `EventRunMonths.CountSpentOnAsync(db, eventId)` — spent, not refunded.
+- [ ] 2.1 `EventRunMonths.CountForAsync(db, eventId)` — the show's months, not refunded.
 - [ ] 2.2 `RunTooLong(dates, extraMonths)`: limit = `first.AddMonths(1 + extraMonths)`.
 - [ ] 2.3 `ValidateAsync` passes the event's extra months on update (0 on create).
 - [ ] 2.4 The refusal names the way out: "…is past that. Buy an extra month for this show, or make the later
@@ -78,26 +81,27 @@ filter publishes an event on half a credit. Separate rows cost a little duplicat
 - [ ] 4.1 `StripeFulfillmentService` branch for `ih_run_months`: idempotent by payment reference; writes the
       months spent on the show at once; charge + payment ledger rows with frozen tax; next receipt number;
       receipt email "N extra month(s) for {show}".
-- [ ] 4.2 Fulfilled even if the show was called off between click and card: the month is written, then
-      immediately un-spent (back in the holder's pocket) and the receipt says so. No money lost, nothing
-      silent.
-- [ ] 4.3 Tests: delivered twice → one set; called off meanwhile → in the pocket; ledger totals and tax.
+- [ ] 4.2 Fulfilled even if the show was called off between click and card: the months are the show's, and
+      count when it is put back on (rule 7).
+- [ ] 4.3 Tests: delivered twice → one set; called off meanwhile → still on the show; ledger totals and tax.
 
-## Phase 5 — return, reuse, refund
+## Phase 5 — calling off, putting back on, refunds
 
-- [ ] 5.1 Calling a show off: `WhatCancellingDoesToTheCredit` sentence covers the months too ("…and its 2
-      extra months come back"); returned under the same 48-hour rule, and always when the venue withdrew.
-- [ ] 5.2 A returned month sits in the pocket for a year from purchase and can be spent extending another
-      show (no charge) — the same screen, "Use a month you have" instead of "Buy".
-- [ ] 5.3 SuperAdmin: list, grant and refund months on the existing credits admin page.
-- [ ] 5.4 Expiry warning job covers months in the pocket.
-- [ ] 5.5 Tests: return inside/outside the window; venue withdrew; spending a returned month; expiry.
+- [ ] 5.1 Calling a show off: the cancel screen's sentence adds "Its 2 extra months stay with this show, and
+      count again if you put it back on." The credit's own 48-hour rule is unchanged.
+- [ ] 5.2 "It's back on" → republish: spends a credit as today if the old one came back; the months still
+      count, so the dates can run as far as before.
+- [ ] 5.3 "Copy this event" doesn't copy months (a copy is a new show).
+- [ ] 5.4 SuperAdmin: list, grant and refund months, on the existing credits admin page. A refunded month
+      stops counting; dates already past the new limit are kept, and the next save asks to fix them.
+- [ ] 5.5 Tests: called off and back on keeps the run; copy has none; refunded month stops counting.
 
 ## Phase 6 — screens
 
 - [ ] 6.1 The show's page (organizer): "This run can go until {date}." and, when it can be extended, "Add a
       month — $49.50" (or "Use a month you have"); the dates editor marks dates past the limit.
-- [ ] 6.2 Billing card / My event credits: months in hand, with the show each was for.
+- [ ] 6.2 Billing card / My event credits: months bought, with the show each belongs to (a record, not a
+      balance).
 - [ ] 6.3 Pricing page: "Run a show longer than a month: each extra month is half the price of a credit."
 - [ ] 6.4 Admin pricing: the percentage.
 - [ ] 6.5 Touch targets, every width, dark/light (the site's own checks).
@@ -121,12 +125,14 @@ filter publishes an event on half a credit. Separate rows cost a little duplicat
 | # | Gap | Proposed answer |
 |---|---|---|
 | G1 | How many extra months may one show have? Unlimited means one credit + halves runs for years | **Needs Ben.** Suggest up to 11 (a year in all) |
-| G2 | A returned month — what is it? It was bought for one show | A month in the pocket for a year, spendable on any other show (5.2) |
+| G2 | A month after its show is called off | **Ben, 10/24:** stays with the show; counts when it is put back on |
 | G3 | A show published before credits existed (spent nothing) | Can still buy months; the rule is about the run, not the credit |
 | G4 | Planning a 3-month run before publishing | Publish with the first month's dates, then add months; the help says so in that order |
 | G5 | Buying months then removing the late dates | No refund; months were spent. Said before paying |
 | G6 | Moving a paid event's dates in general (still open from the walk) | Untouched here; the run window follows the first date |
-| G7 | Called off between checkout and payment | 4.2: written, returned to the pocket, receipt says so |
+| G7 | Called off between checkout and payment | 4.2: written to the show, counts if it is put back on |
+| G12 | A show called off for good, months never used | Nothing comes back (rule 7); the cancel screen says so before the button |
+| G13 | The credit came back on cancel but expires before the show is put back on | Republishing needs a credit as today; the months wait on the show |
 | G8 | A group's paid plan lapses after buying at $9.90 | Price frozen at purchase, as credits |
 | G9 | A person's credit spent on a group's show — who may buy months? | Anybody who may edit the show, paying as the group or as themselves |
 | G10 | A stay converted to a run after publish, to escape "each weekend is its own event" | Allowed; the run is then held to a month like any other. Converting back keeps months spent |
