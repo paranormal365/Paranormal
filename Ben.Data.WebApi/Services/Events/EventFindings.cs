@@ -26,17 +26,33 @@ public static class EventFindings
             {
                 e.IsPublic, e.OrganizationId, e.HostedEventId,
                 Residence = e.Place != null && e.Place.Kind == PlaceKind.PrivateResidence,
-                // A hosted event's findings are the people who were there's until the organizer publishes
-                // them (10/25/2026). An ordinary calendar event keeps "accepted is public".
-                Unpublished = e.HostedEventId != null
-                           && db.HostedEvents.Any(h => h.Id == e.HostedEventId && h.FindingsPublishedUtc == null),
+                // A hosted event's own standing, not its calendar row's: archiving takes the row off the public
+                // site, and its findings must stay as they were when it ended (10/25/2026).
+                Hosted = db.HostedEvents.Where(h => h.Id == e.HostedEventId)
+                    .Select(h => new { h.FindingsPublishedUtc, h.LifecycleState }).FirstOrDefault(),
             })
             .FirstOrDefaultAsync(ct);
         if (row is null) return false;
 
-        if (!row.Residence && !row.Unpublished) return row.IsPublic;
+        // An ordinary calendar event keeps "accepted is public", except at a private home.
+        if (row.HostedEventId is null)
+            return row.Residence
+                ? userId != Guid.Empty && await WasThereAsync(db, row.OrganizationId, null, calendarEventId, userId, ct)
+                : row.IsPublic;
+
+        // A hosted event's are the people who were there's until the organizer publishes them (10/25/2026).
+        if (row.Hosted is null || row.Hosted.LifecycleState == HostedEventLifecycleState.Removed) return false;
+        if (!row.Residence && row.Hosted.FindingsPublishedUtc is not null && ShowsFindings.Contains(row.Hosted.LifecycleState))
+            return true;
         return userId != Guid.Empty && await WasThereAsync(db, row.OrganizationId, row.HostedEventId, calendarEventId, userId, ct);
     }
+
+    /// <summary>The states whose published findings anybody may see: on the public site, or archived after it.</summary>
+    public static readonly HostedEventLifecycleState[] ShowsFindings =
+    [
+        HostedEventLifecycleState.Published, HostedEventLifecycleState.Live,
+        HostedEventLifecycleState.Ended, HostedEventLifecycleState.Archived,
+    ];
 
     /// <summary>Whether a calendar event's findings are open to anybody at all, signed out included.</summary>
     public static async Task<bool> OpenToAllAsync(BenDataContext db, Guid calendarEventId, CancellationToken ct)

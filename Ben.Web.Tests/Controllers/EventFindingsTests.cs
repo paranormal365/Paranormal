@@ -124,6 +124,54 @@ public sealed class EventFindingsTests
         Assert.False(await MaySee(w, w.GuestId));
     }
 
+    /// <summary>Archiving takes the calendar row off the public site; the findings stay as they were (10/25/2026).</summary>
+    private static Task ArchiveAsync(World w, HostedEventLifecycleState state = HostedEventLifecycleState.Archived)
+        => ChangeAsync(w, (db, ev, _) =>
+        {
+            ev.LifecycleState = state;
+            db.OrgCalendarEvents.Single(c => c.Id == w.CalendarId).IsPublic = false;
+        });
+
+    [Fact]
+    public async Task Archiving_keeps_published_findings_open_to_anybody()
+    {
+        var w = await SeedAsync(published: true);
+        await ArchiveAsync(w);
+
+        Assert.True(await MaySee(w, Guid.Empty));
+        Assert.True(await MaySee(w, w.GuestId));
+    }
+
+    [Fact]
+    public async Task Archiving_keeps_private_findings_with_the_people_who_were_there()
+    {
+        var w = await SeedAsync(published: false);
+        await ArchiveAsync(w);
+
+        Assert.False(await MaySee(w, w.StrangerId));
+        Assert.True(await MaySee(w, w.GuestId));
+    }
+
+    [Fact]
+    public async Task A_called_off_events_findings_go_only_to_the_people_who_were_there()
+    {
+        var w = await SeedAsync(published: true);
+        await ArchiveAsync(w, HostedEventLifecycleState.Cancelled);
+
+        Assert.False(await MaySee(w, Guid.Empty));
+        Assert.True(await MaySee(w, w.GuestId));
+    }
+
+    [Fact]
+    public async Task An_event_removed_from_the_site_shows_its_findings_to_nobody()
+    {
+        var w = await SeedAsync(published: true);
+        await ArchiveAsync(w, HostedEventLifecycleState.Removed);
+
+        Assert.False(await MaySee(w, Guid.Empty));
+        Assert.False(await MaySee(w, w.GuestId));
+    }
+
     // ── publishing ────────────────────────────────────────────────────────────
 
     [Fact]
