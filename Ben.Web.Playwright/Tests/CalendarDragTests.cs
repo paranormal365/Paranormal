@@ -35,7 +35,11 @@ public class CalendarDragTests : BenTestBase
 
         // Noon today, so it is in the week the calendar opens on and in the middle of its day whatever the zone.
         _title = $"Drag test {Guid.NewGuid():N}"[..20];
-        var start = DateTime.UtcNow.Date.AddHours(12);
+        // Noon on the calendar's own today, in Central time. UTC's date was used, and on a Saturday evening that is
+        // already Sunday — next week, off the week the calendar opens on (10/24/2026, 10:42 PM CDT).
+        var central = TimeZoneInfo.FindSystemTimeZoneById("America/Chicago");
+        var start = TimeZoneInfo.ConvertTimeToUtc(
+            TimeZoneInfo.ConvertTimeFromUtc(DateTime.UtcNow, central).Date.AddHours(12), central);
         var made = await _api.PostAsync($"/api/organizations/{_orgId}/calendar", new()
         {
             Headers = _auth,

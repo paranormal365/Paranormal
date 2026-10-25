@@ -171,6 +171,7 @@ namespace Ben.Data.Source.Context
         public virtual DbSet<UserEmailOptOut> UserEmailOptOuts { get; set; }
         public virtual DbSet<OutboxEmailAttachment> OutboxEmailAttachments { get; set; }
         public virtual DbSet<EventCredit> EventCredits { get; set; }
+        public virtual DbSet<EventRunMonth> EventRunMonths { get; set; }
         public virtual DbSet<TourGuide> TourGuides { get; set; }
         public virtual DbSet<TourSocialLink> TourSocialLinks { get; set; }
         public virtual DbSet<MessagePoll> MessagePolls { get; set; }
@@ -1928,6 +1929,45 @@ namespace Ben.Data.Source.Context
             modelBuilder.Entity<EventCredit>()
                 .HasOne(c => c.UpdatedByAppUser).WithMany()
                 .HasForeignKey(c => c.UpdatedByAppUserId).OnDelete(DeleteBehavior.NoAction);
+
+            // ── Extra months for a show's run (10/24/2026) ─────────────────
+            // Never a kind of credit: publishing reads EventCredits only. Owned by a group OR a person,
+            // as credits are.
+            modelBuilder.Entity<EventRunMonth>()
+                .ToTable(t => t.HasCheckConstraint(
+                    "CK_EventRunMonths_OneOwner",
+                    "([OwnerOrganizationId] IS NOT NULL AND [OwnerAppUserId] IS NULL) OR "
+                  + "([OwnerOrganizationId] IS NULL AND [OwnerAppUserId] IS NOT NULL)"));
+            modelBuilder.Entity<HostedEvent>().Property(e => e.CalledOffRefundHow).HasMaxLength(1000);
+            modelBuilder.Entity<EventRunMonth>().Property(m => m.PriceAtPurchase).HasPrecision(18, 2);
+            modelBuilder.Entity<EventRunMonth>().Property(m => m.Currency).HasMaxLength(3);
+            modelBuilder.Entity<EventRunMonth>().Property(m => m.ProviderCheckoutRef).HasMaxLength(200);
+            modelBuilder.Entity<EventRunMonth>().Property(m => m.ProviderPaymentRef).HasMaxLength(200);
+            modelBuilder.Entity<EventRunMonth>().Property(m => m.ReceiptNumber).HasMaxLength(40);
+            modelBuilder.Entity<EventRunMonth>().Property(m => m.RefundedReason).HasMaxLength(500);
+            modelBuilder.Entity<EventRunMonth>().Property(m => m.GrantedReason).HasMaxLength(500);
+            modelBuilder.Entity<EventRunMonth>()
+                .HasIndex(m => m.ProviderPaymentRef).HasFilter("[ProviderPaymentRef] IS NOT NULL");
+            // "How many months does this show have" and "what does this owner hold".
+            modelBuilder.Entity<EventRunMonth>().HasIndex(m => new { m.AppliedToHostedEventId, m.RefundedUtc });
+            modelBuilder.Entity<EventRunMonth>().HasIndex(m => new { m.OwnerOrganizationId, m.AppliedToHostedEventId, m.ExpiresUtc });
+            modelBuilder.Entity<EventRunMonth>().HasIndex(m => new { m.OwnerAppUserId, m.AppliedToHostedEventId, m.ExpiresUtc });
+            modelBuilder.Entity<EventRunMonth>()
+                .HasOne(m => m.OwnerOrganization).WithMany()
+                .HasForeignKey(m => m.OwnerOrganizationId).OnDelete(DeleteBehavior.NoAction);
+            modelBuilder.Entity<EventRunMonth>()
+                .HasOne(m => m.OwnerAppUser).WithMany()
+                .HasForeignKey(m => m.OwnerAppUserId).OnDelete(DeleteBehavior.NoAction);
+            // An event purged takes its months back to held rather than taking the record with it.
+            modelBuilder.Entity<EventRunMonth>()
+                .HasOne(m => m.AppliedToHostedEvent).WithMany()
+                .HasForeignKey(m => m.AppliedToHostedEventId).OnDelete(DeleteBehavior.SetNull);
+            modelBuilder.Entity<EventRunMonth>()
+                .HasOne(m => m.CreatedByAppUser).WithMany()
+                .HasForeignKey(m => m.CreatedByAppUserId).OnDelete(DeleteBehavior.NoAction);
+            modelBuilder.Entity<EventRunMonth>()
+                .HasOne(m => m.UpdatedByAppUser).WithMany()
+                .HasForeignKey(m => m.UpdatedByAppUserId).OnDelete(DeleteBehavior.NoAction);
 
             // ONE umbrella row per event, said by the database rather than by a convention
             // somebody has to remember. Filtered so the thousands of ordinary calendar rows, which

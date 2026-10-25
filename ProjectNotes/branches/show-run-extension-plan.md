@@ -107,6 +107,22 @@ on a month. Separate rows can't leak into publishing.
 - [ ] 5.7 Tests: apply held; apply refused (draft, stay, ended, cap, lapsed, someone else's); every kind of
       calling off returns them; back on doesn't re-apply; copy; expiry warning once; refund.
 
+## Phase 5b — what confirmed guests are told when an event is called off (Ben, 10/24)
+
+Ben: "When calling off and there are already confirmed guests, the organizer can choose to send a message and
+email the guests with either the new date or how to request their refund."
+
+- [ ] 5b.1 The cancel box, when anybody holds a confirmed place, offers a choice: **It's moving to a new date**
+      (a date, and optionally where to book) or **How to get your money back** (the organizer's own words:
+      who to contact, how). Either is optional; the reason stays.
+- [ ] 5b.2 `CancelHostedEventRequest` carries `NewDate` and `RefundHow`; the called-off letter
+      (`EventGuestMailer.SendCalledOffAsync`) says the one chosen, plainly, instead of only "nothing was paid
+      here". The site message to each guest (bell) says the same.
+- [ ] 5b.3 The event's public page, once called off, shows the new date or the refund words to people who had
+      a place.
+- [ ] 5b.4 Tests: each choice reaches the letter; neither chosen keeps today's letter; words kept as text.
+- [ ] 5b.5 Help: going-to-an-event ("If the event changes") and organization-administration.
+
 ## Phase 6 — screens
 
 - [ ] 6.1 The show's page (organizer): "This run can go until MM/DD/YYYY." and, when it may be extended,

@@ -370,6 +370,8 @@ public sealed class PublicHostedEventController : BenControllerBase
             EvidenceDeadlineUtc: HostedEventEvidence.DeadlineUtc(r.Event, [.. r.Nights]),
             EvidenceClosedSentence: HostedEventEvidence.WhyClosed(r.Event, [.. r.Nights], DateTime.UtcNow),
             EvidenceSentence: HostedEventEvidence.WindowSentence(r.Event, [.. r.Nights]),
-            AsksForVotes: r.Event.AsksForVotes);
+            AsksForVotes: r.Event.AsksForVotes,
+            CalledOffNewDate: HostedEventStates.CalledOff.Contains(r.Event.LifecycleState) ? r.Event.CalledOffNewDate : null,
+            CalledOffRefundHow: HostedEventStates.CalledOff.Contains(r.Event.LifecycleState) ? r.Event.CalledOffRefundHow : null);
     }
 }

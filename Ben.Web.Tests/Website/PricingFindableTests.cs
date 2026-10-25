@@ -262,6 +262,8 @@ public sealed class PricingFindableTests
         Setting(SiteSettingKeys.EventCreditPriceUsd, "Event credit price ($)", price),
         Setting(SiteSettingKeys.EventCreditSubscriberPercent, "Paid-subscriber price (% of the full price)"),
         Setting(SiteSettingKeys.EventCreditBundles, "Event credit bundles", "3 = 249", multiLine: true),
+        Setting(SiteSettingKeys.EventRunMonthPercent, "Extra month for a show's run (% of a credit)"),
+        Setting(SiteSettingKeys.EventRunMonthsPerShow, "Most extra months for one show"),
         Setting(SiteSettingKeys.GhostWalkEnabled, "Sell the Ghost Walk Tour subscription", "true", boolean: true),
         Setting(SiteSettingKeys.GhostWalkMonthlyPriceUsd, "Ghost Walk Tour price ($ a month per tour route)"),
     ];
@@ -412,6 +414,8 @@ public sealed class PricingFindableTests
         Assert.Equal(SiteSettingKeys.EventCreditPriceUsd, AdminPricing.EventCreditPriceKey);
         Assert.Equal(SiteSettingKeys.EventCreditSubscriberPercent, AdminPricing.EventCreditPercentKey);
         Assert.Equal(SiteSettingKeys.EventCreditBundles, AdminPricing.EventCreditBundlesKey);
+        Assert.Equal(SiteSettingKeys.EventRunMonthPercent, AdminPricing.RunMonthPercentKey);
+        Assert.Equal(SiteSettingKeys.EventRunMonthsPerShow, AdminPricing.RunMonthsPerShowKey);
         Assert.Equal(SiteSettingKeys.GhostWalkEnabled, AdminPricing.GhostWalkKey);
         Assert.Equal(SiteSettingKeys.GhostWalkMonthlyPriceUsd, AdminPricing.GhostWalkPriceKey);
 

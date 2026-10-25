@@ -419,6 +419,12 @@ public static class MailKinds
         ["AppUsers", "Organizations"],
         CanDecline: true);
 
+    public static readonly MailKindInfo EventRunMonthExpiring = new(
+        "event-run-month-expiring", "Extra months for a show expire soon",
+        "The warning before held extra months for a show's run lapse.",
+        ["AppUsers", "Organizations"],
+        CanDecline: true);
+
     public static readonly MailKindInfo EventCreditExpiring = new(
         "event-credit-expiring", "An event credit expires soon",
         "The warning before a bought credit runs out.",
@@ -512,7 +518,7 @@ public static class MailKinds
         SessionMoved, SessionCancelled, SessionPromoted,
         EventThankYou, EventMissedYou, EventResults, StaffInvite, GuestRemoved, AppealAnswered, HoldYourPlaces,
         BookingsArrived, BookingsDigest,
-        PaymentReceipt, SubscriptionLapsing, PlanChanged, EventCreditExpiring,
+        PaymentReceipt, SubscriptionLapsing, PlanChanged, EventCreditExpiring, EventRunMonthExpiring,
         VenueClaimCode,
         StoreOrderConfirmation, StoreOrderPlaced, StoreOrderLink, StoreOrderShipped, StoreOrderRefunded, StoreLowStock,
         StoreSellerParcelToShip,

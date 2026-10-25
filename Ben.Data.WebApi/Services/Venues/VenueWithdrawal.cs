@@ -58,6 +58,7 @@ public static class VenueWithdrawal
 
             // Regardless of timing. The forty-eight hour rule is there to stop an organizer cancelling
             // on the Friday afternoon for free; here the organizer cancelled nothing.
+            await EventRunMonths.ReturnFromAsync(db, hosted.Id, actorId, now, ct);
             var credit = await EventCredits.SpentOnAsync(db, hosted.Id, ct);
             if (credit is not null)
             {

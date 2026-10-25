@@ -484,6 +484,11 @@
                     </div>
                 </div>
 
+                @if (ev.DatesAreSeparate)
+                {
+                    <EventRunMonthsPanel OrgId="OrgId" EventId="ev.Id" />
+                }
+
                 @* ── Dates ───────────────────────────────────────────────── *@
                 <div class="card mb-3" id="event-dates">
                     <div class="card-header fw-semibold">
@@ -937,6 +942,21 @@
                                         <button type="button" class="btn btn-outline-danger" id="cancel-event"
                                                 disabled="@_busy" @onclick="CancelAsync">Call it off</button>
                                     </div>
+                                    @* Ben, 10/24/2026: guests with a place can be told the new date, or how to get
+                                       their money back. Both optional; both go in their letter and on the page. *@
+                                    <div class="w-100 row g-2 mt-1" id="cancel-tell-guests" style="max-width:40rem;">
+                                        <div class="col-12 small text-secondary">Tell everybody with a place (optional):</div>
+                                        <div class="col-12 col-sm-5">
+                                            <label class="form-label small mb-1" for="cancel-new-date">It's moving to</label>
+                                            <BenDateField Mode="DateEntryMode.Date" Id="cancel-new-date" @bind-Value="_cancelNewDate" />
+                                        </div>
+                                        <div class="col-12 col-sm-7">
+                                            <label class="form-label small mb-1" for="cancel-refund-how">How to get their money back</label>
+                                            <BenTextArea id="cancel-refund-how" class="form-control" rows="2" maxlength="1000" Value="@_cancelRefundHow"
+                                                         OnInput="@(e => _cancelRefundHow = e.Value?.ToString() ?? "")"
+                                                         placeholder="Who to contact and how, in your words" />
+                                        </div>
+                                    </div>
                                 }
                             </div>
                         }
@@ -980,6 +1000,8 @@
               + (CopyNote is { Length: > 0 } more ? " " + more : "")
             : null;
     private string _cancelReason = "";
+    private DateTime? _cancelNewDate;
+    private string _cancelRefundHow = "";
     private readonly EventForm _form = new();
     private IReadOnlyList<HostedEventReadinessItem> _readiness = [];
 
@@ -1417,7 +1439,8 @@
     {
         _busy = true; _error = null; _note = null;
 
-        var (saved, error) = await AdminClient.CancelHostedEventAsync(OrgId, EventId, _cancelReason);
+        var (saved, error) = await AdminClient.CancelHostedEventAsync(OrgId, EventId, _cancelReason,
+            newDate: _cancelNewDate, refundHow: string.IsNullOrWhiteSpace(_cancelRefundHow) ? null : _cancelRefundHow);
         _busy = false;
 
         if (saved is null) { _error = error ?? "That couldn't be done just now."; return; }
@@ -1428,6 +1451,8 @@
         // left showing the state of the page before the save.
         await LoadReadinessAsync();
         _cancelReason = "";
+        _cancelNewDate = null;
+        _cancelRefundHow = "";
     }
 
     // ── moving it somewhere else ────────────────────────────────────────────

@@ -237,7 +237,9 @@ public sealed record HostedEventCancellationEffect(bool CreditComesBack, string 
 public sealed record SetHostedEventBookingModeRequest(HostedEventBookingMode Mode);
 
 /// <summary>Calling an event off, with the reason the people who have places will read.</summary>
-public sealed record CancelHostedEventRequest(string? Reason = null);
+/// <param name="NewDate">When it's moving to a new date, that date (Ben, 10/24/2026). Told to everybody with a place.</param>
+/// <param name="RefundHow">How to get their money back, in the organizer's words. Told to everybody with a place.</param>
+public sealed record CancelHostedEventRequest(string? Reason = null, DateTime? NewDate = null, string? RefundHow = null);
 
 /// <summary>A hosted event as a visitor sees it (item 235).</summary>
 /// <remarks>
@@ -349,7 +351,13 @@ public sealed record PublicHostedEventRecord(
     string? EvidenceSentence = null,
 
     /// <summary>Whether the page asks people to vote on the evidence it shows.</summary>
-    bool AsksForVotes = false);
+    bool AsksForVotes = false,
+
+    /// <summary>When it was called off and moved, the new date (10/24/2026).</summary>
+    DateTime? CalledOffNewDate = null,
+
+    /// <summary>When it was called off, how guests get their money back, in the organizer's words (10/24/2026).</summary>
+    string? CalledOffRefundHow = null);
 
 /// <summary>
 /// One thing that has to be true before an event can go live (item 235 phase 3).
@@ -934,3 +942,21 @@ public static class EventGuestThreadStanding
 
 /// <summary>A message to (or from) the organizers. Words only.</summary>
 public sealed record PostEventGuestThreadRequest(string? Body);
+
+// ── extra months for a show's run (10/24/2026) ───────────────────────────────
+
+/// <summary>A show's extra months, as its organizer sees them.</summary>
+/// <param name="IsRun">False for a stay, which never takes a month.</param>
+/// <param name="Applied">Months counting toward the run now.</param>
+/// <param name="Cap">The most one show may have.</param>
+/// <param name="RunUntil">The last date a performance may fall on, or null when the show has no dates.</param>
+/// <param name="GroupPrice">One month, paid by the group (its paid-plan price when it has one).</param>
+/// <param name="PersonPrice">One month, paid by the person themselves.</param>
+/// <param name="HeldByGroup">Months the group holds, ready to apply.</param>
+/// <param name="HeldByMe">Months the reader holds, ready to apply.</param>
+/// <param name="WhyNot">Why the show can't take a month now, or null when it can.</param>
+/// <param name="OnSale">Months can be bought now.</param>
+public sealed record EventRunMonthsRecord(
+    bool IsRun, int Applied, int Cap, DateTime? RunUntil,
+    decimal GroupPrice, decimal PersonPrice, int HeldByGroup, int HeldByMe,
+    string? WhyNot, bool OnSale);

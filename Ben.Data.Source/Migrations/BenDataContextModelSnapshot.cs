@@ -3215,6 +3215,101 @@ namespace Ben.Data.Source.Migrations
                     b.ToTable("EventReminderSents");
                 });
 
+            modelBuilder.Entity("Ben.Data.Source.Entities.EventRunMonth", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<Guid?>("AppliedToHostedEventId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<DateTime?>("AppliedUtc")
+                        .HasColumnType("datetime2");
+
+                    b.Property<Guid>("CreatedByAppUserId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<string>("Currency")
+                        .IsRequired()
+                        .HasMaxLength(3)
+                        .HasColumnType("nvarchar(3)");
+
+                    b.Property<DateTime>("DateCreated")
+                        .HasColumnType("datetime2");
+
+                    b.Property<DateTime?>("DateUpdated")
+                        .HasColumnType("datetime2");
+
+                    b.Property<DateTime>("ExpiresUtc")
+                        .HasColumnType("datetime2");
+
+                    b.Property<DateTime?>("ExpiryWarningSentUtc")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("GrantedReason")
+                        .HasMaxLength(500)
+                        .HasColumnType("nvarchar(500)");
+
+                    b.Property<Guid?>("OwnerAppUserId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<Guid?>("OwnerOrganizationId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<decimal>("PriceAtPurchase")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("decimal(18,2)");
+
+                    b.Property<string>("ProviderCheckoutRef")
+                        .HasMaxLength(200)
+                        .HasColumnType("nvarchar(200)");
+
+                    b.Property<string>("ProviderPaymentRef")
+                        .HasMaxLength(200)
+                        .HasColumnType("nvarchar(200)");
+
+                    b.Property<DateTime>("PurchasedUtc")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("ReceiptNumber")
+                        .HasMaxLength(40)
+                        .HasColumnType("nvarchar(40)");
+
+                    b.Property<Guid?>("RefundedByAppUserId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<string>("RefundedReason")
+                        .HasMaxLength(500)
+                        .HasColumnType("nvarchar(500)");
+
+                    b.Property<DateTime?>("RefundedUtc")
+                        .HasColumnType("datetime2");
+
+                    b.Property<Guid?>("UpdatedByAppUserId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("CreatedByAppUserId");
+
+                    b.HasIndex("ProviderPaymentRef")
+                        .HasFilter("[ProviderPaymentRef] IS NOT NULL");
+
+                    b.HasIndex("UpdatedByAppUserId");
+
+                    b.HasIndex("AppliedToHostedEventId", "RefundedUtc");
+
+                    b.HasIndex("OwnerAppUserId", "AppliedToHostedEventId", "ExpiresUtc");
+
+                    b.HasIndex("OwnerOrganizationId", "AppliedToHostedEventId", "ExpiresUtc");
+
+                    b.ToTable("EventRunMonths", t =>
+                        {
+                            t.HasCheckConstraint("CK_EventRunMonths_OneOwner", "([OwnerOrganizationId] IS NOT NULL AND [OwnerAppUserId] IS NULL) OR ([OwnerOrganizationId] IS NULL AND [OwnerAppUserId] IS NOT NULL)");
+                        });
+                });
+
             modelBuilder.Entity("Ben.Data.Source.Entities.EvidenceVote", b =>
                 {
                     b.Property<Guid>("Id")
@@ -4274,6 +4369,13 @@ namespace Ben.Data.Source.Migrations
 
                     b.Property<DateTime?>("BookingsCloseAtUtc")
                         .HasColumnType("datetime2");
+
+                    b.Property<DateTime?>("CalledOffNewDate")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("CalledOffRefundHow")
+                        .HasMaxLength(1000)
+                        .HasColumnType("nvarchar(1000)");
 
                     b.Property<DateTime?>("CancelledAtUtc")
                         .HasColumnType("datetime2");
@@ -16844,6 +16946,45 @@ namespace Ben.Data.Source.Migrations
                     b.Navigation("AppUser");
 
                     b.Navigation("OrgCalendarEvent");
+                });
+
+            modelBuilder.Entity("Ben.Data.Source.Entities.EventRunMonth", b =>
+                {
+                    b.HasOne("Ben.Data.Source.Entities.HostedEvent", "AppliedToHostedEvent")
+                        .WithMany()
+                        .HasForeignKey("AppliedToHostedEventId")
+                        .OnDelete(DeleteBehavior.SetNull);
+
+                    b.HasOne("Ben.Data.Source.Entities.AppUser", "CreatedByAppUser")
+                        .WithMany()
+                        .HasForeignKey("CreatedByAppUserId")
+                        .OnDelete(DeleteBehavior.NoAction)
+                        .IsRequired();
+
+                    b.HasOne("Ben.Data.Source.Entities.AppUser", "OwnerAppUser")
+                        .WithMany()
+                        .HasForeignKey("OwnerAppUserId")
+                        .OnDelete(DeleteBehavior.NoAction);
+
+                    b.HasOne("Ben.Data.Source.Entities.Organization", "OwnerOrganization")
+                        .WithMany()
+                        .HasForeignKey("OwnerOrganizationId")
+                        .OnDelete(DeleteBehavior.NoAction);
+
+                    b.HasOne("Ben.Data.Source.Entities.AppUser", "UpdatedByAppUser")
+                        .WithMany()
+                        .HasForeignKey("UpdatedByAppUserId")
+                        .OnDelete(DeleteBehavior.NoAction);
+
+                    b.Navigation("AppliedToHostedEvent");
+
+                    b.Navigation("CreatedByAppUser");
+
+                    b.Navigation("OwnerAppUser");
+
+                    b.Navigation("OwnerOrganization");
+
+                    b.Navigation("UpdatedByAppUser");
                 });
 
             modelBuilder.Entity("Ben.Data.Source.Entities.EvidenceVote", b =>

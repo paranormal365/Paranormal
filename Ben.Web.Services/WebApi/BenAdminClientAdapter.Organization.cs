@@ -308,10 +308,11 @@ public sealed partial class BenAdminClientAdapter
                new { }, token);
 
     public Task<(HostedEventRecord? Result, string? Error)> CancelHostedEventAsync(
-        Guid orgId, Guid eventId, string? reason, CancellationToken token = default)
+        Guid orgId, Guid eventId, string? reason, CancellationToken token = default,
+        DateTime? newDate = null, string? refundHow = null)
         => _api.SendExpectingReasonAsync<CancelHostedEventRequest, HostedEventRecord>(
                HttpMethod.Post, $"/api/organizations/{orgId}/events/{eventId}/cancel",
-               new CancelHostedEventRequest(reason), token);
+               new CancelHostedEventRequest(reason, newDate, refundHow), token);
 
     public Task<LoadResult<HostedEventReadinessItem>> GetHostedEventReadinessAsync(
         Guid orgId, Guid eventId, CancellationToken token = default)
@@ -322,6 +323,23 @@ public sealed partial class BenAdminClientAdapter
         Guid orgId, Guid eventId, CancellationToken token = default)
         => _api.GetAsync<HostedEventCancellationEffect>(
                $"/api/organizations/{orgId}/events/{eventId}/cancellation-effect", token);
+
+    public Task<ItemResult<EventRunMonthsRecord>> GetEventRunMonthsAsync(Guid orgId, Guid eventId, CancellationToken token = default)
+        => _api.GetItemAsync<EventRunMonthsRecord>($"/api/organizations/{orgId}/events/{eventId}/run-months", token);
+
+    public Task<(Ben.Service.Models.StartCheckoutResponse? Result, string? Error)> StartEventRunMonthsCheckoutAsync(
+        Guid orgId, Guid eventId, int count, bool asGroup, CancellationToken token = default)
+        => _api.SendExpectingReasonAsync<object, Ben.Service.Models.StartCheckoutResponse>(
+               HttpMethod.Post,
+               $"/api/organizations/{orgId}/events/{eventId}/run-months/checkout?count={count}&asGroup={asGroup.ToString().ToLowerInvariant()}",
+               new { }, token);
+
+    public Task<(EventRunMonthsRecord? Result, string? Error)> ApplyEventRunMonthsAsync(
+        Guid orgId, Guid eventId, int count, bool fromGroup, CancellationToken token = default)
+        => _api.SendExpectingReasonAsync<object, EventRunMonthsRecord>(
+               HttpMethod.Post,
+               $"/api/organizations/{orgId}/events/{eventId}/run-months/apply?count={count}&fromGroup={fromGroup.ToString().ToLowerInvariant()}",
+               new { }, token);
 
     public Task<(HostedEventRecord? Result, string? Error)> DecideHostedEventAsync(
         Guid orgId, Guid eventId, bool going, CancellationToken token = default)

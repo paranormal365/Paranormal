@@ -733,6 +733,15 @@ Under *Events* in Site Settings, and on **Administration → Pricing**:
   makes a $99 credit $19.80. Leave it empty for 20. It applies to bundles too.
 - **Event credit bundles** are several credits for one price, one per line as *how many = price*,
   for example `3 = 249`. Up to six, each for 2 to 20 credits.
+- **Extra month for a show's run (% of a credit)** is what one extra month costs, as a percentage of
+  what the buyer pays for a credit. Leave it empty for 50: $49.50, or $9.90 for a group with a paid
+  plan. A show's run fits a month from its first performance on one credit; each extra month adds a
+  month. Extra months only lengthen a run and never publish an event.
+- **Most extra months for one show** is the cap. Leave it empty for 11, a run of a year.
+
+The **Event credits** page also lists every extra month sold or given. **Give them** hands a group
+months for a reason (nothing reaches the ledger), and **Refund** stops one counting at once and writes
+the adjustment on the ledger.
 
 The home page, the Pricing page, the billing pages and the help all show these prices as they are
 set, so changing one changes every place it appears. A value that doesn't make sense, such as a

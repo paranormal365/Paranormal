@@ -116,6 +116,9 @@ public sealed class EveryMailerGoesThroughTheOutboxTests
         ["ClientStatusMailer.cs: SendToClientsAsync"] =
             "case-status and visit notices, after the change is saved; the client's case page shows "
           + "the same status and visit either way.",
+        ["EventCreditExpiryJob.cs: WarnAboutHeldMonthsAsync"] =
+            "a warning ahead of held extra months lapsing, the same as the credit warning beside it; losing it "
+          + "costs the holder the reminder, not the months, which lapse when they always would.",
         ["EventCreditExpiryJob.cs: WarnAsync"] =
             "a warning ahead of a credit's expiry (the bell is used only where there is no address); "
           + "losing it costs the holder the reminder, not the credit, which expires when it always would.",

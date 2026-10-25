@@ -740,7 +740,8 @@ public sealed class EventGuestMailer
     /// </remarks>
     /// <returns>How many letters went.</returns>
     public async Task<int> SendCalledOffAsync(
-        BenDataContext db, Guid hostedEventId, string? reason, CancellationToken ct)
+        BenDataContext db, Guid hostedEventId, string? reason, CancellationToken ct,
+        DateTime? newDate = null, string? refundHow = null)
     {
         if (!_email.IsConfigured) return 0;
 
@@ -761,9 +762,17 @@ public sealed class EventGuestMailer
             if (Trimmed(reason) is { } why)
                 body.Append($"<p>{Safe(ev?.Organization?.Name ?? "The venue")} said: “{Safe(why)}”</p>");
 
-            body.Append("<p>Nothing was paid through this site, so there is nothing to refund "
-                      + "here. Anything you arranged directly with the venue is between you and "
-                      + "them.</p>");
+            var host = Safe(ev?.Organization?.Name ?? "The organizers");
+            if (newDate is { } moved)
+                body.Append($"<p><strong>It's moving to {moved:dddd, MM/dd/yyyy}.</strong> {host} will tell you how to "
+                          + "keep your place for the new date.</p>");
+            if (Trimmed(refundHow) is { } how)
+                body.Append($"<p><strong>Getting your money back:</strong> {Safe(how)}</p>"
+                          + "<p>Nothing was paid through this site, so it's settled directly with them.</p>");
+            else
+                body.Append("<p>Nothing was paid through this site, so there is nothing to refund "
+                          + "here. Anything you arranged directly with the venue is between you and "
+                          + "them.</p>");
 
             try
             {

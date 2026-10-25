@@ -90,6 +90,13 @@ public static class SiteSettingKeys
     /// </remarks>
     public const string EventCreditSubscriberPercent = "events.credit-subscriber-percent";
 
+    /// <summary>What an extra month for a show's run costs, as a percentage of the buyer's own credit price (10/24/2026).</summary>
+    /// <remarks>Ben: "It is 50% off to add each additional month." Unset reads as 50; 1 to 100.</remarks>
+    public const string EventRunMonthPercent = "events.run-month-percent";
+
+    /// <summary>The most extra months one show's run may have (10/24/2026). Unset reads as 11: a year in all.</summary>
+    public const string EventRunMonthsPerShow = "events.run-months-per-show";
+
     /// <summary>
     /// Bundle offers for event credits: several credits for one price (10/21/2026).
     /// </summary>
@@ -352,6 +359,14 @@ public static class SiteSettingKeys
             "What a group with an active paid subscription pays for an event credit or a bundle, as a "
             + "percentage of the full price. 20 means a $99 credit costs them $19.80. Leave empty for "
             + "20. Any whole or decimal number from 1 to 100."),
+        (EventRunMonthPercent, "Extra month for a show's run (% of a credit)",
+            "A show's run may last a month from its first performance on one credit. Each extra month costs "
+            + "this percentage of what the buyer pays for a credit: 50 means $49.50, or $9.90 for a group with a "
+            + "paid plan. An extra month only lengthens a run; it can never publish an event. Leave empty for 50. "
+            + "Any number from 1 to 100."),
+        (EventRunMonthsPerShow, "Most extra months for one show",
+            "How many extra months one show's run may have. 11 means a run of up to a year. Leave empty for 11. "
+            + "A whole number from 1 to 36."),
         (EventCreditBundles, "Event credit bundles",
             "Several credits for one price. One offer per line, written as how many = price, for "
             + "example \"3 = 249\". A bundle must be for 2 to 20 credits and each line a different "
@@ -486,7 +501,8 @@ public static class SiteSettingKeys
 
         ("Events",
          "What it costs to put an event on. No plan includes events, so every event uses one credit.",
-         [EventCreditsEnabled, EventCreditPriceUsd, EventCreditSubscriberPercent, EventCreditBundles]),
+         [EventCreditsEnabled, EventCreditPriceUsd, EventCreditSubscriberPercent, EventCreditBundles,
+          EventRunMonthPercent, EventRunMonthsPerShow]),
 
         ("Ghost Walk Tour subscription",
          "A monthly subscription of its own, separate from the investigation plans, priced per tour route.",

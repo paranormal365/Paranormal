@@ -33,7 +33,13 @@ day-by-day account of building it would say nothing to anyone using it now.
 
 ## Unreleased
 
+- A published show can run longer than a month: each extra month is half the price of a credit, up to a year in all, bought from the show's own page. Extra months only lengthen a run, come back if the show is called off, and lapse a year after they're bought.
+- Calling an event off can tell everybody with a place the new date, or how to get their money back.
 - One event credit covers one event: days in a row, like a weekend, or a show's run of performances within a month of the first. Another weekend, or performances after that month, are their own event.
+
+### Administration
+
+- Extra months for a show's run: their price (a percentage of a credit) and the most per show are on Pricing, and they're listed, given and refunded on the event credits page.
 
 ## 2.21.0 · 2026-10-24
 

@@ -1101,6 +1101,21 @@ must all fall within a month of the first performance. Performances after that a
 
 **One credit covers either.** A weekend is one event, and so is a show's run of up to a month.
 
+### Running a show longer than a month
+
+Once a show is published, its page has **How long the run can go**. Each **extra month** lets the run go a
+month longer, and costs half what you pay for a credit: $49.50, or $9.90 for a group with a paid plan. You
+can add up to 11, a run of a year in all. Choose how many, then pay as the group or yourself; the dates can
+then reach that far.
+
+- **Extra months only lengthen a show's run.** They can't publish an event; only a credit does that.
+- **If the show is called off,** its extra months come back to whoever paid, whatever the timing, and can
+  lengthen another show's run. **Use the group's** or **Use yours** on that show's page applies them, free.
+- **Held months lapse a year after they were bought.** We write to you a month before.
+- **Removing dates later doesn't refund months.** They stay with the show.
+- **Planning a long run before it's published?** Publish it with the first month's dates, then add months
+  and the later dates.
+
 ### Each date can say its own thing
 
 You can give any date its own title, its own start and end time, and a note — for example, if
@@ -1183,7 +1198,9 @@ evidence guests send. Everything about it stays exactly as it is. Events are arc
 two months after their last date, once the time for reviews and evidence has run out, so a guest
 following the thank-you letter's link still finds the page.
 
-**Cancel** is for an event that was going to happen and now won't. The listing adds CANCELED to its
+**Cancel** is for an event that was going to happen and now won't. When you call it off you can also tell
+everybody with a place **It's moving to** a new date, or **How to get their money back**, in your own words.
+Both go in the letter they get and on the event's page. The listing adds CANCELED to its
 title — the one line everyone actually reads, whether on your page, a shared link or a phone — and
 the reason you give is shown to people who had places. The event is kept rather than deleted, so
 anyone who was planning to come can see that it is off. Once the event has happened, it can't be
