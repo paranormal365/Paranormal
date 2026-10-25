@@ -399,10 +399,22 @@ results are also under **Results** on the event.
 - **The deadline is for evidence you offer on the page.** Sessions you recorded with the IsHaunted
   app can still be sent to the event after it, because a long night can take days to go through.
 
+**Who sees the findings.** What the organizers accept is seen first only by the people who were
+there: the organizers, the event's staff and guests with a confirmed place. Sign in to see it. The
+organizers may then make the findings public, so anybody can see them. At someone's home, they always
+stay with the people who were there.
+
+**The place's page.** At a public place, the organizers may also ask to show what you sent on the
+place's own page, credited to you. You get a message the day they choose it, and it appears a week
+later. If you'd rather it didn't, choose **Keep it off the place's page** beside it under **My
+evidence** or **My field sessions**, or turn on **Keep what I send off** the place's page on your
+booking to cover everything you send from that event. You can do that any time — before the event,
+during it, or after it appears — and it comes off at once.
+
 **Your sessions in the results.** When you send a session from the app to an event, you can turn on
 **May be shown with the results**, or tick the same box later under **My field sessions** on the
-website. If you do, and the organizers choose to show it, anybody can play it from the event's page
-in the session player, with any EVPs marked, credited to you. Your exact position is never shown.
+website. If you do, and the organizers choose to show it, it can be played from the event's page in the
+session player, with any EVPs marked, credited to you — by anybody once the findings are public. Your exact position is never shown.
 It's only possible at an event that takes evidence, at a public place. Turn the box off and it comes
 off the page at once.
 

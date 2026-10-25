@@ -55,6 +55,28 @@ public class EventAfterTests : BenTestBase
         Assert.That(wide, Is.False, "the page scrolled sideways");
     }
 
+    /// <summary>
+    /// Who can see the findings (10/25/2026): a new event's start with the people who were there, and the
+    /// organizer is told why they can't be made public yet rather than offered a button that would be refused.
+    /// </summary>
+    [TestCase(1280, 800)]
+    [TestCase(375, 812)]
+    public async Task The_findings_start_with_the_people_who_were_there(int width, int height)
+    {
+        await LoginAsync(SuperAdminEmail, SuperAdminPassword);
+        await Page.SetViewportSizeAsync(width, height);
+
+        await Page.GotoAsync($"{BaseUrl}/organizations/{_orgId}/events/{RoomsEventId}/after");
+        await WaitUntilLoadedAsync();
+
+        await Expect(Page.Locator("#findings-private")).ToBeVisibleAsync(new() { Timeout = 30_000 });
+        await Expect(Page.Locator("#findings-why-not")).ToContainTextAsync("once the event has started");
+        Assert.That(await Page.Locator("#findings-publish").CountAsync(), Is.Zero, "offered a publish the server would refuse");
+
+        var wide = await Page.EvaluateAsync<bool>("document.documentElement.scrollWidth > window.innerWidth + 1");
+        Assert.That(wide, Is.False, "the page scrolled sideways");
+    }
+
     [Test]
     public async Task A_guests_review_page_says_reviews_open_once_the_event_is_over()
     {

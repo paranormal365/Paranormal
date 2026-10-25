@@ -2,6 +2,34 @@
 
 Branch: `feature/event-findings` (from develop).
 
+## Status (10/25/2026)
+
+**Built on `feature/event-findings`:** phases 0–6. Phase 0 merged to develop on its own (6d883cbe); phases
+1–5 in b92de0ca, then the words.
+
+- Who may see: `EventFindings.MaySeeAsync` — hosted events are the people who were there's until
+  `FindingsPublishedUtc`; a private home never opens. Used by the evidence list, file route, results, CMS
+  evidence section, votes, and (through `EventSessionPublication.Shown`) the sessions shown with results.
+- Organizer: `HostedEventFindingsController` (`…/after/findings`, publish/unpublish, `place?mode=`,
+  `place/{evidence|session}/{id}?show=`), shown as `EventFindingsCard` on After the event.
+- Place page: `ArchiveEvidencePublication.OnThePlace` and `PublicPlaceController.PublishedSessionsAsync` add
+  organizer-chosen pieces a week after choosing, never with a piece or booking opt-out.
+- Guest: Keep it off on My evidence and My field sessions; the booking card's standing switch; the event page
+  says "shared with the people who were there" (and asks a signed-out visitor to sign in).
+- Evidence pictures go through the site relay `/media/event-evidence/…` so a guest's sign-in travels.
+- Tests: `EventFindingsTests` (12, each rule checked against code with it switched off), session/results
+  tests updated to publish first; Playwright `EventAfterTests.The_findings_start_with_the_people_who_were_there`.
+
+**Not done, on purpose:**
+- Archived events still drop their shown sessions (`EventSessionPublication.Showing` has no Archived) — 2.4.
+- No audit-log rows for publish/unpublish (3.3); the row keeps who and when.
+- The app's own opt-out switch waits for iOS 1.1.8 (G3); the website covers it.
+- No full guest→place browser walk: the seeded events are all in the future, and publishing needs a started
+  event. The rules are proved at the controller level.
+
+**Deploy:** migrations `FindingsFromPrivateHomes` and `EventFindings` (idempotent script from
+`20261025000000`-era head; see the merge note).
+
 ## Ben's rules
 
 1. "The organizer can choose if the findings can be public after the event. They can link it to the event

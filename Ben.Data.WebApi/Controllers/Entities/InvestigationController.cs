@@ -662,6 +662,12 @@ public sealed class EvidenceVoteController : BenControllerBase
         if (!await db.UploadFiles.AnyAsync(f => f.Id == uploadFileId, ct))
             return NotFound("File not found.");
 
+        // Evidence offered at an event: only somebody who may see the event's findings may vote on it (10/25/2026).
+        var atEvent = await db.EventEvidenceSubmissions.AsNoTracking()
+            .Where(e => e.UploadFileId == uploadFileId).Select(e => (Guid?)e.OrgCalendarEventId).FirstOrDefaultAsync(ct);
+        if (atEvent is { } eventId && !await Services.Events.EventFindings.MaySeeAsync(db, eventId, userId, ct))
+            return NotFound("File not found.");
+
         // Determine voter's org membership
         bool isPublic = !await db.OrganizationUserMemberships
             .AnyAsync(m => m.AppUserId == userId && m.IsActive, ct);
