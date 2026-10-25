@@ -479,7 +479,8 @@ public interface IBenOrganizationClient
 
     /// <summary>Calls an event off, keeping the row so the people coming can see that it is off.</summary>
     Task<(HostedEventRecord? Result, string? Error)> CancelHostedEventAsync(
-        Guid orgId, Guid eventId, string? reason, CancellationToken token = default);
+        Guid orgId, Guid eventId, string? reason, CancellationToken token = default,
+        DateTime? newDate = null, string? refundHow = null);
 
     /// <summary>
     /// Everything standing between this event and going live.
@@ -501,6 +502,17 @@ public interface IBenOrganizationClient
     /// </remarks>
     Task<HostedEventCancellationEffect?> GetHostedEventCancellationEffectAsync(
         Guid orgId, Guid eventId, CancellationToken token = default);
+
+    /// <summary>A show's extra months: how many it has, how far its run may go, and what a month costs (10/24/2026).</summary>
+    Task<ItemResult<EventRunMonthsRecord>> GetEventRunMonthsAsync(Guid orgId, Guid eventId, CancellationToken token = default);
+
+    /// <summary>Opens a checkout for extra months on this show, paid by the group or by the reader.</summary>
+    Task<(Ben.Service.Models.StartCheckoutResponse? Result, string? Error)> StartEventRunMonthsCheckoutAsync(
+        Guid orgId, Guid eventId, int count, bool asGroup, CancellationToken token = default);
+
+    /// <summary>Applies months already held — the group's or the reader's — to this show.</summary>
+    Task<(EventRunMonthsRecord? Result, string? Error)> ApplyEventRunMonthsAsync(
+        Guid orgId, Guid eventId, int count, bool fromGroup, CancellationToken token = default);
 
     /// <summary>Says whether an event that set a minimum number is going ahead.</summary>
     /// <remarks>

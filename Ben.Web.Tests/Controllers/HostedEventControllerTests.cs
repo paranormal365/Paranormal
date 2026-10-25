@@ -479,6 +479,66 @@ public sealed class HostedEventControllerTests
         Assert.Empty(sent);
     }
 
+    /// <summary>
+    /// Ben, 10/24/2026: "When calling off and there are already confirmed guests, the organizer can choose to send
+    /// a message and email the guests with either the new date or how to request their refund."
+    /// </summary>
+    [Fact]
+    public async Task Calling_off_can_tell_the_guests_the_new_date_and_how_to_get_their_money_back()
+    {
+        var f = await SeedAsync();
+        var controller = Build(f);
+        var weekend = UpcomingWeekend();
+        var record = Created(await controller.Create(OrgId, weekend, default));
+        await SetAsync(f, record.Id, e => e.LifecycleState = HostedEventLifecycleState.Published);
+        await BookTheLastNightAsync(f, record.Id, HostedEventBookingStatus.Confirmed);
+
+        var sent = new List<Ben.Data.Common.Interfaces.EmailMessage>();
+        var email = new Mock<Ben.Data.Common.Interfaces.IEmailService>();
+        email.SetupGet(e => e.IsConfigured).Returns(true);
+        email.Setup(e => e.SendAsync(It.IsAny<Ben.Data.Common.Interfaces.EmailMessage>(), It.IsAny<CancellationToken>()))
+             .Callback<Ben.Data.Common.Interfaces.EmailMessage, CancellationToken>((m, _) => sent.Add(m))
+             .Returns(Task.CompletedTask);
+        var mail = new EventGuestMailer(email.Object,
+            Microsoft.Extensions.Options.Options.Create(new Ben.Data.Common.SiteIdentity()),
+            Microsoft.Extensions.Logging.Abstractions.NullLogger<EventGuestMailer>.Instance);
+
+        var moved = weekend.StartsOn.AddDays(14);
+        await controller.Cancel(OrgId, record.Id,
+            new CancelHostedEventRequest("The boiler failed", moved, "Reply to this email and we'll refund you within a week."), mail, default);
+
+        var letter = System.Net.WebUtility.HtmlDecode(Assert.Single(sent).HtmlBody);
+        Assert.Contains($"It's moving to {moved:dddd, MM/dd/yyyy}", letter);
+        Assert.Contains("Reply to this email and we'll refund you within a week.", letter);
+        Assert.DoesNotContain("there is nothing to refund", letter);
+
+        await controller.Uncancel(OrgId, record.Id, default);
+        await using var db = await f.CreateDbContextAsync();
+        var back = await db.HostedEvents.FirstAsync(e => e.Id == record.Id);
+        Assert.Equal((null, null), (back.CalledOffNewDate, back.CalledOffRefundHow));
+    }
+
+    [Fact]
+    public async Task Calling_off_without_either_keeps_the_letter_it_always_sent()
+    {
+        var f = await SeedAsync();
+        var controller = Build(f);
+        var record = Created(await controller.Create(OrgId, UpcomingWeekend(), default));
+        await SetAsync(f, record.Id, e => e.LifecycleState = HostedEventLifecycleState.Published);
+        await BookTheLastNightAsync(f, record.Id, HostedEventBookingStatus.Confirmed);
+        var sent = new List<Ben.Data.Common.Interfaces.EmailMessage>();
+        var email = new Mock<Ben.Data.Common.Interfaces.IEmailService>();
+        email.SetupGet(e => e.IsConfigured).Returns(true);
+        email.Setup(e => e.SendAsync(It.IsAny<Ben.Data.Common.Interfaces.EmailMessage>(), It.IsAny<CancellationToken>()))
+             .Callback<Ben.Data.Common.Interfaces.EmailMessage, CancellationToken>((m, _) => sent.Add(m)).Returns(Task.CompletedTask);
+
+        await controller.Cancel(OrgId, record.Id, new CancelHostedEventRequest("Storm"), new EventGuestMailer(email.Object,
+            Microsoft.Extensions.Options.Options.Create(new Ben.Data.Common.SiteIdentity()),
+            Microsoft.Extensions.Logging.Abstractions.NullLogger<EventGuestMailer>.Instance), default);
+
+        Assert.Contains("there is nothing to refund", Assert.Single(sent).HtmlBody);
+    }
+
     private static async Task MoveTheNightsAsync(IDbContextFactory<BenDataContext> f, Guid eventId, int days)
     {
         await using var db = await f.CreateDbContextAsync();
@@ -532,6 +592,144 @@ public sealed class HostedEventControllerTests
         Assert.Equal("A show's run fits within a month of its first performance, and Sat 11/14 is past that. "
                    + "Make the later performances their own event.", refusal.Value);
     }
+
+    // ── extra months for a show's run (10/24/2026) ─────────────────────────
+
+    private static async Task GiveMonthsAsync(IDbContextFactory<BenDataContext> f, Guid showId, int count, bool refunded = false)
+    {
+        await using var db = await f.CreateDbContextAsync();
+        for (var i = 0; i < count; i++)
+            db.EventRunMonths.Add(new EventRunMonth
+            {
+                Id = Guid.NewGuid(), OwnerOrganizationId = OrgId, PriceAtPurchase = 49.5m,
+                PurchasedUtc = DateTime.UtcNow, ExpiresUtc = DateTime.UtcNow.AddYears(1),
+                AppliedToHostedEventId = showId, AppliedUtc = DateTime.UtcNow,
+                RefundedUtc = refunded ? DateTime.UtcNow : null,
+                DateCreated = DateTime.UtcNow, CreatedByAppUserId = OwnerId,
+            });
+        await db.SaveChangesAsync();
+    }
+
+    private static UpsertHostedEventRequest Show(params int[] daysFromFirst)
+    {
+        var first = DateTime.UtcNow.Date.AddDays(20);
+        var dates = daysFromFirst.Select(d => first.AddDays(d)).ToList();
+        return new UpsertHostedEventRequest("Murder at the Manor", VenueId, dates[0], dates[^1],
+            TimeZoneId: "America/Chicago", DatesAreSeparate: true, Dates: dates,
+            ContactLine: "Call the box office on (615) 555-0142.");
+    }
+
+    [Fact]
+    public async Task An_extra_month_lets_a_published_shows_run_go_a_month_further_and_a_refunded_one_does_not()
+    {
+        var f = await SeedAsync();
+        var controller = Build(f);
+        var record = Created(await controller.Create(OrgId, Show(0, 7), default));
+        await SetAsync(f, record.Id, e => e.LifecycleState = HostedEventLifecycleState.Published);
+
+        // Six weeks out: past a month. The refusal offers the month, because this show can take one.
+        var refused = Assert.IsType<BadRequestObjectResult>((await controller.Update(OrgId, record.Id, Show(0, 7, 42), default)).Result);
+        Assert.Contains("Add a month to this show", (string)refused.Value!);
+
+        await GiveMonthsAsync(f, record.Id, 1, refunded: true);
+        Assert.IsType<BadRequestObjectResult>((await controller.Update(OrgId, record.Id, Show(0, 7, 42), default)).Result);
+
+        await GiveMonthsAsync(f, record.Id, 1);
+        Assert.IsType<OkObjectResult>((await controller.Update(OrgId, record.Id, Show(0, 7, 42), default)).Result);
+    }
+
+    [Fact]
+    public async Task A_draft_past_a_month_is_told_to_make_another_event_not_to_buy_a_month()
+    {
+        var f = await SeedAsync();
+        var refusal = Assert.IsType<BadRequestObjectResult>((await Build(f).Create(OrgId, Show(0, 42), default)).Result);
+        Assert.DoesNotContain("Add a month", (string)refusal.Value!);
+        Assert.Contains("Make the later performances their own event.", (string)refusal.Value!);
+    }
+
+    private static HostedEventRunMonthController RunMonths(IDbContextFactory<BenDataContext> f)
+    {
+        var security = new Mock<IOrganizationSecurityService>();
+        security.Setup(s => s.HasAccessAsync(It.IsAny<Guid>(), It.IsAny<Guid>(), It.IsAny<OrganizationSecurityTable>(),
+                It.IsAny<OrganizationSecurityAction>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(true);
+        return new HostedEventRunMonthController(f, new Mock<IMapper>().Object, security.Object,
+            new Mock<Ben.Data.WebApi.Services.Billing.StripeIntegration.IStripeGateway>().Object,
+            new Microsoft.Extensions.Configuration.ConfigurationBuilder().Build())
+        {
+            ControllerContext = new ControllerContext
+            {
+                HttpContext = new DefaultHttpContext
+                {
+                    User = new ClaimsPrincipal(new ClaimsIdentity([new Claim(ClaimTypes.NameIdentifier, OwnerId.ToString())], "Bearer")),
+                },
+            },
+        };
+    }
+
+    /// <summary>Ben, 10/24/2026: when a show is called off its months always come back, to lengthen another show.</summary>
+    [Fact]
+    public async Task Calling_a_show_off_brings_its_months_back_and_they_lengthen_another_show()
+    {
+        var f = await SeedAsync();
+        var controller = Build(f);
+        var first = Created(await controller.Create(OrgId, Show(0, 7), default));
+        var second = Created(await controller.Create(OrgId, Show(0, 7) with { Name = "The Haunting of Hill House" }, default));
+        foreach (var id in new[] { first.Id, second.Id })
+            await SetAsync(f, id, e => e.LifecycleState = HostedEventLifecycleState.Published);
+        await GiveMonthsAsync(f, first.Id, 2);
+
+        // The cancel screen says so before the button.
+        var effect = Assert.IsType<HostedEventCancellationEffect>(Assert.IsType<OkObjectResult>(
+            (await controller.CancellationEffect(OrgId, first.Id, default)).Result).Value);
+        Assert.Contains("Its 2 extra months come back to whoever paid", effect.Sentence);
+
+        await controller.Cancel(OrgId, first.Id, new CancelHostedEventRequest("The lead broke a leg"), NoMail(), default);
+        await using (var db = await f.CreateDbContextAsync())
+            Assert.All(await db.EventRunMonths.ToListAsync(), m => Assert.True(m.IsHeld(DateTime.UtcNow)));
+
+        var applied = Assert.IsType<EventRunMonthsRecord>(Assert.IsType<OkObjectResult>(
+            (await RunMonths(f).Apply(OrgId, second.Id, 2, fromGroup: true, default)).Result).Value);
+        Assert.Equal((2, 0), (applied.Applied, applied.HeldByGroup));
+        Assert.IsType<OkObjectResult>((await controller.Update(OrgId, second.Id, Show(0, 7, 80) with { Name = "The Haunting of Hill House" }, default)).Result);
+    }
+
+    [Fact]
+    public async Task Held_months_are_refused_for_a_draft_a_stay_and_past_the_cap()
+    {
+        var f = await SeedAsync();
+        var controller = Build(f);
+        var draft = Created(await controller.Create(OrgId, Show(0, 7), default));
+        Assert.Contains("Publish the show first", (string)Assert.IsType<BadRequestObjectResult>(
+            (await RunMonths(f).Apply(OrgId, draft.Id, 1, fromGroup: true, default)).Result).Value!);
+
+        var stay = Created(await controller.Create(OrgId, UpcomingWeekend(), default));
+        await SetAsync(f, stay.Id, e => e.LifecycleState = HostedEventLifecycleState.Published);
+        Assert.Contains("its own event", (string)Assert.IsType<BadRequestObjectResult>(
+            (await RunMonths(f).Apply(OrgId, stay.Id, 1, fromGroup: true, default)).Result).Value!);
+
+        await SetAsync(f, draft.Id, e => e.LifecycleState = HostedEventLifecycleState.Published);
+        await GiveMonthsAsync(f, draft.Id, 11);
+        Assert.Contains("the most one show can have", (string)Assert.IsType<BadRequestObjectResult>(
+            (await RunMonths(f).Apply(OrgId, draft.Id, 1, fromGroup: true, default)).Result).Value!);
+    }
+
+    [Fact]
+    public async Task Nothing_held_is_said_in_words()
+    {
+        var f = await SeedAsync();
+        var show = Created(await Build(f).Create(OrgId, Show(0, 7), default));
+        await SetAsync(f, show.Id, e => e.LifecycleState = HostedEventLifecycleState.Published);
+        Assert.Equal("The group holds no extra months.", Assert.IsType<BadRequestObjectResult>(
+            (await RunMonths(f).Apply(OrgId, show.Id, 1, fromGroup: true, default)).Result).Value);
+    }
+
+    [Theory]
+    [InlineData("2026-10-01", "2026-11-30", 1, true)]
+    [InlineData("2026-10-01", "2026-12-01", 1, false)]
+    [InlineData("2026-10-01", "2027-09-30", 11, true)]
+    public void Each_extra_month_adds_a_calendar_month(string first, string last, int months, bool fits)
+        => Assert.Equal(fits, HostedEventController.RunTooLong([DateTime.Parse(first), DateTime.Parse(last)], months) is null);
 
     [Theory]
     [InlineData("2026-10-01", "2026-10-31", true)]

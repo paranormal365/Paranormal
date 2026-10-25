@@ -108,6 +108,9 @@
             </GridColumns>
         </TelerikGrid>
     </BenListState>
+
+    <AdminEventRunMonths Organizations="@([.. _orgOptions.Select(o => new AdminEventRunMonths.OrgChoice(o.Id, o.Name))])"
+                     FilterOrgId="@(_filterOrgId == Guid.Empty ? null : _filterOrgId)" />
 </div>
 
 @* ── Grant dialog ──────────────────────────────────────────────────────────── *@

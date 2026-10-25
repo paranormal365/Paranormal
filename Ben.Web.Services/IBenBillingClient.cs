@@ -226,6 +226,17 @@ public interface IBenBillingClient
     Task<(IReadOnlyList<AdminEventCreditRecord>? Result, string? Error)> GrantEventCreditsAsync(
         Guid organizationId, GrantEventCreditsRequest request, CancellationToken token = default);
 
+    /// <summary>Every extra month for a show's run, sold or given (10/24/2026). SuperAdmin.</summary>
+    Task<LoadResult<AdminEventRunMonthRecord>> GetEventRunMonthsAdminAsync(Guid? orgId = null, CancellationToken token = default);
+
+    /// <summary>Gives a group extra months nobody paid for, held to use on its shows. SuperAdmin.</summary>
+    Task<(IReadOnlyList<AdminEventRunMonthRecord>? Result, string? Error)> GrantEventRunMonthsAsync(
+        Guid organizationId, GrantEventCreditsRequest request, CancellationToken token = default);
+
+    /// <summary>Refunds one extra month; it stops counting at once. SuperAdmin.</summary>
+    Task<(AdminEventRunMonthRecord? Result, string? Error)> RefundEventRunMonthAsync(
+        Guid monthId, RefundEventCreditRequest request, CancellationToken token = default);
+
     /// <summary>Refunds an unspent credit so it can never be spent. SuperAdmin.</summary>
     Task<(AdminEventCreditRecord? Result, string? Error)> RefundEventCreditAsync(
         Guid creditId, RefundEventCreditRequest request, CancellationToken token = default);

@@ -1,0 +1,145 @@
+@namespace Ben.Web.Website.Library.Manage.Events
+@using Ben.Service.Models
+@using Ben.Service.Models.Entities
+@using Ben.Web.Services
+@using Ben.Web.Website.Library.Kit
+@inject IBenAdminClient AdminClient
+@inject NavigationManager Nav
+
+@* A show's run and its extra months (10/24/2026). One credit covers performances within a month of the first;
+   each extra month adds a month, at half what the buyer pays for a credit, up to the most one show may have.
+   Bought only here, by choosing this show (Ben: "only if they select the show to extend"). Never a credit. *@
+
+@if (_result.Failed)
+{
+    <BenItemState TItem="EventRunMonthsRecord" Result="@_result" Loading="false" OnRetry="@LoadAsync" />
+}
+else if (_result.Item is { IsRun: true } run)
+{
+    <div class="card mb-3" id="event-run-months">
+        <div class="card-header fw-semibold">How long the run can go</div>
+        <div class="card-body">
+            <p class="mb-2" id="event-run-until">
+                @if (run.RunUntil is { } until)
+                {
+                    <text>This run can go until <strong>@until.ToString("MM/dd/yyyy")</strong></text>
+                    @(run.Applied == 0 ? ", a month from its first performance." : $", with its {run.Applied} extra month{(run.Applied == 1 ? "" : "s")}.")
+                }
+                else
+                {
+                    <text>Once it has dates, this run can go a month from its first performance.</text>
+                }
+            </p>
+            <p class="small text-secondary">
+                Each extra month lets the run go a month longer. Extra months only lengthen a show's run; they can't
+                publish an event. If the show is called off, they come back to whoever paid, to use on another show
+                within a year of buying them. One show can have @run.Cap.
+            </p>
+
+            @if (_note is { Length: > 0 }) { <div class="alert alert-success py-2" role="status" id="run-months-note">@_note</div> }
+            @if (_error is { Length: > 0 }) { <div class="alert alert-danger py-2" role="alert" id="run-months-error">@_error</div> }
+
+            @if (run.WhyNot is { Length: > 0 } why)
+            {
+                <p class="small text-secondary mb-0" id="run-months-why-not">@why</p>
+            }
+            else
+            {
+                var left = Math.Max(1, run.Cap - run.Applied);
+                <div class="d-flex flex-wrap align-items-end gap-2 mb-2">
+                    <div>
+                        <label class="form-label small mb-1" for="run-months-count">Months</label>
+                        <select class="form-select" id="run-months-count" @bind="_count">
+                            @for (var i = 1; i <= left; i++)
+                            {
+                                var n = i;
+                                <option value="@n">@n</option>
+                            }
+                        </select>
+                    </div>
+                    @if (run.HeldByGroup > 0)
+                    {
+                        <button type="button" class="btn btn-outline-primary" id="run-months-use-group" disabled="@_busy"
+                                @onclick="@(() => ApplyAsync(fromGroup: true))">
+                            Use the group's (@run.HeldByGroup held)
+                        </button>
+                    }
+                    @if (run.HeldByMe > 0)
+                    {
+                        <button type="button" class="btn btn-outline-primary" id="run-months-use-mine" disabled="@_busy"
+                                @onclick="@(() => ApplyAsync(fromGroup: false))">
+                            Use yours (@run.HeldByMe held)
+                        </button>
+                    }
+                </div>
+                @if (run.OnSale)
+                {
+                    <div class="d-flex flex-wrap gap-2">
+                        <button type="button" class="btn btn-primary" id="run-months-buy-group" disabled="@_busy"
+                                @onclick="@(() => BuyAsync(asGroup: true))">
+                            Add @Months(_count) — @BenMoney.Format(run.GroupPrice * _count), paid by the group
+                        </button>
+                        <button type="button" class="btn btn-outline-secondary" id="run-months-buy-me" disabled="@_busy"
+                                @onclick="@(() => BuyAsync(asGroup: false))">
+                            Pay @BenMoney.Format(run.PersonPrice * _count) myself
+                        </button>
+                    </div>
+                    <p class="small text-secondary mt-2 mb-0">
+                        Plus sales tax where the group's state requires it. Months stay with this show if you later take
+                        dates away.
+                    </p>
+                }
+            }
+        </div>
+    </div>
+}
+
+@code {
+    [Parameter, EditorRequired] public Guid OrgId { get; set; }
+    [Parameter, EditorRequired] public Guid EventId { get; set; }
+    /// <summary>Raised after months are applied, so the page can read the event again.</summary>
+    [Parameter] public EventCallback OnChanged { get; set; }
+
+    private ItemResult<EventRunMonthsRecord> _result;
+    private int _count = 1;
+    private bool _busy;
+    private string? _note, _error;
+
+    protected override Task OnParametersSetAsync() => LoadAsync();
+
+    private async Task LoadAsync()
+    {
+        _result = await AdminClient.GetEventRunMonthsAsync(OrgId, EventId);
+        if (Nav.Uri.Contains("months=success", StringComparison.Ordinal))
+            _note = "Paid. The months are on this show as soon as the payment is confirmed — usually a few seconds.";
+    }
+
+    private static string Months(int n) => n == 1 ? "1 month" : $"{n} months";
+
+    private async Task BuyAsync(bool asGroup)
+    {
+        _busy = true; _error = null;
+        try
+        {
+            var (result, error) = await AdminClient.StartEventRunMonthsCheckoutAsync(OrgId, EventId, _count, asGroup);
+            if (result is null) { _error = error ?? "Couldn't start checkout — try again."; return; }
+            // forceLoad: Stripe's page is not a Blazor route.
+            Nav.NavigateTo(result.RedirectUrl, forceLoad: true);
+        }
+        finally { _busy = false; }
+    }
+
+    private async Task ApplyAsync(bool fromGroup)
+    {
+        _busy = true; _error = null; _note = null;
+        try
+        {
+            var (result, error) = await AdminClient.ApplyEventRunMonthsAsync(OrgId, EventId, _count, fromGroup);
+            if (result is null) { _error = error ?? "That couldn't be applied just now."; return; }
+            _result = ItemResult<EventRunMonthsRecord>.Ok(result);
+            _note = $"Added {Months(_count)}. This run can now go until {result.RunUntil:MM/dd/yyyy}.";
+            await OnChanged.InvokeAsync();
+        }
+        finally { _busy = false; }
+    }
+}

@@ -85,6 +85,33 @@ public sealed class EventCreditExpiryJobTests
 
     // ── Who is warned, and when ───────────────────────────────────────────────
 
+    /// <summary>Held extra months for a show's run are warned about too, once per holder (10/24/2026).</summary>
+    [Fact]
+    public async Task Held_extra_months_lapsing_soon_are_warned_about_once_and_applied_ones_never()
+    {
+        var factory = await SeedAsync(EventCredits.WarningLead + TimeSpan.FromDays(60));
+        await using (var db = await factory.CreateDbContextAsync())
+        {
+            foreach (var applied in new[] { false, false, true })
+                db.EventRunMonths.Add(new EventRunMonth
+                {
+                    Id = Guid.NewGuid(), OwnerOrganizationId = OrgId, PriceAtPurchase = 49.5m,
+                    PurchasedUtc = DateTime.UtcNow.AddMonths(-11), ExpiresUtc = DateTime.UtcNow.AddDays(20),
+                    AppliedToHostedEventId = applied ? Guid.NewGuid() : null,
+                    DateCreated = DateTime.UtcNow, CreatedByAppUserId = UserId,
+                });
+            await db.SaveChangesAsync();
+        }
+        var email = new FakeEmail();
+
+        await Build(factory, email).RunAsync(default);
+        await Build(factory, email).RunAsync(default);
+
+        var sent = Assert.Single(email.Sent);
+        Assert.Contains("2 extra months for a show's run expire", sent.Subject);
+        Assert.Contains("The Thomas House holds 2 extra months", System.Net.WebUtility.HtmlDecode(sent.Body));
+    }
+
     [Fact]
     public async Task A_credit_inside_the_window_warns_its_group()
     {

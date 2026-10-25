@@ -407,6 +407,99 @@ public sealed class AdminBillingController : BenControllerBase
                 c.GrantedReason))
             .SingleAsync(ct);
 
+    // ── Extra months for a show's run (10/24/2026) ────────────────────────────
+
+    /// <summary>Every extra month ever sold or given, newest first.</summary>
+    [HttpGet("run-months")]
+    public async Task<ActionResult<IEnumerable<AdminEventRunMonthRecord>>> GetRunMonths(
+        [FromQuery] Guid? orgId, [FromQuery] int take = 200, CancellationToken ct = default)
+    {
+        await using var db = await _db.CreateDbContextAsync(ct);
+        var query = db.EventRunMonths.AsNoTracking();
+        if (orgId is { } o) query = query.Where(m => m.OwnerOrganizationId == o);
+        return Ok(await ProjectMonths(query.OrderByDescending(m => m.PurchasedUtc).Take(Math.Clamp(take, 1, 1000))).ToListAsync(ct));
+    }
+
+    /// <summary>
+    /// Gives a group extra months nobody paid for, held to use on any of its shows. Not a sale: nothing reaches
+    /// the ledger, and the reason is the record, as for granted credits.
+    /// </summary>
+    [HttpPost("organizations/{orgId:guid}/run-months")]
+    public async Task<ActionResult<IEnumerable<AdminEventRunMonthRecord>>> GrantRunMonths(
+        Guid orgId, [FromBody] GrantEventCreditsRequest request, CancellationToken ct)
+    {
+        if (string.IsNullOrWhiteSpace(request.Reason))
+            return BadRequest("Given months need a reason — it is the only record that they were given.");
+        var count = Math.Clamp(request.Quantity <= 0 ? 1 : request.Quantity, 1, Services.Events.EventRunMonths.HighestCap);
+
+        await using var db = await _db.CreateDbContextAsync(ct);
+        if (!await db.Organizations.AnyAsync(o => o.Id == orgId, ct)) return NotFound("Organization not found.");
+
+        var now = DateTime.UtcNow;
+        var ids = new List<Guid>();
+        for (var i = 0; i < count; i++)
+        {
+            var month = new EventRunMonth
+            {
+                Id = Guid.NewGuid(), OwnerOrganizationId = orgId, PriceAtPurchase = 0m, Currency = "USD",
+                PurchasedUtc = now, ExpiresUtc = now.Add(Services.Events.EventRunMonths.Life),
+                GrantedReason = request.Reason.Trim(), DateCreated = now, CreatedByAppUserId = GetCurrentUserId(),
+            };
+            db.EventRunMonths.Add(month);
+            ids.Add(month.Id);
+        }
+        await db.SaveChangesAsync(ct);
+        return Ok(await ProjectMonths(db.EventRunMonths.AsNoTracking().Where(m => ids.Contains(m.Id))).ToListAsync(ct));
+    }
+
+    /// <summary>
+    /// Refunds one extra month. It stops counting at once, held or applied; a show's dates already past its new
+    /// limit stay, and its next save asks for them to be fixed. The adjustment is written unless turned off.
+    /// </summary>
+    [HttpPost("run-months/{monthId:guid}/refund")]
+    public async Task<ActionResult<AdminEventRunMonthRecord>> RefundRunMonth(
+        Guid monthId, [FromBody] RefundEventCreditRequest request, CancellationToken ct)
+    {
+        if (string.IsNullOrWhiteSpace(request.Reason))
+            return BadRequest("A refund needs a reason — a row that does not say why is one nobody can answer for later.");
+
+        await using var db = await _db.CreateDbContextAsync(ct);
+        var month = await db.EventRunMonths.FirstOrDefaultAsync(m => m.Id == monthId, ct);
+        if (month is null) return NotFound("That month no longer exists.");
+        if (month.RefundedUtc is not null)
+            return BadRequest($"That month was already refunded on {month.RefundedUtc:MM/dd/yyyy}.");
+
+        var now = DateTime.UtcNow;
+        month.RefundedUtc = now;
+        month.RefundedByAppUserId = GetCurrentUserId();
+        month.RefundedReason = request.Reason.Trim();
+        month.DateUpdated = now;
+        month.UpdatedByAppUserId = GetCurrentUserId();
+
+        if (request.RecordAdjustment && month.PriceAtPurchase > 0m)
+            db.BillingLedgerEntries.Add(new BillingLedgerEntry
+            {
+                Id = Guid.NewGuid(), Kind = BillingLedgerKind.Adjustment,
+                OrganizationId = month.OwnerOrganizationId,
+                PayerAppUserId = month.OwnerOrganizationId is null ? month.OwnerAppUserId : null,
+                Amount = month.PriceAtPurchase, AdjustmentIsCredit = true,
+                Description = $"Extra month for a show's run refunded — {month.RefundedReason}",
+                DateCreated = now, CreatedByAppUserId = GetCurrentUserId(),
+            });
+
+        await db.SaveChangesAsync(ct);
+        return Ok(await ProjectMonths(db.EventRunMonths.AsNoTracking().Where(m => m.Id == monthId)).SingleAsync(ct));
+    }
+
+    private static IQueryable<AdminEventRunMonthRecord> ProjectMonths(IQueryable<EventRunMonth> months)
+        => months.Select(m => new AdminEventRunMonthRecord(
+            m.Id, m.OwnerOrganizationId,
+            m.OwnerOrganization != null ? m.OwnerOrganization.Name
+                : (m.OwnerAppUser != null ? (m.OwnerAppUser.DisplayName ?? m.OwnerAppUser.Email ?? "?") : "?"),
+            m.PriceAtPurchase, m.PurchasedUtc, m.ExpiresUtc,
+            m.AppliedToHostedEventId, m.AppliedToHostedEvent != null ? m.AppliedToHostedEvent.Name : null,
+            m.RefundedUtc, m.RefundedReason, m.ReceiptNumber, m.GrantedReason));
+
     // ── Tax rates ─────────────────────────────────────────────────────────────
 
     [HttpGet("tax-rates")]

@@ -78,6 +78,7 @@ public static class HostedEventRemovals
         hosted.DateUpdated = now;
         hosted.UpdatedByAppUserId = actorId;
 
+        await EventRunMonths.ReturnFromAsync(db, hosted.Id, actorId, now, ct);
         if (await EventCredits.SpentOnAsync(db, hosted.Id, ct) is { } credit)
         {
             EventCredits.Unspend(credit, actorId, now);

@@ -389,6 +389,8 @@ public sealed class OrganizationPurge
             // they go before both. The money they represent survives in the ledger rows below,
             // which is where a purged group's history is supposed to live.
             await db.EventCredits.Where(x => x.OwnerOrganizationId == organizationId).ExecuteDeleteAsync(ct);
+            // Extra months for a show's run, the same way: the group paid; the ledger keeps the money.
+            await db.EventRunMonths.Where(x => x.OwnerOrganizationId == organizationId).ExecuteDeleteAsync(ct);
             // Hosted events (item 235) block the deletion the same way a tour does: they point at
             // the group and at a place, both NoAction. They go after the calendar rows above,
             // because the umbrella row names its event. The nights cascade from the event, so

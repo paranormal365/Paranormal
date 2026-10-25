@@ -118,6 +118,8 @@
                     @Setting(EventCreditPriceKey)
                     @Setting(EventCreditPercentKey)
                     @Setting(EventCreditBundlesKey)
+                    @Setting(RunMonthPercentKey)
+                    @Setting(RunMonthsPerShowKey)
                 </div>
             </section>
 
@@ -152,6 +154,8 @@
     internal const string EventCreditPriceKey   = "events.credit-price-usd";
     internal const string EventCreditPercentKey = "events.credit-subscriber-percent";
     internal const string EventCreditBundlesKey = "events.credit-bundles";
+    internal const string RunMonthPercentKey    = "events.run-month-percent";
+    internal const string RunMonthsPerShowKey   = "events.run-months-per-show";
     internal const string GhostWalkKey          = "tours.ghost-walk-enabled";
     internal const string GhostWalkPriceKey     = "tours.ghost-walk-monthly-price-usd";
 
@@ -159,7 +163,7 @@
     internal static readonly IReadOnlyList<string> Keys =
     [
         PlanPurchasesKey, EventCreditsKey, EventCreditPriceKey, EventCreditPercentKey,
-        EventCreditBundlesKey, GhostWalkKey, GhostWalkPriceKey,
+        EventCreditBundlesKey, RunMonthPercentKey, RunMonthsPerShowKey, GhostWalkKey, GhostWalkPriceKey,
     ];
 
     private LoadResult<SiteSettingRecord> _result;

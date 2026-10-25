@@ -1,0 +1,136 @@
+@namespace Ben.Web.Website.Library.SuperAdmin
+@using Ben.Service.Models.Admin
+@using Ben.Web.Services
+@using Ben.Web.Website.Library.Kit
+@inject IBenAdminClient AdminClient
+
+@* Extra months for a show's run (10/24/2026), on the event credits page: every one sold or given, a grant for
+   support, and a refund. Never credits: they only lengthen a show's run. *@
+
+<section class="mt-4" id="admin-run-months">
+    <h2 class="h5">Extra months for a show's run</h2>
+    <p class="text-secondary small">
+        Each lets one show's run go a month longer. Bought only from a published show's page; held when a show is
+        called off; lapse a year after purchase. A refunded month stops counting at once.
+    </p>
+
+    @if (_note is { Length: > 0 }) { <div class="alert alert-success py-2" role="status">@_note</div> }
+    @if (_error is { Length: > 0 }) { <div class="alert alert-danger py-2" role="alert">@_error</div> }
+
+    <div class="d-flex flex-wrap align-items-end gap-2 mb-3" id="run-months-grant">
+        <div>
+            <label class="form-label small mb-1" for="run-months-grant-org">Give a group</label>
+            <select class="form-select" id="run-months-grant-org" @bind="_grantOrgId">
+                <option value="@Guid.Empty">— Choose a group —</option>
+                @foreach (var o in Organizations)
+                {
+                    <option value="@o.Id">@o.Name</option>
+                }
+            </select>
+        </div>
+        <div>
+            <label class="form-label small mb-1" for="run-months-grant-count">Months</label>
+            <input id="run-months-grant-count" type="number" class="form-control" min="1" max="36" style="width:6rem;" @bind="_grantCount" />
+        </div>
+        <div class="flex-grow-1" style="min-width:14rem;">
+            <label class="form-label small mb-1" for="run-months-grant-reason">Why</label>
+            <BenTextBox id="run-months-grant-reason" class="form-control" Value="@_grantReason"
+                        OnInput="@(e => _grantReason = e.Value?.ToString() ?? "")" placeholder="Support ticket 412…" />
+        </div>
+        <button type="button" class="btn btn-primary" id="run-months-grant-save"
+                disabled="@(_busy || _grantOrgId == Guid.Empty || string.IsNullOrWhiteSpace(_grantReason))" @onclick="GrantAsync">
+            Give them
+        </button>
+    </div>
+
+    <BenListState TItem="AdminEventRunMonthRecord" Result="@_months" Loading="@_loading"
+                  LoadingText="Loading the months…" EmptyText="No extra months have been sold or given yet.">
+        <div class="table-responsive">
+            <table class="table table-sm align-middle" id="run-months-table">
+                <thead><tr><th>Holder</th><th>Show</th><th>Paid</th><th>Bought</th><th>Lapses</th><th></th></tr></thead>
+                <tbody>
+                    @foreach (var m in _months.Items)
+                    {
+                        var month = m;
+                        <tr data-month="@month.Id">
+                            <td>@month.OwnerName</td>
+                            <td>@(month.RefundedUtc is not null ? "Refunded" : month.ShowName ?? "Held")</td>
+                            <td>@(month.GrantedReason is not null ? "Given" : BenMoney.Format(month.PriceAtPurchase))</td>
+                            <td>@month.PurchasedUtc.ToString("MM/dd/yyyy")</td>
+                            <td>@month.ExpiresUtc.ToString("MM/dd/yyyy")</td>
+                            <td class="text-nowrap">
+                                @if (month.RefundedUtc is null)
+                                {
+                                    @if (_refunding == month.Id)
+                                    {
+                                        <BenTextBox class="form-control form-control-sm d-inline-block" style="width:12rem;" Value="@_refundReason"
+                                                    OnInput="@(e => _refundReason = e.Value?.ToString() ?? "")" placeholder="Why" />
+                                        <button type="button" class="btn btn-sm btn-danger" disabled="@(_busy || string.IsNullOrWhiteSpace(_refundReason))"
+                                                @onclick="@(() => RefundAsync(month.Id))">Refund it</button>
+                                    }
+                                    else
+                                    {
+                                        <button type="button" class="btn btn-sm btn-outline-danger" @onclick="@(() => { _refunding = month.Id; _refundReason = ""; })">Refund</button>
+                                    }
+                                }
+                            </td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+    </BenListState>
+</section>
+
+@code {
+    public sealed record OrgChoice(Guid Id, string Name);
+
+    /// <summary>The groups to give months to, from the page that already loaded them.</summary>
+    [Parameter] public IReadOnlyList<OrgChoice> Organizations { get; set; } = [];
+    [Parameter] public Guid? FilterOrgId { get; set; }
+
+    private LoadResult<AdminEventRunMonthRecord> _months;
+    private bool _loading = true, _busy;
+    private Guid _grantOrgId;
+    private int _grantCount = 1;
+    private string _grantReason = "", _refundReason = "";
+    private Guid? _refunding;
+    private string? _note, _error;
+
+    protected override async Task OnParametersSetAsync() => await LoadAsync();
+
+    private async Task LoadAsync()
+    {
+        _loading = true;
+        _months = await AdminClient.GetEventRunMonthsAdminAsync(FilterOrgId);
+        _loading = false;
+    }
+
+    private async Task GrantAsync()
+    {
+        _busy = true; _error = null; _note = null;
+        try
+        {
+            var (result, error) = await AdminClient.GrantEventRunMonthsAsync(_grantOrgId, new GrantEventCreditsRequest(_grantCount, _grantReason.Trim()));
+            if (result is null) { _error = error ?? "The months were not given."; return; }
+            _note = result.Count == 1 ? "One month given." : $"{result.Count} months given.";
+            _grantReason = "";
+            await LoadAsync();
+        }
+        finally { _busy = false; }
+    }
+
+    private async Task RefundAsync(Guid id)
+    {
+        _busy = true; _error = null; _note = null;
+        try
+        {
+            var (result, error) = await AdminClient.RefundEventRunMonthAsync(id, new RefundEventCreditRequest(_refundReason.Trim()));
+            if (result is null) { _error = error ?? "The refund did not go through."; return; }
+            _note = $"Refunded — {result.OwnerName}'s month no longer counts.";
+            _refunding = null;
+            await LoadAsync();
+        }
+        finally { _busy = false; }
+    }
+}

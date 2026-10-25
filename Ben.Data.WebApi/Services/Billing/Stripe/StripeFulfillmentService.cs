@@ -94,6 +94,16 @@ public sealed class StripeFulfillmentService
             /// </summary>
             public const string CreditOwnerUser = "ih_credit_owner_user";
 
+            /// <summary>
+            /// Present exactly when this payment buys EXTRA MONTHS for a show's run (10/24/2026): how many.
+            /// Never a credit; fulfilled down its own path. The payer is the organization key or
+            /// <see cref="CreditOwnerUser"/>, as credits.
+            /// </summary>
+            public const string RunMonths = "ih_run_months";
+
+            /// <summary>The show the months were bought for.</summary>
+            public const string RunShow = "ih_run_show";
+
             /// <summary>The credits' price before any subscriber price — for the ledger's wording.</summary>
             public const string CreditFullPrice = "ih_credit_full";
 
@@ -234,6 +244,14 @@ public sealed class StripeFulfillmentService
             && Guid.TryParse(ghostRaw, out var ghostOrgId))
         {
             await FulfillGhostWalkAsync(ghostOrgId, checkout, ct);
+            return;
+        }
+
+        // Extra months for a show's run (10/24/2026): never credits, so never down the credit path.
+        if (checkout.Metadata.TryGetValue(CheckoutFacts.Keys.RunMonths, out var monthsRaw)
+            && int.TryParse(monthsRaw, out var monthCount) && monthCount > 0)
+        {
+            await FulfillRunMonthsAsync(monthCount, checkout, ct);
             return;
         }
 
@@ -734,6 +752,126 @@ public sealed class StripeFulfillmentService
         _log.LogInformation(
             "Stripe fulfilled {Count} event credit(s) for {Owner}, receipt R-{Receipt:00000}.",
             count, organizationId?.ToString() ?? $"person {personId}", payment.ReceiptNumber);
+
+        if (_email is not null)
+            await PostReceiptAsync(db, organizationId, payment, description, ct, personId);
+    }
+
+    /// <summary>
+    /// Extra months for a show's run, paid (10/24/2026).
+    /// </summary>
+    /// <remarks>
+    /// <para>The credit path's shape: idempotent by payment reference, a charge and a payment with the tax that
+    /// was frozen into the session, the next receipt number, the receipt mail.</para>
+    ///
+    /// <para><b>Applied to the show when it can still take them</b>; otherwise — called off, over, or at the
+    /// most months meanwhile — they arrive HELD for whoever paid, to lengthen another show. Money taken is never
+    /// money lost, and the receipt says which happened.</para>
+    /// </remarks>
+    private async Task FulfillRunMonthsAsync(int count, StripeCompletedCheckout checkout, CancellationToken ct)
+    {
+        await using var db = await _dbFactory.CreateDbContextAsync(ct);
+
+        var reference = checkout.PaymentIntentRef ?? checkout.SessionId;
+        if (await db.BillingLedgerEntries.AnyAsync(e => e.PaymentReference == reference, ct))
+        {
+            _log.LogInformation("Run-month payment {Reference} delivered again — already fulfilled.", reference);
+            return;
+        }
+
+        Guid? organizationId = null, personId = null;
+        if (checkout.Metadata.TryGetValue(CheckoutFacts.Keys.Organization, out var orgRaw) && Guid.TryParse(orgRaw, out var o))
+            organizationId = o;
+        else if (checkout.Metadata.TryGetValue(CheckoutFacts.Keys.CreditOwnerUser, out var pRaw) && Guid.TryParse(pRaw, out var pp))
+            personId = pp;
+        if (organizationId is null && personId is null)
+        {
+            _log.LogError("Run-month payment {Reference} names no group and no person.", reference);
+            return;
+        }
+
+        Guid buyerId = Guid.Empty;
+        if (checkout.Metadata.TryGetValue(CheckoutFacts.Keys.User, out var userRaw)) Guid.TryParse(userRaw, out buyerId);
+        Guid? showId = checkout.Metadata.TryGetValue(CheckoutFacts.Keys.RunShow, out var showRaw) && Guid.TryParse(showRaw, out var sid)
+            ? sid : null;
+
+        var inv = System.Globalization.CultureInfo.InvariantCulture;
+        if (!checkout.Metadata.TryGetValue(CheckoutFacts.Keys.List, out var listRaw)
+            || !decimal.TryParse(listRaw, System.Globalization.NumberStyles.Any, inv, out var total))
+        {
+            _log.LogError("Run-month payment {Reference} carries no price.", reference);
+            return;
+        }
+        total = decimal.Round(total, 2, MidpointRounding.AwayFromZero);
+        decimal taxRate = 0m, tax = 0m;
+        if (checkout.Metadata.TryGetValue(CheckoutFacts.Keys.TaxRate, out var rateRaw))
+            decimal.TryParse(rateRaw, System.Globalization.NumberStyles.Number, inv, out taxRate);
+        if (checkout.Metadata.TryGetValue(CheckoutFacts.Keys.TaxAmount, out var taxRaw))
+            decimal.TryParse(taxRaw, System.Globalization.NumberStyles.Number, inv, out tax);
+
+        var now = DateTime.UtcNow;
+        var show = showId is { } id
+            ? await db.HostedEvents.AsNoTracking().Include(e => e.Nights).FirstOrDefaultAsync(e => e.Id == id, ct)
+            : null;
+        var applyTo = (Guid?)null;
+        if (show is not null)
+        {
+            var (_, cap) = await Services.Events.EventRunMonths.ReadAsync(db, ct);
+            var applied = await Services.Events.EventRunMonths.AppliedToAsync(db, show.Id, ct);
+            var lastEnds = Services.Events.HostedEventCalendarSync.Window(show, [.. show.Nights.OrderBy(n => n.Date)]).EndUtc;
+            if (Services.Events.EventRunMonths.WhyNotExtend(show, applied, count, cap, lastEnds, now) is null)
+                applyTo = show.Id;
+        }
+
+        var description = Services.Events.EventRunMonthCheckout.Describe(count, show?.Name)
+            + (applyTo is null ? " — held for another show, because that one can no longer take them" : "");
+
+        var shares = Services.Events.EventCreditPricing.Share(total, count);
+        for (var i = 0; i < count; i++)
+        {
+            db.EventRunMonths.Add(new EventRunMonth
+            {
+                Id = Guid.NewGuid(),
+                OwnerOrganizationId = organizationId,
+                OwnerAppUserId = organizationId is null ? personId : null,
+                PriceAtPurchase = shares[i], Currency = "USD",
+                PurchasedUtc = now, ExpiresUtc = now.Add(Services.Events.EventRunMonths.Life),
+                AppliedToHostedEventId = applyTo, AppliedUtc = applyTo is null ? null : now,
+                ProviderCheckoutRef = checkout.SessionId, ProviderPaymentRef = reference,
+                DateCreated = now, CreatedByAppUserId = buyerId,
+            });
+        }
+
+        var payer = organizationId is null ? personId : null;
+        db.BillingLedgerEntries.Add(new BillingLedgerEntry
+        {
+            Id = Guid.NewGuid(), Kind = BillingLedgerKind.Charge,
+            OrganizationId = organizationId, PayerAppUserId = payer,
+            Amount = total, TaxRatePercent = taxRate, TaxAmount = tax,
+            Description = description, PaymentReference = reference,
+            DateCreated = now, CreatedByAppUserId = buyerId,
+        });
+        var payment = new BillingLedgerEntry
+        {
+            Id = Guid.NewGuid(), Kind = BillingLedgerKind.Payment,
+            OrganizationId = organizationId, PayerAppUserId = payer,
+            Amount = total, TaxRatePercent = taxRate, TaxAmount = tax,
+            Description = $"Card payment — {description}", PaymentReference = reference,
+            DateCreated = now, CreatedByAppUserId = buyerId,
+        };
+        for (var attempt = 0; ; attempt++)
+        {
+            payment.ReceiptNumber = 1 + await db.BillingLedgerEntries.MaxAsync(e => (int?)e.ReceiptNumber, ct) ?? 1;
+            db.BillingLedgerEntries.Add(payment);
+            try { await db.SaveChangesAsync(ct); break; }
+            catch (DbUpdateException) when (attempt < 2) { db.BillingLedgerEntries.Remove(payment); }
+        }
+        foreach (var month in db.ChangeTracker.Entries<EventRunMonth>().Select(e => e.Entity))
+            month.ReceiptNumber = $"R-{payment.ReceiptNumber:00000}";
+        await db.SaveChangesAsync(ct);
+
+        _log.LogInformation("Stripe fulfilled {Count} run month(s) for show {Show} ({Where}), receipt R-{Receipt:00000}.",
+            count, showId, applyTo is null ? "held" : "applied", payment.ReceiptNumber);
 
         if (_email is not null)
             await PostReceiptAsync(db, organizationId, payment, description, ct, personId);

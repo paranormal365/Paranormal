@@ -452,6 +452,13 @@ namespace Ben.Data.Source.Entities
         /// <summary>Why it was called off, shown to anybody who had a place.</summary>
         public string? CancelledReason { get; set; }
 
+        /// <summary>The date it moved to, when the organizer said so on calling it off (10/24/2026).</summary>
+        public DateTime? CalledOffNewDate { get; set; }
+
+        /// <summary>How guests get their money back, in the organizer's words, when they said so (10/24/2026).</summary>
+        /// <remarks>IsHaunted never takes guests' money, so this is the organizer's to say, never the site's.</remarks>
+        public string? CalledOffRefundHow { get; set; }
+
         /// <summary>On the books: not filed away.</summary>
         public bool IsActive => LifecycleState != HostedEventLifecycleState.Archived;
 

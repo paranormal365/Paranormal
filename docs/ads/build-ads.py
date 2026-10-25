@@ -429,7 +429,7 @@ ADS = [
                ("Publish", "One event credit per event. It's live in minutes."),
                ("Open the door", "Scan passes, even with no signal, from any phone.")],
         offer="<em>$99</em> an event.",
-        offer_small="$19.80 with a paid plan. However many nights. No ticket fees: guests pay you. Credits last a year and come back if you cancel 48+ hours ahead.",
+        offer_small="$19.80 with a paid plan. However many nights; a show's run up to a month, and extra months half price. No ticket fees: guests pay you. Credits last a year.",
         url_small="Web · iPhone & iPad app", fine=FINE,
     ),
 ]

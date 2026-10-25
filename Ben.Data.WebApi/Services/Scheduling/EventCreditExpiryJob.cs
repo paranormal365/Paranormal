@@ -63,6 +63,7 @@ public sealed class EventCreditExpiryJob : IScheduledJob
         await using var db = await _dbFactory.CreateDbContextAsync(ct);
 
         var now = DateTime.UtcNow;
+        await WarnAboutHeldMonthsAsync(db, now, ct);
         var due = await EventCredits.DueAWarningAsync(db, now, ct);
         if (due.Count == 0) return;
 
@@ -102,6 +103,51 @@ public sealed class EventCreditExpiryJob : IScheduledJob
         }
 
         if (warned > 0) _logger.LogInformation("Warned about {Count} expiring event credit(s).", warned);
+    }
+
+    /// <summary>
+    /// Held extra months for a show's run, lapsing within the lead (10/24/2026): one letter per holder, once.
+    /// </summary>
+    private async Task WarnAboutHeldMonthsAsync(BenDataContext db, DateTime now, CancellationToken ct)
+    {
+        var due = await EventRunMonths.DueAWarningAsync(db, now, ct);
+        foreach (var holder in due.GroupBy(m => (m.OwnerOrganizationId, m.OwnerAppUserId)))
+        {
+            if (ct.IsCancellationRequested) break;
+            try
+            {
+                var first = holder.OrderBy(m => m.ExpiresUtc).First();
+                var asCredit = new EventCredit { OwnerOrganizationId = first.OwnerOrganizationId, OwnerAppUserId = first.OwnerAppUserId };
+                var (holderName, recipients) = await HolderAsync(db, asCredit, ct);
+                var count = holder.Count();
+                var what = count == 1 ? "an extra month" : $"{count} extra months";
+                var subject = $"{(count == 1 ? "An extra month for a show's run expires" : $"{count} extra months for a show's run expire")} on {first.ExpiresUtc:MM/dd/yyyy}";
+                var text = $"{holderName} holds {what} for a show's run, which {(count == 1 ? "lapses" : "lapse")} on {first.ExpiresUtc:MM/dd/yyyy}. "
+                         + (count == 1 ? "Use it on a published show's page to let its run go a month longer. After that date it's gone and isn't refunded."
+                                     : "Use them on a published show's page to let its run go a month longer each. After that date they're gone and aren't refunded.");
+                var unreachable = new List<Guid>();
+                foreach (var person in recipients)
+                {
+                    if (_email.IsConfigured && !string.IsNullOrWhiteSpace(person.Email))
+                        await _email.SendAsync(new EmailMessage(person.Email!, subject,
+                            $"<p>{System.Net.WebUtility.HtmlEncode(text)}</p><p>— {System.Net.WebUtility.HtmlEncode(_site.Name)}</p>",
+                            Kind: MailKinds.EventRunMonthExpiring.Key,
+                            Payload: MailRows.For(MailKinds.EventRunMonthExpiring, MailRows.Person(person.Email, person.DisplayName))), ct);
+                    else
+                        unreachable.Add(person.Id);
+                }
+                if (unreachable.Count > 0)
+                    await _messages.SendAsync(subject, text, unreachable,
+                        first.CreatedByAppUserId == Guid.Empty ? unreachable[0] : first.CreatedByAppUserId, ct);
+
+                foreach (var m in holder) { m.ExpiryWarningSentUtc = DateTime.UtcNow; m.DateUpdated = m.ExpiryWarningSentUtc; }
+                await db.SaveChangesAsync(ct);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex, "Could not warn about held extra months.");
+            }
+        }
     }
 
     /// <summary>Who holds this credit, and who should hear that it is about to lapse.</summary>

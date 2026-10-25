@@ -373,8 +373,9 @@ password right away instead of leaving you to find out later.
 - **New dates, times or a new venue.** We write to you saying what changed. Your booking still
   stands; if the change doesn't work for you, let your places go from the event's page. A date you're
   booked on can't be taken off until the organizers have moved or released your booking.
-- **Called off.** You're told, and anything you were holding is released. An event can't be called
-  off once it has happened.
+- **Called off.** You're told, and anything you were holding is released. The organizers may tell you
+  the new date, or how to get your money back; it's in the letter and on the event's page. An event
+  can't be called off once it has happened.
 - **The venue withdraws.** This is rare, and it's handled the same way: everything is released and
   everyone is told.
 

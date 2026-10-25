@@ -604,6 +604,10 @@ public sealed class HostedEventController : OrgCmsControllerBase
         hosted.LifecycleState = HostedEventLifecycleState.Cancelled;
         hosted.CancelledAtUtc = now;
         hosted.CancelledReason = request.Reason?.Trim() is { Length: > 0 } r ? r : null;
+        // What the people with places are told next (Ben, 10/24/2026): a new date, or how to get their money
+        // back — the organizer's words, because IsHaunted never takes guests' money.
+        hosted.CalledOffNewDate = request.NewDate?.Date;
+        hosted.CalledOffRefundHow = request.RefundHow?.Trim() is { Length: > 0 } how ? how[..Math.Min(how.Length, 1000)] : null;
         hosted.DateUpdated = now;
         hosted.UpdatedByAppUserId = userId.Value;
 
@@ -615,7 +619,8 @@ public sealed class HostedEventController : OrgCmsControllerBase
         // AFTER the save, and best effort. Until phase 6 this endpoint told the organizer that
         // everybody with a place had been told, and nothing had been sent to anybody: the guests
         // found out by opening the page, or by turning up.
-        var told = await mail.SendCalledOffAsync(db, hosted.Id, hosted.CancelledReason, ct);
+        var told = await mail.SendCalledOffAsync(db, hosted.Id, hosted.CancelledReason, ct,
+            hosted.CalledOffNewDate, hosted.CalledOffRefundHow);
 
         return Ok((await LoadAsync(db, orgId, eventId, ct))[0]
             with { PlanNote = $"{note} {Told(told)}" });
@@ -667,9 +672,16 @@ public sealed class HostedEventController : OrgCmsControllerBase
             SiteSettingKeys.EventCancellationCreditWindowHours,
             (decimal)EventCredits.CancellationWindow.TotalHours, ct);
 
-        return EventCredits.WhatCancellingDoesToTheCredit(
+        var (returns, sentence) = EventCredits.WhatCancellingDoesToTheCredit(
             spent, startsUtc, now, TimeSpan.FromHours(hours),
             theVenueWithdrew: hosted.LifecycleState == HostedEventLifecycleState.VenueWithdrawn);
+
+        // Its extra months always come back, whatever the timing (Ben, 10/24/2026). Read before they move.
+        var months = await EventRunMonths.AppliedToAsync(db, hosted.Id, ct);
+        if (months > 0)
+            sentence += $" Its {(months == 1 ? "extra month comes" : $"{months} extra months come")} back to whoever paid, "
+                      + "to lengthen another show's run.";
+        return (returns, sentence);
     }
 
     /// <summary>Puts the credit back when the rules say it comes back. The caller saves.</summary>
@@ -677,6 +689,8 @@ public sealed class HostedEventController : OrgCmsControllerBase
         BenDataContext db, HostedEvent hosted, Guid userId, DateTime now, CancellationToken ct)
     {
         var (returns, sentence) = await WeighTheCreditAsync(db, hosted, now, ct);
+        // Extra months come back whatever the timing (Ben, 10/24/2026), after the sentence has counted them.
+        await EventRunMonths.ReturnFromAsync(db, hosted.Id, userId, now, ct);
         if (!returns) return (false, sentence);
 
         var spent = await EventCredits.SpentOnAsync(db, hosted.Id, ct);
@@ -1261,6 +1275,8 @@ public sealed class HostedEventController : OrgCmsControllerBase
         hosted.LifecycleState = HostedEventLifecycleState.Draft;
         hosted.CancelledAtUtc = null;
         hosted.CancelledReason = null;
+        hosted.CalledOffNewDate = null;
+        hosted.CalledOffRefundHow = null;
         // Bringing it back reopens the decision it was called off by, so the reminders can run
         // again. Leaving it decided would leave a live event permanently marked "no go".
         if (hosted.GoNoGoDecision == HostedEventGoNoGo.NoGo)
@@ -1477,23 +1493,35 @@ public sealed class HostedEventController : OrgCmsControllerBase
             // and one credit covers the run, but not performances beyond a month from the first. A weekend
             // of ghost hunting or seminars is a stay, days in a row, and each weekend is its own event.
             // Before this, one credit could cover up to 366 dates across a year.
-            if (RunTooLong(dates) is { } last)
-                return $"A show's run fits within a month of its first performance, and {last.ToString("ddd MM/dd", CultureInfo.InvariantCulture)} is "
-                     + "past that. Make the later performances their own event.";
+            // Each extra month applied to the show adds a calendar month (10/24/2026).
+            var months = existingId is { } showId ? await EventRunMonths.AppliedToAsync(db, showId, ct) : 0;
+            if (RunTooLong(dates, months) is { } last)
+            {
+                var day = last.ToString("ddd MM/dd", CultureInfo.InvariantCulture);
+                var reach = months == 0 ? "within a month of its first performance"
+                          : $"within {1 + months} months of its first performance, with its {months} extra month{(months == 1 ? "" : "s")}";
+                var (_, cap) = await EventRunMonths.ReadAsync(db, ct);
+                var live = existingId is { } id && await db.HostedEvents.AnyAsync(
+                    e => e.Id == id && (e.LifecycleState == HostedEventLifecycleState.Published
+                                     || e.LifecycleState == HostedEventLifecycleState.Live), ct);
+                return live && months < cap
+                    ? $"This show's run fits {reach}, and {day} is past that. Add a month to this show, or make the later performances their own event."
+                    : $"A show's run fits {reach}, and {day} is past that. Make the later performances their own event.";
+            }
         }
 
         return null;
     }
 
     /// <summary>
-    /// The first performance more than a month after the run's first, or null when the run fits.
-    /// "Within a month": 10/01 to 10/31 fits; 11/01 does not.
+    /// The first performance past the run's limit, or null when the run fits. The limit is a month from the
+    /// first performance, and a month more for each extra month: 10/01 to 10/31 fits on its own; 11/01 needs one.
     /// </summary>
-    internal static DateTime? RunTooLong(IEnumerable<DateTime> dates)
+    internal static DateTime? RunTooLong(IEnumerable<DateTime> dates, int extraMonths = 0)
     {
         var days = dates.Select(d => d.Date).Distinct().OrderBy(d => d).ToList();
         if (days.Count == 0) return null;
-        var limit = days[0].AddMonths(1);
+        var limit = EventRunMonths.LimitFor(days[0], extraMonths);
         return days.FirstOrDefault(d => d >= limit) is { } late && late != default ? late : null;
     }
 

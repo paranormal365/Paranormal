@@ -250,6 +250,20 @@ public sealed partial class BenAdminClientAdapter
         => _api.SendExpectingReasonAsync<GrantEventCreditsRequest, IReadOnlyList<AdminEventCreditRecord>>(
             HttpMethod.Post, $"/api/admin/billing/organizations/{organizationId}/event-credits", request, token);
 
+    public Task<LoadResult<AdminEventRunMonthRecord>> GetEventRunMonthsAdminAsync(Guid? orgId = null, CancellationToken token = default)
+        => _api.GetListAsync<AdminEventRunMonthRecord>(
+            orgId is { } o ? $"/api/admin/billing/run-months?orgId={o}" : "/api/admin/billing/run-months", token);
+
+    public Task<(IReadOnlyList<AdminEventRunMonthRecord>? Result, string? Error)> GrantEventRunMonthsAsync(
+        Guid organizationId, GrantEventCreditsRequest request, CancellationToken token = default)
+        => _api.SendExpectingReasonAsync<GrantEventCreditsRequest, IReadOnlyList<AdminEventRunMonthRecord>>(
+            HttpMethod.Post, $"/api/admin/billing/organizations/{organizationId}/run-months", request, token);
+
+    public Task<(AdminEventRunMonthRecord? Result, string? Error)> RefundEventRunMonthAsync(
+        Guid monthId, RefundEventCreditRequest request, CancellationToken token = default)
+        => _api.SendExpectingReasonAsync<RefundEventCreditRequest, AdminEventRunMonthRecord>(
+            HttpMethod.Post, $"/api/admin/billing/run-months/{monthId}/refund", request, token);
+
     public Task<(AdminEventCreditRecord? Result, string? Error)> RefundEventCreditAsync(
         Guid creditId, RefundEventCreditRequest request, CancellationToken token = default)
         => _api.SendExpectingReasonAsync<RefundEventCreditRequest, AdminEventCreditRecord>(

@@ -100,3 +100,11 @@ public record RefundEventCreditRequest(string Reason, bool RecordAdjustment = tr
 /// thing separating a support fix from a giveaway.
 /// </param>
 public record GrantEventCreditsRequest(int Quantity, string Reason);
+
+/// <summary>One extra month for a show's run, as a SuperAdmin sees it (10/24/2026).</summary>
+/// <param name="ShowName">The show it lengthens, or null while it is held.</param>
+public record AdminEventRunMonthRecord(
+    Guid Id, Guid? OwnerOrganizationId, string OwnerName,
+    decimal PriceAtPurchase, DateTime PurchasedUtc, DateTime ExpiresUtc,
+    Guid? AppliedToHostedEventId, string? ShowName,
+    DateTime? RefundedUtc, string? RefundedReason, string? ReceiptNumber, string? GrantedReason);

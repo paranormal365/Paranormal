@@ -97,6 +97,14 @@ else
                     {
                         <span> @why</span>
                     }
+                    @if (hosted.CalledOffNewDate is { } moved)
+                    {
+                        <div class="mt-1" id="hosted-cancelled-new-date">It's moving to <strong>@moved.ToString("dddd, MM/dd/yyyy")</strong>.</div>
+                    }
+                    @if (hosted.CalledOffRefundHow is { Length: > 0 } how)
+                    {
+                        <div class="mt-1" id="hosted-cancelled-refund"><strong>Getting your money back:</strong> @how</div>
+                    }
                 </div>
             }
 

@@ -92,6 +92,8 @@ public sealed class AdminSiteSettingController : BenControllerBase
             : "Write the event credit price as a number above zero, without the dollar sign — for example 99.",
         SiteSettingKeys.EventCreditSubscriberPercent => Services.Events.EventCreditPricing.WhyNotAPercent(value),
         SiteSettingKeys.EventCreditBundles => Services.Events.EventCreditPricing.WhyNotBundles(value),
+        SiteSettingKeys.EventRunMonthPercent => Services.Events.EventRunMonths.WhyNotAPercent(value),
+        SiteSettingKeys.EventRunMonthsPerShow => Services.Events.EventRunMonths.WhyNotACap(value),
         SiteSettingKeys.GhostWalkMonthlyPriceUsd => Services.Tours.GhostWalkOffer.WhyNotAPrice(value),
         _ => null,
     };
