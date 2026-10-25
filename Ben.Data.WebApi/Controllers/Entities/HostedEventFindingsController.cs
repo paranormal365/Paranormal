@@ -65,7 +65,8 @@ public sealed class HostedEventFindingsController : OrgCmsControllerBase
         if (publish && WhyNot(ev, now) is { } why) return BadRequest(why);
 
         await EventFindings.SetPublishedAsync(db, ev, publish, userId.Value, now, ct);
-        await db.SaveChangesAsync(ct);
+        // Audited (10/25/2026): who made a night's findings public, or took them back, is worth a record.
+        await SaveAndAuditAsync(db, ev, ev.Id, userId.Value, ct);
         return Ok(await DescribeAsync(db, ev, ct));
     }
 
@@ -89,7 +90,7 @@ public sealed class HostedEventFindingsController : OrgCmsControllerBase
         ev.UpdatedByAppUserId = userId.Value;
         // Everything public: every piece is chosen now, and each guest gets their week.
         var told = mode == FindingsOnPlace.AllPublic ? await ChooseAllAsync(db, ev, now, ct) : [];
-        await db.SaveChangesAsync(ct);
+        await SaveAndAuditAsync(db, ev, ev.Id, userId.Value, ct);
         await TellAsync(messages, ev, told, userId.Value, now, ct);
         return Ok(await DescribeAsync(db, ev, ct));
     }
@@ -111,6 +112,7 @@ public sealed class HostedEventFindingsController : OrgCmsControllerBase
 
         var now = DateTime.UtcNow;
         Guid? guest = null;
+        if (show && ev.FindingsOnPlace == FindingsOnPlace.None) ev.FindingsOnPlace = FindingsOnPlace.Chosen;
         if (kind == "evidence")
         {
             var piece = await db.EventEvidenceSubmissions.FirstOrDefaultAsync(
@@ -118,6 +120,7 @@ public sealed class HostedEventFindingsController : OrgCmsControllerBase
             if (piece is null) return NotFound();
             if (show && piece.OnPlaceChosenUtc is null) { piece.OnPlaceChosenUtc = now; guest = piece.SubmittedByAppUserId; }
             if (!show) piece.OnPlaceChosenUtc = null;
+            await SaveAndAuditAsync(db, piece, piece.Id, userId.Value, ct);
         }
         else
         {
@@ -125,9 +128,8 @@ public sealed class HostedEventFindingsController : OrgCmsControllerBase
             if (piece is null) return NotFound();
             if (show && piece.OnPlaceChosenUtc is null) { piece.OnPlaceChosenUtc = now; guest = piece.SubmittedByAppUserId; }
             if (!show) piece.OnPlaceChosenUtc = null;
+            await SaveAndAuditAsync(db, piece, piece.Id, userId.Value, ct);
         }
-        if (show && ev.FindingsOnPlace == FindingsOnPlace.None) ev.FindingsOnPlace = FindingsOnPlace.Chosen;
-        await db.SaveChangesAsync(ct);
         if (guest is { } g) await TellAsync(messages, ev, [g], userId.Value, now, ct);
         return Ok(await DescribeAsync(db, ev, ct));
     }

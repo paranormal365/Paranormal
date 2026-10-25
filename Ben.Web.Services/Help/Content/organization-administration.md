@@ -1111,7 +1111,8 @@ then reach that far.
 - **Extra months only lengthen a show's run.** They can't publish an event; only a credit does that.
 - **If the show is called off,** its extra months come back to whoever paid, whatever the timing, and can
   lengthen another show's run. **Use the group's** or **Use yours** on that show's page applies them, free.
-- **Held months lapse a year after they were bought.** We write to you a month before.
+- **Held months lapse a year after they were bought.** We write to you a month before. Your billing page
+  lists every extra month under **Extra months for a show's run**: ready to use, on a show, or past.
 - **Removing dates later doesn't refund months.** They stay with the show.
 - **Planning a long run before it's published?** Publish it with the first month's dates, then add months
   and the later dates.
@@ -1193,8 +1194,9 @@ the record of who came.
 
 **Un-publish** removes the event from the public site. Nothing is deleted and nothing is refunded.
 
-**Archive** removes the event from your list and closes its page, its results, its reviews and the
-evidence guests send. Everything about it stays exactly as it is. Events are archived automatically
+**Archive** removes the event from your list and closes its page, its reviews and the evidence guests
+send. Everything about it stays exactly as it is, and so do its findings: whoever could see them still
+can, in the IsHaunted app's results and on the place's page. Events are archived automatically
 two months after their last date, once the time for reviews and evidence has run out, so a guest
 following the thank-you letter's link still finds the page.
 

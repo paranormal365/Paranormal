@@ -24,8 +24,8 @@ namespace Ben.Data.WebApi.Controllers.Public;
 /// </remarks>
 public static class EventSessionPublication
 {
-    private static readonly HostedEventLifecycleState[] Showing =
-        [HostedEventLifecycleState.Published, HostedEventLifecycleState.Live, HostedEventLifecycleState.Ended];
+    // Archived too (10/25/2026): archiving tidies the organizer's list, and the results stay as they were.
+    private static readonly HostedEventLifecycleState[] Showing = Services.Events.EventFindings.ShowsFindings;
 
     /// <summary>Sessions shown with a hosted event's results right now.</summary>
     public static IQueryable<FieldSessionUpload> Shown(BenDataContext db)

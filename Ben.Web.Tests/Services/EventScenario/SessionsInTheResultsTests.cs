@@ -126,6 +126,20 @@ public sealed class SessionsInTheResultsTests
         Assert.IsType<NotFoundResult>((await Public(w).Summary(id, default)).Result);
     }
 
+    /// <summary>Archiving tidies the organizer's list; the results stay as they were (10/25/2026).</summary>
+    [Fact]
+    public async Task Archiving_the_event_keeps_its_shown_sessions()
+    {
+        await using var w = await ScenarioWorld.CreateAsync();
+        var id = await SessionAsync(w);
+        await Publisher(w, ScenarioWorld.Came).AgreeToShow(id, default);
+        await Publisher(w, ScenarioWorld.Jim).ShowWithResults(id, default);
+        await w.ChangeEventAsync(e => e.FindingsPublishedUtc = DateTime.UtcNow);
+
+        await w.ChangeEventAsync(e => e.LifecycleState = HostedEventLifecycleState.Archived);
+        Assert.Single(await ListedAsync(w));
+    }
+
     [Fact]
     public async Task Taking_the_event_off_the_site_takes_its_sessions_with_it()
     {

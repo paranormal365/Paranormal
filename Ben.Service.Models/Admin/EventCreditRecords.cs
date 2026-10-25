@@ -48,7 +48,25 @@ public record OrgEventCreditsView(
     decimal FullUnitPrice = 0m,
     bool PaysSubscriberPrice = false,
     decimal SubscriberPercent = 20m,
-    IReadOnlyList<Ben.Service.Models.EventCreditBundleOffer>? Bundles = null);
+    IReadOnlyList<Ben.Service.Models.EventCreditBundleOffer>? Bundles = null,
+    /// <summary>Extra months for a show's run (10/25/2026): held ones, ones on a show, and past ones.</summary>
+    IReadOnlyList<OrgEventRunMonthRecord>? RunMonths = null);
+
+/// <summary>
+/// One extra month for a show's run, as its holder sees it. Not a credit: it only lengthens a run.
+/// </summary>
+/// <param name="AppliedToEventName">The show it lengthens, when it is on one; null while held.</param>
+public record OrgEventRunMonthRecord(
+    Guid Id,
+    decimal PriceAtPurchase,
+    string Currency,
+    DateTime PurchasedUtc,
+    DateTime ExpiresUtc,
+    Guid? AppliedToHostedEventId,
+    string? AppliedToEventName,
+    DateTime? RefundedUtc,
+    string? ReceiptNumber,
+    string? GrantedReason);
 
 /// <summary>A credit as a SuperAdmin sees it: whose it is, and who bought it.</summary>
 public record AdminEventCreditRecord(
