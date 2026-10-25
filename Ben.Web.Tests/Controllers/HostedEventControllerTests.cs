@@ -496,8 +496,31 @@ public sealed class HostedEventControllerTests
     {
         var f = await SeedAsync();
 
-        // The resident play company: one production, a date a month. Generating every day from
-        // September to November would be a wrong answer delivered quickly.
+        // A play's run: Fridays and Saturdays for a month. Generating every day between would be a
+        // wrong answer delivered quickly.
+        DateTime[] dates = [new(2026, 9, 11), new(2026, 9, 12), new(2026, 9, 25), new(2026, 9, 26), new(2026, 10, 10)];
+        var request = new UpsertHostedEventRequest(
+            "Murder at the Manor", VenueId,
+            new DateTime(2026, 9, 11), new DateTime(2026, 10, 10),
+            TimeZoneId: "America/Chicago",
+            DatesAreSeparate: true,
+            Dates: dates);
+
+        var record = Created(await Build(f).Create(OrgId, request, default));
+
+        Assert.Equal(5, record.Nights.Count);
+        Assert.Equal("date", record.DateNoun);
+        Assert.Equal(dates, record.Nights.Select(n => n.Date).ToArray());
+    }
+
+    /// <summary>
+    /// Ben, 10/24/2026: one credit covers a show's run, "it cannot be performances beyond a month's time".
+    /// Before, one credit covered up to 366 dates across a year.
+    /// </summary>
+    [Fact]
+    public async Task A_shows_run_is_refused_past_a_month_from_its_first_performance()
+    {
+        var f = await SeedAsync();
         var request = new UpsertHostedEventRequest(
             "Murder at the Manor", VenueId,
             new DateTime(2026, 9, 12), new DateTime(2026, 11, 14),
@@ -505,14 +528,17 @@ public sealed class HostedEventControllerTests
             DatesAreSeparate: true,
             Dates: [new DateTime(2026, 9, 12), new DateTime(2026, 10, 10), new DateTime(2026, 11, 14)]);
 
-        var record = Created(await Build(f).Create(OrgId, request, default));
-
-        Assert.Equal(3, record.Nights.Count);
-        Assert.Equal("date", record.DateNoun);
-        Assert.Equal(
-            [new DateTime(2026, 9, 12), new DateTime(2026, 10, 10), new DateTime(2026, 11, 14)],
-            record.Nights.Select(n => n.Date).ToArray());
+        var refusal = Assert.IsType<BadRequestObjectResult>((await Build(f).Create(OrgId, request, default)).Result);
+        Assert.Equal("A show's run fits within a month of its first performance, and Sat 11/14 is past that. "
+                   + "Make the later performances their own event.", refusal.Value);
     }
+
+    [Theory]
+    [InlineData("2026-10-01", "2026-10-31", true)]
+    [InlineData("2026-10-01", "2026-11-01", false)]
+    [InlineData("2026-01-31", "2026-02-27", true)]
+    public void A_month_runs_to_the_day_before_the_same_date_next_month(string first, string last, bool fits)
+        => Assert.Equal(fits, HostedEventController.RunTooLong([DateTime.Parse(first), DateTime.Parse(last)]) is null);
 
     [Fact]
     public async Task A_stay_gets_every_day_between_its_ends_and_calls_them_nights()

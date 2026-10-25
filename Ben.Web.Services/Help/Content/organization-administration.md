@@ -1091,15 +1091,15 @@ to be a home that's already on file, the event isn't saved and the page says why
 
 When you add the event, a switch lets you choose one of two kinds.
 
-**One stay** is a run of consecutive nights, like a weekend. Every day between the first and last
-date becomes a night of the same event, and a guest can book several of them.
+**One stay** is days in a row, like a weekend of ghost hunting or a weekend of seminars. Every day
+between the first and last date becomes a night of the same event, and a guest can book several of
+them. Another weekend is another event.
 
-**Separate dates** is a production put on more than once — a monthly play, a supper club, a
-seasonal tour. The event is the production, each date is one performance, and each date is booked
-separately. The dates don't need to be evenly spaced or close together.
+**Separate dates** is a show's run, like a play or a musical. The event is the show, each date is one
+performance, and each date is booked separately. The dates don't need to be evenly spaced, but they
+must all fall within a month of the first performance. Performances after that are their own event.
 
-**It costs the same either way.** A monthly show is one production with twelve dates, not twelve
-events, so you are never charged twelve times for running the same thing again and again.
+**One credit covers either.** A weekend is one event, and so is a show's run of up to a month.
 
 ### Each date can say its own thing
 
@@ -1116,7 +1116,8 @@ apps, and opens it for bookings. This is when any charge applies, and the page t
 will be before you press the button.
 
 Publishing uses one **event credit**. No plan includes events, the largest included: every event is
-bought on its own. One credit covers one event, however many days in a row it runs. A credit is
+bought on its own. One credit covers one event, however many days in a row it runs, or a show's run
+of performances within a month. A credit is
 **{{price.event-credit}}**, and a group with a paid plan pays {{percent.event-credit-subscriber}} of that:
 **{{price.event-credit-subscriber}}**. Before you press the button, you can see how many credits you
 have and what the button will do.

@@ -214,21 +214,21 @@
                     <BenDateField Mode="DateEntryMode.Date" Id="new-event-to" @bind-Value="_form.EndsOn" />
                 </div>
                 <div class="col-12 col-md-6 pt-md-4">
-                    @* The flag Ben asked for. A stay is nights in a row; a run is a production put
-                       on repeatedly, and it is billed the same either way — one product. *@
+                    @* The flag Ben asked for. A stay is days in a row; a run is a show's performances. One credit
+                       covers either, and a run only within a month of its first performance (10/24/2026). *@
                     <div class="form-check form-switch">
                         <input class="form-check-input" type="checkbox" role="switch"
                                id="new-event-separate" @bind="_form.DatesAreSeparate" />
                         <label class="form-check-label" for="new-event-separate">
                             @(_form.DatesAreSeparate
-                                ? "Separate dates — a production put on more than once"
-                                : "One stay — nights running together")
+                                ? "Separate dates — a show's run, like a play or a musical"
+                                : "One stay — days in a row, like a weekend")
                         </label>
                     </div>
                     <div class="form-text">
                         @(_form.DatesAreSeparate
-                            ? "Each date is booked on its own. Choose them on the event's own page once it exists."
-                            : "Every day between the two dates becomes a night of the same event.")
+                            ? "Each performance is booked on its own. They must all fall within a month of the first; choose them on the event's own page once it exists."
+                            : "Every day between the two dates becomes a night of the same event. A second weekend is its own event.")
                     </div>
                 </div>
             </div>
