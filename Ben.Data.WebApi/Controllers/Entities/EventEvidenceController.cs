@@ -87,7 +87,10 @@ public sealed class EventEvidenceController : BenControllerBase
         // "Confirms" votes on it, which rank the public list (event-scenario-gaps).
         int PositiveVotes = 0,
         // When it was caught, from the file itself; null when the file does not say.
-        DateTime? CaughtAtUtc = null);
+        DateTime? CaughtAtUtc = null,
+        // When the organizers chose it for the place's page, and when the guest said keep it off (10/25/2026).
+        DateTime? OnPlaceChosenUtc = null,
+        DateTime? PlaceOptOutUtc = null);
 
     // ── the visitor's door ────────────────────────────────────────────────────
 
@@ -317,6 +320,35 @@ public sealed class EventEvidenceController : BenControllerBase
         return NoContent();
     }
 
+    /// <summary>
+    /// The guest's no to the organizers showing this on the place's page (Ben, 10/25/2026), or taking it back.
+    /// Free, and honored at any time — before the piece is chosen, during the week's notice, or after it shows.
+    /// </summary>
+    [HttpPost("{submissionId:guid}/keep-off-place")]
+    public Task<IActionResult> KeepOffPlace(Guid eventId, Guid submissionId, CancellationToken ct)
+        => SetKeptOffAsync(eventId, submissionId, true, ct);
+
+    [HttpDelete("{submissionId:guid}/keep-off-place")]
+    public Task<IActionResult> AllowOnPlace(Guid eventId, Guid submissionId, CancellationToken ct)
+        => SetKeptOffAsync(eventId, submissionId, false, ct);
+
+    private async Task<IActionResult> SetKeptOffAsync(Guid eventId, Guid submissionId, bool keepOff, CancellationToken ct)
+    {
+        var userId = GetCurrentUserId();
+        if (userId == Guid.Empty) return Unauthorized();
+
+        await using var db = await _db.CreateDbContextAsync(ct);
+        var submission = await db.EventEvidenceSubmissions
+            .FirstOrDefaultAsync(e => e.Id == submissionId && e.OrgCalendarEventId == eventId, ct);
+        if (submission is null || submission.SubmittedByAppUserId != userId) return NotFound();
+
+        submission.PlaceOptOutUtc = keepOff ? submission.PlaceOptOutUtc ?? DateTime.UtcNow : null;
+        submission.DateUpdated = DateTime.UtcNow;
+        submission.UpdatedByAppUserId = userId;
+        await db.SaveChangesAsync(ct);
+        return NoContent();
+    }
+
     /// <summary>Reports published evidence, hiding it until a moderator looks.</summary>
     /// <remarks>
     /// Needs an account for the reason the field archive's flag does: one flag hides, so an
@@ -424,6 +456,14 @@ public sealed class EventEvidenceController : BenControllerBase
         if (request.Accept && await Services.Events.EventFindings.OpenToAllAsync(db, submission.OrgCalendarEventId, ct))
             submission.UploadFile.IsPublic = true;
 
+        // An event sharing everything public on its location's page chooses this piece now; the guest's week
+        // starts today and the message below says so (10/25/2026).
+        var onPlace = request.Accept && submission.OrgCalendarEvent.HostedEventId is { } hostedForPlace
+            && await db.HostedEvents.AnyAsync(h => h.Id == hostedForPlace && h.FindingsPublishedUtc != null
+                                                && h.FindingsOnPlace == FindingsOnPlace.AllPublic
+                                                && h.Place.Kind == PlaceKind.PublicLocation, ct);
+        if (onPlace) submission.OnPlaceChosenUtc = DateTime.UtcNow;
+
         await db.SaveChangesAsync(ct);
 
         await _messages.SendAsync(
@@ -431,8 +471,14 @@ public sealed class EventEvidenceController : BenControllerBase
                 ? $"Your evidence from \"{submission.OrgCalendarEvent.Title}\" was accepted"
                 : $"Your evidence from \"{submission.OrgCalendarEvent.Title}\" was declined",
             request.Accept
-                ? "The group has accepted your submission into the event's record. Evidence at a "
-                + "public investigation is part of the public record — thank you for contributing."
+                ? "The group has accepted your submission into the event's record — thank you for contributing. "
+                + (submission.UploadFile.IsPublic
+                    ? "It's public with the event's findings."
+                    : "It's shared with the people who were there; the organizers may make the findings public later.")
+                + (onPlace
+                    ? $" It will also show on the event's location page from {DateTime.UtcNow.Add(HostedEventFindingsController.NoticeWeek):MM/dd/yyyy}."
+                    + " If you'd rather it didn't, choose Keep it off on your evidence on the website."
+                    : "")
                 : $"The group declined this submission: {submission.RejectionReason}",
             [submission.SubmittedByAppUserId], userId, ct);
 
@@ -481,6 +527,9 @@ public sealed class EventEvidenceController : BenControllerBase
             {
                 PositiveVotes = votes.GetValueOrDefault(a.UploadFileId),
                 CaughtAtUtc = caught.TryGetValue(a.UploadFileId, out var at) ? at : null,
+                // The guest's say over the place's page is between them and the organizers, not for the public list.
+                OnPlaceChosenUtc = null,
+                PlaceOptOutUtc = null,
             }),
             a => a.PositiveVotes,
             a => a.CaughtAtUtc ?? a.DateCreated)];
@@ -603,7 +652,10 @@ public sealed class EventEvidenceController : BenControllerBase
                 && s.OrgCalendarEvent.Place!.Kind == PlaceKind.PublicLocation,
             // Item 233: how long it has left, and whether somebody stopped the clock.
             s.UploadFile.ExpiresAtUtc,
-            s.UploadFile.KeptAtUtc != null)).ToListAsync(ct);
+            s.UploadFile.KeptAtUtc != null,
+            0, null,
+            s.OnPlaceChosenUtc,
+            s.PlaceOptOutUtc)).ToListAsync(ct);
 
     private static async Task<EvidenceSubmissionRecord> ToRecordAsync(
         BenDataContext db, Guid id, CancellationToken ct) =>

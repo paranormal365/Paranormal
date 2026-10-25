@@ -247,6 +247,12 @@ namespace Ben.Data.Source.Entities
         /// </remarks>
         public DateTime? CancellationRequestedUtc { get; set; }
 
+        /// <summary>
+        /// When the guest asked to keep their findings off the location's page (10/25/2026) — for every piece,
+        /// before, during or after the event.
+        /// </summary>
+        public DateTime? FindingsOffPlaceUtc { get; set; }
+
         /// <summary>Why they cannot come, in their own words. Shown to the venue.</summary>
         public string? CancellationReason { get; set; }
 

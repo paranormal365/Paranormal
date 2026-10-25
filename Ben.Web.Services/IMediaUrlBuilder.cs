@@ -64,6 +64,15 @@ public interface IMediaUrlBuilder
     /// </remarks>
     string EventFile(Guid eventId, Guid fileId);
 
+    /// <summary>
+    /// One piece of evidence offered at an event, carrying the viewer's sign-in when there is one (10/25/2026).
+    /// </summary>
+    /// <remarks>
+    /// An event's findings can be for the people who were there only, and a picture's src sends no token, so a
+    /// guest who may see them would get a broken frame from the API's own URL. The API decides; this only carries who asks.
+    /// </remarks>
+    string EventEvidence(Guid eventId, Guid submissionId) => $"/media/event-evidence/{eventId}/{submissionId}";
+
     /// <summary>A photo or video posted in an event's room, for the people in it (item 235 phase 11).</summary>
     string EventRoomMedia(Guid eventId, Guid messageId);
 

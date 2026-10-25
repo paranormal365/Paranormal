@@ -202,7 +202,13 @@ public sealed record MyHostedEventBookingRecord(
     bool HasReviewed = false,
 
     /// <summary>The event's own clock (IANA), so its sessions read in its time or the guest's (2026-09-28).</summary>
-    string? TimeZoneId = null);
+    string? TimeZoneId = null,
+
+    /// <summary>When the guest said keep everything they send off the place's page (10/25/2026), or null.</summary>
+    DateTime? FindingsOffPlaceUtc = null,
+
+    /// <summary>Whether the event is at a public place, so its findings could ever be shown on the place's page.</summary>
+    bool AtPublicPlace = false);
 
 /// <summary>One session on a guest's own list.</summary>
 public sealed record MySessionLineRecord(

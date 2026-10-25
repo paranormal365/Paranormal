@@ -4,6 +4,7 @@
 @inject IBenAdminClient AdminClient
 @inject IBenUserState UserState
 @inject NavigationManager NavManager
+@inject IMediaUrlBuilder MediaUrls
 @using Ben.Data.Common.Enums
 @using Ben.Service.Models
 @using Ben.Web.Services
@@ -65,7 +66,7 @@
                             </td>
                             <td>
                                 @* Their own copy, whatever the verdict — the whole point of the page. *@
-                                <a href="@AdminClient.GetEventEvidenceFileUrl(row.OrgCalendarEventId, row.Id)"
+                                <a href="@MediaUrls.EventEvidence(row.OrgCalendarEventId, row.Id)"
                                    target="_blank" rel="noopener" class="text-truncate d-inline-block"
                                    style="max-width:180px;">@row.FileName</a>
                                 @* Item 233. A tour business's plan takes photographs off the site
@@ -116,6 +117,33 @@
                                 else
                                 {
                                     <span class="text-secondary small">Not added</span>
+                                }
+                                @* The organizers can choose it for the place's page too; the guest's no wins at any time (10/25/2026). *@
+                                @if (row.PlaceAcceptsArchive && row.PublishedToPlaceAtUtc is null)
+                                {
+                                    <div class="small mt-1" id="@($"place-say-{row.Id}")">
+                                        @if (row.PlaceOptOutUtc is not null)
+                                        {
+                                            <span class="text-secondary">You've kept it off the place's page.</span>
+                                            <button type="button" class="btn btn-link btn-sm p-0 ms-1 align-baseline"
+                                                    disabled="@(_busy == row.Id)" @onclick="@(() => KeepOffAsync(row, false))">Let the organizers show it</button>
+                                        }
+                                        else
+                                        {
+                                            @if (row.OnPlaceChosenUtc is { } chosen)
+                                            {
+                                                var from = chosen.AddDays(7);
+                                                <span class="text-secondary">
+                                                    @(from > DateTime.UtcNow
+                                                        ? $"The organizers will show it on the place's page from {from.ToViewerLocalTime(UserState).ToDisplayDate()}."
+                                                        : "The organizers show it on the place's page.")
+                                                </span>
+                                            }
+                                            <button type="button" class="btn btn-link btn-sm p-0 ms-1 align-baseline"
+                                                    id="@($"keep-off-{row.Id}")"
+                                                    disabled="@(_busy == row.Id)" @onclick="@(() => KeepOffAsync(row, true))">Keep it off the place's page</button>
+                                        }
+                                    </div>
                                 }
                             </td>
                             <td class="text-nowrap">
@@ -216,6 +244,23 @@
         _message[row.Id] = ok
             ? (true, "Added — it's on the place's page now.")
             : (false, error ?? "Couldn't add that just now.");
+
+        if (ok) await LoadAsync();
+        StateHasChanged();
+    }
+
+    private async Task KeepOffAsync(EventEvidenceRecord row, bool keepOff)
+    {
+        _busy = row.Id;
+        _message.Remove(row.Id);
+        StateHasChanged();
+
+        var (ok, error) = await AdminClient.SetEvidenceKeptOffPlaceAsync(row.OrgCalendarEventId, row.Id, keepOff);
+
+        _busy = null;
+        _message[row.Id] = ok
+            ? (true, keepOff ? "Kept off — the organizers can't show it on the place's page." : "The organizers may show it on the place's page.")
+            : (false, error ?? "Couldn't change that just now.");
 
         if (ok) await LoadAsync();
         StateHasChanged();

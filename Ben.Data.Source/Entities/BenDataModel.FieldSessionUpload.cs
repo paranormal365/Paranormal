@@ -166,6 +166,12 @@ namespace Ben.Data.Source.Entities
         /// </summary>
         public DateTime? ShownWithEventResultsAtUtc { get; set; }
 
+        /// <summary>When the organizer chose this session for the location's page (10/25/2026).</summary>
+        public DateTime? OnPlaceChosenUtc { get; set; }
+
+        /// <summary>When the sender said to keep it off the location's page.</summary>
+        public DateTime? PlaceOptOutUtc { get; set; }
+
         /// <summary>Who chose to show it.</summary>
         public Guid? ShownWithEventResultsByAppUserId { get; set; }
 

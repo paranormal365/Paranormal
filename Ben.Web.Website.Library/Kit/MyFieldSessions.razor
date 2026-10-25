@@ -231,6 +231,20 @@
                                                @onchange="e => ConsentAsync(it, e.Value is true)" />
                                         <label class="form-check-label small" for="@($"show-with-results-{it.Id:N}")">May be shown with the results</label>
                                     </div>
+                                    @* The organizers may also choose it for the place's page, a week after telling them; their no
+                                       wins at any time (10/25/2026). Only worth asking once it may be shown at all. *@
+                                    @if (it.EventResultsConsentAtUtc is not null)
+                                    {
+                                        <div class="form-check form-switch d-inline-block ms-2 text-start align-middle"
+                                             title="@(it.OnPlaceChosenUtc is { } chosen && it.PlaceOptOutUtc is null
+                                                      ? $"The organizers chose it for the place's page, from {chosen.AddDays(7).ToViewerLocalTime(UserState).ToDisplayDate()}."
+                                                      : "If the organizers choose it, it's shown on the page of the place it was recorded at, a week after you're told.")">
+                                            <input class="form-check-input" type="checkbox" id="@($"keep-off-place-{it.Id:N}")"
+                                                   checked="@(it.PlaceOptOutUtc is not null)" disabled="@_consentBusy"
+                                                   @onchange="e => KeepOffPlaceAsync(it, e.Value is true)" />
+                                            <label class="form-check-label small" for="@($"keep-off-place-{it.Id:N}")">Keep it off the place's page</label>
+                                        </div>
+                                    }
                                 }
                             </td>
                         </tr>
@@ -282,6 +296,16 @@
         _consentBusy = false;
         if (!done) { _consentError = error; return; }
         _rows = [.. (_rows ?? []).Select(r => r.Id == row.Id ? r with { EventResultsConsentAtUtc = agree ? DateTime.UtcNow : null } : r)];
+    }
+
+    /// <summary>The sender keeps this session off the place's page, whatever the organizers choose, or lets them.</summary>
+    private async Task KeepOffPlaceAsync(FieldSessionSummaryRecord row, bool keepOff)
+    {
+        _consentBusy = true; _consentError = null;
+        var (done, error) = await AdminClient.SetSessionKeptOffPlaceAsync(row.Id, keepOff);
+        _consentBusy = false;
+        if (!done) { _consentError = error; return; }
+        _rows = [.. (_rows ?? []).Select(r => r.Id == row.Id ? r with { PlaceOptOutUtc = keepOff ? DateTime.UtcNow : null } : r)];
     }
     private List<InvestigationMapPin> _pins = [];
     private int     _withoutFix;

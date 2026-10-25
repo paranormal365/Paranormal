@@ -86,6 +86,10 @@ public sealed class SessionsInTheResultsTests
         Assert.IsType<NotFoundResult>(await Publisher(w, ScenarioWorld.Stranger).ShowWithResults(id, default));
         Assert.IsType<NoContentResult>(await Publisher(w, ScenarioWorld.Nephew).ShowWithResults(id, default));
 
+        // Shown, but the findings are still the people who were there's until the organizer publishes (10/25/2026).
+        Assert.Empty(await ListedAsync(w));
+        await w.ChangeEventAsync(e => e.FindingsPublishedUtc = DateTime.UtcNow);
+
         var row = Assert.Single(await ListedAsync(w));
         Assert.Equal((id, w.PlaceId, 4, true), (row.Id, row.PlaceId, row.MarkerCount, row.MediaReady));
         var summary = Assert.IsType<PublicSessionSummary>(Assert.IsType<OkObjectResult>((await Public(w).Summary(id, default)).Result).Value);
@@ -102,6 +106,7 @@ public sealed class SessionsInTheResultsTests
     {
         await using var w = await ScenarioWorld.CreateAsync();
         var id = await SessionAsync(w);
+        await w.ChangeEventAsync(e => e.FindingsPublishedUtc = DateTime.UtcNow);
         Assert.IsType<NoContentResult>(await Publisher(w, ScenarioWorld.Came).AgreeToShow(id, default));
         Assert.IsType<NoContentResult>(await Publisher(w, ScenarioWorld.Jim).ShowWithResults(id, default));
         Assert.Single(await ListedAsync(w));
@@ -128,6 +133,8 @@ public sealed class SessionsInTheResultsTests
         var id = await SessionAsync(w);
         await Publisher(w, ScenarioWorld.Came).AgreeToShow(id, default);
         await Publisher(w, ScenarioWorld.Jim).ShowWithResults(id, default);
+        await w.ChangeEventAsync(e => e.FindingsPublishedUtc = DateTime.UtcNow);
+        Assert.Single(await ListedAsync(w));
 
         await w.ChangeEventAsync(e => e.LifecycleState = HostedEventLifecycleState.Removed);
         Assert.Empty(await ListedAsync(w));

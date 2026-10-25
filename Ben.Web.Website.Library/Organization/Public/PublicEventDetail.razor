@@ -462,6 +462,14 @@ else
         @* ── Evidence from the night (item 111) ────────────────────────────── *@
         @* The anchor the after-event letters link to (event-scenario-gaps). *@
         <div id="event-evidence"></div>
+        @* Refused, not empty: a hosted event's findings are the people who were there's until the organizers make
+           them public, and always at a private home (10/25/2026). Said, so the page doesn't look like nothing happened. *@
+        @if (_hosted is not null && _event.StartDateTime <= DateTime.UtcNow && _acceptedEvidence.Failed && !_acceptedEvidence.SessionExpired)
+        {
+            <p class="small text-secondary mb-4" id="event-findings-private">
+                The findings from this event are shared with the people who were there.@(_isAuthenticated ? "" : " If you were, sign in to see them.")
+            </p>
+        }
         @if (_acceptedEvidence.Items.Count > 0)
         {
             <BenSectionHeading Text="What people caught" />
@@ -479,10 +487,9 @@ else
                     {
                         <div class="py-2 border-bottom d-flex flex-column flex-sm-row gap-2 justify-content-between" data-testid="event-evidence-item">
                             <div style="min-width:0;">
-                                @* Absolute against the API origin: on the split deployment a raw
-                                   /api href resolves to the SITE and 404s — the img-sends-no-token
-                                   trap's anonymous sibling. *@
-                                <a href="@AdminClient.GetEventEvidenceFileUrl(ev.OrgCalendarEventId, ev.Id)"
+                                @* Through the site's media relay, so a guest who was there carries their sign-in: findings
+                                   can be for the people who were there only (10/25/2026). *@
+                                <a href="@MediaUrls.EventEvidence(ev.OrgCalendarEventId, ev.Id)"
                                    target="_blank" rel="noopener" style="overflow-wrap:anywhere;">@ev.FileName</a>
                                 <span class="text-secondary small">— @ev.SubmitterDisplayName, @Local(ev.CaughtAtUtc ?? ev.DateCreated).ToString("MM/dd/yyyy h:mm tt")</span>
                                 @if (ev.PositiveVotes > 0)
@@ -538,9 +545,19 @@ else
                     @* The bargain, stated BEFORE the button — item 87's rule is that evidence at
                        an open investigation is public, and nobody should learn that after
                        submitting. *@
-                    <p class="text-secondary small">
-                        A group member reviews every submission. If yours is accepted it becomes
-                        part of this event's <strong>public</strong> record, credited to you.
+                    <p class="text-secondary small" id="evidence-bargain">
+                        @if (_hosted is null)
+                        {
+                            <text>A group member reviews every submission. If yours is accepted it becomes
+                            part of this event's <strong>public</strong> record, credited to you.</text>
+                        }
+                        else
+                        {
+                            @* Hosted events (10/25/2026): the people who were there first; public when the organizers say. *@
+                            <text>The organizers review every submission. If yours is accepted, the people who were there
+                            can see it, credited to you, and it becomes <strong>public</strong> if the organizers make the
+                            findings public. They may also ask to show it on the place's page; you're told first and can say no.</text>
+                        }
                     </p>
                     @if (_hosted?.EvidenceSentence is { Length: > 0 } window)
                     {
@@ -581,7 +598,7 @@ else
                                         <span class="badge bg-secondary">Waiting for review</span>
                                         break;
                                     case Ben.Data.Common.Enums.EvidenceSubmissionStatus.Accepted:
-                                        <span class="badge bg-success">Accepted — public</span>
+                                        <span class="badge bg-success">Accepted</span>
                                         break;
                                     case Ben.Data.Common.Enums.EvidenceSubmissionStatus.Rejected:
                                         <span class="badge bg-danger">Declined</span>

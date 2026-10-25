@@ -278,6 +278,8 @@ public sealed class AfterTheEventTests
         var first = await AcceptedAsync(w, "first.wav", caught: ScenarioWorld.FirstDay.AddHours(21), confirms: 0);
         var second = await AcceptedAsync(w, "second.wav", caught: ScenarioWorld.FirstDay.AddHours(22), confirms: 2);
         var third = await AcceptedAsync(w, "third.wav", caught: ScenarioWorld.FirstDay.AddHours(20), confirms: 0);
+        // Public once the organizer publishes the findings (10/25/2026).
+        await w.ChangeEventAsync(e => e.FindingsPublishedUtc = DateTime.UtcNow);
 
         var served = Assert.IsAssignableFrom<IEnumerable<EventEvidenceController.EvidenceSubmissionRecord>>(
             Assert.IsType<OkObjectResult>((await Evidence(w, ScenarioWorld.Stranger).Accepted(w.UmbrellaId, default)).Result).Value).ToList();

@@ -327,7 +327,11 @@ public sealed record EventEvidenceRecord(
     /// <summary>"Confirms" votes on it; the public list is ranked by these (event-scenario-gaps).</summary>
     int PositiveVotes = 0,
     /// <summary>When it was caught, from the file itself; null when the file does not say.</summary>
-    DateTime? CaughtAtUtc = null);
+    DateTime? CaughtAtUtc = null,
+    /// <summary>When the organizers chose it for the place's page; it shows a week later (10/25/2026).</summary>
+    DateTime? OnPlaceChosenUtc = null,
+    /// <summary>When the guest said keep it off the place's page; null when they haven't.</summary>
+    DateTime? PlaceOptOutUtc = null);
 
 // ── Tours (item 233) ─────────────────────────────────────────────────────────
 // Ben, 2026-09-10: "Tours are public so, they show up on the map and are searchable." A tour is

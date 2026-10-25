@@ -1108,7 +1108,9 @@ public sealed partial class FieldSessionUploadController : BenControllerBase
             session.OrgCalendarEventId,
             session.HostedEventId,
             session.EventResultsConsentAtUtc,
-            session.ShownWithEventResultsAtUtc);
+            session.ShownWithEventResultsAtUtc,
+            session.OnPlaceChosenUtc,
+            session.PlaceOptOutUtc);
 }
 
 /// <summary>The few facts read out of a session document so sessions can be listed without
@@ -1228,7 +1230,10 @@ public sealed record FieldSessionRecord(
     // The sender's agreement to show it with a hosted event's results, and the organizer's choice to
     // (event-scenario-gaps). Trailing and defaulted.
     DateTime? EventResultsConsentAtUtc = null,
-    DateTime? ShownWithEventResultsAtUtc = null);
+    DateTime? ShownWithEventResultsAtUtc = null,
+    // When the organizers chose it for the place's page, and when the sender said keep it off (10/25/2026).
+    DateTime? OnPlaceChosenUtc = null,
+    DateTime? PlaceOptOutUtc = null);
 
 /// <summary>A session and its document, for playing back.</summary>
 public sealed record FieldSessionDetail(FieldSessionRecord Session, string Document);

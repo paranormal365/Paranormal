@@ -32,6 +32,7 @@ public static class EventSessionPublication
             .Where(s => s.HostedEventId != null && s.InvestigationId == null
                      && s.EventResultsConsentAtUtc != null && s.ShownWithEventResultsAtUtc != null
                      && db.HostedEvents.Any(h => h.Id == s.HostedEventId && h.CollectsEvidence
+                                              && h.FindingsPublishedUtc != null
                                               && Showing.Contains(h.LifecycleState)
                                               && h.Place.Kind == PlaceKind.PublicLocation));
 

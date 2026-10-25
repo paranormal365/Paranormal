@@ -112,22 +112,37 @@ public static class ArchiveEvidencePublication
     /// <summary>True when an anonymous caller may receive this evidence file's bytes.</summary>
     public static Task<bool> MayServeAsync(
         BenDataContext db, Guid submissionId, CancellationToken ct)
-        => db.EventEvidenceSubmissions.AsNoTracking()
-            .AnyAsync(e => e.Id == submissionId
-                        && e.PublishedToPlaceAtUtc != null
-                        && e.ArchiveReviewState == FeedMediaReviewState.Approved
-                        && e.OrgCalendarEvent.PlaceId != null
-                        && e.OrgCalendarEvent.Place!.Kind == PlaceKind.PublicLocation, ct);
+        => OnThePlace(db, DateTime.UtcNow).AnyAsync(e => e.Id == submissionId, ct);
+
+    /// <summary>
+    /// Evidence on its place's page: published there by the guest themselves, or chosen by the organizer of a
+    /// hosted event whose findings are public, a week after it was chosen and with no "keep it off" from the
+    /// guest (10/25/2026). Only ever at a public location.
+    /// </summary>
+    internal static IQueryable<EventEvidenceSubmission> OnThePlace(BenDataContext db, DateTime now)
+    {
+        var shownFrom = now - Entities.HostedEventFindingsController.NoticeWeek;
+        return db.EventEvidenceSubmissions.AsNoTracking()
+            .Where(e => e.OrgCalendarEvent.PlaceId != null
+                     && e.OrgCalendarEvent.Place!.Kind == PlaceKind.PublicLocation
+                     && ((e.PublishedToPlaceAtUtc != null && e.ArchiveReviewState == FeedMediaReviewState.Approved)
+                      || (e.Status == EvidenceSubmissionStatus.Accepted
+                          && e.OnPlaceChosenUtc != null && e.OnPlaceChosenUtc <= shownFrom
+                          && e.PlaceOptOutUtc == null
+                          && db.HostedEvents.Any(h => h.Id == e.OrgCalendarEvent.HostedEventId
+                                                   && h.FindingsPublishedUtc != null
+                                                   && h.FindingsOnPlace != FindingsOnPlace.None)
+                          && !db.HostedEventBookings.Any(b => b.HostedEventId == e.OrgCalendarEvent.HostedEventId
+                                                           && b.LeadAppUserId == e.SubmittedByAppUserId
+                                                           && b.FindingsOffPlaceUtc != null))));
+    }
 
     /// <summary>Everything published to this place from an event held there, newest first.</summary>
     public static async Task<IReadOnlyList<PlaceEvidenceRow>> ForPlaceAsync(
         BenDataContext db, Guid placeId, CancellationToken ct)
-        => await db.EventEvidenceSubmissions.AsNoTracking()
-            .Where(e => e.OrgCalendarEvent.PlaceId == placeId
-                     && e.PublishedToPlaceAtUtc != null
-                     && e.ArchiveReviewState == FeedMediaReviewState.Approved
-                     && e.OrgCalendarEvent.Place!.Kind == PlaceKind.PublicLocation)
-            .OrderByDescending(e => e.PublishedToPlaceAtUtc)
+        => await OnThePlace(db, DateTime.UtcNow)
+            .Where(e => e.OrgCalendarEvent.PlaceId == placeId)
+            .OrderByDescending(e => e.PublishedToPlaceAtUtc ?? e.OnPlaceChosenUtc)
             .Select(e => new PlaceEvidenceRow(
                 e.Id,
                 e.OrgCalendarEventId,
@@ -141,7 +156,7 @@ public static class ArchiveEvidencePublication
                 e.OrgCalendarEvent.StartDateTime,
                 e.Note,
                 e.UploadFile.ContentType,
-                e.PublishedToPlaceAtUtc!.Value))
+                (e.PublishedToPlaceAtUtc ?? e.OnPlaceChosenUtc)!.Value))
             .ToListAsync(ct);
 }
 

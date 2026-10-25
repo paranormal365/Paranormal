@@ -297,6 +297,10 @@ public interface IBenEventBookingClient
     Task<(MyHostedEventBookingRecord? Result, string? Error)> AcknowledgeMyHostedEventBookingAsync(
         Guid eventId, CancellationToken token = default);
 
+    /// <summary>The guest's standing no to anything they send being shown on the place's page, or taking it back.</summary>
+    Task<(MyHostedEventBookingRecord? Result, string? Error)> SetMyFindingsOffPlaceAsync(
+        Guid eventId, bool off, CancellationToken token = default);
+
     /// <summary>
     /// Takes a request back, or asks the venue to release a booking it has already confirmed.
     /// </summary>

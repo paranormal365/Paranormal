@@ -960,3 +960,23 @@ public sealed record EventRunMonthsRecord(
     bool IsRun, int Applied, int Cap, DateTime? RunUntil,
     decimal GroupPrice, decimal PersonPrice, int HeldByGroup, int HeldByMe,
     string? WhyNot, bool OnSale);
+
+// ── an event's findings: who sees them, and the location's page (10/25/2026) ──
+
+/// <summary>Where an event's findings stand, as its organizer sees them.</summary>
+/// <param name="PublishedUtc">When they were made public; null while they're the people who were there's.</param>
+/// <param name="OnPlace">What the location's page shows.</param>
+/// <param name="PlaceName">The event's location, for the words on the switch.</param>
+/// <param name="AtPublicPlace">Whether the location can show anything at all (never a private home).</param>
+/// <param name="WhyNotPublish">Why they can't be made public now, or null.</param>
+/// <param name="Pieces">The accepted evidence and the sessions shown, with each one's place state.</param>
+public sealed record EventFindingsRecord(
+    DateTime? PublishedUtc, Ben.Data.Common.Enums.FindingsOnPlace OnPlace, string? PlaceName, bool AtPublicPlace,
+    string? WhyNotPublish, IReadOnlyList<EventFindingPieceRecord> Pieces);
+
+/// <summary>One finding and where it stands on the location's page.</summary>
+/// <param name="Kind">"evidence" or "session".</param>
+/// <param name="ShowsFromUtc">When it appears on the location's page — a week after it was chosen.</param>
+/// <param name="KeptOff">The guest said to keep it off.</param>
+public sealed record EventFindingPieceRecord(
+    Guid Id, string Kind, string Title, string? GuestName, DateTime? ChosenUtc, DateTime? ShowsFromUtc, bool KeptOff);
