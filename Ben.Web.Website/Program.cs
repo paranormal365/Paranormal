@@ -808,6 +808,20 @@ app.MapGet("/media/event-files/{eventId:guid}/{fileId:guid}", async (
         accessToken, httpFactory, ctx, ct);
 }).AllowAnonymous();
 
+// A piece of evidence offered at an event (10/25/2026). The ticket carries the viewer's token when they are signed in, so the
+// people who were there can see findings that aren't public; without one the API serves only what anybody may see.
+app.MapGet("/media/event-evidence/{eventId:guid}/{submissionId:guid}", async (
+    Guid eventId, Guid submissionId, string? t,
+    Ben.Web.Website.Services.MediaTicketService tickets,
+    IHttpClientFactory httpFactory, IConfiguration config,
+    HttpContext ctx, CancellationToken ct) =>
+{
+    var accessToken = string.IsNullOrWhiteSpace(t) ? null : tickets.Unprotect(submissionId, t);
+    return await Ben.Web.Website.Services.MediaProxy.StreamAsync(
+        $"{config["WebApi:BaseUrl"]}/api/events/{eventId}/evidence/{submissionId}/file",
+        accessToken, httpFactory, ctx, ct);
+}).AllowAnonymous();
+
 // What an organizer takes away from an event before its files are removed, as one zip (item 235 phase 12).
 // The organizer's own permission is checked by the API; the ticket carries who they are.
 app.MapGet("/media/event-keep/{orgId:guid}/{eventId:guid}", async (

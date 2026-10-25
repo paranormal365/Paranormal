@@ -108,6 +108,21 @@ public sealed class MediaUrlBuilder : IMediaUrlBuilder
         return url;
     }
 
+    public string EventEvidence(Guid eventId, Guid submissionId)
+    {
+        var cacheKey = $"event-evidence:{eventId}:{submissionId}";
+        if (_urls.TryGetValue(cacheKey, out var cached)) return cached;
+
+        var token = _tokens.AccessToken;
+        var ticket = string.IsNullOrWhiteSpace(token) ? null : _tickets.Protect(submissionId, token);
+        var url = ticket is null
+            ? $"/media/event-evidence/{eventId}/{submissionId}"
+            : $"/media/event-evidence/{eventId}/{submissionId}?t={Uri.EscapeDataString(ticket)}";
+
+        _urls[cacheKey] = url;
+        return url;
+    }
+
     public string EventRoomMedia(Guid eventId, Guid messageId)
     {
         var cacheKey = $"event-room:{eventId}:{messageId}";

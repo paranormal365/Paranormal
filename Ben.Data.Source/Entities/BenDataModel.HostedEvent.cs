@@ -416,6 +416,17 @@ namespace Ben.Data.Source.Entities
         public bool AsksForVotes { get; set; }
 
         /// <summary>
+        /// When the organizer made the findings public (10/25/2026). Null: they stay with the people who were there.
+        /// </summary>
+        public DateTime? FindingsPublishedUtc { get; set; }
+
+        /// <summary>Who made the findings public.</summary>
+        public Guid? FindingsPublishedByAppUserId { get; set; }
+
+        /// <summary>What the findings put on the location's page.</summary>
+        public Ben.Data.Common.Enums.FindingsOnPlace FindingsOnPlace { get; set; }
+
+        /// <summary>
         /// Where the results are: a page the organizer built, or null for the event's own page.
         /// </summary>
         /// <remarks>A path on this site ("/o/group/p/results") or a full https address.</remarks>

@@ -13,7 +13,8 @@ namespace Ben.Data.WebApi.Controllers.Public;
 /// <remarks>
 /// <para><b>Three yeses, asked on every request.</b> The sender's (they were told only the group would see
 /// it), the organizer's (who curates the results, as with evidence), and the event's own standing: on the
-/// public site, taking evidence, at a public place. Withdrawing any of them takes the session off at once,
+/// public site, taking evidence, at a public place, with its findings made public by the organizer
+/// (10/25/2026; until then they are the people who were there's, and this public player shows none of them). Withdrawing any of them takes the session off at once,
 /// with nothing to remember. A session filed with an investigation is never shown this way: that is the
 /// investigation's group's to publish.</para>
 ///
@@ -32,6 +33,7 @@ public static class EventSessionPublication
             .Where(s => s.HostedEventId != null && s.InvestigationId == null
                      && s.EventResultsConsentAtUtc != null && s.ShownWithEventResultsAtUtc != null
                      && db.HostedEvents.Any(h => h.Id == s.HostedEventId && h.CollectsEvidence
+                                              && h.FindingsPublishedUtc != null
                                               && Showing.Contains(h.LifecycleState)
                                               && h.Place.Kind == PlaceKind.PublicLocation));
 

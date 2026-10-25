@@ -18,6 +18,26 @@ public sealed partial class BenAdminClientAdapter
     public Task<(bool Done, string? Error)> SetSessionResultsConsentAsync(Guid sessionId, bool agree, CancellationToken token = default)
         => SendNoBodyAsync(agree ? HttpMethod.Post : HttpMethod.Delete, $"/api/field-sessions/{sessionId}/event-results-consent", token);
 
+    public Task<(bool Done, string? Error)> SetSessionKeptOffPlaceAsync(Guid sessionId, bool keepOff, CancellationToken token = default)
+        => SendNoBodyAsync(keepOff ? HttpMethod.Post : HttpMethod.Delete, $"/api/field-sessions/{sessionId}/keep-off-place", token);
+
+    private static string FindingsUrl(Guid orgId, Guid eventId) => $"/api/organizations/{orgId}/events/{eventId}/after/findings";
+
+    public Task<ItemResult<EventFindingsRecord>> GetEventFindingsAsync(Guid orgId, Guid eventId, CancellationToken token = default)
+        => _api.GetItemAsync<EventFindingsRecord>(FindingsUrl(orgId, eventId), token);
+
+    public Task<(EventFindingsRecord? Result, string? Error)> SetEventFindingsPublishedAsync(Guid orgId, Guid eventId, bool publish, CancellationToken token = default)
+        => _api.SendExpectingReasonAsync<object, EventFindingsRecord>(
+               HttpMethod.Post, $"{FindingsUrl(orgId, eventId)}/{(publish ? "publish" : "unpublish")}", new { }, token);
+
+    public Task<(EventFindingsRecord? Result, string? Error)> SetEventFindingsOnPlaceAsync(Guid orgId, Guid eventId, Ben.Data.Common.Enums.FindingsOnPlace mode, CancellationToken token = default)
+        => _api.SendExpectingReasonAsync<object, EventFindingsRecord>(
+               HttpMethod.Put, $"{FindingsUrl(orgId, eventId)}/place?mode={mode}", new { }, token);
+
+    public Task<(EventFindingsRecord? Result, string? Error)> ChooseEventFindingForPlaceAsync(Guid orgId, Guid eventId, string kind, Guid pieceId, bool show, CancellationToken token = default)
+        => _api.SendExpectingReasonAsync<object, EventFindingsRecord>(
+               HttpMethod.Put, $"{FindingsUrl(orgId, eventId)}/place/{kind}/{pieceId}?show={(show ? "true" : "false")}", new { }, token);
+
     public Task<(bool Done, string? Error)> SetSessionShownWithResultsAsync(Guid sessionId, bool show, CancellationToken token = default)
         => SendNoBodyAsync(show ? HttpMethod.Post : HttpMethod.Delete, $"/api/field-sessions/{sessionId}/event-results", token);
 

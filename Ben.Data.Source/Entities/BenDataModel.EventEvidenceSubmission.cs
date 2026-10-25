@@ -63,6 +63,12 @@ namespace Ben.Data.Source.Entities
         /// </remarks>
         public DateTime? PublishedToPlaceAtUtc { get; set; }
 
+        /// <summary>When the organizer chose this piece for the location's page (10/25/2026).</summary>
+        public DateTime? OnPlaceChosenUtc { get; set; }
+
+        /// <summary>When the guest said to keep this piece off the location's page.</summary>
+        public DateTime? PlaceOptOutUtc { get; set; }
+
         /// <summary>
         /// Moderation state for the ARCHIVE copy — independent of the operator's verdict.
         /// </summary>

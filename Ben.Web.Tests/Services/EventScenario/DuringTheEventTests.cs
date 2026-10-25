@@ -238,6 +238,7 @@ public sealed class DuringTheEventTests
     public async Task An_evidence_section_draws_the_events_accepted_evidence_ranked()
     {
         await using var w = await ScenarioWorld.CreateAsync();
+        await w.ChangeEventAsync(e => e.FindingsPublishedUtc = DateTime.UtcNow);
         await using (var db = await w.Sqlite.NewContextAsync())
         {
             foreach (var (name, confirms) in new[] { ("quiet.wav", 0), ("loud.wav", 1) })

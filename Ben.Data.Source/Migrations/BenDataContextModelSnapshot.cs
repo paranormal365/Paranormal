@@ -2926,8 +2926,14 @@ namespace Ben.Data.Source.Migrations
                         .HasMaxLength(2000)
                         .HasColumnType("nvarchar(2000)");
 
+                    b.Property<DateTime?>("OnPlaceChosenUtc")
+                        .HasColumnType("datetime2");
+
                     b.Property<Guid>("OrgCalendarEventId")
                         .HasColumnType("uniqueidentifier");
+
+                    b.Property<DateTime?>("PlaceOptOutUtc")
+                        .HasColumnType("datetime2");
 
                     b.Property<DateTime?>("PublishedToPlaceAtUtc")
                         .HasColumnType("datetime2");
@@ -4089,11 +4095,17 @@ namespace Ben.Data.Source.Migrations
                     b.Property<DateTime?>("MediaReviewedUtc")
                         .HasColumnType("datetime2");
 
+                    b.Property<DateTime?>("OnPlaceChosenUtc")
+                        .HasColumnType("datetime2");
+
                     b.Property<Guid?>("OrgCalendarEventId")
                         .HasColumnType("uniqueidentifier");
 
                     b.Property<Guid?>("PlaceId")
                         .HasColumnType("uniqueidentifier");
+
+                    b.Property<DateTime?>("PlaceOptOutUtc")
+                        .HasColumnType("datetime2");
 
                     b.Property<bool>("PositionResolved")
                         .HasColumnType("bit");
@@ -4435,6 +4447,15 @@ namespace Ben.Data.Source.Migrations
                     b.Property<int?>("EvidenceDays")
                         .HasColumnType("int");
 
+                    b.Property<int>("FindingsOnPlace")
+                        .HasColumnType("int");
+
+                    b.Property<Guid?>("FindingsPublishedByAppUserId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<DateTime?>("FindingsPublishedUtc")
+                        .HasColumnType("datetime2");
+
                     b.Property<DateTime?>("FirstPublishedUtc")
                         .HasColumnType("datetime2");
 
@@ -4769,6 +4790,9 @@ namespace Ben.Data.Source.Migrations
                     b.Property<string>("DecisionNote")
                         .HasMaxLength(1000)
                         .HasColumnType("nvarchar(1000)");
+
+                    b.Property<DateTime?>("FindingsOffPlaceUtc")
+                        .HasColumnType("datetime2");
 
                     b.Property<DateTime?>("GuestAcknowledgedUtc")
                         .HasColumnType("datetime2");

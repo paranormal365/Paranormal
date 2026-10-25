@@ -225,6 +225,12 @@ public sealed partial class BenAdminClientAdapter
                HttpMethod.Post, $"/api/public/hosted-events/{eventId}/my-booking/acknowledge",
                new { }, token);
 
+    public Task<(MyHostedEventBookingRecord? Result, string? Error)> SetMyFindingsOffPlaceAsync(
+        Guid eventId, bool off, CancellationToken token = default)
+        => _api.SendExpectingReasonAsync<object, MyHostedEventBookingRecord>(
+               off ? HttpMethod.Post : HttpMethod.Delete, $"/api/public/hosted-events/{eventId}/my-booking/findings-off-place",
+               new { }, token);
+
     public Task<(MyHostedEventBookingRecord? StillStanding, string? Error)> WithdrawMyHostedEventBookingAsync(
         Guid eventId, string? reason, CancellationToken token = default)
     {

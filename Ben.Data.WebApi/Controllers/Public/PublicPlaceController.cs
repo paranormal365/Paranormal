@@ -236,8 +236,19 @@ public sealed class PublicPlaceController : ControllerBase
     private static async Task<IReadOnlyList<PublicPlaceSessionRow>> PublishedSessionsAsync(
         BenDataContext db, Guid placeId, CancellationToken ct)
     {
+        // Published here by the sender, or chosen by a hosted event's organizer: shown with its public results,
+        // a week after it was chosen, with no "keep it off" (10/25/2026).
+        var shownFrom = DateTime.UtcNow - Entities.HostedEventFindingsController.NoticeWeek;
+        var shown = EventSessionPublication.Shown(db);
         var rows = await db.FieldSessionUploads.AsNoTracking()
-            .Where(s => s.PlaceId == placeId && s.PublishedAtUtc != null)
+            .Where(s => (s.PlaceId == placeId && s.PublishedAtUtc != null)
+                     || (s.OnPlaceChosenUtc != null && s.OnPlaceChosenUtc <= shownFrom && s.PlaceOptOutUtc == null
+                         && shown.Any(x => x.Id == s.Id)
+                         && db.HostedEvents.Any(h => h.Id == s.HostedEventId && h.PlaceId == placeId
+                                                  && h.FindingsOnPlace != Ben.Data.Common.Enums.FindingsOnPlace.None)
+                         && !db.HostedEventBookings.Any(b => b.HostedEventId == s.HostedEventId
+                                                          && b.LeadAppUserId == s.SubmittedByAppUserId
+                                                          && b.FindingsOffPlaceUtc != null)))
             .OrderByDescending(s => s.StartedAt)
             .Select(s => new PublicPlaceSessionRow(
                 s.Id,
@@ -252,14 +263,15 @@ public sealed class PublicPlaceController : ControllerBase
                 s.ReadingCount,
                 s.MarkerCount,
                 s.DeviceModel,
-                s.PublishedAtUtc!.Value,
+                (s.PublishedAtUtc ?? s.OnPlaceChosenUtc)!.Value,
                 s.DocumentUploadFileId,
                 // Fail-closed, and on the SAME predicate the serving endpoint uses. Listing media
                 // this page cannot serve would draw a gallery of broken frames; the place-kind
                 // clause is what stops a place later corrected to a private residence from
                 // keeping its pictures up. See ArchiveMediaPublication, which owns the rule.
                 s.MediaReviewState == Ben.Data.Common.Enums.FeedMediaReviewState.Approved
-                 && s.Place!.Kind == Ben.Data.Common.Enums.PlaceKind.PublicLocation
+                 && ((s.PlaceId != null && s.Place!.Kind == Ben.Data.Common.Enums.PlaceKind.PublicLocation)
+                     || shown.Any(x => x.Id == s.Id))
                     // Same rule as ArchiveMediaPublication: a recording sent on its own goes by
                     // its UploadFile's id, one inside the session's .ben by its row's id — the
                     // media route takes either. The name and type are finished below, where

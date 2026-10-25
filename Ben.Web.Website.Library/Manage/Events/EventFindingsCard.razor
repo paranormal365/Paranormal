@@ -1,0 +1,170 @@
+@namespace Ben.Web.Website.Library.Manage.Events
+
+@inject IBenAdminClient AdminClient
+@inject IBenUserState UserState
+
+@using Ben.Data.Common.Enums
+@using Ben.Service.Models.Entities
+
+@* Who can see the findings (Ben, 10/25/2026): "The organizer can choose if the findings can be public after the
+   event. They can link it to the event location and make them public there as well." New events start with the
+   people who were there; the organizer picks pieces for the place's page, or shares everything public. Each guest
+   is told, and has a week to say keep it off — and can say so any time. *@
+
+<div class="card mb-3" id="after-findings">
+    <div class="card-header fw-semibold">Who can see the findings</div>
+    <div class="card-body">
+        @if (_error is { Length: > 0 }) { <div class="alert alert-danger py-2" id="findings-error" role="alert">@_error</div> }
+        @if (_note is { Length: > 0 }) { <div class="alert alert-success py-2" id="findings-note" role="status">@_note</div> }
+
+        @if (_findings is null)
+        {
+            <p class="small text-secondary mb-0">@(_loading ? "Reading the findings…" : "The findings couldn't be read just now.")</p>
+        }
+        else
+        {
+            var f = _findings;
+            @if (f.PublishedUtc is { } published)
+            {
+                <p class="mb-2" id="findings-public">
+                    Public since @published.ToViewerLocalTime(UserState).ToString("MM/dd/yyyy"): anybody can see the evidence you
+                    accepted and the sessions you show with the results.
+                </p>
+                <button type="button" class="btn btn-outline-secondary btn-sm" id="findings-unpublish" disabled="@_busy"
+                        @onclick="() => PublishAsync(false)">Share only with the people who were there</button>
+            }
+            else
+            {
+                <p class="mb-2" id="findings-private">
+                    Only the people who were there can see them: your group, the event's staff, and guests with a confirmed place.
+                </p>
+                @if (f.WhyNotPublish is { Length: > 0 } why)
+                {
+                    <p class="small text-secondary mb-0" id="findings-why-not">@why</p>
+                }
+                else
+                {
+                    <button type="button" class="btn btn-primary btn-sm" id="findings-publish" disabled="@_busy"
+                            @onclick="() => PublishAsync(true)">Make the findings public</button>
+                }
+            }
+
+            @if (f.AtPublicPlace && f.PublishedUtc is not null)
+            {
+                var place = f.PlaceName ?? "the place";
+                <hr />
+                <div class="fw-semibold small mb-1">On @(place)'s page</div>
+                <p class="small text-secondary">
+                    Choose pieces to show on the place's page, or show everything public. Each guest is told first and has a
+                    week to say keep it off, and they can say so any time.
+                </p>
+                <div class="d-flex flex-column gap-1 mb-2">
+                    @foreach (var (mode, words) in Modes)
+                    {
+                        var m = mode;
+                        <div class="form-check">
+                            <input class="form-check-input" type="radio" name="findings-on-place" id="@($"findings-place-{m}")"
+                                   checked="@(f.OnPlace == m)" disabled="@_busy" @onchange="() => SetPlaceAsync(m)" />
+                            <label class="form-check-label" for="@($"findings-place-{m}")">@words</label>
+                        </div>
+                    }
+                </div>
+
+                @if (f.Pieces.Count == 0)
+                {
+                    <p class="small text-secondary mb-0" id="findings-no-pieces">Nothing is accepted or shown with the results yet.</p>
+                }
+                else
+                {
+                    <ul class="list-group list-group-flush" id="findings-pieces">
+                        @foreach (var piece in f.Pieces)
+                        {
+                            var p = piece;
+                            <li class="list-group-item d-flex flex-wrap gap-2 align-items-center justify-content-between px-0" data-piece="@p.Id">
+                                <div style="min-width:0;">
+                                    <span style="overflow-wrap:anywhere;">@p.Title</span>
+                                    <span class="small text-secondary">· @(p.Kind == "session" ? "session" : "evidence")@(p.GuestName is { Length: > 0 } g ? $" from {g}" : "")</span>
+                                    <div class="small text-secondary">@State(p)</div>
+                                </div>
+                                @if (!p.KeptOff)
+                                {
+                                    <div class="form-check form-switch mb-0">
+                                        <input class="form-check-input" type="checkbox" id="@($"findings-piece-{p.Id:N}")"
+                                               checked="@(p.ChosenUtc is not null)" disabled="@_busy"
+                                               @onchange="e => ChooseAsync(p, e.Value is true)" />
+                                        <label class="form-check-label small" for="@($"findings-piece-{p.Id:N}")">Show</label>
+                                    </div>
+                                }
+                            </li>
+                        }
+                    </ul>
+                }
+            }
+            else if (!f.AtPublicPlace && f.PlaceName is { Length: > 0 })
+            {
+                <p class="small text-secondary mt-2 mb-0">@f.PlaceName isn't a public place, so nothing from this event goes on its page.</p>
+            }
+        }
+    </div>
+</div>
+
+@code {
+    [Parameter, EditorRequired] public Guid OrgId { get; set; }
+    [Parameter, EditorRequired] public Guid EventId { get; set; }
+
+    private EventFindingsRecord? _findings;
+    private bool _loading = true, _busy;
+    private string? _note, _error;
+
+    private static readonly (FindingsOnPlace Mode, string Words)[] Modes =
+    [
+        (FindingsOnPlace.None, "Show nothing on the place's page"),
+        (FindingsOnPlace.Chosen, "Show the pieces I choose"),
+        (FindingsOnPlace.AllPublic, "Show everything that's public"),
+    ];
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (!firstRender) return;
+        if (!await UserState.WaitUntilAuthReadyAsync(RendererInfo.IsInteractive)) return;
+        var read = await AdminClient.GetEventFindingsAsync(OrgId, EventId);
+        _findings = read.Item;
+        _loading = false;
+        StateHasChanged();
+    }
+
+    private string State(EventFindingPieceRecord p)
+    {
+        if (p.KeptOff) return "The guest asked to keep it off the place's page.";
+        if (p.ShowsFromUtc is not { } from) return "Not on the place's page.";
+        return from > DateTime.UtcNow
+            ? $"Shows on the place's page from {from.ToViewerLocalTime(UserState):MM/dd/yyyy}, unless the guest says no."
+            : "On the place's page.";
+    }
+
+    private async Task PublishAsync(bool publish)
+        => await RunAsync(AdminClient.SetEventFindingsPublishedAsync(OrgId, EventId, publish),
+            publish ? "The findings are public." : "The findings are shared only with the people who were there.");
+
+    private async Task SetPlaceAsync(FindingsOnPlace mode)
+        => await RunAsync(AdminClient.SetEventFindingsOnPlaceAsync(OrgId, EventId, mode), mode switch
+        {
+            FindingsOnPlace.AllPublic => "Everything public is chosen. Each guest has been told, and it shows in a week.",
+            FindingsOnPlace.Chosen => "Choose the pieces to show below.",
+            _ => "Nothing from this event shows on the place's page.",
+        });
+
+    private async Task ChooseAsync(EventFindingPieceRecord piece, bool show)
+        => await RunAsync(AdminClient.ChooseEventFindingForPlaceAsync(OrgId, EventId, piece.Kind, piece.Id, show),
+            show ? "Chosen. The guest has been told, and it shows in a week." : "Taken off the place's page.");
+
+    private async Task RunAsync(Task<(EventFindingsRecord? Result, string? Error)> call, string done)
+    {
+        _busy = true; _note = null; _error = null;
+        var (saved, error) = await call;
+        _busy = false;
+        if (saved is null) { _error = error ?? "That couldn't be changed just now."; return; }
+        _findings = saved;
+        _note = done;
+    }
+}

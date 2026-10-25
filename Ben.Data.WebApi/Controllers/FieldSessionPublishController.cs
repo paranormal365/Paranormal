@@ -277,6 +277,32 @@ public sealed class FieldSessionPublishController : BenControllerBase
     }
 
     /// <summary>
+    /// The sender's no to the organizers showing this session on the place's page (Ben, 10/25/2026), or taking it
+    /// back. Honored at any time.
+    /// </summary>
+    [HttpPost("~/api/field-sessions/{id:guid}/keep-off-place")]
+    public Task<IActionResult> KeepOffPlace(Guid id, CancellationToken ct) => SetKeptOffAsync(id, keepOff: true, ct);
+
+    [HttpDelete("~/api/field-sessions/{id:guid}/keep-off-place")]
+    public Task<IActionResult> AllowOnPlace(Guid id, CancellationToken ct) => SetKeptOffAsync(id, keepOff: false, ct);
+
+    private async Task<IActionResult> SetKeptOffAsync(Guid id, bool keepOff, CancellationToken ct)
+    {
+        var userId = GetCurrentUserId();
+        if (userId == Guid.Empty) return Unauthorized();
+
+        await using var db = await _db.CreateDbContextAsync(ct);
+        var session = await db.FieldSessionUploads.FirstOrDefaultAsync(s => s.Id == id, ct);
+        if (session is null || session.SubmittedByAppUserId != userId) return NotFound();
+
+        session.PlaceOptOutUtc = keepOff ? session.PlaceOptOutUtc ?? DateTime.UtcNow : null;
+        session.DateUpdated = DateTime.UtcNow;
+        session.UpdatedByAppUserId = userId;
+        await db.SaveChangesAsync(ct);
+        return NoContent();
+    }
+
+    /// <summary>
     /// The event's organizer shows a sent session with the results, where anybody can play it — or stops.
     /// </summary>
     /// <remarks>
@@ -285,12 +311,15 @@ public sealed class FieldSessionPublishController : BenControllerBase
     /// screens it.
     /// </remarks>
     [HttpPost("~/api/field-sessions/{id:guid}/event-results")]
-    public Task<IActionResult> ShowWithResults(Guid id, CancellationToken ct) => SetShownAsync(id, show: true, ct);
+    public Task<IActionResult> ShowWithResults(Guid id, CancellationToken ct,
+        [FromServices] Services.PlatformMessageService? messages = null)
+        => SetShownAsync(id, show: true, ct, messages);
 
     [HttpDelete("~/api/field-sessions/{id:guid}/event-results")]
     public Task<IActionResult> StopShowing(Guid id, CancellationToken ct) => SetShownAsync(id, show: false, ct);
 
-    private async Task<IActionResult> SetShownAsync(Guid id, bool show, CancellationToken ct)
+    private async Task<IActionResult> SetShownAsync(Guid id, bool show, CancellationToken ct,
+        Services.PlatformMessageService? messages = null)
     {
         var userId = GetCurrentUserId();
         if (userId == Guid.Empty) return Unauthorized();
@@ -313,9 +342,15 @@ public sealed class FieldSessionPublishController : BenControllerBase
         session.ShownWithEventResultsByAppUserId = show ? userId : null;
         if (show && session.MediaReviewState == FeedMediaReviewState.Pending && session.MediaReviewedUtc is null)
             await ScreenMediaAsync(db, session, ct);
+        // Everything public on the place's page (10/25/2026): a session shown later is chosen too, with its week.
+        var chosen = show && session.OnPlaceChosenUtc is null && hosted.FindingsOnPlace == FindingsOnPlace.AllPublic
+                  && hosted.FindingsPublishedUtc is not null && hosted.Place?.Kind == PlaceKind.PublicLocation;
+        if (chosen) session.OnPlaceChosenUtc = DateTime.UtcNow;
         session.DateUpdated = DateTime.UtcNow;
         session.UpdatedByAppUserId = userId;
         await db.SaveChangesAsync(ct);
+        if (chosen && messages is not null)
+            await Entities.HostedEventFindingsController.TellAsync(messages, hosted, [session.SubmittedByAppUserId], userId, DateTime.UtcNow, ct);
         return NoContent();
     }
 

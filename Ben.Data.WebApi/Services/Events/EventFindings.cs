@@ -26,17 +26,55 @@ public static class EventFindings
             {
                 e.IsPublic, e.OrganizationId, e.HostedEventId,
                 Residence = e.Place != null && e.Place.Kind == PlaceKind.PrivateResidence,
+                // A hosted event's findings are the people who were there's until the organizer publishes
+                // them (10/25/2026). An ordinary calendar event keeps "accepted is public".
+                Unpublished = e.HostedEventId != null
+                           && db.HostedEvents.Any(h => h.Id == e.HostedEventId && h.FindingsPublishedUtc == null),
             })
             .FirstOrDefaultAsync(ct);
         if (row is null) return false;
 
-        if (!row.Residence) return row.IsPublic;
+        if (!row.Residence && !row.Unpublished) return row.IsPublic;
         return userId != Guid.Empty && await WasThereAsync(db, row.OrganizationId, row.HostedEventId, calendarEventId, userId, ct);
     }
 
     /// <summary>Whether a calendar event's findings are open to anybody at all, signed out included.</summary>
     public static async Task<bool> OpenToAllAsync(BenDataContext db, Guid calendarEventId, CancellationToken ct)
         => await MaySeeAsync(db, calendarEventId, Guid.Empty, ct);
+
+    /// <summary>Why the organizer can't publish this event's findings now, or null when they can.</summary>
+    /// <param name="firstStartsUtc">When the event's first night starts: findings arrive from then on.</param>
+    public static string? WhyNotPublish(Ben.Data.Source.Entities.HostedEvent ev, PlaceKind? placeKind, DateTime firstStartsUtc, DateTime now)
+    {
+        if (placeKind == PlaceKind.PrivateResidence)
+            return "This event was at a private home, so its findings stay with the people who were there.";
+        if (HostedEventStates.CalledOff.Contains(ev.LifecycleState))
+            return "This event was called off, so it has no findings to share.";
+        if (now < firstStartsUtc)
+            return "Findings can be shared once the event has started.";
+        return null;
+    }
+
+    /// <summary>
+    /// Makes the findings public, or takes them back to the people who were there, and with them the accepted
+    /// evidence files. The caller saves. A file a guest put on the location's page themselves stays as they left it.
+    /// </summary>
+    public static async Task SetPublishedAsync(BenDataContext db, Ben.Data.Source.Entities.HostedEvent ev, bool published,
+        Guid userId, DateTime now, CancellationToken ct)
+    {
+        ev.FindingsPublishedUtc = published ? now : null;
+        ev.FindingsPublishedByAppUserId = published ? userId : null;
+        if (!published) ev.FindingsOnPlace = FindingsOnPlace.None;
+        ev.DateUpdated = now;
+        ev.UpdatedByAppUserId = userId;
+
+        var files = await db.EventEvidenceSubmissions
+            .Where(s => s.OrgCalendarEvent.HostedEventId == ev.Id && s.Status == EvidenceSubmissionStatus.Accepted
+                     && (published || s.PublishedToPlaceAtUtc == null))
+            .Select(s => s.UploadFile)
+            .ToListAsync(ct);
+        foreach (var f in files) f.IsPublic = published;
+    }
 
     /// <summary>The people who were there: the group, the event's staff, and its confirmed guests or RSVPs.</summary>
     public static async Task<bool> WasThereAsync(

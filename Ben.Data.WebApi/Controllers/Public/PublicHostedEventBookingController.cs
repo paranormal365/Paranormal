@@ -826,6 +826,36 @@ public sealed class PublicHostedEventBookingController : BenControllerBase
         return Ok(await ReloadAsync(db, userId, booking.Id, ct));
     }
 
+    /// <summary>
+    /// The guest's standing no (Ben, 10/25/2026): nothing they send from this event goes on the place's page, whatever
+    /// the organizers choose. Any time — before, during or after the event. Taking it back lets the organizers choose
+    /// again, each piece with its week's notice.
+    /// </summary>
+    [HttpPost("{eventId:guid}/my-booking/findings-off-place")]
+    public Task<ActionResult<MyHostedEventBookingRecord>> KeepFindingsOffPlace(Guid eventId, CancellationToken ct)
+        => SetFindingsOffPlaceAsync(eventId, true, ct);
+
+    [HttpDelete("{eventId:guid}/my-booking/findings-off-place")]
+    public Task<ActionResult<MyHostedEventBookingRecord>> AllowFindingsOnPlace(Guid eventId, CancellationToken ct)
+        => SetFindingsOffPlaceAsync(eventId, false, ct);
+
+    private async Task<ActionResult<MyHostedEventBookingRecord>> SetFindingsOffPlaceAsync(Guid eventId, bool off, CancellationToken ct)
+    {
+        var userId = GetCurrentUserId();
+        if (userId == Guid.Empty) return Unauthorized();
+
+        await using var db = await _db.CreateDbContextAsync(ct);
+        var booking = await Newest(db.HostedEventBookings
+            .Where(b => b.HostedEventId == eventId && b.LeadAppUserId == userId
+                     && b.Status != HostedEventBookingStatus.Cancelled))
+            .FirstOrDefaultAsync(ct);
+        if (booking is null) return NotFound();
+
+        booking.FindingsOffPlaceUtc = off ? booking.FindingsOffPlaceUtc ?? DateTime.UtcNow : null;
+        await db.SaveChangesAsync(ct);
+        return Ok(await ReloadAsync(db, userId, booking.Id, ct));
+    }
+
     // ── withdrawing ──────────────────────────────────────────────────────────
 
     /// <summary>
@@ -1097,7 +1127,9 @@ public sealed class PublicHostedEventBookingController : BenControllerBase
                     g.Id, g.DisplayName, g.AppUserId, g.DietaryNotes, g.SortOrder))
                 .ToList(),
             b.HoldExpiresUtc,
-            TimeZoneId: b.HostedEvent?.TimeZoneId);
+            TimeZoneId: b.HostedEvent?.TimeZoneId,
+            FindingsOffPlaceUtc: b.FindingsOffPlaceUtc,
+            AtPublicPlace: b.HostedEvent?.Place?.Kind == PlaceKind.PublicLocation);
 
     internal static string? Trimmed(string? value)
         => value?.Trim() is { Length: > 0 } v ? v : null;

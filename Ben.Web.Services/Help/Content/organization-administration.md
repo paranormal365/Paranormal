@@ -2347,11 +2347,23 @@ one message.
 - **Sessions from the app aren't held to the window.** The deadline closes the event's page to new
   evidence; a guest can still send a session they recorded in the app afterward.
 - **Sessions in the results.** Under the sessions sent to the event, **Show with the results** puts a
-  session on the event's page, where anybody can play it in the session player with its EVPs marked.
+  session on the event's page, where it can be played in the session player with its EVPs marked —
+  by anybody once the findings are public.
   It needs the sender's yes first: they give it when they send it from the app, or later on the
   website, and the button says *Waiting for the sender's OK* until they do. It's only offered at an
   event that takes evidence, at a public place. **Stop showing** takes it off, and so does the
   sender changing their mind.
+- **Who can see the findings.** At first, the evidence you accept and the sessions you show are seen
+  only by the people who were there: your group, the event's staff, and guests with a confirmed place.
+  Once the event has started, **Make the findings public** opens them to anybody; **Share only with
+  the people who were there** takes them back. An event at a private home always keeps its findings
+  with the people who were there.
+- **On the place's page.** Once the findings are public, at a public place, you can show them on the
+  place's page too: **Show the pieces I choose**, with a **Show** switch beside each piece, or **Show
+  everything that's public**, which also takes in anything you accept later. Each guest gets a message
+  the day their piece is chosen, and it appears a week later. A guest can say **Keep it off** at any
+  time, before or after it appears, for one piece or for everything from their booking, and the
+  piece is marked so you can see why it isn't there.
 - **The results.** When the evidence is ready, **Send the results letter** emails everybody who had
   a place, including those who missed it, with a link and a QR code to the results. The link goes to
   the event's page, or to a page you built: add the section **An event's evidence** to one of your
@@ -2360,6 +2372,8 @@ one message.
 - **Reviews** can only come from people who had a confirmed place, for two months after the event.
   You can hide a review from the page, but you can't change what it says, and the person who wrote
   it still sees it, marked as hidden. Turning reviews off stops new ones.
+
+![Who can see the findings](help-media:organization-administration/event-findings.png)
 
 **Files are kept for 90 days after the last date.** After that, the event's files, its gallery
 pictures and the links to photos in its room are removed. The event itself stays, with its

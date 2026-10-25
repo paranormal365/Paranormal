@@ -34,6 +34,8 @@ day-by-day account of building it would say nothing to anyone using it now.
 ## Unreleased
 
 - Evidence from an event held at someone's home is shown only to the people who were there: the organizers, the event's staff and its confirmed guests.
+- An event's findings are seen first only by the people who were there, and the organizers choose when to make them public, from After the event.
+- Organizers can show an event's findings on the place's page, piece by piece or all at once; each guest is told first, it appears a week later, and a guest can keep theirs off at any time.
 - A published show can run longer than a month: each extra month is half the price of a credit, up to a year in all, bought from the show's own page. Extra months only lengthen a run, come back if the show is called off, and lapse a year after they're bought.
 - Calling an event off can tell everybody with a place the new date, or how to get their money back.
 - One event credit covers one event: days in a row, like a weekend, or a show's run of performances within a month of the first. Another weekend, or performances after that month, are their own event.

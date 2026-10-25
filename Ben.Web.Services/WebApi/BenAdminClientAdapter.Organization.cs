@@ -225,11 +225,21 @@ public sealed partial class BenAdminClientAdapter
         return (error is null, error);
     }
 
+    public async Task<(bool Ok, string? Error)> SetEvidenceKeptOffPlaceAsync(
+        Guid eventId, Guid submissionId, bool keepOff, CancellationToken token = default)
+    {
+        var (_, error) = await _api.SendExpectingReasonAsync<object, object>(
+            keepOff ? HttpMethod.Post : HttpMethod.Delete,
+            $"/api/events/{eventId}/evidence/{submissionId}/keep-off-place", new { }, token);
+        return (error is null, error);
+    }
+
     public Task<LoadResult<EventEvidenceRecord>> GetMyEventEvidenceAsync(Guid eventId, CancellationToken token = default)
         => _api.GetListAsync<EventEvidenceRecord>($"/api/events/{eventId}/evidence/mine", token);
 
     public Task<LoadResult<EventEvidenceRecord>> GetAcceptedEventEvidenceAsync(Guid eventId, CancellationToken token = default)
-        => _api.GetAnonymousListAsync<EventEvidenceRecord>($"/api/events/{eventId}/evidence/accepted", token);
+        // Signed in when the viewer is: the people who were there may see findings that aren't public (10/25/2026).
+        => _api.GetListAsync<EventEvidenceRecord>($"/api/events/{eventId}/evidence/accepted", token);
 
     public Task<LoadResult<EventEvidenceRecord>> GetEvidenceQueueAsync(Guid orgId, CancellationToken token = default)
         => _api.GetListAsync<EventEvidenceRecord>($"/api/organizations/{orgId}/evidence-submissions", token);

@@ -378,7 +378,11 @@ public interface IBenOrganizationClient
     Task<(bool Ok, string? Error)> RetractEvidenceFromPlaceAsync(
         Guid eventId, Guid submissionId, CancellationToken token = default);
 
-    /// <summary>Accepted evidence — the public half of the record. Anonymous.</summary>
+    /// <summary>The guest's say over the organizers showing it on the place's page: keep it off, or allow it.</summary>
+    Task<(bool Ok, string? Error)> SetEvidenceKeptOffPlaceAsync(
+        Guid eventId, Guid submissionId, bool keepOff, CancellationToken token = default);
+
+    /// <summary>Accepted evidence, for anybody when the findings are public and the people who were there when not.</summary>
     Task<LoadResult<EventEvidenceRecord>> GetAcceptedEventEvidenceAsync(Guid eventId, CancellationToken token = default);
 
     /// <summary>Submissions waiting on this group's answer.</summary>

@@ -18,6 +18,21 @@ public interface IBenEventScenarioClient
     /// <summary>The sender agrees (or withdraws agreeing) that their session may be shown with an event's results.</summary>
     Task<(bool Done, string? Error)> SetSessionResultsConsentAsync(Guid sessionId, bool agree, CancellationToken token = default);
 
+    /// <summary>The sender keeps their session off the place's page, or lets the organizers show it there.</summary>
+    Task<(bool Done, string? Error)> SetSessionKeptOffPlaceAsync(Guid sessionId, bool keepOff, CancellationToken token = default);
+
+    /// <summary>An event's findings, for its organizer: who can see them, and what the place's page shows.</summary>
+    Task<ItemResult<EventFindingsRecord>> GetEventFindingsAsync(Guid orgId, Guid eventId, CancellationToken token = default);
+
+    /// <summary>Makes the findings public, or takes them back to the people who were there.</summary>
+    Task<(EventFindingsRecord? Result, string? Error)> SetEventFindingsPublishedAsync(Guid orgId, Guid eventId, bool publish, CancellationToken token = default);
+
+    /// <summary>What the place's page shows: nothing, the pieces chosen, or everything public.</summary>
+    Task<(EventFindingsRecord? Result, string? Error)> SetEventFindingsOnPlaceAsync(Guid orgId, Guid eventId, Ben.Data.Common.Enums.FindingsOnPlace mode, CancellationToken token = default);
+
+    /// <summary>Chooses one piece (kind "evidence" or "session") for the place's page, or takes it off.</summary>
+    Task<(EventFindingsRecord? Result, string? Error)> ChooseEventFindingForPlaceAsync(Guid orgId, Guid eventId, string kind, Guid pieceId, bool show, CancellationToken token = default);
+
     /// <summary>The organizer shows a sent session with the event's results, or stops.</summary>
     Task<(bool Done, string? Error)> SetSessionShownWithResultsAsync(Guid sessionId, bool show, CancellationToken token = default);
 

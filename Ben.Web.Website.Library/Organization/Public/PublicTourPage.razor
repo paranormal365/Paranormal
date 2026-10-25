@@ -174,7 +174,7 @@ else
                     {
                         <div class="py-2 border-bottom d-flex justify-content-between gap-3 flex-wrap">
                             <div>
-                                <a href="@AdminClient.GetEventEvidenceFileUrl(mine.OrgCalendarEventId, mine.Id)"
+                                <a href="@MediaUrls.EventEvidence(mine.OrgCalendarEventId, mine.Id)"
                                    target="_blank" rel="noopener">@mine.FileName</a>
                                 <div class="text-secondary small">
                                     @mine.EventTitle · @mine.DateCreated.ToViewerLocalTime(UserState).ToString("MM/dd/yyyy")

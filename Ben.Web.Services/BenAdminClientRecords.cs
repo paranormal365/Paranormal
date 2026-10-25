@@ -1680,7 +1680,11 @@ public sealed record FieldSessionSummaryRecord(
     /// <summary>When the sender agreed it may be shown with the event's results (event-scenario-gaps).</summary>
     DateTime? EventResultsConsentAtUtc = null,
     /// <summary>When the organizer chose to show it with the event's results.</summary>
-    DateTime? ShownWithEventResultsAtUtc = null)
+    DateTime? ShownWithEventResultsAtUtc = null,
+    /// <summary>When the organizers chose it for the place's page; it shows a week later (10/25/2026).</summary>
+    DateTime? OnPlaceChosenUtc = null,
+    /// <summary>When the sender said keep it off the place's page; null when they haven't.</summary>
+    DateTime? PlaceOptOutUtc = null)
 {
     /// <summary>Whether it belongs to a group's record rather than to the person alone.</summary>
     public bool IsGroupWork => InvestigationId is not null || OrgCalendarEventId is not null || HostedEventId is not null;
