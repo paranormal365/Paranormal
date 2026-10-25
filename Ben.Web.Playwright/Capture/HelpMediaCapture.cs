@@ -3192,8 +3192,15 @@ public sealed class HelpMediaCapture : BenTestBase
         if (await Page.Locator("#after-thank-you-note").CountAsync() > 0)
             await Page.Locator("#after-thank-you-note").FillAsync(
                 "Thank you for spending the weekend with us at the Thomas House. We'll be back in March.");
+        // The card, not the whole page: the page is taller than the window now, and Chrome leaves what is
+        // below the fold of an element shot blank.
         await ShootAsync("organization-administration", "event-after.png", gated: true,
-            selector: ".container-fluid", proves: "Thank-you email");
+            selector: "#after-thank-you", proves: "Thank-you email");
+
+        // Who can see the findings (10/25/2026), on its own.
+        await Expect(Page.Locator("#findings-private")).ToBeVisibleAsync(new() { Timeout = 30_000 });
+        await ShootAsync("organization-administration", "event-findings.png", gated: true,
+            selector: "#after-findings", proves: "Who can see the findings");
     }
 
     /// <summary>Keeping an event's files before they are removed (item 235 phase 12).</summary>

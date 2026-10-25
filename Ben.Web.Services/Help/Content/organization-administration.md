@@ -2373,6 +2373,8 @@ one message.
   You can hide a review from the page, but you can't change what it says, and the person who wrote
   it still sees it, marked as hidden. Turning reviews off stops new ones.
 
+![Who can see the findings](help-media:organization-administration/event-findings.png)
+
 **Files are kept for 90 days after the last date.** After that, the event's files, its gallery
 pictures and the links to photos in its room are removed. The event itself stays, with its
 bookings, program and reviews, and guests keep their own photos — a photo a guest shared with you
