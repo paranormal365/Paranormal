@@ -62,7 +62,10 @@ namespace Ben.Data.Source.Migrations
 
             // Findings already public stay public (10/25/2026): an event at a public place with any accepted
             // evidence or a session shown with its results counts as published. New events start private.
+            // EXEC so SQL Server compiles it when it runs: in the idempotent deploy script it shares a batch with the
+            // ALTERs that add FindingsPublishedUtc, and a batch is compiled whole, before that column exists.
             migrationBuilder.Sql("""
+                EXEC(N'
                 UPDATE h SET h.FindingsPublishedUtc = SYSUTCDATETIME()
                 FROM HostedEvents h
                 JOIN Places p ON p.Id = h.PlaceId
@@ -72,6 +75,7 @@ namespace Ben.Data.Source.Migrations
                                WHERE c.HostedEventId = h.Id AND s.Status = 1)
                     OR EXISTS (SELECT 1 FROM FieldSessionUploads u
                                WHERE u.HostedEventId = h.Id AND u.ShownWithEventResultsAtUtc IS NOT NULL));
+                ');
                 """);
         }
 
