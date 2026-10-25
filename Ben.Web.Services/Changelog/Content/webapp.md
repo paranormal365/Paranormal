@@ -31,7 +31,7 @@ it is hidden from everybody else, but still takes its number. No other sub-headi
 1.0.0 holds everything up to going live, summarized rather than listed: the site was not yet open, and a
 day-by-day account of building it would say nothing to anyone using it now.
 
-## Unreleased
+## 2.22.0 · 2026-10-25
 
 - Asking for another email confirmation link sends the same link again while it's still good, so an earlier email doesn't stop working.
 - Evidence from an event held at someone's home is shown only to the people who were there: the organizers, the event's staff and its confirmed guests.
