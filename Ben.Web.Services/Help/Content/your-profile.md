@@ -122,15 +122,17 @@ invitations, or appearing under an address that isn't theirs.
 the card tells you the link has been sent. If the site isn't set up to send email — which is
 normal on a test system — the page shows you the link instead so you can copy it.
 
-To get another link, press **Send confirmation link** next to an unconfirmed address.
+To get the link again, press **Send confirmation link** next to an unconfirmed address. It sends the
+same link, so any of the emails you have will work.
 
 Opening the link shows the address, partly hidden, and a **Confirm** button. You don't have to
 be signed in, and you can open it on any device. The address is only confirmed when you press the
 button, so an email scanner that follows links can't confirm it for you.
 
-Links last seven days, and you can ask for a new one only once a minute. Asking for a new link
-cancels the old one. If you later edit the address, it's no longer confirmed and goes back to
-private, because the new address hasn't been confirmed.
+A link lasts seven days from the last time it was sent, and you can send it only once a minute.
+After seven days it stops working, and sending again gives you a new one. If you edit the address,
+the old link stops working, and the address is no longer confirmed and goes back to private,
+because the new address hasn't been confirmed.
 
 ## Your investigation map
 

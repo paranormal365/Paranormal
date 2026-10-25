@@ -33,6 +33,7 @@ day-by-day account of building it would say nothing to anyone using it now.
 
 ## Unreleased
 
+- Asking for another email confirmation link sends the same link again while it's still good, so an earlier email doesn't stop working.
 - Evidence from an event held at someone's home is shown only to the people who were there: the organizers, the event's staff and its confirmed guests.
 - An event's findings are seen first only by the people who were there, and the organizers choose when to make them public, from After the event.
 - Organizers can show an event's findings on the place's page, piece by piece or all at once; each guest is told first, it appears a week later, and a guest can keep theirs off at any time.

@@ -571,8 +571,12 @@ public sealed class MyContactInfoController : BenControllerBase
     /// would eventually disagree about the token's lifetime or about what happens when there is no
     /// mail server.</para>
     ///
-    /// <para><b>Regenerating retires whatever link was already out there.</b> Only the newest may
-    /// be redeemed, so an old email sitting in an inbox cannot confirm a since-changed address.</para>
+    /// <para><b>Sending again sends the same link while it is still good</b> (10/25/2026). It used to make a
+    /// new one and retire the old, and since letters are posted a few minutes after they are queued, the
+    /// first email to arrive could carry the link the profile had already retired: Ben's own confirmation
+    /// said "We can't find that link". Changing the address still retires it (the update clears the
+    /// token), so an old email can never confirm a since-changed address; only an expired link is replaced.
+    /// Each send restarts its week.</para>
     ///
     /// <para><b>The link comes back whether or not it was emailed.</b> On a machine with no SMTP —
     /// which is every development machine — the caller shows it instead, so the flow is walkable.
@@ -591,7 +595,9 @@ public sealed class MyContactInfoController : BenControllerBase
     {
         var before = new UserEmail { Id = entity.Id, DateValidationSent = entity.DateValidationSent };
 
-        entity.ValidationToken = GenerateToken();
+        var stillGood = !string.IsNullOrEmpty(entity.ValidationToken)
+                     && entity.DateValidationSent is { } sent && DateTime.UtcNow - sent <= ValidationLifetime;
+        if (!stillGood) entity.ValidationToken = GenerateToken();
         entity.DateValidationSent = DateTime.UtcNow;
         await db.SaveChangesAsync(ct);
 
