@@ -30,6 +30,18 @@ public static class EventCreditViews
                 c.RefundedUtc, c.ReceiptNumber, c.GrantedReason))
             .ToListAsync(ct);
 
+        var runMonths = await db.EventRunMonths.AsNoTracking()
+            .Where(m => organizationId != null
+                ? m.OwnerOrganizationId == organizationId
+                : m.OwnerAppUserId == appUserId)
+            .OrderByDescending(m => m.PurchasedUtc)
+            .Select(m => new OrgEventRunMonthRecord(
+                m.Id, m.PriceAtPurchase, m.Currency, m.PurchasedUtc, m.ExpiresUtc,
+                m.AppliedToHostedEventId,
+                m.AppliedToHostedEvent != null ? m.AppliedToHostedEvent.Name : null,
+                m.RefundedUtc, m.ReceiptNumber, m.GrantedReason))
+            .ToListAsync(ct);
+
         var offer = await EventCreditOffer.ReadAsync(db, ct);
 
         // A person buying for themselves is not a group, so has no plan to be a subscriber of.
@@ -51,6 +63,7 @@ public static class EventCreditViews
             Bundles: [.. offer.Bundles.Select(b => new EventCreditBundleOffer(
                 b.Quantity, b.Price,
                 EventCreditPricing.Quote(offer.UnitPrice, b.Quantity, b, subscriber, offer.SubscriberPercent).Payable,
-                EventCreditPricing.AtPercent(b.Price, offer.SubscriberPercent)))]);
+                EventCreditPricing.AtPercent(b.Price, offer.SubscriberPercent)))],
+            RunMonths: runMonths);
     }
 }

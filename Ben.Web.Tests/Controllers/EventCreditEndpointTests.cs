@@ -134,6 +134,48 @@ public sealed class EventCreditEndpointTests
         Assert.Equal(4, view.Credits.Count);
     }
 
+    /// <summary>
+    /// 10/25/2026: a month that came back from a called-off show was kept, but nothing on the billing card
+    /// listed it, so the group couldn't see it was there to use.
+    /// </summary>
+    [Fact]
+    public async Task The_card_lists_extra_months_held_and_on_a_show()
+    {
+        var f = await SeedAsync();
+        var now = DateTime.UtcNow;
+        await using (var db = await f.CreateDbContextAsync())
+        {
+            var show = new HostedEvent
+            {
+                Id = Guid.NewGuid(), OrganizationId = OrgId, Name = "Dracula", UrlName = "dracula",
+                StartsOn = now.Date, EndsOn = now.Date.AddDays(40), TimeZoneId = "America/Chicago",
+                DateCreated = now, CreatedByAppUserId = OwnerId,
+            };
+            db.HostedEvents.Add(show);
+            EventRunMonth Month(Guid? on = null) => new()
+            {
+                Id = Guid.NewGuid(), OwnerOrganizationId = OrgId, PriceAtPurchase = 49.5m, PurchasedUtc = now.AddDays(-3),
+                ExpiresUtc = now.AddYears(1), AppliedToHostedEventId = on, AppliedUtc = on is null ? null : now,
+                ReceiptNumber = "R-1", DateCreated = now, CreatedByAppUserId = OwnerId,
+            };
+            db.EventRunMonths.AddRange(Month(), Month(show.Id));
+            // Somebody else's month is not this group's to see.
+            db.EventRunMonths.Add(new EventRunMonth
+            {
+                Id = Guid.NewGuid(), OwnerAppUserId = AdminId, PriceAtPurchase = 49.5m, PurchasedUtc = now,
+                ExpiresUtc = now.AddYears(1), DateCreated = now, CreatedByAppUserId = AdminId,
+            });
+            await db.SaveChangesAsync();
+        }
+
+        var view = View(await BuildBilling(f).GetEventCredits(OrgId, default));
+
+        var months = Assert.IsAssignableFrom<IReadOnlyList<OrgEventRunMonthRecord>>(view.RunMonths);
+        Assert.Equal(2, months.Count);
+        Assert.Single(months, m => m.AppliedToHostedEventId is null);
+        Assert.Single(months, m => m.AppliedToEventName == "Dracula");
+    }
+
     [Fact]
     public async Task The_card_carries_the_price_so_the_buy_control_is_not_a_guess()
     {

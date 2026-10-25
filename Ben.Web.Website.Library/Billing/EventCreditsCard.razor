@@ -141,6 +141,49 @@
                     </table>
                 </div>
             }
+
+            @* Extra months for a show's run (10/25/2026). Not credits, so their own list: a month that came back
+               from a called-off show waits here until it's added to another, and nothing else showed it. *@
+            @if (view.RunMonths is { Count: > 0 } months)
+            {
+                var held = months.Count(m => RunMonthState(m) == "Ready");
+                <h3 class="h6 mt-4" id="run-months">Extra months for a show's run</h3>
+                <p class="small text-secondary" data-testid="run-months-held">
+                    @(held switch
+                    {
+                        0 => "None are waiting to be used.",
+                        1 => "1 is waiting to be used. Add it from the page of a show that's running or coming up.",
+                        var n => $"{n} are waiting to be used. Add them from the page of a show that's running or coming up.",
+                    })
+                    Each one lengthens a show's run by a month, and lapses a year after it's bought.
+                </p>
+                <div class="table-responsive">
+                    <table class="table table-sm align-middle mb-0" data-testid="run-months-table">
+                        <thead><tr>
+                            <th>Bought</th><th>Good until</th><th>Status</th>
+                            <th class="text-end">Paid</th><th>Receipt</th>
+                        </tr></thead>
+                        <tbody>
+                        @foreach (var m in months)
+                        {
+                            <tr>
+                                <td class="text-nowrap">@m.PurchasedUtc.ToString("MM/dd/yyyy")</td>
+                                <td class="text-nowrap">@m.ExpiresUtc.ToString("MM/dd/yyyy")</td>
+                                <td>
+                                    <span class="badge @RunMonthBadge(m) me-2">@RunMonthWords(m)</span>
+                                    @if (m.AppliedToEventName is { } show && m.RefundedUtc is null)
+                                    {
+                                        <span>@show</span>
+                                    }
+                                </td>
+                                <td class="text-end text-nowrap">@(m.GrantedReason is null ? $"${m.PriceAtPurchase:0.00}" : "Given to you")</td>
+                                <td class="text-nowrap">@(m.ReceiptNumber ?? "—")</td>
+                            </tr>
+                        }
+                        </tbody>
+                    </table>
+                </div>
+            }
         }
     </div>
 </div>
@@ -199,6 +242,27 @@
          : c.SpentUtc is not null ? "Spent on"
          : c.ExpiresUtc <= DateTime.UtcNow ? "Expired"
          : "Ready";
+
+    private static string RunMonthState(OrgEventRunMonthRecord m)
+        => m.RefundedUtc is not null ? "Refunded"
+         : m.AppliedToHostedEventId is not null ? "On"
+         : m.ExpiresUtc <= DateTime.UtcNow ? "Expired"
+         : "Ready";
+
+    private static string RunMonthWords(OrgEventRunMonthRecord m) => RunMonthState(m) switch
+    {
+        "On" => "On the show",
+        "Ready" => "Ready to use",
+        var s => s,
+    };
+
+    private static string RunMonthBadge(OrgEventRunMonthRecord m) => RunMonthState(m) switch
+    {
+        "Refunded" => "bg-secondary",
+        "On" => "bg-info",
+        "Expired" => "bg-warning text-dark",
+        _ => "bg-success",
+    };
 
     private static string CreditBadge(OrgEventCreditRecord c)
         => c.RefundedUtc is not null ? "bg-secondary"
