@@ -31,6 +31,15 @@ it is hidden from everybody else, but still takes its number. No other sub-headi
 1.0.0 holds everything up to going live, summarized rather than listed: the site was not yet open, and a
 day-by-day account of building it would say nothing to anyone using it now.
 
+## Unreleased
+
+- Your billing page lists your extra months for a show's run: the ones ready to use, the ones on a show, and past ones.
+- Archiving an event keeps its findings as they were, and the guests at a called-off event can still see what was found.
+
+### Administration
+
+- Making an event's findings public or private, and choosing what shows on the place's page, is recorded in the audit log.
+
 ## 2.22.0 · 2026-10-25
 
 - Asking for another email confirmation link sends the same link again while it's still good, so an earlier email doesn't stop working.
