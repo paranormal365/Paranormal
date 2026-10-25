@@ -31,6 +31,10 @@ it is hidden from everybody else, but still takes its number. No other sub-headi
 1.0.0 holds everything up to going live, summarized rather than listed: the site was not yet open, and a
 day-by-day account of building it would say nothing to anyone using it now.
 
+## Unreleased
+
+- One event credit covers one event: days in a row, like a weekend, or a show's run of performances within a month of the first. Another weekend, or performances after that month, are their own event.
+
 ## 2.21.0 · 2026-10-24
 
 - The brochures at the bottom of the home page show today's prices and the app as it is now, in more colors, with titles that are easy to read.

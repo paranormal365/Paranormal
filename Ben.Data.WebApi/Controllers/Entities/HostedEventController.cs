@@ -1472,9 +1472,29 @@ public sealed class HostedEventController : OrgCmsControllerBase
 
             if (dates.Any(d => d.Date < request.StartsOn.Date || d.Date > request.EndsOn.Date))
                 return "Every date has to fall between the first and last dates of the run.";
+
+            // One credit, one event (Ben, 10/24/2026). Separate dates are a show's run — a play, a musical —
+            // and one credit covers the run, but not performances beyond a month from the first. A weekend
+            // of ghost hunting or seminars is a stay, days in a row, and each weekend is its own event.
+            // Before this, one credit could cover up to 366 dates across a year.
+            if (RunTooLong(dates) is { } last)
+                return $"A show's run fits within a month of its first performance, and {last.ToString("ddd MM/dd", CultureInfo.InvariantCulture)} is "
+                     + "past that. Make the later performances their own event.";
         }
 
         return null;
+    }
+
+    /// <summary>
+    /// The first performance more than a month after the run's first, or null when the run fits.
+    /// "Within a month": 10/01 to 10/31 fits; 11/01 does not.
+    /// </summary>
+    internal static DateTime? RunTooLong(IEnumerable<DateTime> dates)
+    {
+        var days = dates.Select(d => d.Date).Distinct().OrderBy(d => d).ToList();
+        if (days.Count == 0) return null;
+        var limit = days[0].AddMonths(1);
+        return days.FirstOrDefault(d => d >= limit) is { } late && late != default ? late : null;
     }
 
     /// <summary>
