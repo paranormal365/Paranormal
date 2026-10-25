@@ -516,7 +516,9 @@ public static class CmsEmbed
                 // the same order as the event's page, from the same method (event-scenario-gaps).
                 var umbrella = await db.OrgCalendarEvents.AsNoTracking()
                     .Where(c => c.HostedEventId == ev.Id && c.IsPublic).Select(c => (Guid?)c.Id).FirstOrDefaultAsync(ct);
+                // A page anybody reads: only findings open to anybody (10/25/2026).
                 var ranked = umbrella is Guid calendarId && ev.CollectsEvidence
+                             && await Services.Events.EventFindings.OpenToAllAsync(db, calendarId, ct)
                     ? await Entities.EventEvidenceController.RankedAcceptedAsync(db, calendarId, ct)
                     : [];
                 return record with

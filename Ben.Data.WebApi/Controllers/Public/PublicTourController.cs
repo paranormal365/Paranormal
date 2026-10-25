@@ -106,6 +106,7 @@ public sealed class PublicTourController : BenControllerBase
         var guestGallery = await db.EventEvidenceSubmissions.AsNoTracking()
             .Where(e => e.OrgCalendarEvent.TourId == tour.Id
                      && e.OrgCalendarEvent.IsPublic
+                     && (e.OrgCalendarEvent.Place == null || e.OrgCalendarEvent.Place.Kind != PlaceKind.PrivateResidence)
                      && e.Status == EvidenceSubmissionStatus.Accepted
                      && e.UploadFile.ContentType.StartsWith("image/"))
             .OrderByDescending(e => e.DateCreated)

@@ -148,6 +148,7 @@ public sealed class HostedEventResultsController : OrgCmsControllerBase
             .Select(c => (Guid?)c.Id).FirstOrDefaultAsync(ct);
 
         var items = umbrella is Guid calendarId && ev.CollectsEvidence
+                    && await EventFindings.MaySeeAsync(db, calendarId, GetCurrentUserId() ?? Guid.Empty, ct)
             ? await EventEvidenceController.RankedAcceptedAsync(db, calendarId, ct)
             : [];
 

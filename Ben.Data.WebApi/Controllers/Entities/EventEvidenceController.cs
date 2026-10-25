@@ -420,7 +420,8 @@ public sealed class EventEvidenceController : BenControllerBase
         // Item 87's bargain, enforced at the byte level: accepted evidence at a public event is
         // public, so the file itself becomes fetchable on the anonymous path the public event
         // page uses. Rejected files stay private to the submitter.
-        if (request.Accept)
+        // Not at a private home: those findings stay with the people who were there (10/25/2026).
+        if (request.Accept && await Services.Events.EventFindings.OpenToAllAsync(db, submission.OrgCalendarEventId, ct))
             submission.UploadFile.IsPublic = true;
 
         await db.SaveChangesAsync(ct);
@@ -449,10 +450,9 @@ public sealed class EventEvidenceController : BenControllerBase
         await using var db = await _db.CreateDbContextAsync(ct);
 
         // Anonymous, so the event's own publicity is the gate — a private event's accepted
-        // submissions are not served here regardless of their state.
-        var isPublic = await db.OrgCalendarEvents.AsNoTracking()
-            .AnyAsync(e => e.Id == eventId && e.IsPublic, ct);
-        if (!isPublic) return NotFound();
+        // submissions are not served here regardless of their state — and findings from a private home
+        // go only to the people who were there (10/25/2026).
+        if (!await Services.Events.EventFindings.MaySeeAsync(db, eventId, GetCurrentUserId(), ct)) return NotFound();
 
         return Ok(await RankedAcceptedAsync(db, eventId, ct));
     }
@@ -502,12 +502,13 @@ public sealed class EventEvidenceController : BenControllerBase
     {
         await using var db = await _db.CreateDbContextAsync(ct);
 
-        // The public route: an accepted submission at a public event, servable to anybody.
+        // The public route: an accepted submission at an event whose findings this reader may see — anybody at
+        // a public event, only the people who were there at a private home (10/25/2026).
         var allowed = await db.EventEvidenceSubmissions.AsNoTracking()
-            .AnyAsync(s => s.Id == submissionId
-                        && s.OrgCalendarEventId == eventId
-                        && s.Status == EvidenceSubmissionStatus.Accepted
-                        && s.OrgCalendarEvent.IsPublic, ct);
+                          .AnyAsync(s => s.Id == submissionId
+                                      && s.OrgCalendarEventId == eventId
+                                      && s.Status == EvidenceSubmissionStatus.Accepted, ct)
+                      && await Services.Events.EventFindings.MaySeeAsync(db, eventId, GetCurrentUserId(), ct);
 
         // The archive route: published by its photographer to the place's public record, and not
         // currently held. Independent of the operator's verdict — see ArchiveEvidencePublication.
