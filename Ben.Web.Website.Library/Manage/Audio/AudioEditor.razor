@@ -218,76 +218,9 @@
                             {
                                 @* The preset seeds these; from here they're yours. Every recording is
                                    different, and a threshold that suits a quiet bedroom floods the queue
-                                   in a room with a furnace. *@
-                                <div class="evp-lab__tuning">
-                                    <div class="d-flex align-items-center justify-content-between mb-2">
-                                        <span class="evp-lab__section-head mb-0">Detector settings</span>
-                                        <button type="button" class="btn btn-outline-secondary btn-sm" @onclick="@(() => ApplySensitivityPreset(_scanSensitivity))">
-                                            Reset to @_scanSensitivity
-                                        </button>
-                                    </div>
-
-                                    <div class="mb-2">
-                                        <label class="small d-block" for="audiofilepreview-tolerance-how-far-above-0bad">
-                                            Tolerance: how far above the background a sound must rise,
-                                            <strong>@_scanOptions.ThresholdDb.ToString("0.0") dB</strong>
-                                        </label>
-                                        <input id="audiofilepreview-tolerance-how-far-above-0bad" type="range" class="form-range"
-                                               min="@EvpDetectionOptions.ThresholdRange.Min"
-                                               max="@EvpDetectionOptions.ThresholdRange.Max"
-                                               step="0.5"
-                                               value="@_scanOptions.ThresholdDb"
-                                               @oninput="@(e => SetThreshold(e.Value))" />
-                                        <div class="d-flex justify-content-between small text-secondary">
-                                            <span>lower: finds more, more to review</span>
-                                            <span>higher: only the obvious</span>
-                                        </div>
-                                    </div>
-
-                                    <div class="d-flex gap-3 flex-wrap">
-                                        <label class="small">
-                                            Shortest sound (s)
-                                            <BenTextBox type="number" class="form-control form-control-sm" style="width:90px;"
-                                                        min="@EvpDetectionOptions.MinDurationRange.Min"
-                                                        max="@EvpDetectionOptions.MinDurationRange.Max"
-                                                        step="0.05"
-                                                        Value="@_scanOptions.MinDurationSeconds"
-                                                        OnInput="@(e => SetOption(e.Value, v => _scanOptions = _scanOptions with { MinDurationSeconds = v }))" />
-                                        </label>
-                                        <label class="small">
-                                            Join sounds within (s)
-                                            <BenTextBox type="number" class="form-control form-control-sm" style="width:90px;"
-                                                        min="@EvpDetectionOptions.MergeGapRange.Min"
-                                                        max="@EvpDetectionOptions.MergeGapRange.Max"
-                                                        step="0.05"
-                                                        Value="@_scanOptions.MergeGapSeconds"
-                                                        OnInput="@(e => SetOption(e.Value, v => _scanOptions = _scanOptions with { MergeGapSeconds = v }))" />
-                                        </label>
-                                        <label class="small">
-                                            Context either side (s)
-                                            <BenTextBox type="number" class="form-control form-control-sm" style="width:90px;"
-                                                        min="@EvpDetectionOptions.ContextPadRange.Min"
-                                                        max="@EvpDetectionOptions.ContextPadRange.Max"
-                                                        step="0.1"
-                                                        Value="@_scanOptions.ContextPadSeconds"
-                                                        OnInput="@(e => SetOption(e.Value, v => _scanOptions = _scanOptions with { ContextPadSeconds = v }))" />
-                                        </label>
-                                        <label class="small">
-                                            Longest candidate (s)
-                                            <BenTextBox type="number" class="form-control form-control-sm" style="width:90px;"
-                                                        min="@EvpDetectionOptions.MaxEventRange.Min"
-                                                        max="@EvpDetectionOptions.MaxEventRange.Max"
-                                                        step="0.5"
-                                                        Value="@_scanOptions.MaxEventSeconds"
-                                                        OnInput="@(e => SetOption(e.Value, v => _scanOptions = _scanOptions with { MaxEventSeconds = v }))" />
-                                        </label>
-                                    </div>
-
-                                    @if (_scanOptions.Validate() is { } settingsProblem)
-                                    {
-                                        <div class="text-danger small mt-2">@settingsProblem</div>
-                                    }
-                                </div>
+                                   in a room with a furnace. Every dial the detector has is here (phase 5). *@
+                                <EvpScanSettingsEditor Value="@_scanOptions" ValueChanged="@OnScanOptionsChanged"
+                                                       @bind-Presets="@_scanPresets" />
                             }
                         </div>
 
@@ -336,6 +269,12 @@
                                             @if (heard)
                                             {
                                                 <span class="evp-row__pill evp-row__pill--heard" title="You have listened to this one">heard</span>
+                                            }
+                                            @if (c.IsExploratory)
+                                            {
+                                                @* So nobody wonders why a low score is in the list (phase 5). *@
+                                                <span class="evp-row__pill evp-row__pill--sample"
+                                                      title="The scan found more than fit, and kept this lower-scoring one as a sample. Your ruling on it teaches the detector the most.">sample</span>
                                             }
                                             <span class="evp-row__actions">
                                                 <button type="button" class="btn btn-outline-secondary btn-sm ben-grid-action" @onclick="@(() => PlayCandidateAsync(c))" title="Play this stretch with its surrounding context"><BenIcon Name="play" /></button>
@@ -1111,7 +1050,13 @@
         if (_modalPlayer is not null)
             await _modalPlayer.SetDragModeAsync(_regionDrawMode);
 
-        await RestoreSavedViewAsync();
+        try { await RestoreSavedViewAsync(); }
+        finally
+        {
+            // Whatever happened to the restore, the toolbar is usable from here.
+            _restoreFinished = true;
+            StateHasChanged();
+        }
 
         // Far from non-critical: every one of the eight edit buttons and both Save-as-clip buttons
         // are disabled while there is no file type to save into, so a failed load here turns the
@@ -1690,6 +1635,7 @@
             if (_spectrogramAnalysis != SpectrogramAnalysis.Default with { Scale = _spectrogramAnalysis.Scale } || scale is not ("mel" or "linear"))
                 await ApplySpectrogramAnalysisAsync();
         }
+        await _modalPlayer.SetVoiceBandAsync(_scanOptions.BandLowHz, _scanOptions.BandHighHz);
         if (_showVoiceBand) await _modalPlayer.ToggleVoiceBandOverlayAsync(true);
         if (!_regionDrawMode) await _modalPlayer.SetDragModeAsync(false);
         if (_silenceDetectionEnabled) await _modalPlayer.DetectSilenceAsync(_silenceThresholdDb);
@@ -1702,6 +1648,11 @@
         await ApplyChainToPlayerAsync();
 
         _viewRestored = true;
+        StateHasChanged();
+
+        // After the view, not before it: the presets are a second round trip, and the toolbar
+        // waits for the view (ToolbarState.Ready).
+        await SeedScanSettingsAsync();
         StateHasChanged();
     }
 
@@ -1769,6 +1720,12 @@
     /// saved one is put back.
     /// </summary>
     private bool _viewRestored;
+
+    /// <summary>
+    /// The restore has run, successfully or not. Separate from <see cref="_viewRestored"/>, which
+    /// also allows saving and so must stay false after a failed restore, while the toolbar must not.
+    /// </summary>
+    private bool _restoreFinished;
 
     private async Task SaveViewAsync()
     {
@@ -1956,8 +1913,10 @@
 
     private string SpeedText => _speed.ToString("0.##", System.Globalization.CultureInfo.InvariantCulture) + "×";
 
+    // Ready only once the saved view is applied: a click before then (Select / Scrub, say) was
+    // undone a moment later by the restore putting the saved setting back (10/26/2026).
     private AudioToolbarState ToolbarState => new(
-        Ready:             _modalReady,
+        Ready:             _modalReady && _restoreFinished,
         Scrub:             !_regionDrawMode,
         Spectrogram:       _spectrogramEnabled,
         SpectrogramLabels: _spectrogramLabels,
@@ -1973,7 +1932,8 @@
         CanEdit:           Source.Can.HasFlag(AudioEditorCapabilities.Edit) && CanApplyEdit(),
         HasSelection:      _regionSelection.HasTarget,
         ActiveTab:         _inspectorTab,
-        InspectorOpen:     _inspectorOpen);
+        InspectorOpen:     _inspectorOpen,
+        CustomScan:        EvpDetectionOptions.PresetName(_scanOptions) is null);
 
     private void OpenTab(string tab)
     {
@@ -2211,8 +2171,49 @@
         _scanOptions     = EvpDetectionOptions.FromSensitivity(sensitivity);
     }
 
-    private void SetThreshold(object? raw) =>
-        SetOption(raw, v => _scanOptions = _scanOptions with { ThresholdDb = v });
+    /// <summary>The person's saved scan settings (phase 5), for the Fine-tune list.</summary>
+    private IReadOnlyList<EvpScanPresetRecord> _scanPresets = [];
+
+    /// <summary>
+    /// A change from Fine-tune. When it lands exactly on Low, Medium or High the buttons follow, so
+    /// the record of the scan says which one it was.
+    /// </summary>
+    private async Task OnScanOptionsChanged(EvpDetectionOptions options)
+    {
+        var bandMoved = options.BandLowHz != _scanOptions.BandLowHz || options.BandHighHz != _scanOptions.BandHighHz;
+        _scanOptions = options;
+        if (bandMoved && _modalPlayer is not null && options.BandHighHz > options.BandLowHz)
+            await _modalPlayer.SetVoiceBandAsync(options.BandLowHz, options.BandHighHz);
+        if (EvpDetectionOptions.PresetName(options) is { } name && Enum.TryParse<EvpSensitivity>(name, out var level))
+            _scanSensitivity = level;
+    }
+
+    /// <summary>
+    /// What the next scan starts from: this recording's last scan, else the person's default
+    /// preset, else Medium (phase 5). Settings that are no longer allowed are skipped, not used.
+    /// </summary>
+    private async Task SeedScanSettingsAsync()
+    {
+        var presets = await AdminClient.GetEvpScanPresetsAsync();
+        if (!presets.Failed) _scanPresets = presets.Items;
+
+        if (ScanOptionsFrom(_savedConfig?.EvpScanOptionsJson) is { } lastUsed)
+            await OnScanOptionsChanged(lastUsed);
+        else if (_scanPresets.FirstOrDefault(p => p.IsDefault && p.Problem is null) is { } byDefault)
+            await OnScanOptionsChanged(byDefault.Options);
+    }
+
+    private static EvpDetectionOptions? ScanOptionsFrom(string? json)
+    {
+        if (string.IsNullOrWhiteSpace(json)) return null;
+        try
+        {
+            var options = System.Text.Json.JsonSerializer.Deserialize<EvpDetectionOptions>(
+                json, new System.Text.Json.JsonSerializerOptions(System.Text.Json.JsonSerializerDefaults.Web));
+            return options?.Validate() is null ? options : null;
+        }
+        catch (System.Text.Json.JsonException) { return null; }
+    }
 
     /// <summary>
     /// Applies a numeric input, ignoring values mid-edit. A partially typed number ("0." or "")

@@ -409,6 +409,72 @@ public class AudioEditorTests : BenTestBase
     }
 
     /// <summary>
+    /// Every scan setting can be changed from Fine-tune, a change reaches the scan, a preset can be
+    /// saved, and the settings a recording was last scanned with come back on reopening (phase 5).
+    /// </summary>
+    [Test]
+    public async Task Scan_settings_change_the_scan_and_come_back_with_their_preset()
+    {
+        if (!await ReadyInFullViewAsync(ScannableWav(), "wav", "audio/wav"))
+        {
+            Assert.Ignore("Could not open the editor; see the output for where it gave up.");
+            return;
+        }
+
+        await AudioEditorUi.OpenTabAsync(Modal, "EVP Markers");
+        var panel = Modal.Locator("#evp-markers-panel");
+        await panel.GetByRole(AriaRole.Button, new() { Name = "Fine-tune" }).ClickAsync();
+        var settings = panel.Locator("#evp-scan-settings");
+        await Expect(settings).ToBeVisibleAsync(new() { Timeout = 15_000 });
+        await Expect(settings.Locator("#evp-preset-pick")).ToHaveValueAsync("builtin:Medium");
+
+        async Task<string> ScanAsync()
+        {
+            var scan = panel.GetByRole(AriaRole.Button, new() { Name = "Scan for EVP" });
+            await scan.ClickAsync();
+            await Expect(scan).ToBeEnabledAsync(new() { Timeout = 120_000 });
+            await Expect(panel.Locator(".evp-lab__msg")).ToBeVisibleAsync(new() { Timeout = 30_000 });
+            var scores = await panel.Locator(".evp-row--candidate .evp-score__num").AllInnerTextsAsync();
+            return string.Join(",", scores);
+        }
+
+        var atMedium = await ScanAsync();
+        Assert.That(atMedium, Is.Not.Empty, "Medium should find the test sounds");
+
+        // A setting whose effect cannot be missed: nothing scores 95 or more. (The listening range
+        // was the first choice, but these sounds are loud enough to score 94 either way; that it
+        // reaches the detector is Scan_RecordsEverySettingItRanWith and A_narrower_band_changes_the_scores.)
+        await settings.Locator("#evp-band-high").FillAsync("1000");
+        await settings.Locator("#evp-min-score").FillAsync("95");
+        await Expect(settings.Locator("#evp-preset-pick")).ToHaveValueAsync("custom");
+        // Waited for by what it should say: the button can read "enabled" before the click has
+        // started the scan, and the first scan's message and rows are still on the page then.
+        await panel.GetByRole(AriaRole.Button, new() { Name = "Scan for EVP" }).ClickAsync();
+        await Expect(panel.Locator(".evp-lab__msg")).ToHaveTextAsync("Nothing stood out from the background.",
+            new() { Timeout = 120_000 });
+        var filtered = string.Join(",", await panel.Locator(".evp-row--candidate .evp-score__num").AllInnerTextsAsync());
+        TestContext.Out.WriteLine($"scores at Medium: [{atMedium}], with a lowest score of 95: [{filtered}]");
+        Assert.That(filtered, Is.Empty, "the lowest score did not reach the scan");
+
+        var name = $"Low range {Guid.NewGuid():N}"[..20];
+        await settings.Locator("#evp-preset-save-as").ClickAsync();
+        await settings.Locator("#evp-preset-name").FillAsync(name);
+        await settings.Locator("#evp-preset-save").ClickAsync();
+        await Expect(settings.Locator("#evp-preset-message")).ToContainTextAsync($"Saved \"{name}\"", new() { Timeout = 15_000 });
+        await Expect(settings.Locator("#evp-preset-pick option", new() { HasTextString = name })).ToHaveCountAsync(1);
+
+        await LeaveAndReopenEditorAsync();
+
+        await AudioEditorUi.OpenTabAsync(Modal, "EVP Markers");
+        await panel.GetByRole(AriaRole.Button, new() { Name = "Fine-tune" }).ClickAsync();
+        await Expect(settings.Locator("#evp-band-high")).ToHaveValueAsync("1000", new() { Timeout = 15_000 });
+        await Expect(settings.Locator("#evp-min-score")).ToHaveValueAsync("95");
+        await Expect(settings.Locator("#evp-preset-pick option", new() { HasTextString = name })).ToHaveCountAsync(1);
+        Assert.That(await settings.Locator("#evp-preset-pick").InputValueAsync(), Does.StartWith("saved:"),
+            "the remembered settings are the saved preset's, so the list should say so");
+    }
+
+    /// <summary>
     /// Silence, applied to a region a person drew, produces a file and says it did.
     /// </summary>
     /// <remarks>

@@ -2,6 +2,7 @@ using Ben.Data.Common.Enums;
 using Ben.Data.Source.Context;
 using Ben.Data.Source.Entities;
 using Ben.Service.Models.Entities;
+using System.Text.Json;
 using Microsoft.EntityFrameworkCore;
 
 namespace Ben.Data.WebApi.Services.Audio;
@@ -27,12 +28,13 @@ public sealed class EvpScanRecorder
     /// </summary>
     public const int MaxCandidatesPerScan = 500;
 
-    /// <summary>
-    /// How much a proposal must overlap an already-reviewed span to count as the same event.
-    /// Half is deliberately lenient: the detector's bounds shift slightly with sensitivity, and
-    /// re-proposing something the reviewer already dismissed is worse than missing a near-miss.
-    /// </summary>
-    private const double DuplicateOverlapFraction = 0.5;
+    // How much a proposal must overlap an already-reviewed span to count as the same event is
+    // EvpDetectionOptions.ReviewedOverlapFraction since phase 5. Its default, half, is deliberately
+    // lenient: the detector's bounds shift slightly with sensitivity, and re-proposing something
+    // the reviewer already dismissed is worse than missing a near-miss.
+
+    /// <summary>How a scan's settings are kept: the same shape the editor sends them in.</summary>
+    public static readonly JsonSerializerOptions OptionsJson = new(JsonSerializerDefaults.Web);
 
     private readonly IDbContextFactory<BenDataContext> _dbContextFactory;
     private readonly ILogger<EvpScanRecorder> _logger;
@@ -79,7 +81,8 @@ public sealed class EvpScanRecorder
     /// </remarks>
     public async Task<Replaced> ReplacePendingAsync(
         BenDataContext db, Guid fileId, IEnumerable<AudioCandidateRequest> candidates,
-        Guid createdBy, CancellationToken ct, Func<AudioCandidateRequest, string?>? noteFor = null)
+        Guid createdBy, CancellationToken ct, Func<AudioCandidateRequest, string?>? noteFor = null,
+        Func<AudioCandidateRequest, bool>? exploratory = null)
     {
         var now = DateTime.UtcNow;
         var stale = await db.AudioMarkers
@@ -100,6 +103,7 @@ public sealed class EvpScanRecorder
                 ConfidenceLevel    = EvpConfidenceLevel.Possible,
                 IsAutoDetected     = true,
                 DetectionScore     = c.Score,
+                IsExploratory      = exploratory?.Invoke(c) ?? false,
                 ReviewStatus       = EvpReviewStatus.Pending,
                 Note               = noteFor?.Invoke(c),
                 DateCreated        = now,
@@ -145,15 +149,18 @@ public sealed class EvpScanRecorder
             .ToListAsync(ct);
 
         var proposed = analysis.Candidates
-            .Where(c => !reviewed.Any(r => OverlapsEnough(c, r.TimeSeconds, r.EndSeconds)))
+            .Where(c => !reviewed.Any(r => OverlapsEnough(c, r.TimeSeconds, r.EndSeconds, settings.ReviewedOverlapFraction)))
             .ToList();
         var requests = proposed
             .Select(c => new AudioCandidateRequest(c.StartSeconds, c.EndSeconds, c.Score))
             .ToList();
+        var exploratorySpans = proposed.Where(c => c.Exploratory)
+            .Select(c => (c.StartSeconds, c.EndSeconds)).ToHashSet();
 
         if (CandidateProblem(requests) is { } problem) return (null, problem);
 
-        var replaced = await ReplacePendingAsync(db, fileId, requests, createdBy, ct, noteFor);
+        var replaced = await ReplacePendingAsync(db, fileId, requests, createdBy, ct, noteFor,
+            r => exploratorySpans.Contains((r.StartSeconds, r.EndSeconds)));
         var scanId   = await TryRecordScanAsync(fileId, sensitivity, settings, analysis, proposed, replaced.Fresh, ct);
         return (new Proposed(replaced, scanId), null);
     }
@@ -192,6 +199,9 @@ public sealed class EvpScanRecorder
                 MergeGapSeconds    = settings.MergeGapSeconds,
                 ContextPadSeconds  = settings.ContextPadSeconds,
                 MaxEventSeconds    = settings.MaxEventSeconds,
+                OptionsJson        = JsonSerializer.Serialize(settings, OptionsJson),
+                BandLowHz          = settings.BandLowHz,
+                BandHighHz         = settings.BandHighHz,
                 RecordingSeconds   = analysis.RecordingSeconds,
                 FoundCount         = analysis.Candidates.Count,
                 ProposedCount      = proposed.Count,
@@ -215,6 +225,7 @@ public sealed class EvpScanRecorder
                     PeakBandDb        = c.Features.PeakBandDb,
                     BandLevelSpreadDb = c.Features.BandLevelSpreadDb,
                     ZeroCrossingRate  = c.Features.ZeroCrossingRate,
+                    Exploratory       = c.Exploratory,
                 });
             }
 
@@ -234,7 +245,8 @@ public sealed class EvpScanRecorder
     /// True when a proposal covers enough of an already-reviewed marker to be the same event.
     /// A reviewed point marker (no end) counts as a hit if the proposal simply contains it.
     /// </summary>
-    private static bool OverlapsEnough(EvpCandidate candidate, double reviewedStart, double? reviewedEnd)
+    private static bool OverlapsEnough(
+        EvpCandidate candidate, double reviewedStart, double? reviewedEnd, double overlapFraction)
     {
         if (reviewedEnd is not { } end || end <= reviewedStart)
             return candidate.StartSeconds <= reviewedStart && candidate.EndSeconds >= reviewedStart;
@@ -245,6 +257,6 @@ public sealed class EvpScanRecorder
         // Measured against the shorter of the two, so a long candidate can't dodge the check by
         // dwarfing a short reviewed span (or the reverse).
         var shortest = Math.Min(candidate.DurationSeconds, end - reviewedStart);
-        return shortest > 0 && overlap / shortest >= DuplicateOverlapFraction;
+        return shortest > 0 && overlap / shortest >= overlapFraction;
     }
 }

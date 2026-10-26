@@ -240,6 +240,21 @@ public interface IWebApiClient
 
     // Upload File — Audio Markers (EVP)
     Task<LoadResult<AudioMarkerRecord>> GetAudioMarkersAsync(Guid fileId, CancellationToken token = default);
+
+    // ── EVP scan presets (phase 5) ───────────────────────────────────────────
+    /// <summary>The caller's own saved scan settings. A refusal is a failed result, never an empty list.</summary>
+    Task<LoadResult<EvpScanPresetRecord>> GetEvpScanPresetsAsync(CancellationToken token = default);
+
+    /// <summary>Saves a new preset, or the server's reason it would not.</summary>
+    Task<(EvpScanPresetRecord? Result, string? Error)> CreateEvpScanPresetAsync(
+        SaveEvpScanPresetRequest request, CancellationToken token = default);
+
+    /// <summary>Replaces one of the caller's presets, or the server's reason it would not.</summary>
+    Task<(EvpScanPresetRecord? Result, string? Error)> UpdateEvpScanPresetAsync(
+        Guid id, SaveEvpScanPresetRequest request, CancellationToken token = default);
+
+    /// <summary>Deletes one of the caller's presets, or the server's reason it would not.</summary>
+    Task<(bool Deleted, string? Error)> DeleteEvpScanPresetAsync(Guid id, CancellationToken token = default);
     Task<AudioMarkerRecord?> CreateAudioMarkerAsync(Guid fileId, CreateAudioMarkerRequest request, CancellationToken token = default);
     Task<AudioMarkerRecord?> UpdateAudioMarkerAsync(Guid fileId, Guid markerId, UpdateAudioMarkerRequest request, CancellationToken token = default);
     Task<bool> DeleteAudioMarkerAsync(Guid fileId, Guid markerId, CancellationToken token = default);

@@ -419,4 +419,20 @@ public sealed class AudioApiRoutesTests
         Assert.Null(result);
         Assert.Equal("This recording isn't yours to change.", error);
     }
+
+    /// <summary>
+    /// Every scan setting goes in the body, not just the five there used to be (phase 5). The
+    /// editor once showed a lowest score of 95 and the scan still proposed everything.
+    /// </summary>
+    [Fact]
+    public async Task A_scan_sends_every_setting()
+    {
+        var (client, handler) = Build("[]");
+        var settings = EvpDetectionOptions.FromSensitivity(EvpSensitivity.Medium) with { MinScore = 95, BandHighHz = 1000 };
+
+        await client.ScanAudioForEvpWithReasonAsync(File, EvpSensitivity.Medium, settings);
+
+        Assert.Contains("\"minScore\":95", handler.LastBody);
+        Assert.Contains("\"bandHighHz\":1000", handler.LastBody);
+    }
 }

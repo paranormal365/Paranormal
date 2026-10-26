@@ -276,8 +276,51 @@ public sealed class AudioMarkerController : BenControllerBase
             db, fileId, analysis, sensitivity, settings, userId, ct);
         if (proposed is null) return BadRequest(refusal);
 
+        await TryRememberSettingsAsync(db, source, settings, userId, ct);
+
         AuditReplaced(fileId, proposed.Markers, userId);
         return Ok(_mapper.Map<IEnumerable<AudioMarkerRecord>>(proposed.Markers.Fresh));
+    }
+
+    /// <summary>
+    /// Keeps the settings this scan ran with on the recording, so the next scan of it starts from
+    /// them (phase 5). Only for someone who may change the recording, the same people whose editor
+    /// view is saved; anybody else's scan still runs, it just isn't remembered.
+    /// </summary>
+    /// <remarks>
+    /// Never fails the scan the person asked for. A view save rewrites the rest of the config row,
+    /// so this column is written here and nowhere else.
+    /// </remarks>
+    private async Task TryRememberSettingsAsync(
+        BenDataContext db, UploadFile file, EvpDetectionOptions settings, Guid userId, CancellationToken ct)
+    {
+        try
+        {
+            if (!await FileAudienceAccess.CanManageFileAsync(
+                    db, file, userId, User.IsInRole(Ben.Data.Common.Constants.RoleNames.SuperAdmin), ct))
+                return;
+
+            var json   = System.Text.Json.JsonSerializer.Serialize(settings, EvpScanRecorder.OptionsJson);
+            var config = await db.UploadFileAudioConfigs.FirstOrDefaultAsync(c => c.UploadFileId == file.Id, ct);
+            if (config is null)
+            {
+                db.UploadFileAudioConfigs.Add(new UploadFileAudioConfig
+                {
+                    Id = Guid.NewGuid(), UploadFileId = file.Id, EvpScanOptionsJson = json,
+                    DateCreated = DateTime.UtcNow, CreatedByAppUserId = userId,
+                });
+            }
+            else
+            {
+                config.EvpScanOptionsJson = json;
+            }
+            await db.SaveChangesAsync(ct);
+        }
+        catch (Exception ex) when (ex is DbUpdateException or InvalidOperationException)
+        {
+            HttpContext?.RequestServices?.GetService<ILogger<AudioMarkerController>>()?
+                .LogWarning(ex, "The scan settings for file {FileId} were not remembered", file.Id);
+        }
     }
 
     private void AuditReplaced(Guid fileId, EvpScanRecorder.Replaced replaced, Guid userId)

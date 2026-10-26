@@ -393,6 +393,10 @@
         => await Invoke("setSpectrogramMelScale", useMel, _dotnetRef);
     public async Task ToggleVoiceBandOverlayAsync(bool show)
         => await Invoke("toggleVoiceBandOverlay", show);
+
+    /// <summary>The frequencies the voice band covers: the EVP scan's listening range (phase 5).</summary>
+    public async Task SetVoiceBandAsync(double lowHz, double highHz)
+        => await Invoke("setVoiceBand", lowHz, highHz);
     public async Task DetectSilenceAsync(double thresholdDb, double windowSeconds = 0.15)
         => await Invoke("detectSilence", thresholdDb, windowSeconds);
     public async Task ClearSilenceDetectionAsync()

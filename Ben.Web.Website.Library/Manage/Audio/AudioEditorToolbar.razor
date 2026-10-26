@@ -58,15 +58,15 @@
                                 Enabled="@(State.Ready && !State.Scanning)"
                                 ThemeColor="@ThemeConstants.Button.ThemeColor.Primary"
                                 Size="@ThemeConstants.Button.Size.Small"
-                                Title="@($"Scan for EVP at {State.Sensitivity} sensitivity")">
+                                Title="@(State.CustomScan ? "Scan for EVP with your adjusted settings" : $"Scan for EVP at {State.Sensitivity} sensitivity")">
                 <SplitButtonContent>
                     <BenIcon Name="activity" />@(State.Scanning ? "Scanning…" : "Scan for EVP")
                 </SplitButtonContent>
                 <SplitButtonItems>
-                    <SplitButtonItem OnClick="@(() => Act(AudioToolbarAction.ScanLow))">@Check(State.Sensitivity == EvpSensitivity.Low)Scan at Low: only strong sounds</SplitButtonItem>
-                    <SplitButtonItem OnClick="@(() => Act(AudioToolbarAction.ScanMedium))">@Check(State.Sensitivity == EvpSensitivity.Medium)Scan at Medium</SplitButtonItem>
-                    <SplitButtonItem OnClick="@(() => Act(AudioToolbarAction.ScanHigh))">@Check(State.Sensitivity == EvpSensitivity.High)Scan at High: faint sounds too</SplitButtonItem>
-                    <SplitButtonItem OnClick="@(() => Act(AudioToolbarAction.FineTune))"><span class="audio-toolbar__check"></span>Fine-tune the scan…</SplitButtonItem>
+                    <SplitButtonItem OnClick="@(() => Act(AudioToolbarAction.ScanLow))">@Check(!State.CustomScan && State.Sensitivity == EvpSensitivity.Low)Scan at Low: only strong sounds</SplitButtonItem>
+                    <SplitButtonItem OnClick="@(() => Act(AudioToolbarAction.ScanMedium))">@Check(!State.CustomScan && State.Sensitivity == EvpSensitivity.Medium)Scan at Medium</SplitButtonItem>
+                    <SplitButtonItem OnClick="@(() => Act(AudioToolbarAction.ScanHigh))">@Check(!State.CustomScan && State.Sensitivity == EvpSensitivity.High)Scan at High: faint sounds too</SplitButtonItem>
+                    <SplitButtonItem OnClick="@(() => Act(AudioToolbarAction.FineTune))">@Check(State.CustomScan)Fine-tune the scan…</SplitButtonItem>
                 </SplitButtonItems>
             </TelerikSplitButton>
         </ToolBarTemplateItem>

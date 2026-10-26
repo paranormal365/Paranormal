@@ -22,7 +22,8 @@ public sealed record AudioToolbarState(
     bool CanEdit,
     bool HasSelection,
     string ActiveTab,
-    bool InspectorOpen);
+    bool InspectorOpen,
+    bool CustomScan = false);   // the scan settings were adjusted away from Low, Medium and High
 
 /// <summary>Everything the toolbar can ask the editor to do.</summary>
 public enum AudioToolbarAction

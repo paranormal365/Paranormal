@@ -772,7 +772,10 @@ export function updateRegionLabel(containerId, regionId, label) {
 // candidates and markers). It places frequencies through the plugin's own scale functions
 // (hzToScale in spectrogram-render-utils), so it lines up with the picture under it.
 
-/** The band the EVP detector listens in (EvpDetector.HighPassHz / LowPassHz on the server). */
+/**
+ * The band the EVP detector listens in by default (EvpDetectionOptions.BandLowHz / BandHighHz).
+ * Since phase 5 a scan's own range replaces it through setVoiceBand.
+ */
 const VOICE_BAND_HZ = [300, 3400]
 
 /** An rgb triplet token from signal-tokens.css, for drawing on a canvas, which cannot read var(). */
@@ -992,6 +995,17 @@ export async function updateSpectrogramLabels(containerId, showLabels) {
   await _mountSpectrogram(instance, sp.dotnetRef)
 }
 
+/**
+ * Which frequencies the voice band covers: the range the EVP scan listens in (phase 5). Remembered
+ * while the spectrogram is off, like whether the band shows.
+ */
+export function setVoiceBand(containerId, lowHz, highHz) {
+  const instance = instances.get(containerId)
+  if (!instance || !(highHz > lowHz)) return
+  instance._voiceBandHz = [lowHz, highHz]
+  _drawSpectrogramOverlay(instance)
+}
+
 /** Shows or hides the voice band over the spectrogram. Remembered while the spectrogram is off. */
 export function toggleVoiceBandOverlay(containerId, show) {
   const instance = instances.get(containerId)
@@ -1049,8 +1063,9 @@ function _drawSpectrogramOverlay(instance) {
   const lo = _hzToScale(fMin, scale), hi = _hzToScale(fMax, scale)
   const yFor = (hz) => H - ((_hzToScale(hz, scale) - lo) / (hi - lo)) * H
 
-  const yTop = Math.max(0, yFor(VOICE_BAND_HZ[1]))
-  const yBottom = Math.min(H, yFor(VOICE_BAND_HZ[0]))
+  const band = instance._voiceBandHz ?? VOICE_BAND_HZ
+  const yTop = Math.max(0, yFor(band[1]))
+  const yBottom = Math.min(H, yFor(band[0]))
   if (yBottom <= yTop) return
   // A light fill and firm edges: on a recording sampled at 8 kHz the band is most of the picture,
   // and a 15% tint alone over the spectrogram's blues barely showed (10/26/2026).

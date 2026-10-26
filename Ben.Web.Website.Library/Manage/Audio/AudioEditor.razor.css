@@ -324,6 +324,13 @@
     color: var(--ben-ink-muted);
 }
 
+/* A lower-ranked sample a full scan kept (phase 5): dashed, so it reads as "here on purpose". */
+.evp-row__pill--sample {
+    background: transparent;
+    border: 1px dashed rgba(var(--ben-accent-2-rgb), .7);
+    color: var(--ben-ink);
+}
+
 .evp-row__actions { margin-left: auto; display: inline-flex; gap: .25rem; flex-shrink: 0; }
 
 /* The score as a meter: the number to read, the bar to scan a list by. */
@@ -585,3 +592,25 @@
     background: var(--ben-surface);
     color: var(--ben-text);
 }
+
+/* ── Scan settings (phase 5) ───────────────────────────────────────────────── */
+.evp-lab ::deep .evp-tune__presets,
+.evp-lab ::deep .evp-tune__name { display: flex; flex-wrap: wrap; align-items: center; gap: .5rem; margin-bottom: .5rem; }
+.evp-lab ::deep .evp-tune__group {
+    border: 1px solid var(--ben-line);
+    border-radius: var(--ben-radius);
+    padding: .5rem .75rem .6rem;
+    margin: 0 0 .6rem;
+}
+.evp-lab ::deep .evp-tune__group > legend {
+    float: none;
+    width: auto;
+    padding: 0 .35rem;
+    margin: 0;
+    font-size: .78rem;
+    font-weight: 600;
+    color: var(--ben-ink-muted);
+}
+.evp-lab ::deep .evp-tune__row { display: flex; flex-wrap: wrap; gap: .75rem; }
+.evp-lab ::deep .evp-tune__field { display: flex; flex-direction: column; gap: .2rem; }
+.evp-lab ::deep .evp-tune__field input { width: 110px; }

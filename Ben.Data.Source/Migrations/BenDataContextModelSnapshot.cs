@@ -258,6 +258,9 @@ namespace Ben.Data.Source.Migrations
                     b.Property<bool>("IsAutoDetected")
                         .HasColumnType("bit");
 
+                    b.Property<bool>("IsExploratory")
+                        .HasColumnType("bit");
+
                     b.Property<string>("Label")
                         .HasMaxLength(200)
                         .HasColumnType("nvarchar(200)");
@@ -3416,6 +3419,12 @@ namespace Ben.Data.Source.Migrations
                         .ValueGeneratedOnAdd()
                         .HasColumnType("uniqueidentifier");
 
+                    b.Property<double?>("BandHighHz")
+                        .HasColumnType("float");
+
+                    b.Property<double?>("BandLowHz")
+                        .HasColumnType("float");
+
                     b.Property<double>("ContextPadSeconds")
                         .HasColumnType("float");
 
@@ -3436,6 +3445,9 @@ namespace Ben.Data.Source.Migrations
 
                     b.Property<double>("MinDurationSeconds")
                         .HasColumnType("float");
+
+                    b.Property<string>("OptionsJson")
+                        .HasColumnType("nvarchar(max)");
 
                     b.Property<int>("ProposedCount")
                         .HasColumnType("int");
@@ -3480,6 +3492,9 @@ namespace Ben.Data.Source.Migrations
                     b.Property<Guid>("EvpScanId")
                         .HasColumnType("uniqueidentifier");
 
+                    b.Property<bool>("Exploratory")
+                        .HasColumnType("bit");
+
                     b.Property<double>("MeanBandGapDb")
                         .HasColumnType("float");
 
@@ -3511,6 +3526,46 @@ namespace Ben.Data.Source.Migrations
                     b.HasIndex("EvpScanId");
 
                     b.ToTable("EvpScanCandidates");
+                });
+
+            modelBuilder.Entity("Ben.Data.Source.Entities.EvpScanPreset", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<Guid>("AppUserId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<DateTime>("DateCreated")
+                        .HasColumnType("datetime2");
+
+                    b.Property<DateTime?>("DateUpdated")
+                        .HasColumnType("datetime2");
+
+                    b.Property<bool>("IsDefault")
+                        .HasColumnType("bit");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(60)
+                        .HasColumnType("nvarchar(60)");
+
+                    b.Property<string>("OptionsJson")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(max)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("AppUserId")
+                        .IsUnique()
+                        .HasDatabaseName("IX_EvpScanPresets_OneDefault")
+                        .HasFilter("[IsDefault] = 1");
+
+                    b.HasIndex("AppUserId", "Name")
+                        .IsUnique();
+
+                    b.ToTable("EvpScanPresets");
                 });
 
             modelBuilder.Entity("Ben.Data.Source.Entities.ExperienceCategory", b =>
@@ -13315,6 +13370,9 @@ namespace Ben.Data.Source.Migrations
                     b.Property<string>("EnvelopeOptionsJson")
                         .HasColumnType("nvarchar(max)");
 
+                    b.Property<string>("EvpScanOptionsJson")
+                        .HasColumnType("nvarchar(max)");
+
                     b.Property<int?>("Height")
                         .HasColumnType("int");
 
@@ -17075,6 +17133,17 @@ namespace Ben.Data.Source.Migrations
                         .IsRequired();
 
                     b.Navigation("EvpScan");
+                });
+
+            modelBuilder.Entity("Ben.Data.Source.Entities.EvpScanPreset", b =>
+                {
+                    b.HasOne("Ben.Data.Source.Entities.AppUser", "AppUser")
+                        .WithMany()
+                        .HasForeignKey("AppUserId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("AppUser");
                 });
 
             modelBuilder.Entity("Ben.Data.Source.Entities.ExperienceCategory", b =>

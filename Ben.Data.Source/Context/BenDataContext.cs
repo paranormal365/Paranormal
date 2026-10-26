@@ -213,6 +213,7 @@ namespace Ben.Data.Source.Context
         public virtual DbSet<AudioMarker> AudioMarkers { get; set; }
         public virtual DbSet<EvpScan> EvpScans { get; set; }
         public virtual DbSet<EvpScanCandidate> EvpScanCandidates { get; set; }
+        public virtual DbSet<EvpScanPreset> EvpScanPresets { get; set; }
         public virtual DbSet<EvpRuling> EvpRulings { get; set; }
         public virtual DbSet<AuditLog> AuditLogs { get; set; }
         public virtual DbSet<SidecarInstallLog> SidecarInstallLogs { get; set; }
@@ -2576,6 +2577,8 @@ namespace Ben.Data.Source.Context
             modelBuilder.Entity<UploadFileAudioConfig>()
                 .Property(e => e.EditStateJson).HasColumnType("nvarchar(max)");
             modelBuilder.Entity<UploadFileAudioConfig>()
+                .Property(e => e.EvpScanOptionsJson).HasColumnType("nvarchar(max)");
+            modelBuilder.Entity<UploadFileAudioConfig>()
                 .Property(e => e.SpectrogramOptionsJson).HasColumnType("nvarchar(max)");
             modelBuilder.Entity<UploadFileAudioConfig>()
                 .Property(e => e.SpectrogramWindowedOptionsJson).HasColumnType("nvarchar(max)");
@@ -2643,6 +2646,25 @@ namespace Ben.Data.Source.Context
                 .HasForeignKey(e => e.UploadFileId).OnDelete(DeleteBehavior.Cascade);
             modelBuilder.Entity<EvpRuling>()
                 .HasIndex(e => e.AudioMarkerId);
+            modelBuilder.Entity<EvpScan>()
+                .Property(e => e.OptionsJson).HasColumnType("nvarchar(max)");
+
+            // A person's saved scan settings (phase 5). Names are unique per person, so "Basement"
+            // means one thing; they leave with the person.
+            modelBuilder.Entity<EvpScanPreset>()
+                .HasOne(e => e.AppUser).WithMany()
+                .HasForeignKey(e => e.AppUserId).OnDelete(DeleteBehavior.Cascade);
+            modelBuilder.Entity<EvpScanPreset>()
+                .HasIndex(e => new { e.AppUserId, e.Name }).IsUnique();
+            // One default each, held by the database so two quick "Set as default" clicks cannot
+            // leave a person with two.
+            modelBuilder.Entity<EvpScanPreset>()
+                .HasIndex(e => e.AppUserId).IsUnique().HasFilter("[IsDefault] = 1")
+                .HasDatabaseName("IX_EvpScanPresets_OneDefault");
+            modelBuilder.Entity<EvpScanPreset>()
+                .Property(e => e.Name).HasMaxLength(60);
+            modelBuilder.Entity<EvpScanPreset>()
+                .Property(e => e.OptionsJson).HasColumnType("nvarchar(max)");
 
             // ── UploadFileVote ───────────────────────────────────────────────
             // One vote per (user, file): unique index enforces the business rule.
