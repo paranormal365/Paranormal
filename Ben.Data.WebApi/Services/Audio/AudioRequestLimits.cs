@@ -104,8 +104,24 @@ internal static class AudioRequestLimits
                 return "PitchSemitones must be between -24 and 24.";
         }
 
+        if (request.Operation == AudioEditOperation.Envelope)
+        {
+            var points = request.Volume ?? [];
+            if (points.Count < 2) return "A volume curve needs at least two points.";
+            if (points.Count > MaxVolumePoints) return $"A volume curve can have at most {MaxVolumePoints} points.";
+            if (points.Any(p => !double.IsFinite(p.Time) || !double.IsFinite(p.Volume)))
+                return "Every point on the volume curve must be a real time and volume.";
+            if (points.Any(p => p.Time < 0)) return "A point on the volume curve cannot come before the recording starts.";
+            if (points.Any(p => p.Volume is < 0 or > 1)) return "Volumes on the curve go from 0 (silent) to 1 (as recorded).";
+            for (var i = 1; i < points.Count; i++)
+                if (points[i].Time < points[i - 1].Time) return "The points on the volume curve must be in time order.";
+        }
+
         return null;
     }
+
+    /// <summary>The most points one drawn volume curve may have.</summary>
+    public const int MaxVolumePoints = 500;
 
     /// <summary>Every reason a mix export would be refused, or null if there is none.</summary>
     public static string? MixProblem(IReadOnlyList<MixTrackExportInput> tracks)

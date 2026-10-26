@@ -614,3 +614,44 @@
 .evp-lab ::deep .evp-tune__row { display: flex; flex-wrap: wrap; gap: .75rem; }
 .evp-lab ::deep .evp-tune__field { display: flex; flex-direction: column; gap: .2rem; }
 .evp-lab ::deep .evp-tune__field input { width: 110px; }
+
+/* ── Phase 7 ──────────────────────────────────────────────────────────────── */
+
+/* The volume line's bar: a working mode, so it reads as one, across the top of the player. */
+.audio-volume-bar {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: .5rem .75rem;
+    padding: .5rem .75rem;
+    margin-bottom: .5rem;
+    border: 1px solid rgba(var(--ben-accent-rgb), .45);
+    border-left: 3px solid var(--ben-accent);
+    border-radius: var(--ben-radius);
+    background: rgba(var(--ben-accent-rgb), .07);
+    color: var(--ben-ink);
+}
+
+/* The candidate N and P are on, and K and D act on. */
+.evp-row.is-focused {
+    outline: 2px solid var(--ben-accent);
+    outline-offset: -2px;
+    background: rgba(var(--ben-accent-rgb), .06);
+}
+
+.audio-shortcuts {
+    display: grid;
+    grid-template-columns: auto 1fr;
+    gap: .35rem .9rem;
+    margin: 0;
+    font-size: .9rem;
+}
+.audio-shortcuts dt { white-space: nowrap; font-weight: 400; }
+.audio-shortcuts dd { margin: 0; }
+.audio-shortcuts kbd {
+    background: var(--ben-surface);
+    color: var(--ben-ink);
+    border: 1px solid var(--ben-line-strong);
+    box-shadow: 0 1px 0 var(--ben-line-strong);
+    padding: .05rem .35rem;
+}

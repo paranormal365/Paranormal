@@ -214,8 +214,11 @@ public class EvpScanJobTests
         {
             Assert.Equal(20.0, p.Total!.Value, 2);
             Assert.True(p.Settled <= p.Processed);
-            Assert.Equal(p.Segment, p.Job);   // one recording: the job's percent is its percent
         });
+        // One recording: the job's percent is its percent. Not asserted at every look: the
+        // in-memory provider applies one save's rows one at a time, so a look can land between
+        // the segment and the job (failed once in a full run, 10/26/2026). SQL Server commits them together.
+        Assert.Contains(midway, p => p.Segment == p.Job);
     }
 
     /// <summary>Hands the audio over in small pieces, waiting between them.</summary>

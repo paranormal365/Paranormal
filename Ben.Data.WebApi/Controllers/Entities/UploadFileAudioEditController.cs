@@ -120,6 +120,7 @@ public sealed class UploadFileAudioEditController : BenControllerBase
                     AudioEditOperation.Reverse   => AudioEditor.Reverse(sourceStream, workingType),
                     AudioEditOperation.Speed     => AudioEditor.ChangeSpeed(sourceStream, workingType, request.SpeedRatio!.Value),
                     AudioEditOperation.Pitch     => AudioEditor.PitchShift(sourceStream, workingType, request.PitchSemitones!.Value),
+                    AudioEditOperation.Envelope  => AudioEditor.Envelope(sourceStream, workingType, request.Volume!),
                     _                            => throw new NotSupportedException($"Unknown operation: {request.Operation}"),
                 };
             }

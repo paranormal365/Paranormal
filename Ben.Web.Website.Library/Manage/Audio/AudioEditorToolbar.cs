@@ -24,7 +24,10 @@ public sealed record AudioToolbarState(
     bool HasSelection,
     string ActiveTab,
     bool InspectorOpen,
-    bool CustomScan = false);   // the scan settings were adjusted away from Low, Medium and High
+    bool CustomScan = false,    // the scan settings were adjusted away from Low, Medium and High
+    bool Loop = false,          // phase 7: what is played loops instead of stopping at its end
+    bool Minimap = false,
+    bool VolumeCurve = false);  // the volume curve is being drawn
 
 /// <summary>Everything the toolbar can ask the editor to do.</summary>
 public enum AudioToolbarAction
@@ -42,10 +45,12 @@ public enum AudioToolbarAction
     FineTune,
     Markers,
 
-    // Zoom
+    // Zoom, and playing (phase 7)
     ZoomOut,
     ZoomFit,
     ZoomIn,
+    ZoomSelection,
+    ToggleLoop,
 
     // View ▾
     ToggleTimeline,
@@ -53,6 +58,7 @@ public enum AudioToolbarAction
     ToggleMelScale,
     ToggleVoiceBand,
     ToggleDetectSilence,
+    ToggleMinimap,
     DisplaySettings,
 
     // Listen ▾ (the speeds come through OnSpeed)
@@ -69,7 +75,9 @@ public enum AudioToolbarAction
     Fade,
     ChangeSpeed,
     ChangePitch,
+    DrawVolume,
 
-    // Clips
+    // Clips, and the keyboard
     Clips,
+    Shortcuts,
 }

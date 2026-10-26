@@ -27,7 +27,15 @@ public enum AudioEditOperation
     Reverse,
     Speed,
     Pitch,
+    /// <summary>A drawn volume curve (phase 7); see <see cref="AudioEditRequest.Volume"/>.</summary>
+    Envelope,
 }
+
+/// <summary>
+/// One point on a drawn volume curve: a time in seconds, and a volume from 0 (silent) to 1 (as
+/// recorded). Between points the volume moves in a straight line, as it does while playing.
+/// </summary>
+public sealed record VolumePoint(double Time, double Volume);
 
 /// <summary>
 /// Applies <see cref="Operation"/> to an existing upload-file's audio and saves the result as a new
@@ -36,6 +44,7 @@ public enum AudioEditOperation
 /// <see cref="SpeedRatio"/> for <c>Speed</c> (2.0 = twice as fast, 0.5 = half speed, pitch preserved);
 /// <see cref="PitchSemitones"/> for <c>Pitch</c> (positive = up, negative = down, duration preserved).
 /// The result is saved as <see cref="Format"/>, FLAC unless asked otherwise.
+/// <see cref="Volume"/> is the curve for <c>Envelope</c>, 2 to 500 points in time order.
 /// </summary>
 public record AudioEditRequest(
     AudioEditOperation Operation,
@@ -49,4 +58,5 @@ public record AudioEditRequest(
     Guid               UploadFileTypeId,
     double?            SpeedRatio = null,
     double?            PitchSemitones = null,
-    AudioSaveFormat    Format = AudioSaveFormat.Flac);
+    AudioSaveFormat    Format = AudioSaveFormat.Flac,
+    IReadOnlyList<VolumePoint>? Volume = null);

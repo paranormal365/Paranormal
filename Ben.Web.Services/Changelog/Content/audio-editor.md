@@ -32,6 +32,14 @@ it is hidden from everybody else, but still takes its number. No other sub-headi
 
 ## Unreleased
 
+- Keyboard shortcuts: Space plays, the arrows move, N and P go through the candidates, K keeps, D
+  dismisses, Z zooms, F fits, L loops, and ? lists them all.
+- Loop plays a candidate, a marker or the selection round and round.
+- Zoom to the selection, or to one candidate from its row.
+- Candidates and kept markers are marked on the spectrogram, and the spectrogram can be made taller.
+- The overview strip shows the whole recording under the waveform while you're zoomed in.
+- Turn parts down: draw a volume line over the waveform, hear it as you go, and save it as a new
+  file.
 - EVP scans run in the background. The button shows how far a scan has got, the waveform is dimmed
   where it hasn't reached and turns solid as it goes, and Stop ends it early. You can leave the
   editor while it runs and pick it up when you come back.

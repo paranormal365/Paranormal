@@ -474,6 +474,209 @@ public class AudioEditorTests : BenTestBase
             "the remembered settings are the saved preset's, so the list should say so");
     }
 
+    // ── Phase 7: keyboard, spectrogram marks, overview strip, height, loop, volume line ──
+
+    /// <summary>
+    /// Waits until <paramref name="read"/> satisfies <paramref name="ok"/>, then returns the value;
+    /// after <paramref name="timeoutMs"/> returns the last value read, for the assertion to report.
+    /// </summary>
+    private static async Task<T> WaitForAsync<T>(Func<Task<T>> read, Func<T, bool> ok, int timeoutMs = 10_000)
+    {
+        var deadline = DateTime.UtcNow.AddMilliseconds(timeoutMs);
+        var value = await read();
+        while (!ok(value) && DateTime.UtcNow < deadline)
+        {
+            await Task.Delay(200);
+            value = await read();
+        }
+        return value;
+    }
+
+    /// <summary>Scans the 20-second recording with three sounds and waits for the three candidates.</summary>
+    private async Task<ILocator> ScanForThreeAsync()
+    {
+        await AudioEditorUi.OpenTabAsync(Modal, "EVP Markers");
+        var panel = Modal.Locator("#evp-markers-panel");
+        await panel.GetByRole(AriaRole.Button, new() { Name = "Scan for EVP" }).ClickAsync();
+        await Expect(panel.Locator(".evp-row--candidate")).ToHaveCountAsync(3, new() { Timeout = 120_000 });
+        return panel;
+    }
+
+    private Task<double> PlayheadAsync() => Modal.EvaluateAsync<double>(
+        "el => { const a = [...document.querySelectorAll('audio, video')].find(m => m.duration > 0); return a ? a.currentTime : -1; }");
+
+    /// <summary>The keys from the shortcuts window do what it says (phase 7).</summary>
+    [Test]
+    public async Task Keyboard_shortcuts_drive_the_editor()
+    {
+        if (!await ReadyInFullViewAsync(ScannableWav(), "wav", "audio/wav"))
+        {
+            Assert.Ignore("Could not open the editor; see the output for where it gave up.");
+            return;
+        }
+        var panel = await ScanForThreeAsync();
+        // Nothing focused, so the keys go to the page (a click could land on a link).
+        await Page.EvaluateAsync("() => document.activeElement?.blur()");
+
+        // N highlights the first candidate in the list and plays it.
+        await Page.Keyboard.PressAsync("n");
+        var focused = panel.Locator(".evp-row--candidate.is-focused");
+        await Expect(focused).ToHaveCountAsync(1, new() { Timeout = 10_000 });
+
+        // Z zooms in on it; F fits the whole recording again.
+        await Page.Keyboard.PressAsync("z");
+        Assert.That(await WaitForAsync(() => AudioEditorUi.WaveformZoomRatioAsync(Modal), r => r > 2), Is.GreaterThan(2), "Z did not zoom in");
+        await Page.Keyboard.PressAsync("f");
+        Assert.That(await WaitForAsync(() => AudioEditorUi.WaveformZoomRatioAsync(Modal), r => r < 1.05), Is.LessThan(1.05), "F did not fit");
+
+        // D dismisses it, and the highlight moves to the next one.
+        await Page.Keyboard.PressAsync("d");
+        await Expect(panel.Locator(".evp-row--candidate")).ToHaveCountAsync(2, new() { Timeout = 15_000 });
+        await Expect(focused).ToHaveCountAsync(1);
+
+        // [ and ] make a selection from the playhead.
+        await Page.Keyboard.PressAsync("Space");
+        await Page.Keyboard.PressAsync("ArrowRight");
+        await Page.Keyboard.PressAsync("[");
+        await Page.Keyboard.PressAsync("Shift+ArrowRight");
+        await Page.Keyboard.PressAsync("]");
+        await AudioEditorUi.OpenTabAsync(Modal, "Edit");
+        var readout = Modal.Locator("#edit-region-readout");
+        await Expect(readout).Not.ToContainTextAsync("Draw a region", new() { Timeout = 10_000 });
+        TestContext.Out.WriteLine($"selection from the keys: {(await readout.InnerTextAsync()).Trim()}");
+
+        // ? lists them all.
+        await Page.Keyboard.PressAsync("Shift+Slash");
+        await Expect(Page.Locator("#audio-shortcuts")).ToBeVisibleAsync(new() { Timeout = 10_000 });
+        await Expect(Page.Locator("#audio-shortcuts")).ToContainTextAsync("Keep the highlighted candidate");
+    }
+
+    /// <summary>The candidates show on the spectrogram where they are on the waveform (phase 7).</summary>
+    [Test]
+    public async Task The_spectrogram_marks_the_candidates()
+    {
+        if (!await ReadyInFullViewAsync(ScannableWav(), "wav", "audio/wav"))
+        {
+            Assert.Ignore("Could not open the editor; see the output for where it gave up.");
+            return;
+        }
+        await ScanForThreeAsync();
+        await AudioEditorUi.SetSpectrogramAsync(Modal, true);
+
+        // The overlay canvas's pixels at the middle of each sound (4.0 s, 9.0 s, 15.0 s of 20) and
+        // between them (6.5 s): tinted at the first three, clear at the last.
+        async Task<int> AlphaAtAsync(double seconds) => await Modal.EvaluateAsync<int>(@"(el, at) => {
+            const c = el.querySelector('canvas.ws-spectro-overlay');
+            if (!c || !c.width) return -1;
+            const x = Math.round(c.width * at / 20), y = Math.round(c.height / 2);
+            return c.getContext('2d').getImageData(x, y, 1, 1).data[3];
+        }", seconds + 0.4);
+        Assert.That(await WaitForAsync(() => AlphaAtAsync(4.0), a => a > 0, 15_000), Is.GreaterThan(0), "the first candidate is not on the spectrogram");
+        Assert.That(await AlphaAtAsync(9.0), Is.GreaterThan(0));
+        Assert.That(await AlphaAtAsync(15.0), Is.GreaterThan(0));
+        Assert.That(await AlphaAtAsync(6.5), Is.EqualTo(0), "something was drawn between the candidates");
+    }
+
+    /// <summary>The overview strip and the spectrogram's height come back on reopening (phase 7).</summary>
+    [Test]
+    public async Task The_overview_strip_and_spectrogram_height_are_remembered()
+    {
+        if (!await ReadyInFullViewAsync())
+        {
+            Assert.Ignore("Could not open the editor; see the output for where it gave up.");
+            return;
+        }
+        // The strip's pane, with the plugin's waveform drawn into it.
+        Task<int> MinimapsAsync() => Modal.EvaluateAsync<int>(
+            @"el => [...el.querySelectorAll('.ws-minimap-pane')].filter(p => p.children.length > 0 && p.getBoundingClientRect().height > 20).length");
+
+        await AudioEditorUi.ChooseAsync(Page, "view", "Overview strip");
+        Assert.That(await WaitForAsync(MinimapsAsync, n => n > 0), Is.GreaterThan(0), "no overview strip appeared");
+
+        await AudioEditorUi.SetSpectrogramAsync(Modal, true);
+        await AudioEditorUi.OpenTabAsync(Modal, "Display");
+        await Modal.Locator("#spectrogram-height").FillAsync("300");
+        var pane = Modal.Locator(".ws-spectro-pane");
+        Assert.That(await WaitForAsync(() => pane.EvaluateAsync<double>("el => el.getBoundingClientRect().height"), h => h is > 299 and < 301),
+            Is.InRange(299, 301), "the spectrogram did not take the new height");
+
+        await LeaveAndReopenEditorAsync();
+
+        Assert.That(await WaitForAsync(MinimapsAsync, n => n > 0, 20_000), Is.GreaterThan(0), "the overview strip was not remembered");
+        await Expect(Modal.Locator(".ws-spectro-pane")).ToBeVisibleAsync(new() { Timeout = 20_000 });
+        Assert.That(await WaitForAsync(() => Modal.Locator(".ws-spectro-pane").EvaluateAsync<double>("el => el.getBoundingClientRect().height"),
+            h => h is > 299 and < 301, 20_000), Is.InRange(299, 301), "the spectrogram's height was not remembered");
+    }
+
+    /// <summary>With Loop on, a candidate plays round instead of stopping at its end (phase 7).</summary>
+    [Test]
+    public async Task A_candidate_loops_with_loop_on()
+    {
+        if (!await ReadyInFullViewAsync(ScannableWav(), "wav", "audio/wav"))
+        {
+            Assert.Ignore("Could not open the editor; see the output for where it gave up.");
+            return;
+        }
+        var panel = await ScanForThreeAsync();
+        await AudioEditorUi.ClickToolbarAsync(Page, Modal, "Loop");
+
+        // The first in the list is the highest score; play it and watch the playhead for 5 s.
+        var first = panel.Locator(".evp-row--candidate").First;
+        await first.GetByTitle("Play this stretch with its surrounding context").ClickAsync();
+        var times = new List<double>();
+        for (var i = 0; i < 10; i++)
+        {
+            await Page.WaitForTimeoutAsync(500);
+            var text = await PlayheadTextAsync();   // "Add Marker at 0:04.2"
+            var m = System.Text.RegularExpressions.Regex.Match(text, @"(\d+):(\d+(?:\.\d+)?)");
+            if (m.Success) times.Add(int.Parse(m.Groups[1].Value) * 60 + double.Parse(m.Groups[2].Value, System.Globalization.CultureInfo.InvariantCulture));
+        }
+        TestContext.Out.WriteLine($"playhead every half second: {string.Join(", ", times.Select(t => t.ToString("0.0")))}");
+
+        Assert.That(times, Has.Count.EqualTo(10));
+        Assert.That(times.Zip(times.Skip(1)).Any(p => p.Second < p.First - 0.2), Is.True,
+            "the playhead never went back to the start, so it did not loop");
+        Assert.That(times.Max() - times.Min(), Is.LessThan(3.0), "it played on past the candidate instead of going round");
+    }
+
+    /// <summary>"Turn parts down": draw the line down over a stretch and save it as a new file (phase 7).</summary>
+    [Test]
+    public async Task A_volume_line_can_be_drawn_and_saved()
+    {
+        if (!await ReadyInFullViewAsync(ScannableWav(), "wav", "audio/wav"))
+        {
+            Assert.Ignore("Could not open the editor; see the output for where it gave up.");
+            return;
+        }
+
+        await AudioEditorUi.ChooseAsync(Page, "edit", "Turn parts down");
+        var bar = Modal.Locator("#audio-volume-bar");
+        await Expect(bar).ToBeVisibleAsync(new() { Timeout = 10_000 });
+
+        // Untouched, there is nothing to save, and it says so.
+        await bar.Locator("#audio-volume-save").ClickAsync();
+        await Expect(bar).ToContainTextAsync("still at full volume");
+
+        // Drag the first point (top left) down by half the waveform's height.
+        var point = await Modal.EvaluateAsync<double[]>(@"el => {
+            for (const h of el.querySelectorAll('[id^=""ws-""] *, [id^=""ws-""]'))
+                if (h.shadowRoot) {
+                    const pts = [...h.shadowRoot.querySelectorAll('svg circle, svg ellipse')];
+                    if (pts.length) { const r = pts[0].getBoundingClientRect(); return [r.x + r.width / 2, r.y + r.height / 2, h.getBoundingClientRect().height]; }
+                }
+            return [];
+        }");
+        Assert.That(point, Has.Length.EqualTo(3), "no points to drag on the volume line");
+        await Page.Mouse.MoveAsync((float)point[0], (float)point[1]);
+        await Page.Mouse.DownAsync();
+        await Page.Mouse.MoveAsync((float)point[0], (float)(point[1] + point[2] / 2), new() { Steps = 8 });
+        await Page.Mouse.UpAsync();
+
+        await bar.Locator("#audio-volume-save").ClickAsync();
+        await Expect(bar).ToHaveCountAsync(0, new() { Timeout = 60_000 });
+        await Expect(Modal.Locator("#audio-last-save")).ToContainTextAsync("Saved as", new() { Timeout = 15_000 });
+    }
+
     /// <summary>Ten minutes with a few sounds in it: long enough that a scan can be watched and stopped.</summary>
     private static byte[] LongWav() => Wav(600, [(30.0, 0.8), (200.0, 0.7), (450.0, 1.0)]);
 

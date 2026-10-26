@@ -40,6 +40,7 @@ let TimelinePlugin = null
 let ZoomPlugin = null
 let MinimapPlugin = null
 let SpectrogramPlugin = null
+let EnvelopePlugin = null
 
 async function loadCore() {
   if (!WaveSurfer) {
@@ -297,7 +298,12 @@ export async function create(containerId, options, plugins, dotnetRef, audioUrl)
 
   // The timeline and the spectrogram draw into panes of their own, outside the waveform's scroll
   // box, so they are moved with it here. See _syncPanesToWaveform.
-  const sync = () => _syncPanesToWaveform(instances.get(containerId))
+  const sync = () => {
+    const inst = instances.get(containerId)
+    _syncPanesToWaveform(inst)
+    // The marks on the spectrogram are placed from the scroll position (phase 7).
+    if (inst?._spectroSpans?.length) _drawSpectrogramOverlay(inst)
+  }
   instances.get(containerId)._paneSyncUnsubs = [
     ws.on('scroll', sync),
     ws.on('zoom', () => requestAnimationFrame(sync)),
@@ -352,6 +358,9 @@ export async function create(containerId, options, plugins, dotnetRef, audioUrl)
       if (ev.button !== 0) return
       const duration = ws.getDuration()
       if (!duration) return
+
+      // Drawing the volume curve: the envelope plugin owns every press (phase 7).
+      if (instance._envelope) return
 
       // Let the regions plugin own drags that begin on a region or its handles.
       if (instance._dragMode === 'region' && startedOnRegion(ev)) {
@@ -746,12 +755,43 @@ function _stopAtEnd(instance, start, getEnd) {
       else return
     }
     if (t < start - JUMP_SECONDS || t > end + JUMP_SECONDS) { stopAndClean(); return }
-    if (t >= end) { stopAndClean(); ws.pause() }
+    if (t >= end) {
+      // Looping (phase 7): back to the start and keep watching, rather than stopping.
+      if (instance._loop) { ws.setTime(start); return }
+      stopAndClean(); ws.pause()
+    }
   }))
   unsubs.push(ws.on('pause',  stopAndClean))
   unsubs.push(ws.on('finish', stopAndClean))
 
   instance._regionPlayCleanup = stopAndClean
+}
+
+/**
+ * Loops whatever stretch is being played: a region, a candidate, a marker or the selection
+ * (phase 7). Off, they stop at their end as before.
+ */
+export function setLoop(containerId, on) {
+  const instance = instances.get(containerId)
+  if (instance) instance._loop = !!on
+}
+
+/**
+ * Zooms so one stretch fills the window, with a margin either side, and scrolls to it (phase 7):
+ * "zoom to the selection", "zoom to this candidate".
+ */
+export function zoomToRange(containerId, startSeconds, endSeconds, pad = 0.15) {
+  const instance = instances.get(containerId)
+  const ws = instance?.ws
+  const scrollEl = _wsScrollEl(document.getElementById(containerId))
+  if (!ws || !scrollEl) return
+  const duration = ws.getDuration()
+  const span = Math.max(0.05, endSeconds - startSeconds)
+  if (!duration || !scrollEl.clientWidth) return
+  const pxPerSec = scrollEl.clientWidth / (span * (1 + 2 * pad))
+  instance._zoom = pxPerSec
+  ws.zoom(pxPerSec)
+  ws.setScrollTime(Math.max(0, startSeconds - span * pad))
 }
 
 export function updateRegionLabel(containerId, regionId, label) {
@@ -784,8 +824,12 @@ function _themeRgb(name, fallback) {
   return v || fallback
 }
 
-/** Height of the spectrogram pane, in px. Phase 7 makes it resizable. */
+/** Height of the spectrogram pane, in px, until somebody changes it (phase 7: 100–480). */
 const SPECTROGRAM_HEIGHT = 160
+
+function _spectroHeight(instance) {
+  return instance?._spectroHeight ?? SPECTROGRAM_HEIGHT
+}
 
 /** Longer than this, the spectrogram renders the visible window rather than the whole file. */
 const WINDOWED_AFTER_SECONDS = 10 * 60
@@ -803,7 +847,7 @@ function _spectrogramOptions(instance, settings, pane) {
   const duration = instance.ws.getDuration?.() ?? 0
   return {
     container:        pane,
-    height:           SPECTROGRAM_HEIGHT,
+    height:           _spectroHeight(instance),
     labels:           settings.showLabels,
     labelsColor:      'rgba(255,255,255,0.85)',
     labelsHzColor:    'rgba(255,255,255,0.6)',
@@ -913,13 +957,13 @@ export async function toggleSpectrogram(containerId, enable, showLabels, fftSamp
   const pane = document.createElement('div')
   pane.id = `${containerId}-spectro-wrapper`
   pane.className = 'ws-spectro-pane'
-  pane.style.cssText = `position:relative;width:100%;height:${SPECTROGRAM_HEIGHT}px;cursor:context-menu;`
+  pane.style.cssText = `position:relative;width:100%;height:${_spectroHeight(instance)}px;cursor:context-menu;`
   const overlay = document.createElement('canvas')
   overlay.className = 'ws-spectro-overlay'
   overlay.style.cssText = 'position:absolute;inset:0;width:100%;height:100%;pointer-events:none;z-index:5;'
   pane.appendChild(overlay)
   waveformEl.parentNode.insertBefore(pane, waveformEl.nextSibling)
-  _growPlayerHeight(containerId, instance, SPECTROGRAM_HEIGHT)
+  _growPlayerHeight(containerId, instance, _spectroHeight(instance))
 
   const safe = (fn) => fn.catch(() => {})
   pane.addEventListener('contextmenu', (ev) => {
@@ -943,6 +987,44 @@ export async function toggleSpectrogram(containerId, enable, showLabels, fftSamp
   instance._themeWatch.observe(document.documentElement, { attributes: true, attributeFilter: ['data-bs-theme'] })
 
   await _mountSpectrogram(instance, dotnetRef)
+}
+
+/**
+ * Makes the spectrogram taller or shorter (phase 7). The player grows or shrinks by the same
+ * amount, so the waveform keeps its height. Remembered while the spectrogram is off.
+ */
+export async function setSpectrogramHeight(containerId, px) {
+  const instance = instances.get(containerId)
+  if (!instance) return
+  const height = Math.max(100, Math.min(480, Math.round(px)))
+  const before = _spectroHeight(instance)
+  instance._spectroHeight = height
+  const sp = instance.spectro
+  if (!sp || height === before) return
+
+  sp.pane.style.height = `${height}px`
+  const playerEl = document.getElementById(containerId)?.parentElement
+  if (playerEl) {
+    const maxH = parseFloat(getComputedStyle(playerEl).maxHeight) || 9999
+    playerEl.style.height = `${Math.min(playerEl.offsetHeight + (height - before), maxH)}px`
+  }
+  // Not awaited: the plugin's redraw can take its time, and the page waited on it, so the new
+  // height was never saved (10/26/2026). The pane already has its height; the picture follows.
+  try { Promise.resolve(sp.plugin?.setOptions({ height })).catch(() => {}) } catch { /* the pane's size stands */ }
+  instance.ws.setOptions({ height: 'auto' })
+  _drawSpectrogramOverlay(instance)
+}
+
+/**
+ * What to mark on the spectrogram (phase 7): candidates and markers as tinted bands with firm
+ * edges, so a sound can be found in the picture where it was found in the list.
+ * @param {Array<{start:number,end:number,kind:string}>} spans  kind: candidate | confirmed | marker
+ */
+export function setSpectrogramOverlays(containerId, spans) {
+  const instance = instances.get(containerId)
+  if (!instance) return
+  instance._spectroSpans = Array.isArray(spans) ? spans : []
+  _drawSpectrogramOverlay(instance)
 }
 
 /** A setting the plugin can change in place; the picture redraws from what it already computed. */
@@ -1106,6 +1188,7 @@ function _drawSpectrogramOverlay(instance) {
   const ctx = canvas.getContext('2d')
   ctx.setTransform(dpr, 0, 0, dpr, 0, 0)
   ctx.clearRect(0, 0, W, H)
+  _drawSpectrogramSpans(instance, ctx, W, H)
   if (!sp.showVoiceBand) return
 
   const sampleRate = instance.ws.getDecodedData?.()?.sampleRate
@@ -1138,6 +1221,37 @@ function _drawSpectrogramOverlay(instance) {
   ctx.setLineDash([])
 }
 
+/**
+ * The candidates and markers on the spectrogram, placed from the waveform's own scroll position and
+ * width, so they line up with the picture at any zoom (phase 7).
+ */
+function _drawSpectrogramSpans(instance, ctx, W, H) {
+  const spans = instance._spectroSpans
+  if (!spans?.length) return
+  const duration = instance.ws.getDuration?.()
+  const scrollEl = _wsScrollEl(document.getElementById(instance.containerId))
+  if (!duration || !scrollEl?.scrollWidth) return
+  const pxPerSec = scrollEl.scrollWidth / duration
+  const left = scrollEl.scrollLeft
+
+  const tokens = {
+    candidate: _themeRgb('--ben-audio-candidate-rgb', '217, 119, 6'),
+    confirmed: _themeRgb('--ben-audio-confirmed-rgb', '5, 150, 105'),
+    marker:    _themeRgb('--ben-audio-possible-rgb', '100, 116, 139'),
+  }
+  for (const span of spans) {
+    const x1 = span.start * pxPerSec - left
+    const x2 = Math.max(x1 + 2, span.end * pxPerSec - left)
+    if (x2 < 0 || x1 > W) continue
+    const rgb = tokens[span.kind] ?? tokens.marker
+    ctx.fillStyle = `rgba(${rgb},0.16)`
+    ctx.fillRect(x1, 0, x2 - x1, H)
+    ctx.fillStyle = `rgba(${rgb},0.85)`
+    ctx.fillRect(x1, 0, 1, H)
+    ctx.fillRect(x2 - 1, 0, 1, H)
+  }
+}
+
 /** Grows the player by `extra` px so the waveform keeps its height, within the player's max-height. */
 function _growPlayerHeight(containerId, instance, extra) {
   const playerEl = document.getElementById(containerId)?.parentElement
@@ -1164,6 +1278,112 @@ function _restorePlayerHeight(containerId, instance) {
  * created with plugins.regionsDragToCreate — that flag registers the pointer
  * handlers this mode switch controls.
  */
+/**
+ * The minimap: the whole recording in a strip under the waveform, with the part in view outlined,
+ * to drag around a long recording while zoomed in (phase 7).
+ */
+export async function toggleMinimap(containerId, show) {
+  const instance = instances.get(containerId)
+  if (!instance?.ws) return
+  if (!show) {
+    instance.minimap?.destroy()
+    instance.minimap = null
+    instance._minimapPane?.remove()
+    instance._minimapPane = null
+    _restorePlayerHeightBy(containerId, MINIMAP_HEIGHT)
+    return
+  }
+  if (instance.minimap) return
+  if (!MinimapPlugin) MinimapPlugin = (await import('/js/wavesurfer/plugins/minimap.esm.js')).default
+
+  // A pane of its own under the waveform, like the spectrogram's. Left to itself the plugin goes
+  // inside the waveform's shadow DOM, where the waveform's fixed height hides it.
+  const waveformEl = document.getElementById(containerId)
+  if (!waveformEl) return
+  const pane = document.createElement('div')
+  pane.id = `${containerId}-minimap`
+  pane.className = 'ws-minimap-pane'
+  pane.style.cssText = `width:100%;height:${MINIMAP_HEIGHT}px;margin-top:2px;`
+  waveformEl.parentNode.insertBefore(pane, waveformEl.nextSibling)
+  instance._minimapPane = pane
+  _growPlayerHeightBy(containerId, MINIMAP_HEIGHT)
+
+  const accent = _themeRgb('--ben-accent-rgb', '91, 61, 245')
+  instance.minimap = instance.ws.registerPlugin(MinimapPlugin.create({
+    container: pane,
+    height: MINIMAP_HEIGHT,
+    waveColor: `rgba(${accent},0.35)`,
+    progressColor: `rgba(${accent},0.7)`,
+    overlayColor: `rgba(${accent},0.12)`,
+  }))
+}
+
+const MINIMAP_HEIGHT = 36
+
+/** Grows the player by a pane's height so the waveform keeps its own (the minimap's). */
+function _growPlayerHeightBy(containerId, px) {
+  const instance = instances.get(containerId)
+  const playerEl = document.getElementById(containerId)?.parentElement
+  if (!instance || !playerEl) return
+  const maxH = parseFloat(getComputedStyle(playerEl).maxHeight) || 9999
+  playerEl.style.height = `${Math.min(playerEl.offsetHeight + px, maxH)}px`
+  instance.ws.setOptions({ height: 'auto' })
+}
+
+function _restorePlayerHeightBy(containerId, px) {
+  const instance = instances.get(containerId)
+  const playerEl = document.getElementById(containerId)?.parentElement
+  if (!instance || !playerEl) return
+  playerEl.style.height = `${Math.max(0, playerEl.offsetHeight - px)}px`
+  instance.ws.setOptions({ height: 'auto' })
+}
+
+/**
+ * Drawing the volume (phase 7): a line over the waveform with points to drag; double-click adds
+ * one, double-click a point removes it. It starts flat at full volume, and playback follows it as
+ * it is drawn. It can only turn sound down: full volume is the top.
+ * While it is up, dragging the waveform does not draw regions or scrub.
+ */
+export async function startEnvelope(containerId) {
+  const instance = instances.get(containerId)
+  const ws = instance?.ws
+  if (!ws || instance._envelope) return
+  const duration = ws.getDuration()
+  if (!duration) return
+  if (!EnvelopePlugin) EnvelopePlugin = (await import('/js/wavesurfer/plugins/envelope.esm.js')).default
+  instance._volumeBeforeEnvelope = ws.getVolume()
+  const accent = _themeRgb('--ben-accent-rgb', '91, 61, 245')
+  instance._envelope = ws.registerPlugin(EnvelopePlugin.create({
+    // Points at the very start and end, so nothing fades in from silence: the plugin treats the
+    // stretch before its first point and after its last as silent.
+    points: [{ time: 0, volume: 1 }, { time: duration, volume: 1 }],
+    volume: 1,
+    lineColor: `rgba(${accent},0.9)`,
+    lineWidth: '3',
+    dragPointSize: 14,
+    dragPointFill: `rgba(${accent},0.9)`,
+    dragPointStroke: 'rgba(255,255,255,0.9)',
+  }))
+}
+
+/** The curve as drawn: [{ time, volume }], sorted by time. Empty when it is not up. */
+export function getEnvelopePoints(containerId) {
+  const env = instances.get(containerId)?._envelope
+  if (!env) return []
+  return env.getPoints()
+    .map(p => ({ time: p.time, volume: Math.max(0, Math.min(1, p.volume)) }))
+    .sort((a, b) => a.time - b.time)
+}
+
+/** Puts the curve away and the volume back where it was. */
+export function stopEnvelope(containerId) {
+  const instance = instances.get(containerId)
+  if (!instance?._envelope) return
+  instance._envelope.destroy()
+  instance._envelope = null
+  instance.ws.setVolume(instance._volumeBeforeEnvelope ?? 1)
+}
+
 export function setDragMode(containerId, mode) {
   const instance = instances.get(containerId)
   if (!instance) return
@@ -1317,6 +1537,9 @@ export function destroy(containerId) {
   instance.resizeObserver?.disconnect()
   instance._paneSyncUnsubs?.forEach(u => u?.())
   instance.spectro?.plugin?.destroy()
+  instance.minimap?.destroy()
+  instance._minimapPane?.remove()
+  instance._envelope?.destroy()
   instance._resizeSpectroOverlay?.disconnect()
   instance._themeWatch?.disconnect()
   try { instance.audioCtx?.close() } catch { /* ignore */ }

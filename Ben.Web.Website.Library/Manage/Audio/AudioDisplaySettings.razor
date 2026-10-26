@@ -101,6 +101,14 @@
             <small>Above 1 kHz, so the upper parts of a voice stand out.</small>
         </label>
 
+        <label class="audio-display__field">
+            <span>Height, @SpectrogramHeight px</span>
+            <input type="range" class="form-range" min="100" max="480" step="20" id="spectrogram-height"
+                   value="@SpectrogramHeight"
+                   @onchange="@(e => SpectrogramHeightChanged.InvokeAsync((int)ParseDouble(e.Value, SpectrogramHeight)))" />
+            <small>Taller shows more pitches apart. The waveform keeps its own height.</small>
+        </label>
+
         <label class="audio-display__check">
             <input type="checkbox" class="form-check-input" checked="@Analysis.SplitChannels"
                    @onchange="@(e => Change(Analysis with { SplitChannels = e.Value is true }))" />
@@ -137,6 +145,10 @@
 
     [Parameter] public SpectrogramAnalysis Analysis { get; set; } = SpectrogramAnalysis.Default;
     [Parameter] public EventCallback<SpectrogramAnalysis> AnalysisChanged { get; set; }
+
+    /// <summary>The spectrogram's height in px (phase 7).</summary>
+    [Parameter] public int SpectrogramHeight { get; set; } = 160;
+    [Parameter] public EventCallback<int> SpectrogramHeightChanged { get; set; }
 
     [Parameter] public bool SilenceOn { get; set; }
     [Parameter] public double SilenceThresholdDb { get; set; } = -40;

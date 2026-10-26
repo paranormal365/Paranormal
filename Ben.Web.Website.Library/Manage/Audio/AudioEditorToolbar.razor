@@ -90,6 +90,19 @@
         <ToolBarButton OnClick="@(() => Act(AudioToolbarAction.ZoomIn))" Enabled="@State.Ready" Title="Zoom in" AriaLabel="Zoom in">
             <BenIcon Name="zoom-in" /><span class="audio-toolbar__label">Zoom in</span>
         </ToolBarButton>
+        <ToolBarButton OnClick="@(() => Act(AudioToolbarAction.ZoomSelection))" Enabled="@(State.Ready && State.HasSelection)"
+                       Title="Zoom to the selection (Z)" AriaLabel="Zoom to the selection">
+            <BenIcon Name="maximize-2" /><span class="audio-toolbar__label">Zoom to the selection</span>
+        </ToolBarButton>
+        <ToolBarToggleButton Selected="@State.Loop"
+                             SelectedChanged="@(_ => Act(AudioToolbarAction.ToggleLoop))"
+                             Enabled="@State.Ready"
+                             AriaLabel="Loop"
+                             Title="@(State.Loop ? "Looping: a candidate, a marker or the selection plays round again. Press to stop looping (L)." : "Loop what you play: a candidate, a marker or the selection (L)")">
+            @* Icon only, like the zoom buttons: with its word on the bar, Clips (n) went into the
+               overflow menu at 1280 px. The word is there for screen readers and the menu. *@
+            <BenIcon Name="repeat" /><span class="audio-toolbar__label">Loop</span>
+        </ToolBarToggleButton>
 
         <ToolBarSpacer />
 
@@ -103,6 +116,7 @@
                     <DropDownButtonItem OnClick="@(() => Act(AudioToolbarAction.ToggleMelScale))" Enabled="@State.Spectrogram">@Check(State.MelScale)Mel scale</DropDownButtonItem>
                     <DropDownButtonItem OnClick="@(() => Act(AudioToolbarAction.ToggleVoiceBand))" Enabled="@State.Spectrogram">@Check(State.VoiceBand)Voice band</DropDownButtonItem>
                     <DropDownButtonItem OnClick="@(() => Act(AudioToolbarAction.ToggleDetectSilence))">@Check(State.DetectSilence)Detect silence</DropDownButtonItem>
+                    <DropDownButtonItem OnClick="@(() => Act(AudioToolbarAction.ToggleMinimap))">@Check(State.Minimap)Overview strip</DropDownButtonItem>
                     <DropDownButtonItem OnClick="@(() => Act(AudioToolbarAction.DisplaySettings))"><span class="audio-toolbar__check"></span>Display settings…</DropDownButtonItem>
                 </DropDownButtonItems>
             </TelerikDropDownButton>
@@ -138,6 +152,7 @@
                     <DropDownButtonItem OnClick="@(() => Act(AudioToolbarAction.Fade))" Enabled="@State.CanEdit">Fade in and out…</DropDownButtonItem>
                     <DropDownButtonItem OnClick="@(() => Act(AudioToolbarAction.ChangeSpeed))" Enabled="@State.CanEdit">Change speed…</DropDownButtonItem>
                     <DropDownButtonItem OnClick="@(() => Act(AudioToolbarAction.ChangePitch))" Enabled="@State.CanEdit">Change pitch…</DropDownButtonItem>
+                    <DropDownButtonItem OnClick="@(() => Act(AudioToolbarAction.DrawVolume))" Enabled="@(State.CanEdit && !State.VolumeCurve)">Turn parts down…</DropDownButtonItem>
                 </DropDownButtonItems>
             </TelerikDropDownButton>
         </ToolBarTemplateItem>
@@ -148,6 +163,9 @@
                              Title="Clips saved from this recording">
             <BenIcon Name="paperclip" />Clips (@State.ClipCount)
         </ToolBarToggleButton>
+        <ToolBarButton OnClick="@(() => Act(AudioToolbarAction.Shortcuts))" Title="Keyboard shortcuts (?)" AriaLabel="Keyboard shortcuts">
+            <BenIcon Name="help-circle" /><span class="audio-toolbar__label">Keyboard shortcuts</span>
+        </ToolBarButton>
     </TelerikToolBar>
 </div>
 

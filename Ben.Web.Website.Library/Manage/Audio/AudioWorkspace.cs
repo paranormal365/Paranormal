@@ -34,6 +34,12 @@ public sealed record AudioWorkspace
     public string InspectorTab { get; init; } = "markers";
     public SpectrogramAnalysis Analysis { get; init; } = SpectrogramAnalysis.Default;
 
+    /// <summary>The whole-recording strip under the waveform (phase 7).</summary>
+    public bool Minimap { get; init; }
+
+    /// <summary>The spectrogram's height in px, 100–480 (phase 7).</summary>
+    public int SpectrogramHeight { get; init; } = 160;
+
     public static AudioWorkspace Default { get; } = new();
 
     /// <summary>The tabs the editor has; anything else stored falls back to the first.</summary>
@@ -73,6 +79,8 @@ public sealed record AudioWorkspace
             DetectSilence = stored.DetectSilence ?? Default.DetectSilence,
             InspectorOpen = stored.InspectorOpen ?? Default.InspectorOpen,
             InspectorTab  = stored.InspectorTab is { } t && Tabs.Contains(t) ? t : Default.InspectorTab,
+            Minimap       = stored.Minimap ?? Default.Minimap,
+            SpectrogramHeight = (int)Clamp(stored.SpectrogramHeight, Default.SpectrogramHeight, 100, 480),
             Analysis = new SpectrogramAnalysis(
                 Scale:         stored.Scale is { } s && Scales.Contains(s) ? s : a.Scale,
                 FrequencyMin:  Clamp(stored.FrequencyMin, a.FrequencyMin, 0, 24_000),
@@ -101,6 +109,8 @@ public sealed record AudioWorkspace
             DetectSilence = DetectSilence,
             InspectorOpen = InspectorOpen,
             InspectorTab  = InspectorTab,
+            Minimap       = Minimap,
+            SpectrogramHeight = SpectrogramHeight,
             Scale         = Analysis.Scale,
             FrequencyMin  = Analysis.FrequencyMin,
             FrequencyMax  = Analysis.FrequencyMax,
@@ -127,6 +137,8 @@ public sealed record AudioWorkspace
         public bool? DetectSilence { get; init; }
         public bool? InspectorOpen { get; init; }
         public string? InspectorTab { get; init; }
+        public bool? Minimap { get; init; }
+        public double? SpectrogramHeight { get; init; }
         public string? Scale { get; init; }
         public double? FrequencyMin { get; init; }
         public double? FrequencyMax { get; init; }
