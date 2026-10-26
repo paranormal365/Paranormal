@@ -655,3 +655,98 @@
     box-shadow: 0 1px 0 var(--ben-line-strong);
     padding: .05rem .35rem;
 }
+
+/* ── Phase 8 ──────────────────────────────────────────────────────────────── */
+
+/* The hint line carries the live meter at its right. */
+.audio-hint {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: .25rem .75rem;
+}
+.audio-hint__meters {
+    order: 2;
+    margin-left: auto;
+    display: inline-flex;
+    align-items: center;
+    gap: .5rem;
+}
+.audio-meter {
+    width: 160px;
+    height: 36px;
+    border: 1px solid var(--ben-line);
+    border-radius: var(--ben-radius);
+    background: var(--ben-surface);
+}
+.audio-hint__original {
+    padding: .1rem .5rem;
+    border-radius: 999px;
+    font-size: .75rem;
+    font-weight: 600;
+    color: var(--ben-ink);
+    background: rgba(var(--ben-audio-candidate-rgb), .18);
+    border: 1px solid rgba(var(--ben-audio-candidate-rgb), .6);
+}
+
+/* Every candidate and kept marker across the whole recording; stronger candidates are bolder. */
+.evp-strip {
+    position: relative;
+    height: 12px;
+    margin-bottom: .35rem;
+    border-radius: 3px;
+    background: rgba(var(--ben-audio-possible-rgb), .1);
+}
+.evp-strip__mark {
+    position: absolute;
+    top: 0;
+    bottom: 0;
+    min-width: 4px;
+    padding: 0;
+    border: 0;
+    border-radius: 2px;
+    cursor: pointer;
+}
+.evp-strip__mark.is-candidate {
+    background: rgba(var(--ben-audio-candidate-rgb), calc(.3 + .7 * var(--strength, 1)));
+}
+.evp-strip__mark.is-kept {
+    background: rgb(var(--ben-audio-confirmed-rgb));
+}
+.evp-strip__mark.is-focused,
+.evp-strip__mark:focus-visible {
+    outline: 2px solid var(--ben-accent);
+    outline-offset: 1px;
+}
+
+/* Why a candidate was found. */
+.evp-why {
+    margin: -.15rem 0 .5rem;
+    padding: .6rem .75rem;
+    border: 1px solid var(--ben-line);
+    border-top: 0;
+    border-radius: 0 0 var(--ben-radius) var(--ben-radius);
+    background: var(--ben-surface);
+    font-size: .85rem;
+}
+.evp-why__bar {
+    display: flex;
+    height: 10px;
+    border-radius: 5px;
+    overflow: hidden;
+    background: rgba(var(--ben-audio-possible-rgb), .15);
+    margin-bottom: .5rem;
+}
+.evp-why__part--0 { background: rgb(var(--ben-accent-rgb)); }
+.evp-why__part--1 { background: rgb(var(--ben-audio-voice-rgb)); }
+.evp-why__part--2 { background: rgb(var(--ben-audio-candidate-rgb)); }
+.evp-why__terms { margin: 0 0 .5rem; padding-left: 1.1rem; }
+.evp-why__measures {
+    display: grid;
+    grid-template-columns: auto 1fr;
+    gap: .15rem .75rem;
+    margin: 0 0 .35rem;
+}
+.evp-why__measures dt { font-weight: 400; color: var(--ben-ink-muted); }
+.evp-why__measures dd { margin: 0; }
+.evp-why__note { color: var(--ben-ink-muted); margin: 0; }

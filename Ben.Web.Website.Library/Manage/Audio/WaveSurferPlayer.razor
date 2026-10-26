@@ -500,6 +500,19 @@
 
     public async Task StopEnvelopeAsync() => await Invoke("stopEnvelope");
 
+    // ── Phase 8: lanes, meter, compare original ───────────────────────────────
+
+    /// <summary>The level lane under the waveform, with the silence line when <paramref name="silenceDb"/> is given.</summary>
+    public async Task SetLevelLaneAsync(bool show, double? silenceDb) => await Invoke("setLevelLane", show, silenceDb);
+
+    /// <summary>The detector lane, drawn from a scan's trace; null removes it.</summary>
+    public async Task SetDetectorLaneAsync(EvpTraceRecord? trace) => await Invoke("setDetectorLane", trace);
+
+    /// <summary>Plays the recording round every listening tool while on.</summary>
+    public async Task SetChainBypassAsync(bool bypass) => await Invoke("setChainBypass", bypass);
+
+    public async Task StartMeterAsync(ElementReference canvas) => await Invoke("startMeter", canvas);
+
     // ── JS-invokable callbacks ────────────────────────────────────────────────
 
     [JSInvokable] public async Task OnWsReady(double duration)

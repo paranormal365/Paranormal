@@ -799,6 +799,27 @@ public sealed class WebApiClient : IWebApiClient
         return response.StatusCode == System.Net.HttpStatusCode.TooManyRequests ? TooManyTries : null;
     }
 
+    // ── The detector's own view (phase 8) ────────────────────────────────────
+
+    /// <inheritdoc />
+    public Task<(EvpTraceRecord? Trace, string? Error)> GetScanTraceAsync(Guid fileId, CancellationToken token = default)
+        => GetWithReasonAsync<EvpTraceRecord>($"/api/upload-files/{fileId}/audio-markers/scan-trace", token);
+
+    /// <inheritdoc />
+    public Task<(EvpCandidateDetailRecord? Detail, string? Error)> GetCandidateDetailAsync(
+        Guid fileId, Guid markerId, CancellationToken token = default)
+        => GetWithReasonAsync<EvpCandidateDetailRecord>($"/api/upload-files/{fileId}/audio-markers/{markerId}/detection", token);
+
+    /// <summary>A GET whose refusal is a sentence worth showing; an unreadable answer is a failure.</summary>
+    private async Task<(T? Result, string? Error)> GetWithReasonAsync<T>(string url, CancellationToken token) where T : class
+    {
+        using var req = Auth(HttpMethod.Get, url);
+        using var response = await SendOrUnreachableAsync(req, token);
+        if (response.IsSuccessStatusCode && await BodyOrDefaultAsync<T>(response, token) is { } body)
+            return (body, null);
+        return (null, await ScanRefusalAsync(response, token) ?? "That couldn't be loaded just now.");
+    }
+
     // ── Background scans (phase 6) ───────────────────────────────────────────
 
     /// <inheritdoc />

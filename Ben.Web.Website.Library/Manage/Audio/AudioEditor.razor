@@ -47,7 +47,15 @@
     @* The hint gets its own line. Inside the toolbar's flex row it was the item that
        absorbed the overflow, and a sentence squeezed to 40px wide is one word per
        line — the column the walk photographed. *@
-    <div class="small text-secondary fst-italic mb-2 flex-shrink-0">
+    <div class="audio-hint small text-secondary fst-italic mb-2 flex-shrink-0">
+        @* What is heard, live (phase 8), and a word when it is the original rather than the tools' version. *@
+        <span class="audio-hint__meters fst-normal">
+            @if (_compareOriginal)
+            {
+                <span class="audio-hint__original" id="audio-original-chip" title="Playing the recording as it is, round every listening tool (B to switch back)">Original</span>
+            }
+            <canvas class="audio-meter" id="audio-meter" @ref="_meterCanvas" aria-label="Level and frequencies of what is playing" role="img"></canvas>
+        </span>
         @(_regionDrawMode
             ? "Click & drag to mark a region — right-click to play, save, or edit"
             : "Click & drag the waveform to scrub — audio plays while dragging")
@@ -78,6 +86,26 @@
             @if (_volumeError is not null)
             {
                 <div class="w-100 text-danger small">@_volumeError</div>
+            }
+        </div>
+    }
+
+    @* Every candidate and kept marker across the whole recording, at a glance (phase 8): stronger
+       candidates are bolder. A click goes there and plays it. *@
+    @if (_modalReady && _modalDuration > 0 && _markers.Any(m => m.ReviewStatus != EvpReviewStatus.Dismissed))
+    {
+        <div class="evp-strip" id="evp-strip" aria-label="Candidates and markers across the recording">
+            @foreach (var m in _markers.Where(m => m.ReviewStatus != EvpReviewStatus.Dismissed))
+            {
+                var mark = m;
+                var left  = Math.Clamp(mark.TimeSeconds / _modalDuration * 100, 0, 100);
+                var width = Math.Max(0.5, ((mark.EndSeconds ?? mark.TimeSeconds) - mark.TimeSeconds) / _modalDuration * 100);
+                var pending = mark.ReviewStatus == EvpReviewStatus.Pending;
+                <button type="button" class="evp-strip__mark @(pending ? "is-candidate" : "is-kept") @(_focusedCandidateId == mark.Id ? "is-focused" : null)"
+                        style="left:@(left.ToString("0.###", System.Globalization.CultureInfo.InvariantCulture))%;width:@(width.ToString("0.###", System.Globalization.CultureInfo.InvariantCulture))%;--strength:@(((mark.DetectionScore ?? 100) / 100).ToString("0.##", System.Globalization.CultureInfo.InvariantCulture))"
+                        title="@(pending ? $"Candidate at {FormatTime(mark.TimeSeconds)}, score {mark.DetectionScore:0}" : $"{mark.Label} at {FormatTime(mark.TimeSeconds)}")"
+                        aria-label="@(pending ? $"Candidate at {FormatTime(mark.TimeSeconds)}" : $"Marker at {FormatTime(mark.TimeSeconds)}")"
+                        @onclick="@(() => GoToMarkAsync(mark))"></button>
             }
         </div>
     }
@@ -311,6 +339,8 @@
                                             <span class="evp-row__actions">
                                                 <button type="button" class="btn btn-outline-secondary btn-sm ben-grid-action" @onclick="@(() => PlayCandidateAsync(c))" title="Play this stretch with its surrounding context"><BenIcon Name="play" /></button>
                                                 <button type="button" class="btn btn-outline-secondary btn-sm ben-grid-action" @onclick="@(() => ZoomToCandidateAsync(c))" title="Zoom in on this one"><BenIcon Name="maximize-2" /></button>
+                                                <button type="button" class="btn btn-outline-secondary btn-sm ben-grid-action evp-row__why" @onclick="@(() => ToggleExplanationAsync(c))"
+                                                        aria-expanded="@(_explainingId == c.Id ? "true" : "false")" title="Why the scan found this"><BenIcon Name="info" /></button>
                                                 @if (isAdjusting)
                                                 {
                                                     <button type="button" class="btn btn-primary btn-sm" @onclick="SaveAdjustedBoundsAsync">Save bounds</button>
@@ -324,6 +354,44 @@
                                                 }
                                             </span>
                                         </div>
+                                        @if (_explainingId == c.Id)
+                                        {
+                                            @* Why it was found (phase 8): its score in three parts, and what was measured. *@
+                                            <div class="evp-why" id="evp-why-@c.Id">
+                                                @if (_explanation is { } why)
+                                                {
+                                                    <div class="evp-why__bar" role="img" aria-label="@($"Score {why.Score:0} of 100")">
+                                                        @foreach (var term in why.Terms)
+                                                        {
+                                                            <span class="evp-why__part evp-why__part--@(why.Terms.ToList().IndexOf(term))"
+                                                                  style="width:@(term.Points.ToString("0.##", System.Globalization.CultureInfo.InvariantCulture))%"
+                                                                  title="@term.Name: @term.Points.ToString("0") of @term.MaxPoints.ToString("0")"></span>
+                                                        }
+                                                    </div>
+                                                    <ul class="evp-why__terms">
+                                                        @foreach (var term in why.Terms)
+                                                        {
+                                                            <li><strong>@term.Name, @term.Points.ToString("0") of @term.MaxPoints.ToString("0").</strong> @term.Sentence</li>
+                                                        }
+                                                    </ul>
+                                                    <dl class="evp-why__measures">
+                                                        <dt>The room around it</dt><dd>@why.MeanFloorDb.ToString("0") dB</dd>
+                                                        <dt>Its loudest moment</dt><dd>@why.PeakBandDb.ToString("0") dB</dd>
+                                                        <dt>How much its level moved</dt><dd>@why.BandLevelSpreadDb.ToString("0.0") dB (speech rises and falls; a hum holds steady)</dd>
+                                                        <dt>Hiss-like</dt><dd>@((why.ZeroCrossingRate * 100).ToString("0"))% (higher is more like hiss)</dd>
+                                                    </dl>
+                                                    <p class="evp-why__note">The score is how much a sound stood out, not how likely it is to be a voice. Listen to it.</p>
+                                                }
+                                                else if (_explainError is not null)
+                                                {
+                                                    <p class="evp-why__note mb-0">@_explainError</p>
+                                                }
+                                                else
+                                                {
+                                                    <p class="evp-why__note mb-0">Loading…</p>
+                                                }
+                                            </div>
+                                        }
                                     }
                                 </div>
                             </div>
@@ -593,6 +661,7 @@
             <dt><kbd>Z</kbd></dt><dd>Zoom to the selection, or to the highlighted candidate.</dd>
             <dt><kbd>F</kbd></dt><dd>Fit the whole recording.</dd>
             <dt><kbd>L</kbd></dt><dd>Loop on or off.</dd>
+            <dt><kbd>B</kbd></dt><dd>Hear the original, without the listening tools, and back.</dd>
             <dt><kbd>Esc</kbd></dt><dd>Clear the selection, or put the volume line away.</dd>
             <dt><kbd>?</kbd></dt><dd>This list.</dd>
         </dl>
@@ -1149,6 +1218,7 @@
         if (_modalPlayer is not null)
         {
             await _modalPlayer.InitAudioProcessingAsync();
+            await _modalPlayer.StartMeterAsync(_meterCanvas);
 
             // And only now the saved chain: the graph is built fresh on every open, so applying it
             // any earlier sets filters on nodes that do not exist yet and the panel would claim a
@@ -1624,6 +1694,8 @@
         Analysis      = _spectrogramAnalysis,
         Minimap       = _minimap,
         SpectrogramHeight = _spectrogramHeight,
+        LevelLane     = _levelLane,
+        DetectorLane  = _detectorLane,
     };
 
     /// <summary>The listening chain as the controls stand.</summary>
@@ -1692,6 +1764,8 @@
         _inspectorTab            = ws.InspectorTab;
         _minimap                 = ws.Minimap;
         _spectrogramHeight       = ws.SpectrogramHeight;
+        _levelLane               = ws.LevelLane;
+        _detectorLane            = ws.DetectorLane;
 
         ApplyChainToControls(view.Chain);
 
@@ -1701,6 +1775,8 @@
         // Before the spectrogram, so it opens at its remembered height (phase 7).
         await _modalPlayer.SetSpectrogramHeightAsync(_spectrogramHeight);
         if (_minimap) await _modalPlayer.ToggleMinimapAsync(true);
+        if (_levelLane) await RefreshLevelLaneAsync();
+        if (_detectorLane) await RefreshDetectorLaneAsync(sayWhyNot: false);
         if (_spectrogramEnabled)
         {
             await _modalPlayer.ToggleSpectrogramAsync(
@@ -2011,7 +2087,10 @@
         CustomScan:        EvpDetectionOptions.PresetName(_scanOptions) is null,
         Loop:              _loop,
         Minimap:           _minimap,
-        VolumeCurve:       _volumeCurve);
+        VolumeCurve:       _volumeCurve,
+        LevelLane:         _levelLane,
+        DetectorLane:      _detectorLane,
+        CompareOriginal:   _compareOriginal);
 
     private void OpenTab(string tab)
     {
@@ -2050,6 +2129,9 @@
             case AudioToolbarAction.ToggleMinimap:           await ToggleMinimapAsync(); break;
             case AudioToolbarAction.DrawVolume:              await OpenVolumeCurveAsync(); break;
             case AudioToolbarAction.Shortcuts:               _showShortcuts = true; break;
+            case AudioToolbarAction.ToggleLevelLane:         await ToggleLevelLaneAsync(); break;
+            case AudioToolbarAction.ToggleDetectorLane:      await ToggleDetectorLaneAsync(); break;
+            case AudioToolbarAction.ToggleCompare:           await ToggleCompareAsync(); break;
 
             case AudioToolbarAction.ToggleTimeline:          await ToggleTimelineAsync(); break;
             case AudioToolbarAction.ToggleSpectrogramLabels: await OnSpectrogramMenuClickAsync(new SpectrogramMenuItem("labels", "")); break;
@@ -2170,6 +2252,7 @@
     {
         _silenceThresholdDb = db;
         await ApplySilenceDetectionAsync();
+        if (_levelLane) await RefreshLevelLaneAsync();
     }
 
     // ── Menu item records ─────────────────────────────────────────────────────
@@ -2722,6 +2805,7 @@
                 case "zoom": await ZoomToSelectionAsync(); break;
                 case "fit":  await _modalPlayer.SetZoomAsync(0); break;
                 case "loop": await ToggleLoopAsync(); break;
+                case "compare": await ToggleCompareAsync(); break;
 
                 case "escape":
                     if (_volumeCurve) await CloseVolumeCurveAsync();
@@ -2733,6 +2817,89 @@
         }
         catch (Exception gone) when (gone is JSDisconnectedException or OperationCanceledException) { return; }
         StateHasChanged();
+    }
+
+    // ── Phase 8: the detector's own view ──────────────────────────────────────
+
+    private bool    _levelLane;
+    private bool    _detectorLane;
+    private bool    _compareOriginal;
+    private ElementReference _meterCanvas;
+
+    /// <summary>The candidate whose "Why?" is open, and what the server said about it.</summary>
+    private Guid?                     _explainingId;
+    private EvpCandidateDetailRecord? _explanation;
+    private string?                   _explainError;
+
+    private async Task ToggleLevelLaneAsync()
+    {
+        _levelLane = !_levelLane;
+        await RefreshLevelLaneAsync();
+        await SaveViewAsync();
+    }
+
+    private async Task RefreshLevelLaneAsync()
+    {
+        if (_modalPlayer is null) return;
+        await _modalPlayer.SetLevelLaneAsync(_levelLane, _silenceDetectionEnabled ? _silenceThresholdDb : null);
+    }
+
+    private async Task ToggleDetectorLaneAsync()
+    {
+        _detectorLane = !_detectorLane;
+        if (_detectorLane) await RefreshDetectorLaneAsync(sayWhyNot: true);
+        else if (_modalPlayer is not null) await _modalPlayer.SetDetectorLaneAsync(null);
+        await SaveViewAsync();
+    }
+
+    /// <summary>
+    /// Draws the detector lane from the latest scan's trace. When there is none to draw (never
+    /// scanned, or scanned before traces were kept), the lane stays off the screen and, when asked,
+    /// the server's sentence says why.
+    /// </summary>
+    private async Task RefreshDetectorLaneAsync(bool sayWhyNot)
+    {
+        if (_modalPlayer is null) return;
+        var (trace, why) = await AdminClient.GetScanTraceAsync(FileId);
+        await _modalPlayer.SetDetectorLaneAsync(trace);
+        if (trace is null && sayWhyNot)
+            Notify($"The detector lane is on, with nothing to show yet: {why}", "info");
+    }
+
+    /// <summary>B, or Listen ▸ Hear the original: the recording as it is, round every listening tool.</summary>
+    private async Task ToggleCompareAsync()
+    {
+        _compareOriginal = !_compareOriginal;
+        if (_modalPlayer is not null) await _modalPlayer.SetChainBypassAsync(_compareOriginal);
+    }
+
+    private async Task ToggleExplanationAsync(AudioMarkerRecord candidate)
+    {
+        if (_explainingId == candidate.Id) { _explainingId = null; return; }
+        _explainingId = candidate.Id;
+        _explanation  = null;
+        _explainError = null;
+        StateHasChanged();
+
+        var (detail, error) = await AdminClient.GetCandidateDetailAsync(FileId, candidate.Id);
+        if (_explainingId != candidate.Id) return;   // another row was opened meanwhile
+        _explanation  = detail;
+        _explainError = detail is null ? error ?? "Why this was found couldn't be loaded just now." : null;
+    }
+
+    /// <summary>A mark on the candidate strip: go there, highlight it if it's a candidate, and play it.</summary>
+    private async Task GoToMarkAsync(AudioMarkerRecord mark)
+    {
+        if (mark.ReviewStatus == EvpReviewStatus.Pending)
+        {
+            _focusedCandidateId = mark.Id;
+            await PlayCandidateAsync(mark);
+        }
+        else if (_modalPlayer is not null && _modalDuration > 0)
+        {
+            await _modalPlayer.SeekToAsync(mark.TimeSeconds / _modalDuration);
+            await _modalPlayer.PlayAsync();
+        }
     }
 
     // ── Turning parts down: the volume line (phase 7) ─────────────────────────
@@ -2939,6 +3106,8 @@
                 // server-side, so the local list is stale in ways the job alone doesn't describe.
                 await ClearMarkerRegionsAsync();
                 await OverlayMarkersAsync();
+                if (_detectorLane) await RefreshDetectorLaneAsync(sayWhyNot: true);
+                _explainingId = null;
                 _scanMessage = (segment.CandidateCount ?? 0) switch
                 {
                     0 => "Nothing stood out from the background.",
@@ -3136,6 +3305,7 @@
             else
                 await _modalPlayer.ClearSilenceDetectionAsync();
         }
+        if (_levelLane) await RefreshLevelLaneAsync();
         await SaveViewAsync();
     }
 

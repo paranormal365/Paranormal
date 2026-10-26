@@ -301,8 +301,10 @@ export async function create(containerId, options, plugins, dotnetRef, audioUrl)
   const sync = () => {
     const inst = instances.get(containerId)
     _syncPanesToWaveform(inst)
-    // The marks on the spectrogram are placed from the scroll position (phase 7).
+    // The marks on the spectrogram are placed from the scroll position (phase 7), and so are the
+    // lanes (phase 8).
     if (inst?._spectroSpans?.length) _drawSpectrogramOverlay(inst)
+    if (inst?._lanes) _drawLanes(inst)
   }
   instances.get(containerId)._paneSyncUnsubs = [
     ws.on('scroll', sync),
@@ -1320,6 +1322,166 @@ export async function toggleMinimap(containerId, show) {
 
 const MINIMAP_HEIGHT = 36
 
+// ── Lanes under the waveform (phase 8) ───────────────────────────────────────
+
+const LANE_HEIGHT = 64
+
+/**
+ * The level lane: how loud the recording is, every 10 ms, in dB, with the silence threshold when
+ * silence detection is on. Worked out once from the decoded audio; nothing is sent anywhere.
+ */
+export function setLevelLane(containerId, show, silenceDb) {
+  const inst = instances.get(containerId)
+  if (!inst?.ws) return
+  if (!show) { _removeLane(containerId, inst, 'level'); return }
+  if (!inst._levelDb) {
+    const data = inst.ws.getDecodedData?.()
+    if (!data) return
+    const ch = data.getChannelData(0), rate = data.sampleRate, step = Math.max(1, Math.round(rate / 100))
+    const out = new Float32Array(Math.ceil(ch.length / step))
+    for (let i = 0, o = 0; i < ch.length; i += step, o++) {
+      let sum = 0; const end = Math.min(ch.length, i + step)
+      for (let j = i; j < end; j++) sum += ch[j] * ch[j]
+      const rms = Math.sqrt(sum / (end - i))
+      out[o] = rms > 1e-6 ? 20 * Math.log10(rms) : -120
+    }
+    inst._levelDb = out
+  }
+  inst._silenceDb = silenceDb ?? null
+  _ensureLane(containerId, inst, 'level', 'Level')
+  _drawLanes(inst)
+}
+
+/**
+ * The detector lane: what the scan saw, from its stored trace: the voice-band level, the room's
+ * background, the line a sound had to cross (background plus threshold), and shading where the
+ * gate opened, so each candidate's reason is on the screen. Null removes it.
+ */
+export function setDetectorLane(containerId, trace) {
+  const inst = instances.get(containerId)
+  if (!inst?.ws) return
+  if (!trace) { _removeLane(containerId, inst, 'detector'); return }
+  // A loop, not Math.min(...): a long recording has more values than a call can take as arguments.
+  let lo = 0, hi = -120
+  for (const v of trace.floorDb) if (v > -119) lo = Math.min(lo, v)
+  for (const v of trace.bandDb) { if (v > -119) lo = Math.min(lo, v); hi = Math.max(hi, v) }
+  trace._lo = Math.max(-120, lo - 6)
+  trace._hi = Math.min(0, Math.max(hi + 6, trace._lo + 12))
+  inst._trace = trace
+  _ensureLane(containerId, inst, 'detector', 'Detector')
+  _drawLanes(inst)
+}
+
+function _ensureLane(containerId, inst, kind, title) {
+  inst._lanes ??= {}
+  if (inst._lanes[kind]?.isConnected) return
+  const waveformEl = document.getElementById(containerId)
+  if (!waveformEl) return
+  const pane = document.createElement('div')
+  pane.className = `ws-lane ws-lane--${kind}`
+  pane.dataset.lane = kind
+  pane.style.cssText = `position:relative;width:100%;height:${LANE_HEIGHT}px;margin-top:2px;`
+    + 'border-top:1px solid var(--ben-line, rgba(0,0,0,.1));'
+  const canvas = document.createElement('canvas')
+  canvas.style.cssText = 'position:absolute;inset:0;width:100%;height:100%;'
+  const label = document.createElement('span')
+  label.textContent = title
+  label.style.cssText = 'position:absolute;left:4px;top:2px;font-size:11px;line-height:1;padding:2px 4px;border-radius:3px;'
+    + 'background:var(--ben-surface, #fff);color:var(--ben-ink-muted, #666);pointer-events:none;'
+  pane.append(canvas, label)
+  // Level above detector, both straight under the waveform.
+  const after = kind === 'detector' && inst._lanes.level?.isConnected ? inst._lanes.level : waveformEl
+  after.parentNode.insertBefore(pane, after.nextSibling)
+  inst._lanes[kind] = pane
+  _growPlayerHeightBy(containerId, LANE_HEIGHT + 2)
+  inst._laneResize ??= new ResizeObserver(() => _drawLanes(inst))
+  inst._laneResize.observe(pane)
+}
+
+function _removeLane(containerId, inst, kind) {
+  const pane = inst._lanes?.[kind]
+  if (!pane) return
+  pane.remove()
+  inst._lanes[kind] = null
+  _restorePlayerHeightBy(containerId, LANE_HEIGHT + 2)
+}
+
+/** Draws whichever lanes are up, for the part of the recording in view. */
+function _drawLanes(inst) {
+  if (!inst?._lanes) return
+  const duration = inst.ws.getDuration?.()
+  const scrollEl = _wsScrollEl(document.getElementById(inst.containerId))
+  if (!duration || !scrollEl?.scrollWidth) return
+  const pxPerSec = scrollEl.scrollWidth / duration
+  const left = scrollEl.scrollLeft
+  const accent = _themeRgb('--ben-accent-rgb', '91, 61, 245')
+  const candidate = _themeRgb('--ben-audio-candidate-rgb', '217, 119, 6')
+  const muted = _themeRgb('--ben-audio-silence-rgb', '100, 116, 139')
+
+  const prepare = (pane) => {
+    const canvas = pane.querySelector('canvas')
+    const W = canvas.clientWidth, H = canvas.clientHeight
+    if (!W || !H) return null
+    const dpr = window.devicePixelRatio || 1
+    if (canvas.width !== Math.round(W * dpr) || canvas.height !== Math.round(H * dpr)) {
+      canvas.width = Math.round(W * dpr); canvas.height = Math.round(H * dpr)
+    }
+    const ctx = canvas.getContext('2d')
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0)
+    ctx.clearRect(0, 0, W, H)
+    return { ctx, W, H }
+  }
+  // The largest value in a series between two times: a quiet stretch never hides a sound.
+  const peakBetween = (series, secondsPer, t0, t1) => {
+    const a = Math.max(0, Math.floor(t0 / secondsPer)), b = Math.min(series.length, Math.max(a + 1, Math.ceil(t1 / secondsPer)))
+    let v = -Infinity
+    for (let i = a; i < b; i++) v = Math.max(v, series[i])
+    return v
+  }
+  const line = (ctx, W, H, yOf, valueAt, style, dash) => {
+    ctx.strokeStyle = style; ctx.lineWidth = 1.25; ctx.setLineDash(dash ?? [])
+    ctx.beginPath()
+    for (let x = 0; x <= W; x++) {
+      const y = yOf(valueAt((left + x) / pxPerSec, (left + x + 1) / pxPerSec))
+      if (x === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y)
+    }
+    ctx.stroke(); ctx.setLineDash([])
+  }
+
+  const level = inst._lanes.level
+  if (level?.isConnected && inst._levelDb) {
+    const d = prepare(level)
+    if (d) {
+      const yOf = (db) => d.H - Math.max(0, Math.min(1, (db + 90) / 90)) * d.H
+      line(d.ctx, d.W, d.H, yOf, (t0, t1) => peakBetween(inst._levelDb, 0.01, t0, t1), `rgba(${accent},0.9)`)
+      if (inst._silenceDb != null) {
+        d.ctx.strokeStyle = `rgba(${muted},0.9)`; d.ctx.setLineDash([4, 4])
+        d.ctx.beginPath(); d.ctx.moveTo(0, yOf(inst._silenceDb)); d.ctx.lineTo(d.W, yOf(inst._silenceDb)); d.ctx.stroke()
+        d.ctx.setLineDash([])
+      }
+    }
+  }
+
+  const detector = inst._lanes.detector
+  const tr = inst._trace
+  if (detector?.isConnected && tr) {
+    const d = prepare(detector)
+    if (d) {
+      const yOf = (db) => d.H - Math.max(0, Math.min(1, (db - tr._lo) / (tr._hi - tr._lo))) * d.H
+      d.ctx.fillStyle = `rgba(${candidate},0.16)`
+      for (const r of tr.gateRuns) {
+        const x1 = r.start * pxPerSec - left, x2 = Math.max(x1 + 1, r.end * pxPerSec - left)
+        if (x2 >= 0 && x1 <= d.W) d.ctx.fillRect(x1, 0, x2 - x1, d.H)
+      }
+      const per = tr.bucketSeconds
+      const floorAt = (t0, t1) => tr.floorDb[Math.min(tr.floorDb.length - 1, Math.max(0, Math.floor(((t0 + t1) / 2) / per)))]
+      line(d.ctx, d.W, d.H, yOf, floorAt, `rgba(${muted},0.95)`)
+      line(d.ctx, d.W, d.H, yOf, (t0, t1) => floorAt(t0, t1) + tr.thresholdDb, `rgba(${candidate},0.95)`, [5, 4])
+      line(d.ctx, d.W, d.H, yOf, (t0, t1) => peakBetween(tr.bandDb, per, t0, t1), `rgba(${accent},0.9)`)
+    }
+  }
+}
+
 /** Grows the player by a pane's height so the waveform keeps its own (the minimap's). */
 function _growPlayerHeightBy(containerId, px) {
   const instance = instances.get(containerId)
@@ -1539,6 +1701,9 @@ export function destroy(containerId) {
   instance.spectro?.plugin?.destroy()
   instance.minimap?.destroy()
   instance._minimapPane?.remove()
+  instance._stopMeter?.()
+  instance._laneResize?.disconnect()
+  Object.values(instance._lanes ?? {}).forEach(p => p?.remove())
   instance._envelope?.destroy()
   instance._resizeSpectroOverlay?.disconnect()
   instance._themeWatch?.disconnect()
@@ -1601,15 +1766,28 @@ export async function initAudioProcessing(containerId) {
   const outputGain = audioCtx.createGain()
   outputGain.gain.value = 1.0
 
-  // source → [noiseGate →] hp → eq[0..9] → lp → compressor → outputGain → destination
+  // What is heard, measured for the editor's meter (phase 8). Last, so it shows the filters' effect,
+  // and so "compare original" can route round the chain straight to it.
+  const meter = audioCtx.createAnalyser()
+  meter.fftSize = 2048
+  meter.smoothingTimeConstant = 0.6
+
+  // source → [noiseGate →] hp → eq[0..9] → lp → compressor → outputGain → meter → destination
+  const head = noiseGateNode ?? hpFilter
   let prev = source
-  if (noiseGateNode) { prev.connect(noiseGateNode); prev = noiseGateNode }
-  prev.connect(hpFilter);    prev = hpFilter
+  prev.connect(head)
+  if (noiseGateNode) { prev = noiseGateNode; prev.connect(hpFilter) }
+  prev = hpFilter
   for (const f of eqFilters) { prev.connect(f); prev = f }
   prev.connect(lpFilter);    prev = lpFilter
   prev.connect(compressor);  prev = compressor
   prev.connect(outputGain)
-  outputGain.connect(audioCtx.destination)
+  outputGain.connect(meter)
+  meter.connect(audioCtx.destination)
+
+  inst.source = source
+  inst.chainHead = head
+  inst.meter = meter
 
   inst.audioCtx      = audioCtx
   inst.eqFilters     = eqFilters
@@ -1618,6 +1796,78 @@ export async function initAudioProcessing(containerId) {
   inst.compressor    = compressor
   inst.outputGain    = outputGain
   inst.noiseGateNode = noiseGateNode
+}
+
+/**
+ * Compare original (phase 8): while on, the recording plays as it is, round every listening tool,
+ * so the difference the filters make can be heard by switching back and forth.
+ */
+export function setChainBypass(containerId, bypass) {
+  const inst = instances.get(containerId)
+  if (!inst?.source || !inst.meter) return
+  inst.source.disconnect()
+  inst.source.connect(bypass ? inst.meter : inst.chainHead)
+  inst._bypassed = !!bypass
+}
+
+/**
+ * The live meter (phase 8): 64 bands on a log scale, the level of what is heard, with the loudest
+ * moment held for a second. Draws only while something plays; a still frame otherwise.
+ */
+export function startMeter(containerId, canvas) {
+  const inst = instances.get(containerId)
+  if (!inst?.meter || !canvas) return
+  stopMeter(containerId)
+  const analyser = inst.meter
+  const bins = new Uint8Array(analyser.frequencyBinCount)
+  const wave = new Float32Array(analyser.fftSize)
+  const sampleRate = analyser.context.sampleRate
+  let peak = 0, peakAt = 0, running = true
+
+  const draw = (now) => {
+    if (!running) return
+    inst._meterFrame = requestAnimationFrame(draw)
+    const W = canvas.clientWidth, H = canvas.clientHeight
+    if (!W || !H) return
+    const dpr = window.devicePixelRatio || 1
+    if (canvas.width !== Math.round(W * dpr)) { canvas.width = Math.round(W * dpr); canvas.height = Math.round(H * dpr) }
+    const ctx = canvas.getContext('2d')
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0)
+    ctx.clearRect(0, 0, W, H)
+
+    analyser.getByteFrequencyData(bins)
+    analyser.getFloatTimeDomainData(wave)
+    let level = 0
+    for (const v of wave) level = Math.max(level, Math.abs(v))
+    if (level >= peak || now - peakAt > 1000) { peak = level; peakAt = now }
+
+    const accent = _themeRgb('--ben-accent-rgb', '91, 61, 245')
+    const meterW = 10, gap = 4, barsW = W - meterW - gap, n = 64
+    const lo = Math.log10(40), hi = Math.log10(Math.min(16000, sampleRate / 2))
+    ctx.fillStyle = `rgba(${accent},0.75)`
+    for (let i = 0; i < n; i++) {
+      const f0 = 10 ** (lo + (hi - lo) * i / n), f1 = 10 ** (lo + (hi - lo) * (i + 1) / n)
+      const b0 = Math.floor(f0 / (sampleRate / 2) * bins.length), b1 = Math.max(b0 + 1, Math.floor(f1 / (sampleRate / 2) * bins.length))
+      let v = 0
+      for (let b = b0; b < b1 && b < bins.length; b++) v = Math.max(v, bins[b])
+      const h = (v / 255) * H
+      ctx.fillRect((i * barsW) / n, H - h, Math.max(1, barsW / n - 1), h)
+    }
+    // The level: green, amber near the top, red at full scale; the held peak as a line.
+    const dbOf = (a) => a > 0 ? 20 * Math.log10(a) : -120
+    const yOf = (a) => H - Math.max(0, Math.min(1, (dbOf(a) + 60) / 60)) * H
+    const x = W - meterW
+    ctx.fillStyle = level > 0.98 ? 'rgb(220,38,38)' : level > 0.7 ? 'rgb(217,119,6)' : 'rgb(5,150,105)'
+    ctx.fillRect(x, yOf(level), meterW, H - yOf(level))
+    ctx.fillStyle = 'rgba(127,127,127,0.9)'
+    ctx.fillRect(x, yOf(peak), meterW, 2)
+  }
+  inst._meterFrame = requestAnimationFrame(draw)
+  inst._stopMeter = () => { running = false; cancelAnimationFrame(inst._meterFrame) }
+}
+
+export function stopMeter(containerId) {
+  instances.get(containerId)?._stopMeter?.()
 }
 
 export function setEqBand(containerId, bandIndex, gainDb) {

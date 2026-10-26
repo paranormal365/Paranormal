@@ -202,6 +202,8 @@ public sealed class EvpScanRecorder
                 OptionsJson        = JsonSerializer.Serialize(settings, OptionsJson),
                 BandLowHz          = settings.BandLowHz,
                 BandHighHz         = settings.BandHighHz,
+                TraceBlob          = analysis.Trace is { } trace ? EvpTraceCodec.Encode(trace) : null,
+                TraceBucketMs      = analysis.Trace is { } t ? (int)Math.Round(t.BucketSeconds * 1000) : null,
                 RecordingSeconds   = analysis.RecordingSeconds,
                 FoundCount         = analysis.Candidates.Count,
                 ProposedCount      = proposed.Count,

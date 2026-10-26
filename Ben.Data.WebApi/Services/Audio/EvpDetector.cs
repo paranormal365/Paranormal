@@ -53,8 +53,32 @@ public readonly record struct EvpFeatures(
     double BandLevelSpreadDb,
     double ZeroCrossingRate);
 
-/// <summary>One scan's result: the candidates, and how long the recording was.</summary>
-public sealed record EvpAnalysis(IReadOnlyList<EvpCandidate> Candidates, double RecordingSeconds);
+/// <summary>One scan's result: the candidates, how long the recording was, and what the detector saw.</summary>
+/// <param name="Trace">The detector's view of the whole recording (phase 8); null for an empty one.</param>
+public sealed record EvpAnalysis(IReadOnlyList<EvpCandidate> Candidates, double RecordingSeconds, EvpTrace? Trace = null);
+
+/// <summary>
+/// What the detector saw across a recording, a tenth of a second at a time (phase 8): enough to draw
+/// why each candidate was found, without decoding the recording again.
+/// </summary>
+/// <remarks>
+/// <para>The voice-band and full levels are the loudest frame in each bucket, so a short sound is
+/// never averaged away; the background is the mean. The threshold line is the background plus the
+/// scan's threshold, worked out where it is drawn, so moving the threshold redraws without a rescan.</para>
+/// <para><see cref="GateRuns"/> are where the gate opened, before joining, splitting and the
+/// shortest-sound rule: the page can show "the gate opened here, but it was too short to keep".</para>
+/// </remarks>
+public sealed record EvpTrace(
+    double BucketSeconds, float[] BandDb, float[] FullDb, float[] FloorDb, IReadOnlyList<(double Start, double End)> GateRuns);
+
+/// <summary>A candidate's score, taken apart (phase 8): each term's points and what it measured, in a sentence.</summary>
+public sealed record EvpScoreExplanation(
+    double ProminencePoints, string Prominence,
+    double BandPoints, string Band,
+    double DurationPoints, string Duration)
+{
+    public double Total => ProminencePoints + BandPoints + DurationPoints;
+}
 
 /// <summary>How far a streamed scan has got (phase 6).</summary>
 /// <param name="ProcessedSeconds">Audio read and measured so far.</param>
@@ -160,7 +184,7 @@ internal static class EvpDetector
         // One chunk through the same path a streamed scan takes, so the two cannot drift apart.
         var frames = new FrameAccumulator(sampleRate, options);
         frames.Push(mono);
-        return Candidates(frames.Finish(), sampleRate, options, maxResults);
+        return Candidates(frames.Finish(), sampleRate, options, maxResults).Found;
     }
 
     /// <summary>
@@ -189,21 +213,22 @@ internal static class EvpDetector
 
         var data = frames.Finish();
         var seconds = sampleRate > 0 ? data.SampleCount / (double)sampleRate : 0;
-        var found = data.SampleCount == 0 || sampleRate <= 0 || maxResults <= 0
-            ? []
+        var (found, trace) = data.SampleCount == 0 || sampleRate <= 0 || maxResults <= 0
+            ? ([], null)
             : Candidates(data, sampleRate, options, maxResults);
-        return new EvpAnalysis(found, seconds);
+        return new EvpAnalysis(found, seconds, trace);
     }
 
     /// <summary>From the per-frame measurements to the candidates: the part that needs all of them.</summary>
-    private static IReadOnlyList<EvpCandidate> Candidates(
+    private static (IReadOnlyList<EvpCandidate> Found, EvpTrace? Trace) Candidates(
         Frames frames, int sampleRate, EvpDetectionOptions options, int maxResults)
     {
         var (bandDb, fullDb) = (frames.BandDb, frames.FullDb);
-        if (bandDb.Length == 0) return [];
+        if (bandDb.Length == 0) return ([], null);
 
         var floorDb = SlidingFloor(bandDb, options);
         var runs    = GateRuns(bandDb, floorDb, options.ThresholdDb, options.ReleaseHysteresisDb);
+        var trace   = Trace(bandDb, fullDb, floorDb, runs, sampleRate);
         var events  = ShapeEvents(runs, sampleRate, options);
 
         var totalSeconds = frames.SampleCount / (double)sampleRate;
@@ -226,9 +251,39 @@ internal static class EvpDetector
 
         // Hand back in playback order — a review queue reads top to bottom through the recording,
         // not by rank.
-        return Cap(scored, Math.Min(maxResults, options.MaxCandidates), options.ExplorationShare)
+        return (Cap(scored, Math.Min(maxResults, options.MaxCandidates), options.ExplorationShare)
             .OrderBy(c => c.StartSeconds)
-            .ToList();
+            .ToList(), trace);
+    }
+
+    /// <summary>A tenth of a second per bucket.</summary>
+    internal const double TraceBucketSeconds = 0.1;
+
+    /// <summary>The per-frame measurements gathered into tenths of a second (phase 8). See <see cref="EvpTrace"/>.</summary>
+    private static EvpTrace Trace(double[] bandDb, double[] fullDb, double[] floorDb, List<Run> runs, int sampleRate)
+    {
+        var per     = Math.Max(1, (int)Math.Round(TraceBucketSeconds / HopSeconds));
+        var buckets = (bandDb.Length + per - 1) / per;
+        var band  = new float[buckets];
+        var full  = new float[buckets];
+        var floor = new float[buckets];
+        for (var b = 0; b < buckets; b++)
+        {
+            double bandMax = double.MinValue, fullMax = double.MinValue, floorSum = 0;
+            var from = b * per;
+            var to   = Math.Min(bandDb.Length, from + per);
+            for (var f = from; f < to; f++)
+            {
+                bandMax  = Math.Max(bandMax, bandDb[f]);
+                fullMax  = Math.Max(fullMax, fullDb[f]);
+                floorSum += floorDb[f];
+            }
+            band[b]  = (float)bandMax;
+            full[b]  = (float)fullMax;
+            floor[b] = (float)(floorSum / (to - from));
+        }
+        var gate = runs.Select(r => (FrameToSeconds(r.Start, sampleRate), FrameToSeconds(r.End + 1, sampleRate))).ToList();
+        return new EvpTrace(per * HopSeconds, band, full, floor, gate);
     }
 
     /// <summary>
@@ -503,6 +558,44 @@ internal static class EvpDetector
     /// until then this is <see cref="Version"/> 1, and it reads nothing but its argument so the
     /// stored features always reproduce the stored score.
     /// </remarks>
+    /// <summary>
+    /// <see cref="Score"/>'s three terms, in points, with what each measured in a plain sentence
+    /// (phase 8). The weights and the shape are the same; <c>Explain_terms_sum_to_the_score</c>
+    /// holds them together.
+    /// </summary>
+    public static EvpScoreExplanation Explain(EvpFeatures features)
+    {
+        var prominence = Math.Clamp(features.PeakProminenceDb / 20.0, 0, 1);
+        var bandRatio  = Math.Clamp(1.0 + features.MeanBandGapDb / 20.0, 0, 1);
+        var duration   = DurationShape(features.EventSeconds);
+
+        var share = Math.Clamp(Math.Pow(10, features.MeanBandGapDb / 10.0), 0, 1);
+        var length = features.EventSeconds switch
+        {
+            < 0.20  => "very short for a word",
+            <= 3.0  => "about the length of a word or a phrase",
+            <= 10.0 => "long, more like somebody talking",
+            _       => "very long, more like a conversation",
+        };
+
+        return new EvpScoreExplanation(
+            100 * 0.5 * prominence,
+            $"It rose {features.PeakProminenceDb:0} dB above the room around it"
+                + (prominence >= 1 ? " (20 dB or more counts in full)." : "."),
+            100 * 0.3 * bandRatio,
+            $"About {share * 100:0}% of its sound was in the range the scan listens in.",
+            100 * 0.2 * duration,
+            $"It lasted {features.EventSeconds:0.0} s: {length}.");
+    }
+
+    private static double DurationShape(double eventSeconds) => eventSeconds switch
+    {
+        < 0.20 => 0.3,
+        <= 3.0 => 1.0,
+        <= 10.0 => 0.6,
+        _ => 0.2,
+    };
+
     internal static float Score(EvpFeatures features)
     {
         // How far it stood out. 20 dB over the floor is emphatic; beyond that adds nothing.
@@ -515,13 +608,7 @@ internal static class EvpDetector
 
         // Speech-shaped length. Anything can happen in 60 ms; anything over ~10 s is usually a
         // person in the room talking, kept but demoted.
-        var duration = features.EventSeconds switch
-        {
-            < 0.20 => 0.3,
-            <= 3.0 => 1.0,
-            <= 10.0 => 0.6,
-            _ => 0.2,
-        };
+        var duration = DurationShape(features.EventSeconds);
 
         var score = 100.0 * (0.5 * prominence + 0.3 * bandRatio + 0.2 * duration);
         return (float)Math.Clamp(score, 0, 100);

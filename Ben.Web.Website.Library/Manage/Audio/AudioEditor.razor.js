@@ -11,7 +11,7 @@ const KEYS = {
   k: 'keep', K: 'keep', d: 'dismiss', D: 'dismiss', Delete: 'dismiss',
   n: 'next', N: 'next', p: 'previous', P: 'previous',
   z: 'zoom', Z: 'zoom', f: 'fit', F: 'fit', l: 'loop', L: 'loop',
-  Escape: 'escape', '?': 'help',
+  b: 'compare', B: 'compare', Escape: 'escape', '?': 'help',
 }
 
 let listener = null

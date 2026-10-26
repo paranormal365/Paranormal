@@ -40,6 +40,10 @@ public sealed record AudioWorkspace
     /// <summary>The spectrogram's height in px, 100–480 (phase 7).</summary>
     public int SpectrogramHeight { get; init; } = 160;
 
+    /// <summary>The level and detector lanes under the waveform (phase 8).</summary>
+    public bool LevelLane { get; init; }
+    public bool DetectorLane { get; init; }
+
     public static AudioWorkspace Default { get; } = new();
 
     /// <summary>The tabs the editor has; anything else stored falls back to the first.</summary>
@@ -81,6 +85,8 @@ public sealed record AudioWorkspace
             InspectorTab  = stored.InspectorTab is { } t && Tabs.Contains(t) ? t : Default.InspectorTab,
             Minimap       = stored.Minimap ?? Default.Minimap,
             SpectrogramHeight = (int)Clamp(stored.SpectrogramHeight, Default.SpectrogramHeight, 100, 480),
+            LevelLane     = stored.LevelLane ?? Default.LevelLane,
+            DetectorLane  = stored.DetectorLane ?? Default.DetectorLane,
             Analysis = new SpectrogramAnalysis(
                 Scale:         stored.Scale is { } s && Scales.Contains(s) ? s : a.Scale,
                 FrequencyMin:  Clamp(stored.FrequencyMin, a.FrequencyMin, 0, 24_000),
@@ -111,6 +117,8 @@ public sealed record AudioWorkspace
             InspectorTab  = InspectorTab,
             Minimap       = Minimap,
             SpectrogramHeight = SpectrogramHeight,
+            LevelLane     = LevelLane,
+            DetectorLane  = DetectorLane,
             Scale         = Analysis.Scale,
             FrequencyMin  = Analysis.FrequencyMin,
             FrequencyMax  = Analysis.FrequencyMax,
@@ -139,6 +147,8 @@ public sealed record AudioWorkspace
         public string? InspectorTab { get; init; }
         public bool? Minimap { get; init; }
         public double? SpectrogramHeight { get; init; }
+        public bool? LevelLane { get; init; }
+        public bool? DetectorLane { get; init; }
         public string? Scale { get; init; }
         public double? FrequencyMin { get; init; }
         public double? FrequencyMax { get; init; }

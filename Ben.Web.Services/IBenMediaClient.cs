@@ -182,6 +182,13 @@ public interface IBenMediaClient
     /// <summary>Returns all EVP markers for the given file, ordered by time.</summary>
     Task<LoadResult<AudioMarkerRecord>> GetAudioMarkersAsync(Guid fileId, CancellationToken token = default);
 
+    // ── The detector's own view (phase 8) ────────────────────────────────────
+    /// <summary>What the detector saw on the recording's latest scan, or the server's reason there is nothing to show.</summary>
+    Task<(EvpTraceRecord? Trace, string? Error)> GetScanTraceAsync(Guid fileId, CancellationToken token = default);
+
+    /// <summary>Why the detector proposed a marker, or the server's reason it can't say.</summary>
+    Task<(EvpCandidateDetailRecord? Detail, string? Error)> GetCandidateDetailAsync(Guid fileId, Guid markerId, CancellationToken token = default);
+
     // ── Background scans (phase 6) ───────────────────────────────────────────
     /// <summary>Starts a background scan of one recording, or the server's reason it would not.</summary>
     Task<(EvpScanJobRecord? Job, string? Error)> StartScanJobAsync(
