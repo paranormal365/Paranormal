@@ -539,6 +539,45 @@ public class AudioEditorTests : BenTestBase
     }
 
     /// <summary>
+    /// Zoom, speed and the open tab come back when the editor is opened again (phase 3).
+    /// </summary>
+    /// <remarks>
+    /// <para>Zoom was the hard one. The player re-applies its starting zoom as it loads, and the
+    /// restore read the saved zoom into a field that those load-time reports then reset before it
+    /// was applied, so a saved zoom always came back as "fit". Then a page's lingering circuit,
+    /// disposed minutes after a reload, saved its own stale view over the newer one. Both fixed
+    /// 10/26/2026; this fails on either.</para>
+    /// </remarks>
+    [Test]
+    public async Task Zoom_speed_and_tab_survive_leaving_and_reopening()
+    {
+        if (!await ReadyInFullViewAsync())
+        {
+            Assert.Ignore("Could not open the editor; see the output for where it gave up.");
+            return;
+        }
+
+        await AudioEditorUi.ClickToolbarAsync(Page, Modal, "Zoom in");
+        await AudioEditorUi.ClickToolbarAsync(Page, Modal, "Zoom in");
+        await AudioEditorUi.ChooseAsync(Page, "listen", "Play at 0.75");
+        await AudioEditorUi.OpenTabAsync(Modal, "Display");
+
+        var zoomed = await AudioEditorUi.WaveformZoomRatioAsync(Modal);
+        TestContext.Out.WriteLine($"zoom ratio before leaving: {zoomed:0.00}");
+        Assert.That(zoomed, Is.GreaterThan(1.3), "zooming in did not widen the waveform, so there is nothing to remember");
+        await Page.WaitForTimeoutAsync(1_500);   // a zoom is saved a second after it settles
+
+        await LeaveAndReopenEditorAsync();
+        await Page.WaitForTimeoutAsync(1_500);
+
+        var back = await AudioEditorUi.WaveformZoomRatioAsync(Modal);
+        TestContext.Out.WriteLine($"zoom ratio after reopening: {back:0.00}");
+        Assert.That(back, Is.EqualTo(zoomed).Within(0.15), "the zoom did not come back");
+        await Expect(Page.Locator("#audio-menu-listen")).ToContainTextAsync("0.75×");
+        await Expect(Modal.GetByRole(AriaRole.Tab, new() { Name = "Display" })).ToHaveAttributeAsync("aria-selected", "true");
+    }
+
+    /// <summary>
     /// The lesser-used controls live in the toolbar's menus and land where they say: View ▸ Mel scale
     /// changes the spectrogram's scale, and Edit ▸ Fade opens the Edit tab on the fade.
     /// </summary>

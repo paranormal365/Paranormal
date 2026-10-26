@@ -565,3 +565,17 @@ h1, h2, h3, .h1, .h2, .h3, .display-1, .display-2, .display-3, .display-4 {
 /* The header's initials fit their circle: they took the button's own size and ran past its edge
    ("SM" was cut on both sides, site audit 10/09/2026). */
 .user-menu .profile-image { font-size: .78rem; font-weight: 600; line-height: 1; overflow: hidden; letter-spacing: 0; }
+
+
+/* ── Range sliders (10/26/2026, audio editor phase 3) ────────────────────────
+   Bootstrap's .form-range keeps the blue its Sass was compiled with, so every slider on the site was
+   the one blue thing in a violet theme: the audio player's volume and zoom, the editor's equalizer,
+   gain and filters. The thumb is the accent; the track is the line color. */
+.form-range::-webkit-slider-thumb { background-color: var(--ben-accent); }
+.form-range::-webkit-slider-thumb:active { background-color: var(--ben-accent-2); }
+.form-range::-moz-range-thumb { background-color: var(--ben-accent); }
+.form-range::-moz-range-thumb:active { background-color: var(--ben-accent-2); }
+.form-range::-webkit-slider-runnable-track { background-color: var(--ben-line-strong); }
+.form-range::-moz-range-track { background-color: var(--ben-line-strong); }
+.form-range:focus::-webkit-slider-thumb { box-shadow: 0 0 0 1px var(--ben-bg), 0 0 0 .25rem rgba(var(--ben-accent-rgb), .35); }
+.form-range:focus::-moz-range-thumb { box-shadow: 0 0 0 1px var(--ben-bg), 0 0 0 .25rem rgba(var(--ben-accent-rgb), .35); }

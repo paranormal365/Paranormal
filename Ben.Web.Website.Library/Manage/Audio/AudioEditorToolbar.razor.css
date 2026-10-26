@@ -33,3 +33,10 @@
 .audio-toolbar ::deep .k-button-text .sa-icon {
     margin: 0;
 }
+
+/* The zoom buttons are icons on the bar, but carry a label for when Telerik moves them into its
+   overflow menu: a menu of bare icons is a list of guesses. The menu is drawn outside this
+   component, so the label shows there and is hidden only here, on the bar. */
+.audio-toolbar ::deep .k-toolbar .audio-toolbar__label {
+    display: none;
+}

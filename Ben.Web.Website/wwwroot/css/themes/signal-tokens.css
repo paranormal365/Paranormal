@@ -74,6 +74,20 @@
     --ben-shadow-lg:     0 18px 44px rgba(14, 23, 38, .14);
     --ben-glow:          0 8px 22px rgba(var(--ben-accent-rgb), .30);
 
+    /* The audio editor's marks on the waveform and spectrogram (phase 3, 10/26/2026), as rgb
+       triplets so each use picks its own opacity. They were hard-coded in the player's script and
+       did not follow the theme. Region = what you drew; clip = saved clips; candidate = a scan's
+       suggestion awaiting a ruling; confirmed / probable / possible = kept markers by confidence;
+       silence = detected quiet; voice = the band the EVP scan listens in. */
+    --ben-audio-region-rgb:    91, 61, 245;
+    --ben-audio-clip-rgb:      5, 150, 105;
+    --ben-audio-candidate-rgb: 217, 119, 6;
+    --ben-audio-confirmed-rgb: 5, 150, 105;
+    --ben-audio-probable-rgb:  202, 138, 4;
+    --ben-audio-possible-rgb:  100, 116, 139;
+    --ben-audio-silence-rgb:   100, 116, 139;
+    --ben-audio-voice-rgb:     5, 150, 105;
+
     color-scheme: light;
 }
 
@@ -111,6 +125,16 @@
     --ben-shadow:        0 10px 26px rgba(0, 0, 0, .46);
     --ben-shadow-lg:     0 20px 48px rgba(0, 0, 0, .55);
     --ben-glow:          0 8px 24px rgba(var(--ben-accent-rgb), .40);
+
+    /* The audio editor's marks; see the light block. Brighter here so they read on a dark plot. */
+    --ben-audio-region-rgb:    124, 92, 255;
+    --ben-audio-clip-rgb:      52, 211, 153;
+    --ben-audio-candidate-rgb: 245, 158, 11;
+    --ben-audio-confirmed-rgb: 52, 211, 153;
+    --ben-audio-probable-rgb:  234, 179, 8;
+    --ben-audio-possible-rgb:  148, 163, 184;
+    --ben-audio-silence-rgb:   148, 163, 184;
+    --ben-audio-voice-rgb:     52, 211, 153;
 
     color-scheme: dark;
 }

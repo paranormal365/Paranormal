@@ -221,7 +221,10 @@ export async function create(containerId, options, plugins, dotnetRef, audioUrl)
         const inst = instances.get(containerId)
         if (inst) {
           _syncTimelineVisibility(containerId)
-          inst.ws.zoom(inst.ws.options.minPxPerSec ?? 0)
+          // The zoom actually in effect, not the one it was created with: these repaints run up to
+          // 400 ms after load, and re-applying the starting zoom undid one set in that time,
+          // including the editor restoring a saved zoom (10/26/2026).
+          inst.ws.zoom(_currentZoom(inst))
         }
       }, ms)
     )
@@ -233,7 +236,15 @@ export async function create(containerId, options, plugins, dotnetRef, audioUrl)
   ws.on('timeupdate', (time)      => safe(dotnetRef.invokeMethodAsync('OnWsTimeUpdate', time)))
   ws.on('loading',    (percent)   => safe(dotnetRef.invokeMethodAsync('OnWsLoading',    percent)))
   ws.on('error',      (err)       => safe(dotnetRef.invokeMethodAsync('OnWsError',      err?.message ?? String(err))))
-  ws.on('zoom',       (pps)       => safe(dotnetRef.invokeMethodAsync('OnWsZoom',       pps)))
+  ws.on('zoom',       (pps)       => {
+    const inst = instances.get(containerId)
+    if (inst) inst._zoom = pps
+    // ws.zoom() does not record the zoom in ws.options, and every setOptions() re-renders from
+    // ws.options, so any later height change (the spectrogram pane, a resize) snapped the
+    // waveform back to its starting zoom. Recording it here keeps it (10/26/2026).
+    ws.options.minPxPerSec = pps
+    safe(dotnetRef.invokeMethodAsync('OnWsZoom', pps))
+  })
   ws.on('seeking',    (time)      => safe(dotnetRef.invokeMethodAsync('OnWsSeeking',    time)))
 
   // ── Regions events ───────────────────────────────────────────────────────
@@ -379,8 +390,8 @@ export async function create(containerId, options, plugins, dotnetRef, audioUrl)
         previewDiv = document.createElement('div')
         previewDiv.style.cssText =
           'position:absolute;top:0;bottom:0;z-index:20;pointer-events:none;' +
-          'background:rgba(59,130,246,0.18);' +
-          'border:2px solid rgba(59,130,246,0.55);border-radius:2px;'
+          'background:rgba(var(--ben-audio-region-rgb, 91, 61, 245),0.18);' +
+          'border:2px solid rgba(var(--ben-audio-region-rgb, 91, 61, 245),0.55);border-radius:2px;'
         container.style.position = 'relative'
         container.appendChild(previewDiv)
       }
@@ -412,7 +423,9 @@ export async function create(containerId, options, plugins, dotnetRef, audioUrl)
         if (end - start > 0.05) {   // at least 50 ms
           regionsPlugin.addRegion({
             start, end,
-            color: 'rgba(59,130,246,0.2)',
+            // The theme's token, resolved by the browser: custom properties inherit into the
+            // regions' shadow DOM. It was a fixed blue that ignored the theme (phase 3).
+            color: 'rgba(var(--ben-audio-region-rgb, 91, 61, 245),0.2)',
             drag: true, resize: true,
           })
         }
@@ -497,7 +510,17 @@ export function seekTo(containerId, progress)  { instances.get(containerId)?.ws?
 export function setVolume(containerId, volume) { instances.get(containerId)?.ws?.setVolume(Math.max(0, Math.min(1, volume))) }
 export function setMuted(containerId, muted)   { instances.get(containerId)?.ws?.setMuted(muted) }
 export function setPlaybackRate(containerId, rate) { instances.get(containerId)?.ws?.setPlaybackRate(rate) }
-export function setZoom(containerId, minPxPerSec)  { instances.get(containerId)?.ws?.zoom(minPxPerSec) }
+export function setZoom(containerId, minPxPerSec) {
+  const inst = instances.get(containerId)
+  if (!inst?.ws) return
+  inst._zoom = minPxPerSec
+  inst.ws.zoom(minPxPerSec)
+}
+
+/** The zoom in effect: the last one set or reported, else the one the player was created with. */
+function _currentZoom(instance) {
+  return instance?._zoom ?? instance?.ws?.options?.minPxPerSec ?? 0
+}
 
 export async function load(containerId, url) {
   const ws = instances.get(containerId)?.ws
@@ -752,6 +775,12 @@ export function updateRegionLabel(containerId, regionId, label) {
 /** The band the EVP detector listens in (EvpDetector.HighPassHz / LowPassHz on the server). */
 const VOICE_BAND_HZ = [300, 3400]
 
+/** An rgb triplet token from signal-tokens.css, for drawing on a canvas, which cannot read var(). */
+function _themeRgb(name, fallback) {
+  const v = getComputedStyle(document.documentElement).getPropertyValue(name).trim()
+  return v || fallback
+}
+
 /** Height of the spectrogram pane, in px. Phase 7 makes it resizable. */
 const SPECTROGRAM_HEIGHT = 160
 
@@ -906,6 +935,9 @@ export async function toggleSpectrogram(containerId, enable, showLabels, fftSamp
   }
   instance._resizeSpectroOverlay ??= new ResizeObserver(() => _drawSpectrogramOverlay(instance))
   instance._resizeSpectroOverlay.observe(pane)
+  // Light / dark switches the token the overlay is drawn in; a canvas has to be told.
+  instance._themeWatch ??= new MutationObserver(() => _drawSpectrogramOverlay(instance))
+  instance._themeWatch.observe(document.documentElement, { attributes: true, attributeFilter: ['data-bs-theme'] })
 
   await _mountSpectrogram(instance, dotnetRef)
 }
@@ -1022,9 +1054,12 @@ function _drawSpectrogramOverlay(instance) {
   if (yBottom <= yTop) return
   // A light fill and firm edges: on a recording sampled at 8 kHz the band is most of the picture,
   // and a 15% tint alone over the spectrogram's blues barely showed (10/26/2026).
-  ctx.fillStyle = 'rgba(16,185,129,0.12)'
+  // A canvas cannot read var(), so the theme's token is resolved here, on every draw: switching
+  // between light and dark redraws the overlay with the other color.
+  const voice = _themeRgb('--ben-audio-voice-rgb', '52, 211, 153')
+  ctx.fillStyle = `rgba(${voice},0.12)`
   ctx.fillRect(0, yTop, W, yBottom - yTop)
-  ctx.strokeStyle = 'rgba(52,211,153,0.95)'
+  ctx.strokeStyle = `rgba(${voice},0.95)`
   ctx.lineWidth = 1.5
   ctx.setLineDash([6, 4])
   ctx.beginPath()
@@ -1079,7 +1114,7 @@ export function toggleTimeline(containerId, visible) {
   if (instance) instance._timelineEnabled = visible
   _syncTimelineVisibility(containerId)
   if (visible && instance) {
-    instance.ws.zoom(instance.ws.options.minPxPerSec ?? 0)
+    instance.ws.zoom(_currentZoom(instance))
   }
 }
 
@@ -1168,7 +1203,7 @@ export function detectSilence(containerId, thresholdDb, windowSeconds) {
     _rememberRegionKind(containerId, id, 'silence')
     instance.regionsPlugin.addRegion({
       id, start: startTime, end: endTime,
-      color: 'rgba(148,163,184,0.22)',
+      color: 'rgba(var(--ben-audio-silence-rgb, 148, 163, 184),0.22)',
       drag: false, resize: false,
     })
     ids.push(id)
@@ -1214,6 +1249,7 @@ export function destroy(containerId) {
   instance._paneSyncUnsubs?.forEach(u => u?.())
   instance.spectro?.plugin?.destroy()
   instance._resizeSpectroOverlay?.disconnect()
+  instance._themeWatch?.disconnect()
   try { instance.audioCtx?.close() } catch { /* ignore */ }
   // Final in WaveSurfer 8: a destroyed instance cannot be loaded again. The editor and every player
   // make a new one through create(), so nothing here reuses it.

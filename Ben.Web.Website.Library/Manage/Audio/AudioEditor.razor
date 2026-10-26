@@ -30,8 +30,7 @@
        read "e Timeline" — the drag hint at its end collapsed to one word per line, and
        a ~150px band of nothing opened between the two. Two rows, each wrapping on its
        own, and nothing pushed anywhere. *@
-    <div class="d-flex flex-wrap gap-4 mb-2 p-2 rounded flex-shrink-0"
-         style="background:var(--kendo-color-surface,#f5f5f5);font-size:.875rem;align-content:flex-start;">
+    <div class="audio-facts">
         <span><strong>Size:</strong>@(" ")@FormatSize(FileSize)</span>
         <span><strong>Type:</strong>@(" ")@ContentType</span>
         <span><strong>Duration:</strong>@(" ")@FormatTime(_modalDuration)</span>
@@ -75,8 +74,8 @@
                           OnRegionRemoved="@OnModalRegionRemoved"
                           OnSpectrogramReady="@(() => StateHasChanged())"
                           OnSpectrogramContextMenu="@OnSpectrogramContextMenuFired"
-                          OnZoom="@(z => _zoomPxPerSec = z)"
-                          OnRateChanged="@(r => _speed = r)" />
+                          OnZoom="@OnPlayerZoomed"
+                          OnRateChanged="@(async r => { _speed = r; await SaveViewAsync(); })" />
     </div>
 
     @* ── Inspector (phase 2) ───────────────────────────────────────
@@ -85,7 +84,7 @@
        bands of empty space with several open (audit finding U). Toolbar buttons only ever OPEN
        a tab; the Hide button folds the whole area away. *@
     <section class="audio-inspector @(_inspectorOpen ? "is-open" : "is-folded")" aria-label="Editor panels">
-        <button type="button" class="btn btn-link btn-sm audio-inspector__fold" @onclick="@(() => _inspectorOpen = !_inspectorOpen)"
+        <button type="button" class="btn btn-link btn-sm audio-inspector__fold" @onclick="@(async () => { _inspectorOpen = !_inspectorOpen; await SaveViewAsync(); })"
                 aria-expanded="@(_inspectorOpen ? "true" : "false")">
             <BenIcon Name="@(_inspectorOpen ? "chevron-down" : "chevron-up")" Class="me-1" />@(_inspectorOpen ? "Hide panels" : "Show panels")
         </button>
@@ -374,16 +373,12 @@
                 }
                 else if (_childClips.Any())
                 {
-                    <div class="mt-3 flex-shrink-0" style="overflow-y:auto;max-height:40vh;">
-                        <h6 class="mb-2 text-secondary small fw-semibold text-uppercase letter-spacing-1">
-                            Saved Clips (@_childClips.Count)
-                        </h6>
+                    <div class="audio-clips">
                         @foreach (var clip in _childClips)
                         {
-                            <div class="mb-2 p-2 rounded"
-                                 style="background:var(--kendo-color-surface,#f5f5f5);">
+                            <div class="audio-clip">
                                 <div class="d-flex align-items-center gap-2 mb-1">
-                                    <span class="badge bg-success bg-opacity-75 small">
+                                    <span class="audio-clip__range">
                                         @FormatTime(clip.RegionStart ?? 0)–@FormatTime(clip.RegionEnd ?? 0)
                                     </span>
                                     <span class="small fw-semibold">
@@ -428,7 +423,7 @@
                                @onchange="@(e => _ = SetSpeedAsync(ParseDouble(e.Value, _speed)))" />
                         <span class="small text-secondary">Only how it plays here. To make a copy at a new speed, use Edit ▸ Change speed.</span>
                     </div>
-                    <div class="p-2 mb-2 rounded border bg-body-secondary" style="font-size:0.8rem;">
+                    <div class="audio-panel">
                         <div class="d-flex gap-3 flex-wrap">
 
                             @* 10-band EQ — horizontal sliders *@
@@ -514,7 +509,7 @@
             <BenTab Title="Edit" Id="edit" Icon="scissors">
                 @if (_inspectorOpen && _modalReady)
                 {
-                    <div class="p-2 mb-2 rounded border bg-body-secondary" style="font-size:0.8rem;">
+                    <div class="audio-panel">
                         @if (_fileTypesError is not null)
                         {
                             <div class="alert alert-warning py-1 px-2 small mb-2">@_fileTypesError</div>
@@ -898,18 +893,38 @@
     private string? _sourceUrl;
 
     /// <summary>
-    /// Leaving the editor saves how it was set up.
+    /// Leaving the editor saves nothing.
     /// </summary>
     /// <remarks>
-    /// This was the modal's close handler, which also reset every field so the next recording
-    /// opened clean. The editor is now created fresh for each visit, so only the save is left. It
-    /// must be awaited: the colour-ramp picker fires its save without waiting, and a change made
-    /// just before leaving could otherwise be lost (2026-09-06 audio audit, phase 6).
+    /// <para>Phase 1 made this the save that the modal's close used to be. It was wrong on a page:
+    /// after a full reload the old page's circuit lingers for minutes and is disposed long after a
+    /// newer page has saved, so its stale view overwrote the newer one (a saved zoom came back as
+    /// "fit", 10/26/2026). Every change saves as it happens instead; zoom, which the wheel changes
+    /// many times a second, saves a second after the last change.</para>
     /// </remarks>
-    public async ValueTask DisposeAsync()
+    public ValueTask DisposeAsync()
     {
-        try { await SaveViewAsync(); }
-        catch (Exception) { /* the circuit is going away; nothing is left to tell */ }
+        _zoomSave?.Cancel();
+        _zoomSave?.Dispose();
+        return ValueTask.CompletedTask;
+    }
+
+    /// <summary>Pending save of a zoom change; replaced by each newer zoom.</summary>
+    private CancellationTokenSource? _zoomSave;
+
+    /// <summary>The player zoomed (wheel, slider, buttons). Saved once it has settled.</summary>
+    private void OnPlayerZoomed(double pxPerSec)
+    {
+        // Until the saved view is back, these are the player's own load-time zooms, not anyone's
+        // choice; taking them would replace the saved zoom before it was applied.
+        if (!_viewRestored) return;
+        _zoomPxPerSec = pxPerSec;
+        _zoomSave?.Cancel();
+        _zoomSave?.Dispose();
+        var cts = _zoomSave = new CancellationTokenSource();
+        _ = Task.Delay(1000, cts.Token).ContinueWith(
+            t => { if (!t.IsCanceled) _ = InvokeAsync(SaveViewAsync); },
+            TaskScheduler.Default);
     }
 
 
@@ -1135,7 +1150,7 @@
                     Kind    = "clip",
                     Start   = clip.RegionStart.Value,
                     End     = clip.RegionEnd.Value,
-                    Color   = "rgba(16,185,129,0.20)",
+                    Color   = "rgba(var(--ben-audio-clip-rgb, 5, 150, 105),0.20)",
                     Drag    = false,
                     Resize  = false,
                     Content = clip.Description ?? clip.FileName,
@@ -1216,14 +1231,16 @@
     /// </summary>
     private static string MarkerColor(AudioMarkerRecord marker) =>
         marker.ReviewStatus == EvpReviewStatus.Pending
-            ? "rgba(245,158,11,0.75)"
+            ? "rgba(var(--ben-audio-candidate-rgb, 217, 119, 6),0.75)"
             : MarkerColor(marker.ConfidenceLevel);
 
     private static string MarkerColor(EvpConfidenceLevel level) => level switch
     {
-        EvpConfidenceLevel.Confirmed => "rgba(16,185,129,0.85)",
-        EvpConfidenceLevel.Probable  => "rgba(234,179,8,0.85)",
-        _                            => "rgba(148,163,184,0.85)",
+        // Theme tokens (signal-tokens.css), so the marks follow light and dark. Region colors are
+        // inline styles in WaveSurfer's shadow DOM, which custom properties inherit into.
+        EvpConfidenceLevel.Confirmed => "rgba(var(--ben-audio-confirmed-rgb, 5, 150, 105),0.85)",
+        EvpConfidenceLevel.Probable  => "rgba(var(--ben-audio-probable-rgb, 202, 138, 4),0.85)",
+        _                            => "rgba(var(--ben-audio-possible-rgb, 100, 116, 139),0.85)",
     };
 
     /// <summary>
@@ -1560,6 +1577,20 @@
         MelScale           = _melScale,
         TimelineVisible    = _timelineEnabled,
         Chain              = CurrentChain,
+        Workspace          = CurrentWorkspace,
+    };
+
+    /// <summary>The rest of how the editor stands (phase 3): zoom, speed, tabs, the Display dials.</summary>
+    private AudioWorkspace CurrentWorkspace => new()
+    {
+        ZoomPxPerSec  = _zoomPxPerSec,
+        Speed         = _speed,
+        VoiceBand     = _showVoiceBand,
+        DragScrub     = !_regionDrawMode,
+        DetectSilence = _silenceDetectionEnabled,
+        InspectorOpen = _inspectorOpen,
+        InspectorTab  = _inspectorTab,
+        Analysis      = _spectrogramAnalysis,
     };
 
     /// <summary>The listening chain as the controls stand.</summary>
@@ -1593,7 +1624,13 @@
     private async Task RestoreSavedViewAsync()
     {
         try { _savedConfig = await AdminClient.GetAudioConfigAsync(FileId); }
-        catch { return; }   // a view that could not be loaded is not worth a message
+        catch
+        {
+            // A view that could not be loaded is not worth a message, but saving may go ahead:
+            // there is nothing stored to overwrite that this page knows of.
+            _viewRestored = true;
+            return;
+        }
 
         var view = AudioViewState.From(_savedConfig);
         _savedView = view;
@@ -1604,20 +1641,47 @@
         _spectrogramFftSamples = view.FftSamples;
         _colormap              = view.Colormap;
         _melScale              = view.MelScale;
-        // The Display tab's scale follows the saved mel setting, or it said "Linear" over a mel picture.
-        _spectrogramAnalysis   = _spectrogramAnalysis with { Scale = view.MelScale ? "mel" : "linear" };
+
+        // The workspace (phase 3). Its scale is the Display tab's; mel is also stored on its own
+        // (the spectrogram options, older than this), and the two must not disagree: a row written
+        // before the workspace existed has only the mel flag, and said "Linear" over a mel picture.
+        var ws = view.Workspace;
+        var scale = ws.Analysis.Scale == "mel" || ws.Analysis.Scale == "linear"
+            ? (view.MelScale ? "mel" : "linear")
+            : ws.Analysis.Scale;
+        _spectrogramAnalysis     = ws.Analysis with { Scale = scale };
+        _speed                   = ws.Speed;
+        _zoomPxPerSec            = ws.ZoomPxPerSec;
+        _showVoiceBand           = ws.VoiceBand;
+        _regionDrawMode          = !ws.DragScrub;
+        _silenceDetectionEnabled = ws.DetectSilence;
+        _inspectorOpen           = ws.InspectorOpen;
+        _inspectorTab            = ws.InspectorTab;
 
         ApplyChainToControls(view.Chain);
 
-        if (_modalPlayer is null) return;
+        if (_modalPlayer is null) { _viewRestored = true; return; }
 
         await _modalPlayer.ToggleTimelineAsync(_timelineEnabled);
         if (_spectrogramEnabled)
+        {
             await _modalPlayer.ToggleSpectrogramAsync(
                 true, _spectrogramLabels, _spectrogramFftSamples, _colormap, _melScale);
+            if (_spectrogramAnalysis != SpectrogramAnalysis.Default with { Scale = _spectrogramAnalysis.Scale } || scale is not ("mel" or "linear"))
+                await ApplySpectrogramAnalysisAsync();
+        }
+        if (_showVoiceBand) await _modalPlayer.ToggleVoiceBandOverlayAsync(true);
+        if (!_regionDrawMode) await _modalPlayer.SetDragModeAsync(false);
+        if (_silenceDetectionEnabled) await _modalPlayer.DetectSilenceAsync(_silenceThresholdDb);
+        if (Math.Abs(_speed - 1.0) > 0.001) await _modalPlayer.SetPlaybackRateAsync(_speed);
+        // The saved zoom, not the field: the awaits above let the player's own load-time zoom
+        // reports (0) through, and they reset the field before this line read it (10/26/2026).
+        _zoomPxPerSec = ws.ZoomPxPerSec;
+        if (ws.ZoomPxPerSec > 0) await _modalPlayer.SetZoomAsync(ws.ZoomPxPerSec);
 
         await ApplyChainToPlayerAsync();
 
+        _viewRestored = true;
         StateHasChanged();
     }
 
@@ -1679,8 +1743,17 @@
         await _modalPlayer.SetNoiseGateAsync(_noiseGateEnabled, _noiseGateThreshold, _noiseGateAttack, _noiseGateRelease);
     }
 
+    /// <summary>
+    /// False until the saved view has been read and applied. A save before then would write the
+    /// defaults over what was stored: the player reports its starting zoom as it loads, before the
+    /// saved one is put back.
+    /// </summary>
+    private bool _viewRestored;
+
     private async Task SaveViewAsync()
     {
+        if (!_viewRestored) return;
+
         // Let whatever is already going finish, so the second save sees the first one's row.
         try { await _viewSave; } catch { /* its own caller reported it */ }
 
@@ -1734,8 +1807,9 @@
     private async Task ToggleDragModeAsync()
     {
         _regionDrawMode = !_regionDrawMode;
-        if (_modalPlayer is null) return;
-        await _modalPlayer.SetDragModeAsync(_regionDrawMode);
+        if (_modalPlayer is not null)
+            await _modalPlayer.SetDragModeAsync(_regionDrawMode);
+        await SaveViewAsync();
     }
 
     private async Task ToggleSpectrogramAsync()
@@ -1887,7 +1961,11 @@
         _inspectorOpen = true;
     }
 
-    private void OnInspectorTabChanged(string tab) => OpenTab(tab);
+    private async Task OnInspectorTabChanged(string tab)
+    {
+        OpenTab(tab);
+        await SaveViewAsync();
+    }
 
     private async Task OnToolbarActionAsync(AudioToolbarAction action)
     {
@@ -1982,6 +2060,7 @@
         var next = Math.Clamp(current * factor, 1, 2000);
         await _modalPlayer.SetZoomAsync(next);
         _zoomPxPerSec = next;
+        await SaveViewAsync();
     }
 
     /// <summary>Sets the one playback speed everywhere it shows.</summary>
@@ -1990,6 +2069,7 @@
         _speed = Math.Clamp(speed, 0.25, 3.0);
         if (_modalPlayer is not null) await _modalPlayer.SetPlaybackRateAsync(_speed);
         StateHasChanged();
+        await SaveViewAsync();
     }
 
     private static double ParseDouble(object? raw, double fallback) =>
@@ -2011,10 +2091,16 @@
     {
         _spectrogramAnalysis = analysis;
         _melScale = analysis.Scale == "mel";
-        if (_modalPlayer is not null && _spectrogramEnabled)
-            await _modalPlayer.SetSpectrogramAnalysisAsync(analysis.Scale, analysis.FrequencyMin, analysis.FrequencyMax,
-                analysis.WindowFunc, analysis.GainDb, analysis.RangeDb, analysis.PreEmphasis, analysis.SplitChannels);
+        if (_spectrogramEnabled) await ApplySpectrogramAnalysisAsync();
         await SaveViewAsync();
+    }
+
+    private async Task ApplySpectrogramAnalysisAsync()
+    {
+        if (_modalPlayer is null) return;
+        var a = _spectrogramAnalysis;
+        await _modalPlayer.SetSpectrogramAnalysisAsync(a.Scale, a.FrequencyMin, a.FrequencyMax,
+            a.WindowFunc, a.GainDb, a.RangeDb, a.PreEmphasis, a.SplitChannels);
     }
 
     private async Task OnSilenceThresholdChangedAsync(double db)
@@ -2562,18 +2648,23 @@
     private async Task ToggleVoiceBandAsync()
     {
         _showVoiceBand = !_showVoiceBand;
-        if (_modalPlayer is not null && _spectrogramEnabled)
+        // Passed on even with the spectrogram off: the player remembers it for when it comes on.
+        if (_modalPlayer is not null)
             await _modalPlayer.ToggleVoiceBandOverlayAsync(_showVoiceBand);
+        await SaveViewAsync();
     }
 
     private async Task ToggleSilenceDetectionAsync()
     {
         _silenceDetectionEnabled = !_silenceDetectionEnabled;
-        if (_modalPlayer is null) return;
-        if (_silenceDetectionEnabled)
-            await _modalPlayer.DetectSilenceAsync(_silenceThresholdDb);
-        else
-            await _modalPlayer.ClearSilenceDetectionAsync();
+        if (_modalPlayer is not null)
+        {
+            if (_silenceDetectionEnabled)
+                await _modalPlayer.DetectSilenceAsync(_silenceThresholdDb);
+            else
+                await _modalPlayer.ClearSilenceDetectionAsync();
+        }
+        await SaveViewAsync();
     }
 
     private async Task ApplySilenceDetectionAsync()

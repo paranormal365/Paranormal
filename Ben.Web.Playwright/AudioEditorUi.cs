@@ -37,6 +37,32 @@ public static class AudioEditorUi
         await choice.ClickAsync();
     }
 
+    /// <summary>
+    /// Clicks a toolbar button by its accessible name, from the bar or, at a width where Telerik has
+    /// moved it, from the "More tools" overflow menu.
+    /// </summary>
+    public static async Task ClickToolbarAsync(IPage page, ILocator editor, string name)
+    {
+        var onBar = editor.Locator("#audio-editor-toolbar").GetByRole(AriaRole.Button, new() { Name = name, Exact = true });
+        if (await onBar.CountAsync() > 0 && await onBar.First.IsVisibleAsync())
+        {
+            await onBar.First.ClickAsync();
+            return;
+        }
+        await editor.Locator("#audio-editor-toolbar").GetByRole(AriaRole.Button, new() { Name = "More tools" }).ClickAsync();
+        var inMenu = page.GetByRole(AriaRole.Listitem, new() { Name = name, Exact = true }).First;
+        await Expect(inMenu).ToBeVisibleAsync(new() { Timeout = 10_000 });
+        await inMenu.ClickAsync();
+    }
+
+    /// <summary>How much wider than its window the waveform is drawn: 1 is fit, more is zoomed in.</summary>
+    public static Task<double> WaveformZoomRatioAsync(ILocator editor) =>
+        editor.EvaluateAsync<double>(@"el => {
+            const host = el.querySelector('[id^=""ws-""]:not([id$=""-tl""])');
+            const scroll = [...host.children].find(c => c.shadowRoot)?.shadowRoot.querySelector('[part=""scroll""]');
+            return scroll ? scroll.scrollWidth / Math.max(1, scroll.clientWidth) : 0;
+        }");
+
     /// <summary>The toolbar's Spectrogram toggle.</summary>
     public static ILocator SpectrogramToggle(ILocator editor) =>
         editor.Locator("#audio-editor-toolbar").GetByRole(AriaRole.Button, new() { Name = "Spectrogram", Exact = true });
