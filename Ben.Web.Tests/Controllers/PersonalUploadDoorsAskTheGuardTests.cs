@@ -34,13 +34,9 @@ public sealed class PersonalUploadDoorsAskTheGuardTests
     /// </remarks>
     private static readonly Dictionary<string, string> NeedNotAsk = new()
     {
-        ["UploadFileAudioClipController.cs"] =
-            "Writes a clip cut FROM a file the account is already being charged for, and the clip "
-          + "is smaller than its source by construction. Wrong the day clipping can produce "
-          + "something larger, or can run on a file the caller does not own.",
-
         ["UploadFileAudioEditController.cs"] =
-            "Same shape as the clip door: an edit of bytes already counted. Wrong if editing ever "
+            "An edit of bytes already counted, so it is smaller than or about the size of its "
+          + "source. (The clip door had the same exemption until it began asking, 10/26/2026.) Wrong if editing ever "
           + "grows a file materially.",
 
         ["PublicHostedEventRoomController.cs"] =

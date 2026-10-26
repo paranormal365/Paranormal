@@ -743,8 +743,9 @@ public sealed class WebApiClient : IWebApiClient
         req.Content = JsonContent.Create(options);
         using var response = await SendOrUnreachableAsync(req, token);
 
+        // A scan always answers with a list, so an unreadable body is a failure, not "nothing found".
         if (response.IsSuccessStatusCode)
-            return (await BodyOrDefaultAsync<List<AudioMarkerRecord>>(response, token) ?? [], null);
+            return (await BodyOrDefaultAsync<List<AudioMarkerRecord>>(response, token), null);
         if (response.StatusCode == System.Net.HttpStatusCode.TooManyRequests) return (null, TooManyTries);
 
         var body = await response.Content.ReadAsStringAsync(token);

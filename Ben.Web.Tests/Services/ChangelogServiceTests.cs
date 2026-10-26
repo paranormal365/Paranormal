@@ -441,8 +441,8 @@ public sealed class ChangelogServiceTests
     {
         // It lives in the website's library rather than a project of its own, so its number is a
         // constant beside its code.
-        Assert.Equal(_changelog.CurrentVersion(ChangelogStream.AudioEditor),
-                     Ben.Web.Website.Library.Manage.Audio.AudioEditorRelease.Version);
+        Assert.Equal(Ben.Web.Website.Library.Manage.Audio.AudioEditorRelease.Version,
+                     _changelog.CurrentVersion(ChangelogStream.AudioEditor));
     }
 
     [Fact]
