@@ -24,6 +24,8 @@ public sealed class AudioWorkspaceTests
         InspectorOpen = false,
         InspectorTab  = "display",
         Analysis      = new SpectrogramAnalysis("bark", 100, 4000, "blackman", 32, 60, 6, true),
+        Minimap       = true,
+        SpectrogramHeight = 300,
     };
 
     [Fact]
@@ -80,6 +82,7 @@ public sealed class AudioWorkspaceTests
     [Theory]
     [InlineData("""{"workspace":{"speed":"NaN"}}""")]
     [InlineData("""{"workspace":{"speed":99,"zoomPxPerSec":-5}}""")]
+    [InlineData("""{"workspace":{"spectrogramHeight":9000}}""")]
     [InlineData("""{"workspace":{"inspectorTab":"settings","scale":"chromatic","windowFunc":"square"}}""")]
     [InlineData("""{"workspace": 7}""")]
     [InlineData("not json")]
@@ -89,6 +92,7 @@ public sealed class AudioWorkspaceTests
 
         Assert.InRange(workspace.Speed, 0.25, 3);
         Assert.InRange(workspace.ZoomPxPerSec, 0, 2000);
+        Assert.InRange(workspace.SpectrogramHeight, 100, 480);
         Assert.Contains(workspace.InspectorTab, AudioWorkspace.Tabs);
         Assert.Contains(workspace.Analysis.Scale, new[] { "linear", "logarithmic", "mel", "bark", "erb" });
         Assert.Equal("hann", workspace.Analysis.WindowFunc);

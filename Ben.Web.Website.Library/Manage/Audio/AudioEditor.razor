@@ -15,6 +15,7 @@
 @inject IBenAdminClient AdminClient
 @inject Ben.Web.Services.IMediaUrlBuilder MediaUrls
 @inject BenToastService Toasts
+@inject IJSRuntime JS
 @using Ben.Web.Services.WebApi
 @using Ben.Web.Website.Library.Kit
 
@@ -57,6 +58,29 @@
             <span class="fst-normal ms-2" title="Only the owner of a recording can save how it is set up">@_viewNotSavedReason</span>
         }
     </div>
+
+    @* Drawing the volume (phase 7). While it is up the waveform takes points, not regions. *@
+    @if (_volumeCurve)
+    {
+        <div class="audio-volume-bar" id="audio-volume-bar" role="region" aria-label="Turn parts down">
+            <BenIcon Name="volume-1" />
+            <span class="small">
+                Drag the line down where something is too loud. Double-click the line to add a point;
+                double-click a point to remove it. Playing follows the line.
+            </span>
+            <span class="ms-auto d-flex gap-2 flex-wrap">
+                <SaveFormatChoice @bind-SaveAsWav="@_saveAsWav" Id="volume-save-as-wav" />
+                <button type="button" class="btn btn-primary btn-sm" id="audio-volume-save" disabled="@_savingVolume" @onclick="SaveVolumeCurveAsync">
+                    @(_savingVolume ? "Saving…" : "Save as a new file")
+                </button>
+                <button type="button" class="btn btn-outline-secondary btn-sm" disabled="@_savingVolume" @onclick="CloseVolumeCurveAsync">Cancel</button>
+            </span>
+            @if (_volumeError is not null)
+            {
+                <div class="w-100 text-danger small">@_volumeError</div>
+            }
+        </div>
+    }
 
     @* Full WaveSurfer player *@
     <div class="flex-shrink-0" id="modal-player-pane">
@@ -251,7 +275,8 @@
                                         var isAdjusting = _adjustingCandidateId == c.Id;
                                         var score = Math.Clamp(c.DetectionScore ?? 0, 0, 100);
                                         var heard = _heardCandidates.Contains(c.Id);
-                                        <div class="evp-row evp-row--candidate @(isAdjusting ? "is-adjusting" : null)" data-heard="@(heard ? "true" : "false")">
+                                        <div class="evp-row evp-row--candidate @(isAdjusting ? "is-adjusting" : null) @(_focusedCandidateId == c.Id ? "is-focused" : null)"
+                                             data-heard="@(heard ? "true" : "false")" aria-current="@(_focusedCandidateId == c.Id ? "true" : null)">
                                             <span class="evp-score" title="How much this stood out from the background, not a likelihood of speech">
                                                 <span class="evp-score__num">@score.ToString("0")</span>
                                                 <span class="evp-score__meter"><span style="width:@(score.ToString("0", System.Globalization.CultureInfo.InvariantCulture))%;"></span></span>
@@ -285,6 +310,7 @@
                                             }
                                             <span class="evp-row__actions">
                                                 <button type="button" class="btn btn-outline-secondary btn-sm ben-grid-action" @onclick="@(() => PlayCandidateAsync(c))" title="Play this stretch with its surrounding context"><BenIcon Name="play" /></button>
+                                                <button type="button" class="btn btn-outline-secondary btn-sm ben-grid-action" @onclick="@(() => ZoomToCandidateAsync(c))" title="Zoom in on this one"><BenIcon Name="maximize-2" /></button>
                                                 @if (isAdjusting)
                                                 {
                                                     <button type="button" class="btn btn-primary btn-sm" @onclick="SaveAdjustedBoundsAsync">Save bounds</button>
@@ -452,6 +478,8 @@
                                           ColormapChanged="@OnColormapPickedAsync"
                                           Analysis="@_spectrogramAnalysis"
                                           AnalysisChanged="@OnSpectrogramAnalysisChangedAsync"
+                                          SpectrogramHeight="@_spectrogramHeight"
+                                          SpectrogramHeightChanged="@OnSpectrogramHeightChangedAsync"
                                           SilenceOn="@_silenceDetectionEnabled"
                                           SilenceThresholdDb="@_silenceThresholdDb"
                                           SilenceThresholdDbChanged="@OnSilenceThresholdChangedAsync" />
@@ -550,6 +578,26 @@
                       @bind-SaveAsWav="@_saveAsWav"
                       OnClipSaved="@(async saved => { _lastSaveSummary = AudioSaveSummary.For(saved, SaveFormat); await OverlayChildClipRegionsAsync(); })" />
 }
+
+@* ── Keyboard shortcuts (phase 7) ───────────────────────────────── *@
+<BenModal @bind-Visible="@_showShortcuts" Title="Keyboard shortcuts" Size="sm">
+    <ChildContent>
+        <p class="small text-secondary">They work anywhere on the editor's page, except while you're typing in a box.</p>
+        <dl class="audio-shortcuts" id="audio-shortcuts">
+            <dt><kbd>Space</kbd></dt><dd>Play or pause. With Loop on and a selection, play the selection round.</dd>
+            <dt><kbd>←</kbd> <kbd>→</kbd></dt><dd>Back or on a second; with <kbd>Shift</kbd>, five.</dd>
+            <dt><kbd>[</kbd> <kbd>]</kbd></dt><dd>Start a selection at the playhead, then end it there.</dd>
+            <dt><kbd>N</kbd> <kbd>P</kbd></dt><dd>Next or previous candidate: it is highlighted and played.</dd>
+            <dt><kbd>K</kbd></dt><dd>Keep the highlighted candidate.</dd>
+            <dt><kbd>D</kbd></dt><dd>Dismiss the highlighted candidate.</dd>
+            <dt><kbd>Z</kbd></dt><dd>Zoom to the selection, or to the highlighted candidate.</dd>
+            <dt><kbd>F</kbd></dt><dd>Fit the whole recording.</dd>
+            <dt><kbd>L</kbd></dt><dd>Loop on or off.</dd>
+            <dt><kbd>Esc</kbd></dt><dd>Clear the selection, or put the volume line away.</dd>
+            <dt><kbd>?</kbd></dt><dd>This list.</dd>
+        </dl>
+    </ChildContent>
+</BenModal>
 
 @* ── Region label edit dialog ────────────────────────────────── *@
 <BenModal @bind-Visible="@_showEditLabelDialog" Title="Edit Region Label" Size="sm">
@@ -859,13 +907,22 @@
     /// "fit", 10/26/2026). Every change saves as it happens instead; zoom, which the wheel changes
     /// many times a second, saves a second after the last change.</para>
     /// </remarks>
-    public ValueTask DisposeAsync()
+    public async ValueTask DisposeAsync()
     {
         _zoomSave?.Cancel();
         _zoomSave?.Dispose();
         // Only the watching stops; the scan itself carries on in the background.
         _scanWatch?.Cancel();
-        return ValueTask.CompletedTask;
+        try
+        {
+            if (_keys is not null)
+            {
+                await _keys.InvokeVoidAsync("detach");
+                await _keys.DisposeAsync();
+            }
+        }
+        catch (Exception gone) when (gone is JSDisconnectedException or OperationCanceledException or ObjectDisposedException) { }
+        _selfRef?.Dispose();
     }
 
     /// <summary>Pending save of a zoom change; replaced by each newer zoom.</summary>
@@ -1565,6 +1622,8 @@
         InspectorOpen = _inspectorOpen,
         InspectorTab  = _inspectorTab,
         Analysis      = _spectrogramAnalysis,
+        Minimap       = _minimap,
+        SpectrogramHeight = _spectrogramHeight,
     };
 
     /// <summary>The listening chain as the controls stand.</summary>
@@ -1631,12 +1690,17 @@
         _silenceDetectionEnabled = ws.DetectSilence;
         _inspectorOpen           = ws.InspectorOpen;
         _inspectorTab            = ws.InspectorTab;
+        _minimap                 = ws.Minimap;
+        _spectrogramHeight       = ws.SpectrogramHeight;
 
         ApplyChainToControls(view.Chain);
 
         if (_modalPlayer is null) { _viewRestored = true; return; }
 
         await _modalPlayer.ToggleTimelineAsync(_timelineEnabled);
+        // Before the spectrogram, so it opens at its remembered height (phase 7).
+        await _modalPlayer.SetSpectrogramHeightAsync(_spectrogramHeight);
+        if (_minimap) await _modalPlayer.ToggleMinimapAsync(true);
         if (_spectrogramEnabled)
         {
             await _modalPlayer.ToggleSpectrogramAsync(
@@ -1944,7 +2008,10 @@
         HasSelection:      _regionSelection.HasTarget,
         ActiveTab:         _inspectorTab,
         InspectorOpen:     _inspectorOpen,
-        CustomScan:        EvpDetectionOptions.PresetName(_scanOptions) is null);
+        CustomScan:        EvpDetectionOptions.PresetName(_scanOptions) is null,
+        Loop:              _loop,
+        Minimap:           _minimap,
+        VolumeCurve:       _volumeCurve);
 
     private void OpenTab(string tab)
     {
@@ -1978,6 +2045,11 @@
             case AudioToolbarAction.ZoomFit:
                 if (_modalPlayer is not null) await _modalPlayer.SetZoomAsync(0);
                 break;
+            case AudioToolbarAction.ZoomSelection:           await ZoomToSelectionAsync(); break;
+            case AudioToolbarAction.ToggleLoop:              await ToggleLoopAsync(); break;
+            case AudioToolbarAction.ToggleMinimap:           await ToggleMinimapAsync(); break;
+            case AudioToolbarAction.DrawVolume:              await OpenVolumeCurveAsync(); break;
+            case AudioToolbarAction.Shortcuts:               _showShortcuts = true; break;
 
             case AudioToolbarAction.ToggleTimeline:          await ToggleTimelineAsync(); break;
             case AudioToolbarAction.ToggleSpectrogramLabels: await OnSpectrogramMenuClickAsync(new SpectrogramMenuItem("labels", "")); break;
@@ -2481,6 +2553,241 @@
         {
             _reviewingCandidateId = null;
             _confirmingCandidate  = null;
+            StateHasChanged();
+        }
+    }
+
+    // ── Phase 7: shortcuts, zoom, loop, overview strip, the spectrogram, the volume line ──
+
+    private bool    _loop;
+    private bool    _minimap;
+    private int     _spectrogramHeight = 160;
+    private bool    _volumeCurve;
+    private bool    _savingVolume;
+    private string? _volumeError;
+    private bool    _showShortcuts;
+
+    /// <summary>The candidate N and P move through, K keeps and D dismisses; highlighted in the list.</summary>
+    private Guid?   _focusedCandidateId;
+
+    /// <summary>Where <c>[</c> started a selection, until <c>]</c> ends it.</summary>
+    private double? _selectionStartMark;
+
+    private IJSObjectReference?                  _keys;
+    private DotNetObjectReference<AudioEditor>?  _selfRef;
+
+    /// <summary>What the spectrogram's marks were last drawn from, so they are only sent when that changes.</summary>
+    private string? _spectroMarksDrawn;
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender)
+        {
+            try
+            {
+                _keys    = await JS.InvokeAsync<IJSObjectReference>(
+                    "import", "/_content/Ben.Web.Website.Library/Manage/Audio/AudioEditor.razor.js");
+                _selfRef = DotNetObjectReference.Create(this);
+                await _keys.InvokeVoidAsync("attach", _selfRef);
+            }
+            catch (Exception gone) when (gone is JSDisconnectedException or OperationCanceledException or JSException) { }
+        }
+        await PushSpectrogramMarksAsync();
+    }
+
+    /// <summary>
+    /// Candidates and kept markers on the spectrogram, sent whenever the list changes (phase 7).
+    /// The player keeps them through the spectrogram being turned off and on.
+    /// </summary>
+    private async Task PushSpectrogramMarksAsync()
+    {
+        if (_modalPlayer is null || !_modalReady) return;
+        var marks = _markers
+            .Where(m => m.ReviewStatus != EvpReviewStatus.Dismissed)
+            .Select(m => new WsSpan(m.TimeSeconds, m.EndSeconds ?? m.TimeSeconds,
+                                    m.ReviewStatus == EvpReviewStatus.Pending ? "candidate" : "confirmed"))
+            .ToList();
+        var key = string.Join(";", marks.Select(m => FormattableString.Invariant($"{m.Start:0.###}-{m.End:0.###}{m.Kind[0]}")));
+        if (key == _spectroMarksDrawn) return;
+        _spectroMarksDrawn = key;
+        try { await _modalPlayer.SetSpectrogramOverlaysAsync(marks); }
+        catch (Exception gone) when (gone is JSDisconnectedException or OperationCanceledException) { }
+    }
+
+    private async Task OnSpectrogramHeightChangedAsync(int px)
+    {
+        _spectrogramHeight = Math.Clamp(px, 100, 480);
+        if (_modalPlayer is not null) await _modalPlayer.SetSpectrogramHeightAsync(_spectrogramHeight);
+        await SaveViewAsync();
+    }
+
+    private async Task ToggleMinimapAsync()
+    {
+        _minimap = !_minimap;
+        if (_modalPlayer is not null) await _modalPlayer.ToggleMinimapAsync(_minimap);
+        await SaveViewAsync();
+    }
+
+    private async Task ToggleLoopAsync()
+    {
+        _loop = !_loop;
+        if (_modalPlayer is not null) await _modalPlayer.SetLoopAsync(_loop);
+    }
+
+    private async Task ZoomToSelectionAsync()
+    {
+        if (_modalPlayer is null) return;
+        if (_regionSelection.Target is { } sel) await _modalPlayer.ZoomToRangeAsync(sel.Start, sel.End);
+        else if (FocusedCandidate is { } c) await ZoomToCandidateAsync(c);
+    }
+
+    private async Task ZoomToCandidateAsync(AudioMarkerRecord candidate)
+    {
+        _focusedCandidateId = candidate.Id;
+        if (_modalPlayer is not null)
+            await _modalPlayer.ZoomToRangeAsync(candidate.TimeSeconds, candidate.EndSeconds ?? candidate.TimeSeconds + 1);
+    }
+
+    private AudioMarkerRecord? FocusedCandidate =>
+        _focusedCandidateId is { } id ? PendingCandidates.FirstOrDefault(c => c.Id == id) : null;
+
+    /// <summary>A key from the editor's page (AudioEditor.razor.js). See the shortcuts window for the list.</summary>
+    [JSInvokable]
+    public async Task OnShortcutAsync(string action, bool shift)
+    {
+        if (!_modalReady || _modalPlayer is null) return;
+        try
+        {
+            switch (action)
+            {
+                case "space":
+                    if (await _modalPlayer.IsPlayingAsync()) await _modalPlayer.PauseAsync();
+                    else if (_loop && _regionSelection.Target is { } loopSel) await _modalPlayer.PlayRangeAsync(loopSel.Start, loopSel.End);
+                    else await _modalPlayer.PlayAsync();
+                    break;
+
+                case "left" or "right":
+                    if (_modalDuration <= 0) break;
+                    var step = (shift ? 5 : 1) * (action == "left" ? -1 : 1);
+                    var now  = await _modalPlayer.GetCurrentTimeAsync();
+                    await _modalPlayer.SeekToAsync(Math.Clamp((now + step) / _modalDuration, 0, 1));
+                    break;
+
+                case "start":
+                    _selectionStartMark = await _modalPlayer.GetCurrentTimeAsync();
+                    Notify($"Selection starts at {FormatTime(_selectionStartMark.Value)}. Press ] where it should end.", "info");
+                    break;
+
+                case "end":
+                    var end = await _modalPlayer.GetCurrentTimeAsync();
+                    if (_selectionStartMark is not { } start || end - start < 0.05)
+                    {
+                        Notify("Press [ where the selection should start, then ] after it.", "info");
+                        break;
+                    }
+                    await ClearUserRegionsAsync();
+                    await _modalPlayer.AddRegionAsync(new WsRegionParams
+                    {
+                        Start = start, End = end, Kind = "user", Drag = true, Resize = true,
+                        Color = "rgba(var(--ben-audio-region-rgb, 91, 61, 245),0.2)",
+                    });
+                    _selectionStartMark = null;
+                    break;
+
+                case "next" or "previous":
+                    var list = PendingCandidates.ToList();
+                    if (list.Count == 0) break;
+                    var at = FocusedCandidate is { } f ? list.FindIndex(c => c.Id == f.Id) : -1;
+                    var to = action == "next" ? Math.Min(list.Count - 1, at + 1) : Math.Max(0, at < 0 ? 0 : at - 1);
+                    _focusedCandidateId = list[to].Id;
+                    await PlayCandidateAsync(list[to]);
+                    break;
+
+                case "keep":
+                    if (FocusedCandidate is { } keep) OpenConfirmCandidateDialog(keep);
+                    break;
+
+                case "dismiss":
+                    if (FocusedCandidate is { } dismiss)
+                    {
+                        // The next one down the list takes the highlight, so D can be pressed again.
+                        var rest = PendingCandidates.ToList();
+                        var i = rest.FindIndex(c => c.Id == dismiss.Id);
+                        await DismissCandidateAsync(dismiss);
+                        var after = PendingCandidates.ToList();
+                        _focusedCandidateId = after.Count == 0 ? null : after[Math.Min(i, after.Count - 1)].Id;
+                    }
+                    break;
+
+                case "zoom": await ZoomToSelectionAsync(); break;
+                case "fit":  await _modalPlayer.SetZoomAsync(0); break;
+                case "loop": await ToggleLoopAsync(); break;
+
+                case "escape":
+                    if (_volumeCurve) await CloseVolumeCurveAsync();
+                    else { _selectionStartMark = null; await ClearUserRegionsAsync(); }
+                    break;
+
+                case "help": _showShortcuts = true; break;
+            }
+        }
+        catch (Exception gone) when (gone is JSDisconnectedException or OperationCanceledException) { return; }
+        StateHasChanged();
+    }
+
+    // ── Turning parts down: the volume line (phase 7) ─────────────────────────
+
+    private async Task OpenVolumeCurveAsync()
+    {
+        if (_modalPlayer is null || _volumeCurve) return;
+        _volumeError = null;
+        await _modalPlayer.StartEnvelopeAsync();
+        _volumeCurve = true;
+    }
+
+    private async Task CloseVolumeCurveAsync()
+    {
+        _volumeCurve = false;
+        _volumeError = null;
+        if (_modalPlayer is not null) await _modalPlayer.StopEnvelopeAsync();
+    }
+
+    /// <summary>Saves the recording with the line applied, as a new file like every edit.</summary>
+    private async Task SaveVolumeCurveAsync()
+    {
+        if (_modalPlayer is null || _savingVolume) return;
+        var points = await _modalPlayer.GetEnvelopePointsAsync();
+        if (points.All(p => p.Volume >= 0.999))
+        {
+            _volumeError = "The line is still at full volume everywhere. Drag it down where something is too loud.";
+            return;
+        }
+
+        _savingVolume = true;
+        _volumeError  = null;
+        StateHasChanged();
+        try
+        {
+            var (result, error) = await AdminClient.EditAudioWithReasonAsync(FileId, new AudioEditRequest(
+                AudioEditOperation.Envelope, null, null, null, null, null, null,
+                _saveClipIsPublic, _saveClipTypeId,
+                Format: SaveFormat,
+                Volume: points.Select(p => new VolumePoint(p.Time, p.Volume)).ToList()));
+
+            if (result is null)
+            {
+                _volumeError = error ?? "That couldn't be saved.";
+                return;
+            }
+            await CloseVolumeCurveAsync();
+            await OverlayChildClipRegionsAsync();
+            _lastSaveSummary = AudioSaveSummary.For(result, SaveFormat);
+            Notify($"Saved \"{result.FileName}\". {_lastSaveSummary}", "success");
+            OpenTab("clips");
+        }
+        finally
+        {
+            _savingVolume = false;
             StateHasChanged();
         }
     }

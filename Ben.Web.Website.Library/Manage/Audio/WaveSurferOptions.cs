@@ -682,3 +682,14 @@ public static class UploadFileAudioConfigExtensions
                 DefaultIgnoreCondition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull,
             });
 }
+
+/// <summary>A stretch to mark on the spectrogram (phase 7). Kind: candidate, confirmed or marker.</summary>
+public sealed record WsSpan(
+    [property: System.Text.Json.Serialization.JsonPropertyName("start")] double Start,
+    [property: System.Text.Json.Serialization.JsonPropertyName("end")] double End,
+    [property: System.Text.Json.Serialization.JsonPropertyName("kind")] string Kind);
+
+/// <summary>One point on the drawn volume curve: a time, and a volume from 0 (silent) to 1 (as recorded).</summary>
+public sealed record WsEnvelopePoint(
+    [property: System.Text.Json.Serialization.JsonPropertyName("time")] double Time,
+    [property: System.Text.Json.Serialization.JsonPropertyName("volume")] double Volume);

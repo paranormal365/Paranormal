@@ -469,6 +469,37 @@
     public async Task<List<WsRegionData>> GetRegionsAsync()
         => _module is null ? [] : await _module.InvokeAsync<List<WsRegionData>>("getRegions", _containerId);
 
+    // ── Phase 7: loop, zoom to a stretch, the spectrogram's height and marks, minimap, volume ──
+
+    /// <summary>Loops whatever stretch is played (a region, a candidate, the selection) instead of stopping at its end.</summary>
+    public async Task SetLoopAsync(bool on) => await Invoke("setLoop", on);
+
+    /// <summary>Zooms so the stretch fills the window, with a margin either side, and scrolls to it.</summary>
+    public async Task ZoomToRangeAsync(double startSeconds, double endSeconds)
+        => await Invoke("zoomToRange", startSeconds, endSeconds, 0.15);
+
+    /// <summary>The spectrogram's height in px (100–480); the player grows or shrinks with it.</summary>
+    public async Task SetSpectrogramHeightAsync(int px) => await Invoke("setSpectrogramHeight", px);
+
+    /// <summary>Candidates and markers drawn on the spectrogram.</summary>
+    /// <remarks>
+    /// A list, never an array: a <c>WsSpan[]</c> passed to <c>params object?[]</c> IS the params
+    /// array, so each span arrived as an argument of its own and the module saw no list at all.
+    /// </remarks>
+    public async Task SetSpectrogramOverlaysAsync(IEnumerable<WsSpan> spans)
+        => await Invoke("setSpectrogramOverlays", spans.ToList());
+
+    public async Task ToggleMinimapAsync(bool show) => await Invoke("toggleMinimap", show);
+
+    /// <summary>Puts the volume curve over the waveform, flat at full volume.</summary>
+    public async Task StartEnvelopeAsync() => await Invoke("startEnvelope");
+
+    /// <summary>The curve as drawn, sorted by time.</summary>
+    public async Task<List<WsEnvelopePoint>> GetEnvelopePointsAsync()
+        => _module is null ? [] : await _module.InvokeAsync<List<WsEnvelopePoint>>("getEnvelopePoints", _containerId);
+
+    public async Task StopEnvelopeAsync() => await Invoke("stopEnvelope");
+
     // ── JS-invokable callbacks ────────────────────────────────────────────────
 
     [JSInvokable] public async Task OnWsReady(double duration)

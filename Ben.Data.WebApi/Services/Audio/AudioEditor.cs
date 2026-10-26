@@ -1,3 +1,4 @@
+using Ben.Service.Models.Entities;
 using NAudio.Wave;
 
 namespace Ben.Data.WebApi.Services.Audio;
@@ -61,6 +62,46 @@ internal static class AudioEditor
         for (var i = 0; i < samples.Length; i++)
             samples[i] = Math.Clamp(samples[i] * factor, -1f, 1f);
         return WriteWav(samples, format);
+    }
+
+    /// <summary>
+    /// Applies a drawn volume curve (phase 7), exactly as the editor plays it while it is drawn:
+    /// straight lines between the points, silence before the first point and after the last (the
+    /// editor puts points at the very start and end, so a curve drawn there never fades from
+    /// nothing). Only ever turns sound down; 1 is the recording as it is.
+    /// </summary>
+    public static (byte[] Bytes, string ContentType, string Extension) Envelope(
+        Stream sourceStream, string sourceContentType, IReadOnlyList<VolumePoint> points)
+    {
+        var (samples, format) = ReadSamples(sourceStream, sourceContentType);
+        var channels = format.Channels;
+        var frames   = samples.Length / channels;
+        var duration = frames / (double)format.SampleRate;
+
+        var next = 0;
+        for (var f = 0; f < frames; f++)
+        {
+            var volume = (float)VolumeAt(points, f / (double)format.SampleRate, duration, ref next);
+            for (var c = 0; c < channels; c++)
+                samples[f * channels + c] *= volume;
+        }
+        return WriteWav(samples, format);
+    }
+
+    /// <summary>
+    /// The curve's volume at <paramref name="time"/>, the way the envelope plugin reads it during
+    /// playback (envelope.ts, onTimeUpdate, 8.0.3): the last point at or before the time, the first
+    /// point after it, a straight line between; (0, 0) before the first point and (duration, 0)
+    /// after the last. <paramref name="next"/> carries the search forward, since times only grow.
+    /// </summary>
+    internal static double VolumeAt(IReadOnlyList<VolumePoint> points, double time, double duration, ref int next)
+    {
+        while (next < points.Count && points[next].Time <= time) next++;
+        var after  = next < points.Count ? points[next] : new VolumePoint(duration, 0);
+        var before = next > 0 ? points[next - 1] : new VolumePoint(0, 0);
+        var span   = after.Time - before.Time;
+        var volume = span > 0 ? before.Volume + (time - before.Time) * ((after.Volume - before.Volume) / span) : before.Volume;
+        return Math.Clamp(volume, 0, 1);
     }
 
     public static (byte[] Bytes, string ContentType, string Extension) Fade(

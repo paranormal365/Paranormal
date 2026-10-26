@@ -27,12 +27,17 @@ The toolbar holds what you use most:
 - **Scan for EVP:** scans with the settings you last chose. The arrow beside it picks Low, Medium
   or High, or opens the fine-tuning, which is ticked when you've adjusted the settings yourself.
 - **EVP Markers:** the markers you kept and the candidates waiting for you.
-- **Zoom out, fit, zoom in.**
+- **Zoom out, fit, zoom in,** and **zoom to the selection**, which makes the stretch you drew fill
+  the window.
+- **Loop:** plays a candidate, a marker or the selection round and round instead of stopping at its
+  end. Good for hearing a faint sound several times without reaching for the mouse.
+- **?** lists the keyboard shortcuts.
 
 Everything else is in three menus at the right of the toolbar:
 
 - **View:** what's drawn, such as the timeline, the spectrogram's labels, the mel scale, the voice
-  band and silence shading.
+  band, silence shading and the **overview strip**: the whole recording in a thin strip under the
+  waveform, with the part in view outlined, so you can drag around a long recording while zoomed in.
 - **Listen:** the playback speed, and the listening tools.
 - **Edit:** making a clip, exploring a stretch, and every change that makes a new file.
 
@@ -73,6 +78,25 @@ has shaded. None of those are selections, and an edit will never act on them.
 Right-click a region to open its menu: play just that part, explore it in its own window, save it
 as a file, rename it, or remove it.
 
+## Keyboard shortcuts
+
+Once you're working through a list of candidates, the keyboard is quicker than the mouse. The keys
+work anywhere on the editor's page, except while you're typing in a box.
+
+| Key | What it does |
+|---|---|
+| Space | Play or pause. With Loop on and a selection, play the selection round. |
+| ← → | Back or on a second; with Shift, five. |
+| [ then ] | Start a selection at the playhead, then end it there. |
+| N, P | Next or previous candidate: it's highlighted in the list and played. |
+| K | Keep the highlighted candidate. |
+| D | Dismiss the highlighted candidate, and move on to the next. |
+| Z | Zoom to the selection, or to the highlighted candidate. |
+| F | Fit the whole recording. |
+| L | Loop on or off. |
+| Esc | Clear the selection, or put the volume line away. |
+| ? | The list of shortcuts. |
+
 ## The spectrogram
 
 **Spectrogram** draws the recording's frequencies over time, under the waveform. It's the most
@@ -84,7 +108,11 @@ spot them in the hiss much faster than you can hear them.
 recording's energy is low; a voice shows up as brighter marks in the band from a few hundred hertz
 upward.*
 
-Its settings are in the **Display** tab:
+The candidates and the markers you kept are marked on the spectrogram too, as tinted bands, so a
+sound in the list can be found in the picture.
+
+Its settings are in the **Display** tab, including its **height**: make it taller to see pitches
+further apart. The waveform keeps its own height, and the editor remembers your choice.
 
 - **Resolution** trades detail in time for detail in frequency. A low number gives a blurrier
   picture that shows exactly *when* something happened; a high number shows exactly *what pitch* it
@@ -225,6 +253,14 @@ choose how much:
 
 Cut and Silence selection use the region you drew. The other six apply to the whole file, whatever is
 selected.
+
+### Turning parts down
+
+**Edit ▸ Turn parts down…** puts a line across the waveform for the volume. Drag it down where
+something is too loud, such as a door slam right beside a faint sound. Double-click the line to add
+a point, and double-click a point to remove it. Playing follows the line as you draw it, so you hear
+the result before you keep it. **Save as a new file** keeps it; the original isn't changed. The line
+can only turn sound down; to bring a quiet stretch up, turn the rest down and then use Normalize.
 
 Edits work on recordings up to about half an hour long. For anything longer, you'll see a message
 instead, because the whole file has to be held in memory while it's edited. Cut out the part you
