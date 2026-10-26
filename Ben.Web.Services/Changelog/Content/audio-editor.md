@@ -32,6 +32,13 @@ it is hidden from everybody else, but still takes its number. No other sub-headi
 
 ## Unreleased
 
+- Every setting the EVP scan uses can be adjusted in Fine-tune, in four groups: what counts as a
+  sound, the pitch range it listens in, how it judges the room's background, and what reaches the
+  list. The spectrogram's voice band follows the range.
+- Save scan settings as presets of your own, and choose one as your default. A recording starts
+  from the settings you last scanned it with.
+- When a scan finds more than fit, a few places go to lower-scoring sounds, marked as samples, so
+  your rulings teach the scanner about more than its favorites.
 - Clips, edits and case mixes are saved as FLAC: every sound kept exactly, in a smaller file than
   WAV. After saving, the editor shows the size and what it would have been as WAV. A WAV is still
   one tick away for programs that can't open FLAC.

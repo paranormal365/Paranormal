@@ -53,6 +53,12 @@ public record UploadFileAudioConfigRecord
     public string? EditStateJson { get; init; }
     public string? EnvelopeOptionsJson { get; init; }
 
+    /// <summary>
+    /// The EVP scan settings last used on this recording (an <see cref="EvpDetectionOptions"/>), or
+    /// null. Read only: the scan writes it, so a view save can never undo it (phase 5).
+    /// </summary>
+    public string? EvpScanOptionsJson { get; init; }
+
     // Component layout
     public string InitialHeight { get; init; } = "200px";
     public string MinHeight { get; init; } = "80px";

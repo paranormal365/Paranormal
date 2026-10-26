@@ -16,8 +16,13 @@ namespace Ben.Data.WebApi.Services.Audio;
 /// The measurements the score was made from, kept so a reviewer's Keep or Dismiss can later
 /// re-weight them (item 253). Default for a candidate built by hand.
 /// </param>
+/// <param name="Exploratory">
+/// Kept as one of the lower-ranked candidates a full scan sets aside places for
+/// (<see cref="EvpDetectionOptions.ExplorationShare"/>), not for its score.
+/// </param>
 public readonly record struct EvpCandidate(
-    double StartSeconds, double EndSeconds, float Score, EvpFeatures Features = default)
+    double StartSeconds, double EndSeconds, float Score, EvpFeatures Features = default,
+    bool Exploratory = false)
 {
     public double DurationSeconds => EndSeconds - StartSeconds;
 }
@@ -89,23 +94,13 @@ internal static class EvpDetector
     private const double WindowSeconds = 0.025;
     private const double HopSeconds    = 0.010;
 
-    // ── Voice band ────────────────────────────────────────────────────────────
-    // Telephone band. Deliberately narrow: it discards the rumble and handling noise below it and
-    // the hiss above it, both of which otherwise dominate the energy of a quiet recording.
-    private const double HighPassHz = 300.0;
-    private const double LowPassHz  = 3400.0;
-
-    // ── Floor tracking ────────────────────────────────────────────────────────
-    private const double FloorWindowSeconds = 10.0;
-    private const double FloorPercentile    = 0.20;
-
-    // ── Gating ────────────────────────────────────────────────────────────────
-    // Release 2 dB below onset so a wavering sound stays one event instead of chattering into a
-    // dozen fragments.
-    private const double ReleaseHysteresisDb = 2.0;
-
-    // Event shaping is caller-tunable — see EvpDetectionOptions, which documents each value and
-    // the range it's clamped to. Recordings differ too much for one fixed set to serve them all.
+    // Everything else is caller-tunable — see EvpDetectionOptions, which documents each value, the
+    // range it's held to and why its default is what it is. The defaults are the constants that
+    // used to live here: the voice band is the telephone band (300–3400 Hz), deliberately narrow so
+    // it discards the rumble below and the hiss above, both of which otherwise dominate a quiet
+    // recording; the floor is the 20th percentile of 10 s; and a sound is released 2 dB below its
+    // onset so a wavering one stays a single event. Recordings differ too much for one fixed set to
+    // serve them all (phase 5, 10/26/2026).
 
     /// <summary>Quietest level considered; below this a frame is treated as digital silence.</summary>
     private const double SilenceFloorDb = -120.0;
@@ -152,13 +147,13 @@ internal static class EvpDetector
     {
         if (mono.Length == 0 || sampleRate <= 0 || maxResults <= 0) return [];
 
-        var band = BandPass(mono, sampleRate);
+        var band = BandPass(mono, sampleRate, options);
 
         var (bandDb, fullDb) = FrameEnergies(band, mono, sampleRate);
         if (bandDb.Length == 0) return [];
 
-        var floorDb = SlidingFloor(bandDb, sampleRate);
-        var runs    = GateRuns(bandDb, floorDb, options.ThresholdDb);
+        var floorDb = SlidingFloor(bandDb, options);
+        var runs    = GateRuns(bandDb, floorDb, options.ThresholdDb, options.ReleaseHysteresisDb);
         var events  = ShapeEvents(runs, sampleRate, options);
 
         var totalSeconds = mono.Length / (double)sampleRate;
@@ -176,16 +171,43 @@ internal static class EvpDetector
                     Score(features),
                     features);
             })
+            .Where(c => c.Score >= options.MinScore)
             .ToList();
 
-        // Cap by score, then hand back in playback order — a review queue reads top to bottom
-        // through the recording, not by rank.
-        return scored
-            .OrderByDescending(c => c.Score)
-            .ThenBy(c => c.StartSeconds)
-            .Take(maxResults)
+        // Hand back in playback order — a review queue reads top to bottom through the recording,
+        // not by rank.
+        return Cap(scored, Math.Min(maxResults, options.MaxCandidates), options.ExplorationShare)
             .OrderBy(c => c.StartSeconds)
             .ToList();
+    }
+
+    /// <summary>
+    /// At most <paramref name="cap"/>: the highest scores, less a share of the places set aside for
+    /// lower-ranked candidates spread evenly through the rest of the recording (item 253).
+    /// </summary>
+    /// <remarks>
+    /// <para>A detector that only ever shows its favorites only ever learns about its favorites. The
+    /// set-aside places go to every k-th of the remaining candidates in playback order, so the same
+    /// scan always picks the same ones; nothing here is random.</para>
+    /// <para>The share is rounded down, so a small cap reserves nothing: two places are both the top
+    /// two.</para>
+    /// </remarks>
+    internal static List<EvpCandidate> Cap(List<EvpCandidate> scored, int cap, double explorationShare)
+    {
+        if (cap <= 0) return [];
+
+        var ranked = scored.OrderByDescending(c => c.Score).ThenBy(c => c.StartSeconds).ToList();
+        if (ranked.Count <= cap) return ranked;
+
+        var reserve = (int)Math.Floor(Math.Clamp(explorationShare, 0, 1) * cap);
+        var kept    = ranked.Take(cap - reserve).ToList();
+        if (reserve == 0) return kept;
+
+        var rest = ranked.Skip(cap - reserve).OrderBy(c => c.StartSeconds).ToList();
+        var step = rest.Count / (double)reserve;
+        for (var i = 0; i < reserve; i++)
+            kept.Add(rest[(int)(i * step + step / 2)] with { Exploratory = true });
+        return kept;
     }
 
     // ── Band-pass ─────────────────────────────────────────────────────────────
@@ -195,10 +217,10 @@ internal static class EvpDetector
     /// gentle slope, which is what's wanted: a steep filter rings, and ringing on a transient looks
     /// exactly like a short voice-band event.
     /// </summary>
-    private static float[] BandPass(float[] input, int sampleRate)
+    private static float[] BandPass(float[] input, int sampleRate, EvpDetectionOptions options)
     {
-        var hp = Biquad.HighPass(HighPassHz, sampleRate);
-        var lp = Biquad.LowPass(Math.Min(LowPassHz, sampleRate / 2.0 - 1), sampleRate);
+        var hp = Biquad.HighPass(options.BandLowHz, sampleRate);
+        var lp = Biquad.LowPass(Math.Min(options.BandHighHz, sampleRate / 2.0 - 1), sampleRate);
 
         var output = new float[input.Length];
         for (var i = 0; i < input.Length; i++)
@@ -245,12 +267,12 @@ internal static class EvpDetector
     // ── Adaptive floor ────────────────────────────────────────────────────────
 
     /// <summary>
-    /// The <see cref="FloorPercentile"/> of a window centred on each frame, via a 1 dB histogram
-    /// so the cost is per-frame constant rather than a sort per frame.
+    /// The <see cref="EvpDetectionOptions.FloorPercentile"/> of a window centred on each frame, via a
+    /// 1 dB histogram so the cost is per-frame constant rather than a sort per frame.
     /// </summary>
-    private static double[] SlidingFloor(double[] bandDb, int sampleRate)
+    private static double[] SlidingFloor(double[] bandDb, EvpDetectionOptions options)
     {
-        var half = Math.Max(1, (int)(FloorWindowSeconds / HopSeconds / 2));
+        var half = Math.Max(1, (int)(options.FloorWindowSeconds / HopSeconds / 2));
         var bins = new int[(int)-SilenceFloorDb + 2];   // one bin per dB, from SilenceFloorDb to 0
 
         int BinOf(double db) => Math.Clamp((int)Math.Round(db - SilenceFloorDb), 0, bins.Length - 1);
@@ -268,7 +290,7 @@ internal static class EvpDetector
             while (hi < wantHi) { bins[BinOf(bandDb[++hi])]++; inWindow++; }
             while (lo < wantLo) { bins[BinOf(bandDb[lo++])]--; inWindow--; }
 
-            var target = Math.Max(1, (int)Math.Ceiling(inWindow * FloorPercentile));
+            var target = Math.Max(1, (int)Math.Ceiling(inWindow * options.FloorPercentile));
             var seen = 0;
             for (var b = 0; b < bins.Length; b++)
             {
@@ -283,7 +305,7 @@ internal static class EvpDetector
 
     private readonly record struct Run(int Start, int End);
 
-    private static List<Run> GateRuns(double[] bandDb, double[] floorDb, double onsetDeltaDb)
+    private static List<Run> GateRuns(double[] bandDb, double[] floorDb, double onsetDeltaDb, double releaseHysteresisDb)
     {
         var runs = new List<Run>();
         var active = false;
@@ -292,7 +314,7 @@ internal static class EvpDetector
         for (var f = 0; f < bandDb.Length; f++)
         {
             var onset   = floorDb[f] + onsetDeltaDb;
-            var release = onset - ReleaseHysteresisDb;
+            var release = onset - releaseHysteresisDb;
 
             if (!active && bandDb[f] >= onset)
             {

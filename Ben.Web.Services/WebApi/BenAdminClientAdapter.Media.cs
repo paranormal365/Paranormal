@@ -172,6 +172,20 @@ public sealed partial class BenAdminClientAdapter
     public Task<LoadResult<AudioMarkerRecord>> GetAudioMarkersAsync(Guid fileId, CancellationToken token = default)
         => _api.GetAudioMarkersAsync(fileId, token);
 
+    public Task<LoadResult<EvpScanPresetRecord>> GetEvpScanPresetsAsync(CancellationToken token = default)
+        => _api.GetEvpScanPresetsAsync(token);
+
+    public Task<(EvpScanPresetRecord? Result, string? Error)> CreateEvpScanPresetAsync(
+        SaveEvpScanPresetRequest request, CancellationToken token = default)
+        => _api.CreateEvpScanPresetAsync(request, token);
+
+    public Task<(EvpScanPresetRecord? Result, string? Error)> UpdateEvpScanPresetAsync(
+        Guid id, SaveEvpScanPresetRequest request, CancellationToken token = default)
+        => _api.UpdateEvpScanPresetAsync(id, request, token);
+
+    public Task<(bool Deleted, string? Error)> DeleteEvpScanPresetAsync(Guid id, CancellationToken token = default)
+        => _api.DeleteEvpScanPresetAsync(id, token);
+
     public Task<AudioMarkerRecord?> CreateAudioMarkerAsync(Guid fileId, CreateAudioMarkerRequest request, CancellationToken token = default)
         => _api.CreateAudioMarkerAsync(fileId, request, token);
 

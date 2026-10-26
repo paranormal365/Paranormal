@@ -22,6 +22,9 @@ public record AudioMarkerRecord
     /// <summary>The detector's 0–100 signal score, or null for a hand-placed marker.</summary>
     public float? DetectionScore { get; init; }
 
+    /// <summary>Included as a lower-ranked sample from a full scan rather than for its score.</summary>
+    public bool IsExploratory { get; init; }
+
     /// <summary>Where this marker stands in review.</summary>
     public EvpReviewStatus ReviewStatus { get; init; }
 

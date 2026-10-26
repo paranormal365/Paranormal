@@ -27,6 +27,12 @@ namespace Ben.Data.Source.Entities
         /// </summary>
         public float? DetectionScore { get; set; }
 
+        /// <summary>
+        /// Proposed as one of the lower-ranked candidates a full scan sets places aside for, not
+        /// for its score (item 253, phase 5). The page says so, so nobody wonders why it is there.
+        /// </summary>
+        public bool IsExploratory { get; set; }
+
         /// <summary>Where this marker stands in review. Defaults to Confirmed for hand-placed markers.</summary>
         public EvpReviewStatus ReviewStatus { get; set; }
 

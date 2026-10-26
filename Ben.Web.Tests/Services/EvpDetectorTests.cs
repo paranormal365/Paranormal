@@ -692,4 +692,126 @@ public class EvpDetectorTests(ITestOutputHelper output)
         Assert.Equal(30.0, analysis.RecordingSeconds, 2);
         Assert.Equal(3, analysis.Candidates.Count);
     }
+
+    // ── Every dial (phase 5) ──────────────────────────────────────────────────
+
+    /// <summary>
+    /// The listening range reaches the detector. Before phase 5 it was a constant, and a range sent
+    /// with the scan would have changed nothing, so these scores would equal the pinned ones.
+    /// </summary>
+    [Fact]
+    public void A_narrower_band_changes_the_scores()
+    {
+        var pinned = EvpDetector.Detect(BuildFixture(), SampleRate, Medium, 500).Select(c => c.Score).ToArray();
+        var narrow = EvpDetector.Detect(BuildFixture(), SampleRate, Medium with { BandHighHz = 1000 }, 500)
+            .Select(c => c.Score).ToArray();
+
+        Dump("narrow band", EvpDetector.Detect(BuildFixture(), SampleRate, Medium with { BandHighHz = 1000 }, 500));
+        Assert.NotEqual(pinned, narrow);
+    }
+
+    /// <summary>
+    /// The room's background is judged over the window given. When the room gets louder halfway
+    /// through, a short window catches up within seconds; a long one keeps the quiet half in its
+    /// reckoning, so the louder half stands out over it for longer.
+    /// </summary>
+    [Fact]
+    public void A_longer_background_window_follows_a_louder_room_more_slowly()
+    {
+        var buffer = new float[40 * SampleRate];
+        AddRoomTone(buffer, 0.004);
+        var louder = new float[20 * SampleRate];
+        AddRoomTone(louder, 0.016, seed: 777);
+        for (var i = 0; i < louder.Length; i++) buffer[20 * SampleRate + i] += louder[i];
+
+        double SecondsFlagged(double window) => EvpDetector
+            .Detect(buffer, SampleRate, Medium with { FloorWindowSeconds = window, ContextPadSeconds = 0 }, 500)
+            .Where(c => c.StartSeconds >= 19)
+            .Sum(c => c.DurationSeconds);
+
+        var shortWindow = SecondsFlagged(2);
+        var longWindow  = SecondsFlagged(60);
+        output.WriteLine($"after the room got louder: {shortWindow:0.00}s flagged with a 2 s window, {longWindow:0.00}s with 60 s");
+        Assert.True(longWindow > shortWindow);
+    }
+
+    /// <summary>
+    /// The release margin keeps a wavering sound in one piece. With none, every dip between
+    /// syllables ends the sound; with the threshold's worth, it holds.
+    /// </summary>
+    [Fact]
+    public void No_release_margin_breaks_a_wavering_sound_into_more_pieces()
+    {
+        var buffer = new float[10 * SampleRate];
+        AddRoomTone(buffer, 0.004);
+        AddUtterance(buffer, 3.0, 2.5, 0.030);
+
+        int Pieces(double margin) => EvpDetector.Detect(buffer, SampleRate,
+            Medium with { ReleaseHysteresisDb = margin, MergeGapSeconds = 0, MinDurationSeconds = 0.05 }, 500).Count;
+
+        output.WriteLine($"pieces with no margin: {Pieces(0)}, with 6 dB: {Pieces(6)}");
+        Assert.True(Pieces(0) > Pieces(6));
+    }
+
+    [Fact]
+    public void A_lowest_score_leaves_out_everything_below_it()
+    {
+        var all  = EvpDetector.Detect(BuildFixture(), SampleRate, High, 500);
+        var high = EvpDetector.Detect(BuildFixture(), SampleRate, High with { MinScore = 85 }, 500);
+
+        Assert.All(high, c => Assert.True(c.Score >= 85));
+        Assert.Equal(all.Count(c => c.Score >= 85), high.Count);
+        Assert.True(high.Count < all.Count, "the fixture should have something below 85 for this to test anything");
+    }
+
+    /// <summary>Forty quiet utterances of slowly rising strength, so a scan finds far more than ten.</summary>
+    private static float[] ManyUtterances()
+    {
+        var buffer = new float[130 * SampleRate];
+        AddRoomTone(buffer, 0.004);
+        for (var i = 0; i < 40; i++)
+            AddUtterance(buffer, 2 + i * 3.2, 0.6, 0.012 + i * 0.0006);
+        return buffer;
+    }
+
+    [Fact]
+    public void Most_candidates_caps_the_scan()
+    {
+        var found = EvpDetector.Detect(ManyUtterances(), SampleRate, Medium with { MaxCandidates = 10, ExplorationShare = 0 }, 500);
+
+        Assert.Equal(10, found.Count);
+        Assert.DoesNotContain(found, c => c.Exploratory);
+    }
+
+    /// <summary>
+    /// A full scan keeps a share of its places for lower-ranked sounds, marks them, takes them from
+    /// below the top scores, and picks the same ones every time.
+    /// </summary>
+    [Fact]
+    public void Places_for_lower_ranked_go_to_marked_samples_from_below_the_top()
+    {
+        var options = Medium with { MaxCandidates = 10, ExplorationShare = 0.3 };
+        var all     = EvpDetector.Detect(ManyUtterances(), SampleRate, Medium with { MaxCandidates = 500 }, 500);
+        var found   = EvpDetector.Detect(ManyUtterances(), SampleRate, options, 500);
+        var again   = EvpDetector.Detect(ManyUtterances(), SampleRate, options, 500);
+
+        Assert.True(all.Count > 10, $"the fixture must find more than fit; it found {all.Count}");
+        Assert.Equal(10, found.Count);
+        Assert.Equal(3, found.Count(c => c.Exploratory));   // floor(0.3 × 10)
+
+        var topSeven = all.OrderByDescending(c => c.Score).ThenBy(c => c.StartSeconds).Take(7)
+            .Select(c => c.StartSeconds).ToHashSet();
+        Assert.All(found.Where(c => !c.Exploratory), c => Assert.Contains(c.StartSeconds, topSeven));
+        Assert.All(found.Where(c => c.Exploratory),  c => Assert.DoesNotContain(c.StartSeconds, topSeven));
+
+        Assert.Equal(found, again);
+    }
+
+    [Fact]
+    public void Nothing_is_set_aside_when_everything_fits()
+    {
+        var found = EvpDetector.Detect(BuildFixture(), SampleRate, Medium with { ExplorationShare = 0.5 }, 500);
+
+        Assert.DoesNotContain(found, c => c.Exploratory);
+    }
 }

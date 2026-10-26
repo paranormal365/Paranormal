@@ -695,6 +695,26 @@ public sealed class WebApiClient : IWebApiClient
     public Task<LoadResult<AudioMarkerRecord>> GetAudioMarkersAsync(Guid fileId, CancellationToken token = default)
         => GetListAsync<AudioMarkerRecord>($"/api/upload-files/{fileId}/audio-markers", token);
 
+    /// <inheritdoc />
+    public Task<LoadResult<EvpScanPresetRecord>> GetEvpScanPresetsAsync(CancellationToken token = default)
+        => GetListAsync<EvpScanPresetRecord>("/api/evp-scan-presets", token);
+
+    /// <inheritdoc />
+    public Task<(EvpScanPresetRecord? Result, string? Error)> CreateEvpScanPresetAsync(
+        SaveEvpScanPresetRequest request, CancellationToken token = default)
+        => SendExpectingReasonAsync<SaveEvpScanPresetRequest, EvpScanPresetRecord>(
+            HttpMethod.Post, "/api/evp-scan-presets", request, token);
+
+    /// <inheritdoc />
+    public Task<(EvpScanPresetRecord? Result, string? Error)> UpdateEvpScanPresetAsync(
+        Guid id, SaveEvpScanPresetRequest request, CancellationToken token = default)
+        => SendExpectingReasonAsync<SaveEvpScanPresetRequest, EvpScanPresetRecord>(
+            HttpMethod.Put, $"/api/evp-scan-presets/{id}", request, token);
+
+    /// <inheritdoc />
+    public Task<(bool Deleted, string? Error)> DeleteEvpScanPresetAsync(Guid id, CancellationToken token = default)
+        => DeleteExpectingReasonAsync($"/api/evp-scan-presets/{id}", token);
+
     public Task<AudioMarkerRecord?> CreateAudioMarkerAsync(Guid fileId, CreateAudioMarkerRequest request, CancellationToken token = default)
         => PostAsync<CreateAudioMarkerRequest, AudioMarkerRecord>($"/api/upload-files/{fileId}/audio-markers", request, token);
 

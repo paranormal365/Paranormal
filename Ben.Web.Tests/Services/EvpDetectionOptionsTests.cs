@@ -181,4 +181,76 @@ public sealed class EvpDetectionOptionsTests
         Assert.Contains("Threshold", problem);
         Assert.DoesNotContain("Merge gap", problem);
     }
+
+    // ── Every dial (phase 5) ──────────────────────────────────────────────────
+
+    /// <summary>
+    /// A request or a stored row from before phase 5 has none of the new fields. Each must come
+    /// back as the value the detector used then, or every old preset and every old client would
+    /// scan differently without anybody changing anything.
+    /// </summary>
+    [Fact]
+    public void Settings_without_the_new_fields_read_as_the_old_behavior()
+    {
+        var old = System.Text.Json.JsonSerializer.Deserialize<EvpDetectionOptions>(
+            """{"thresholdDb":9,"minDurationSeconds":0.15,"mergeGapSeconds":0.35,"contextPadSeconds":0.4,"maxEventSeconds":5}""",
+            new System.Text.Json.JsonSerializerOptions(System.Text.Json.JsonSerializerDefaults.Web));
+
+        Assert.Equal(EvpDetectionOptions.FromSensitivity(EvpSensitivity.Low), old);
+    }
+
+    [Theory]
+    [InlineData(EvpSensitivity.Low, "Low")]
+    [InlineData(EvpSensitivity.Medium, "Medium")]
+    [InlineData(EvpSensitivity.High, "High")]
+    public void A_preset_is_known_by_its_name(EvpSensitivity level, string name)
+        => Assert.Equal(name, EvpDetectionOptions.PresetName(EvpDetectionOptions.FromSensitivity(level)));
+
+    [Fact]
+    public void Any_change_makes_it_custom()
+        => Assert.Null(EvpDetectionOptions.PresetName(EvpDetectionOptions.FromSensitivity(EvpSensitivity.Medium) with { FloorPercentile = 0.3 }));
+
+    [Theory]
+    [InlineData(49, 3400)]
+    [InlineData(300, 8001)]
+    [InlineData(3400, 300)]
+    [InlineData(1000, 1000)]
+    public void A_listening_range_out_of_bounds_or_upside_down_is_refused(double low, double high)
+        => Assert.Contains("listening range", new EvpDetectionOptions(BandLowHz: low, BandHighHz: high).Validate() ?? "");
+
+    [Theory]
+    [InlineData(1.9)]
+    [InlineData(61)]
+    public void A_background_window_out_of_range_is_refused(double seconds)
+        => Assert.Contains("background window", new EvpDetectionOptions(FloorWindowSeconds: seconds).Validate() ?? "");
+
+    [Theory]
+    [InlineData(0.04)]
+    [InlineData(0.51)]
+    public void A_background_level_out_of_range_is_refused(double fraction)
+        => Assert.Contains("background level", new EvpDetectionOptions(FloorPercentile: fraction).Validate() ?? "");
+
+    /// <summary>
+    /// The release margin may equal the threshold (the lowest threshold, 2 dB, has the default 2 dB
+    /// margin) but not pass it.
+    /// </summary>
+    [Fact]
+    public void A_release_margin_may_equal_the_threshold_but_not_pass_it()
+    {
+        Assert.Null(new EvpDetectionOptions(ThresholdDb: 2, ReleaseHysteresisDb: 2).Validate());
+        Assert.Contains("release margin", new EvpDetectionOptions(ThresholdDb: 4, ReleaseHysteresisDb: 5).Validate() ?? "");
+    }
+
+    [Theory]
+    [InlineData(9, 0, 0, 0.5)]
+    [InlineData(501, 0, 0, 0.5)]
+    [InlineData(100, -1, 0, 0.5)]
+    [InlineData(100, 101, 0, 0.5)]
+    [InlineData(100, 0, 0.51, 0.5)]
+    [InlineData(100, 0, 0, 0.09)]
+    [InlineData(100, 0, 0, 1.01)]
+    public void What_reaches_the_list_is_held_to_its_ranges(int max, double minScore, double share, double overlap)
+        => Assert.NotNull(new EvpDetectionOptions(MaxCandidates: max, MinScore: minScore,
+            ExplorationShare: share, ReviewedOverlapFraction: overlap).Validate());
+
 }

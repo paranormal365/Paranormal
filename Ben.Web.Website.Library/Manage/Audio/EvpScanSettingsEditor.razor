@@ -1,0 +1,279 @@
+@using System.Globalization
+@inject IBenAdminClient AdminClient
+
+@* Every setting an EVP scan runs with, in four groups, and the person's own presets (phase 5,
+   10/26/2026). The editor owns the settings and the preset list; this draws them and reports
+   changes. A preset comes from the server already checked, and one whose settings are no longer
+   allowed says why instead of being applied. *@
+<div class="evp-lab__tuning" id="evp-scan-settings">
+    <div class="evp-tune__presets">
+        <label class="small mb-0" for="evp-preset-pick">Preset</label>
+        <select id="evp-preset-pick" class="form-select form-select-sm" style="max-width:220px;"
+                value="@CurrentPresetKey" @onchange="OnPresetPickedAsync">
+            <option value="builtin:Low">Low</option>
+            <option value="builtin:Medium">Medium</option>
+            <option value="builtin:High">High</option>
+            @foreach (var preset in Presets)
+            {
+                <option value="saved:@preset.Id">@preset.Name@(preset.IsDefault ? " (default)" : "")</option>
+            }
+            @if (CurrentPresetKey == "custom")
+            {
+                <option value="custom">Custom</option>
+            }
+        </select>
+
+        @if (SelectedSaved is { } saved)
+        {
+            <button type="button" class="btn btn-outline-secondary btn-sm" disabled="@_busy"
+                    @onclick="@(() => UpdateSavedAsync(saved, makeDefault: saved.IsDefault))">Update "@saved.Name"</button>
+            @if (!saved.IsDefault)
+            {
+                <button type="button" class="btn btn-outline-secondary btn-sm" disabled="@_busy"
+                        @onclick="@(() => UpdateSavedAsync(saved, makeDefault: true))">Set as default</button>
+            }
+            <button type="button" class="btn btn-outline-danger btn-sm" disabled="@_busy"
+                    @onclick="@(() => DeleteSavedAsync(saved))">Delete</button>
+        }
+        <button type="button" class="btn btn-outline-secondary btn-sm" id="evp-preset-save-as"
+                @onclick="@(() => { _naming = !_naming; _message = null; })">Save as preset…</button>
+    </div>
+
+    @if (_naming)
+    {
+        <div class="evp-tune__name">
+            <BenTextBox id="evp-preset-name" class="form-control form-control-sm" style="max-width:220px;"
+                        maxlength="60" placeholder="e.g. Basement" Value="@_newName"
+                        OnInput="@(e => _newName = e.Value?.ToString() ?? "")" />
+            <label class="small mb-0 d-flex align-items-center gap-1">
+                <input type="checkbox" checked="@_newIsDefault" @onchange="@(e => _newIsDefault = (bool?)e.Value ?? false)" />
+                Make it my default
+            </label>
+            <button type="button" class="btn btn-primary btn-sm" id="evp-preset-save" disabled="@(_busy || string.IsNullOrWhiteSpace(_newName))"
+                    @onclick="CreateAsync">Save</button>
+        </div>
+    }
+    @if (_message is not null)
+    {
+        <div class="small mt-1 @(_messageIsError ? "text-danger" : "text-secondary")" id="evp-preset-message">@_message</div>
+    }
+
+    @* ── What counts as a sound ───────────────────────────────────── *@
+    <fieldset class="evp-tune__group">
+        <legend>What counts as a sound</legend>
+        <div class="mb-2">
+            <label class="small d-block" for="evp-threshold">
+                How far above the background a sound must rise,
+                <strong>@Value.ThresholdDb.ToString("0.0") dB</strong>
+            </label>
+            <input id="evp-threshold" type="range" class="form-range"
+                   min="@EvpDetectionOptions.ThresholdRange.Min" max="@EvpDetectionOptions.ThresholdRange.Max" step="0.5"
+                   value="@Value.ThresholdDb"
+                   @oninput="@(e => Set(e.Value, v => Value with { ThresholdDb = v }))" />
+            <div class="d-flex justify-content-between small text-secondary">
+                <span>lower: finds more, more to review</span>
+                <span>higher: only the obvious</span>
+            </div>
+        </div>
+        <div class="evp-tune__row">
+            @Number("evp-release", "Ends when it drops by (dB)", Value.ReleaseHysteresisDb, EvpDetectionOptions.HysteresisRange, 0.5,
+                    v => Value with { ReleaseHysteresisDb = v },
+                    "How far a sound must fall below where it started before it counts as over. More keeps a wavering sound in one piece.")
+            @Number("evp-min", "Shortest sound (s)", Value.MinDurationSeconds, EvpDetectionOptions.MinDurationRange, 0.05,
+                    v => Value with { MinDurationSeconds = v }, "Anything shorter is a click or a tap, not a word.")
+            @Number("evp-merge", "Join sounds within (s)", Value.MergeGapSeconds, EvpDetectionOptions.MergeGapRange, 0.05,
+                    v => Value with { MergeGapSeconds = v }, "Sounds this close together become one, so a phrase isn't broken into syllables.")
+            @Number("evp-max", "Longest candidate (s)", Value.MaxEventSeconds, EvpDetectionOptions.MaxEventRange, 0.5,
+                    v => Value with { MaxEventSeconds = v }, "Longer stretches are split, so each candidate is short enough to judge.")
+            @Number("evp-pad", "Context either side (s)", Value.ContextPadSeconds, EvpDetectionOptions.ContextPadRange, 0.1,
+                    v => Value with { ContextPadSeconds = v }, "Extra audio kept around each candidate so it doesn't start mid-sound.")
+        </div>
+    </fieldset>
+
+    @* ── Where it listens ─────────────────────────────────────────── *@
+    <fieldset class="evp-tune__group">
+        <legend>Where it listens</legend>
+        <div class="evp-tune__row">
+            @Number("evp-band-low", "From (Hz)", Value.BandLowHz, EvpDetectionOptions.BandRange, 50,
+                    v => Value with { BandLowHz = v }, "Below this is rumble and handling noise. 300 Hz is the telephone range; a deep voice goes lower.")
+            @Number("evp-band-high", "To (Hz)", Value.BandHighHz, EvpDetectionOptions.BandRange, 100,
+                    v => Value with { BandHighHz = v }, "Above this is mostly hiss.")
+        </div>
+        <div class="small text-secondary">The spectrogram's voice band shows this range.</div>
+    </fieldset>
+
+    @* ── The room's background ────────────────────────────────────── *@
+    <fieldset class="evp-tune__group">
+        <legend>The room's background</legend>
+        <div class="evp-tune__row">
+            @Number("evp-floor-window", "Judged over (s)", Value.FloorWindowSeconds, EvpDetectionOptions.FloorWindowRange, 1,
+                    v => Value with { FloorWindowSeconds = v },
+                    "How much of the recording either side of a moment counts as the room. Shorter follows a changing room; longer is steadier.")
+            @Percent("evp-floor-level", "Background level (%)", Value.FloorPercentile, EvpDetectionOptions.FloorPercentileRange,
+                     v => Value with { FloorPercentile = v },
+                     "Which quiet part of that stretch is the background. Higher makes the background louder, so fewer sounds stand out.")
+        </div>
+    </fieldset>
+
+    @* ── What reaches the list ────────────────────────────────────── *@
+    <fieldset class="evp-tune__group">
+        <legend>What reaches the list</legend>
+        <div class="evp-tune__row">
+            @Number("evp-max-candidates", "Most candidates", Value.MaxCandidates, EvpDetectionOptions.MaxCandidatesRange, 10,
+                    v => Value with { MaxCandidates = (int)Math.Round(v) }, "The scan stops proposing after this many.")
+            @Number("evp-min-score", "Lowest score", Value.MinScore, EvpDetectionOptions.MinScoreRange, 5,
+                    v => Value with { MinScore = v }, "Candidates scoring below this aren't proposed. 0 keeps everything found.")
+            @Percent("evp-exploration", "Places for lower-ranked (%)", Value.ExplorationShare, EvpDetectionOptions.ExplorationRange,
+                     v => Value with { ExplorationShare = v },
+                     "When a scan finds more than fit, this share of the places goes to lower-scoring sounds spread through the recording. They're marked, and your rulings on them teach the detector the most.")
+            @Percent("evp-overlap", "Overlap with reviewed (%)", Value.ReviewedOverlapFraction, EvpDetectionOptions.ReviewedOverlapRange,
+                     v => Value with { ReviewedOverlapFraction = v },
+                     "A new candidate overlapping something you already kept or dismissed by this much is left out as the same sound.")
+        </div>
+    </fieldset>
+
+    @if (Value.Validate() is { } problem)
+    {
+        <div class="text-danger small mt-2" id="evp-settings-problem">@problem</div>
+    }
+</div>
+
+@code {
+    [Parameter, EditorRequired] public EvpDetectionOptions Value { get; set; } = new();
+    [Parameter] public EventCallback<EvpDetectionOptions> ValueChanged { get; set; }
+
+    /// <summary>The person's saved presets; the editor loads them once.</summary>
+    [Parameter] public IReadOnlyList<EvpScanPresetRecord> Presets { get; set; } = [];
+    [Parameter] public EventCallback<IReadOnlyList<EvpScanPresetRecord>> PresetsChanged { get; set; }
+
+    private bool    _naming;
+    private string  _newName = "";
+    private bool    _newIsDefault;
+    private bool    _busy;
+    private string? _message;
+    private bool    _messageIsError;
+
+    /// <summary>Which entry in the list the settings are: a saved preset first, then Low/Medium/High, else Custom.</summary>
+    private string CurrentPresetKey =>
+        Presets.FirstOrDefault(p => p.Problem is null && p.Options == Value) is { } saved ? $"saved:{saved.Id}"
+        : EvpDetectionOptions.PresetName(Value) is { } builtIn ? $"builtin:{builtIn}"
+        : "custom";
+
+    private EvpScanPresetRecord? SelectedSaved =>
+        CurrentPresetKey.StartsWith("saved:") ? Presets.FirstOrDefault(p => $"saved:{p.Id}" == CurrentPresetKey) : _pickedBroken;
+
+    /// <summary>A saved preset that was picked but could not be applied, kept so it can still be updated or deleted.</summary>
+    private EvpScanPresetRecord? _pickedBroken;
+
+    private async Task OnPresetPickedAsync(ChangeEventArgs e)
+    {
+        var key = e.Value?.ToString() ?? "";
+        _message = null; _pickedBroken = null;
+
+        if (key.StartsWith("builtin:") && Enum.TryParse<EvpSensitivity>(key["builtin:".Length..], out var level))
+            await ValueChanged.InvokeAsync(EvpDetectionOptions.FromSensitivity(level));
+        else if (key.StartsWith("saved:") && Presets.FirstOrDefault(p => $"saved:{p.Id}" == key) is { } preset)
+        {
+            if (preset.Problem is { } why)
+            {
+                // Shown, not applied: running a preset with values the scan now refuses would fail later and say less.
+                _pickedBroken = preset;
+                Say($"\"{preset.Name}\" can't be used as it is: {why}", error: true);
+            }
+            else await ValueChanged.InvokeAsync(preset.Options);
+        }
+    }
+
+    private async Task CreateAsync()
+    {
+        if (Value.Validate() is { } problem) { Say(problem, error: true); return; }
+        _busy = true;
+        try
+        {
+            var (saved, error) = await AdminClient.CreateEvpScanPresetAsync(
+                new SaveEvpScanPresetRequest(_newName.Trim(), Value, _newIsDefault));
+            if (saved is null) { Say(error ?? "That preset could not be saved.", error: true); return; }
+
+            _naming = false; _newName = ""; _newIsDefault = false;
+            Say($"Saved \"{saved.Name}\".", error: false);
+            await ReloadAsync();
+        }
+        finally { _busy = false; }
+    }
+
+    private async Task UpdateSavedAsync(EvpScanPresetRecord preset, bool makeDefault)
+    {
+        if (Value.Validate() is { } problem) { Say(problem, error: true); return; }
+        _busy = true;
+        try
+        {
+            var (saved, error) = await AdminClient.UpdateEvpScanPresetAsync(
+                preset.Id, new SaveEvpScanPresetRequest(preset.Name, Value, makeDefault));
+            if (saved is null) { Say(error ?? "That preset could not be saved.", error: true); return; }
+
+            _pickedBroken = null;
+            Say(makeDefault && !preset.IsDefault
+                ? $"\"{saved.Name}\" is now your default. Recordings you haven't scanned start from it."
+                : $"Updated \"{saved.Name}\".", error: false);
+            await ReloadAsync();
+        }
+        finally { _busy = false; }
+    }
+
+    private async Task DeleteSavedAsync(EvpScanPresetRecord preset)
+    {
+        _busy = true;
+        try
+        {
+            var (deleted, error) = await AdminClient.DeleteEvpScanPresetAsync(preset.Id);
+            if (!deleted) { Say(error ?? "That preset could not be deleted.", error: true); return; }
+
+            _pickedBroken = null;
+            Say($"Deleted \"{preset.Name}\". The settings are still here until you change them.", error: false);
+            await ReloadAsync();
+        }
+        finally { _busy = false; }
+    }
+
+    private async Task ReloadAsync()
+    {
+        var loaded = await AdminClient.GetEvpScanPresetsAsync();
+        if (loaded.Failed)
+        {
+            // Not an empty list: the presets are still there, this page just couldn't fetch them.
+            Say("Your presets couldn't be loaded just now. Reopen the editor to see them.", error: true);
+            return;
+        }
+        await PresetsChanged.InvokeAsync(loaded.Items);
+    }
+
+    private void Say(string message, bool error) { _message = message; _messageIsError = error; }
+
+    private async Task Set(object? raw, Func<double, EvpDetectionOptions> apply)
+    {
+        // A part-typed number ("0." or "") is ignored rather than written back, which would fight the cursor.
+        if (double.TryParse(raw?.ToString(), NumberStyles.Float, CultureInfo.InvariantCulture, out var v) && double.IsFinite(v))
+            await ValueChanged.InvokeAsync(apply(v));
+    }
+
+    private RenderFragment Number(string id, string label, double value, (double Min, double Max) range, double step,
+                                  Func<double, EvpDetectionOptions> apply, string help) => @<label class="small evp-tune__field" title="@help" for="@id">
+        @label
+        <BenTextBox id="@id" type="number" class="form-control form-control-sm"
+                    min="@range.Min.ToString(CultureInfo.InvariantCulture)" max="@range.Max.ToString(CultureInfo.InvariantCulture)"
+                    step="@step.ToString(CultureInfo.InvariantCulture)"
+                    Value="@value.ToString("0.###", CultureInfo.InvariantCulture)"
+                    OnInput="@(e => Set(e.Value, apply))" />
+    </label>;
+
+    /// <summary>A 0–1 fraction shown and typed as a percentage.</summary>
+    private RenderFragment Percent(string id, string label, double fraction, (double Min, double Max) range,
+                                   Func<double, EvpDetectionOptions> apply, string help) => @<label class="small evp-tune__field" title="@help" for="@id">
+        @label
+        <BenTextBox id="@id" type="number" class="form-control form-control-sm"
+                    min="@((range.Min * 100).ToString("0", CultureInfo.InvariantCulture))"
+                    max="@((range.Max * 100).ToString("0", CultureInfo.InvariantCulture))" step="1"
+                    Value="@((fraction * 100).ToString("0.#", CultureInfo.InvariantCulture))"
+                    OnInput="@(e => Set(e.Value, v => apply(v / 100.0)))" />
+    </label>;
+}

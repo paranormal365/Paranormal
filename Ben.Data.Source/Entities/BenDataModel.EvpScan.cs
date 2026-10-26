@@ -40,6 +40,16 @@ namespace Ben.Data.Source.Entities
         public double ContextPadSeconds { get; set; }
         public double MaxEventSeconds { get; set; }
 
+        /// <summary>
+        /// Every setting the scan ran with, as JSON (phase 5). The five columns above stay for
+        /// the scans made before, which have no JSON; null here means one of those.
+        /// </summary>
+        public string? OptionsJson { get; set; }
+
+        /// <summary>The listening range, out of the JSON because a re-fit groups by it. Null before phase 5 (300–3400 Hz then).</summary>
+        public double? BandLowHz { get; set; }
+        public double? BandHighHz { get; set; }
+
         /// <summary>Length of the recording that was scanned.</summary>
         public double RecordingSeconds { get; set; }
 
@@ -97,7 +107,33 @@ namespace Ben.Data.Source.Entities
         public double BandLevelSpreadDb { get; set; }
         public double ZeroCrossingRate { get; set; }
 
+        /// <summary>Kept as a lower-ranked sample, not for its score (phase 5, item 253).</summary>
+        public bool Exploratory { get; set; }
+
         public virtual EvpScan EvpScan { get; set; } = null!;
+    }
+
+    /// <summary>
+    /// A set of EVP scan settings somebody saved under a name of their own (phase 5, 10/26/2026).
+    /// </summary>
+    /// <remarks>
+    /// <para>One person's, visible to nobody else. At most one is their default, which a recording
+    /// with no settings of its own starts from. Deleting the person deletes their presets.</para>
+    /// <para><see cref="OptionsJson"/> is an <c>EvpDetectionOptions</c>, checked by the server on
+    /// the way in and again on the way out, so a preset saved before a range tightened is refused
+    /// with the reason rather than run.</para>
+    /// </remarks>
+    public partial class EvpScanPreset
+    {
+        public Guid Id { get; set; }
+        public Guid AppUserId { get; set; }
+        public string Name { get; set; } = string.Empty;
+        public string OptionsJson { get; set; } = string.Empty;
+        public bool IsDefault { get; set; }
+        public DateTime DateCreated { get; set; }
+        public DateTime? DateUpdated { get; set; }
+
+        public virtual AppUser AppUser { get; set; } = null!;
     }
 
     /// <summary>

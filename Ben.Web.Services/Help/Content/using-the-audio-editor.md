@@ -24,8 +24,8 @@ The toolbar holds what you use most:
 - **Select / Scrub:** whether dragging across the waveform draws a region or moves the playhead.
 - **Clear Regions:** removes the regions you drew. Markers and saved clips stay.
 - **Spectrogram:** shows the recording's frequencies under the waveform.
-- **Scan for EVP:** scans at the sensitivity you last chose. The arrow beside it picks Low, Medium
-  or High, or opens the fine-tuning.
+- **Scan for EVP:** scans with the settings you last chose. The arrow beside it picks Low, Medium
+  or High, or opens the fine-tuning, which is ticked when you've adjusted the settings yourself.
 - **EVP Markers:** the markers you kept and the candidates waiting for you.
 - **Zoom out, fit, zoom in.**
 
@@ -139,6 +139,33 @@ later scans never touch the markers you've kept.
 
 Press ▶ on a kept marker to play it. If the marker is a single moment rather than a stretch, you
 hear a couple of seconds on either side, which is usually what you need to tell a voice from a bump.
+
+### Adjusting the scan
+
+**Fine-tune** opens every setting the scan uses, in four groups. Each box explains itself when you
+hold the pointer over it.
+
+- **What counts as a sound:** how far above the background a sound must rise, how far it must drop
+  before it counts as over, the shortest and longest sound, how close two sounds must be to join
+  into one, and how much audio to keep either side.
+- **Where it listens:** the range of pitches it pays attention to. 300 to 3,400 Hz is the
+  telephone range, where most speech sits. Lower the bottom for a deep voice, or lower the top to
+  shut out hiss. The voice band on the spectrogram follows this range.
+- **The room's background:** how many seconds either side count as "the room", and how quiet a part
+  of that counts as its background. A shorter stretch keeps up with a room that changes, such as a
+  furnace starting; a longer one is steadier.
+- **What reaches the list:** the most candidates one scan may suggest, the lowest score worth
+  showing, how much of the list goes to lower-scoring sounds when a scan finds more than fit, and
+  how much a new sound must overlap one you've already kept or dismissed to count as the same.
+
+When a scan finds more than fit, a few places go to lower-scoring sounds spread through the
+recording, and each is marked **sample**. They're there on purpose: your rulings on sounds the
+scanner wasn't sure of teach it the most.
+
+**Save as preset…** keeps the settings under a name of your own, such as "Basement". Your presets
+are yours alone. Pick one from the **Preset** list to use it again, or make it your default, so a
+recording you haven't scanned before starts from it. A recording you have scanned starts from the
+settings you last used on it.
 
 ### A smarter EVP detector
 

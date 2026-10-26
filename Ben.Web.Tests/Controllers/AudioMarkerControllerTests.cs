@@ -49,6 +49,7 @@ public class AudioMarkerControllerTests
         Note                   = e.Note,
         IsAutoDetected         = e.IsAutoDetected,
         DetectionScore         = e.DetectionScore,
+        IsExploratory          = e.IsExploratory,
         ReviewStatus           = e.ReviewStatus,
         LinkedClipUploadFileId = e.LinkedClipUploadFileId,
         DateCreated            = e.DateCreated,
@@ -1373,5 +1374,121 @@ public class AudioMarkerControllerTests
                 throw new DbUpdateException($"refused: {typeof(T).Name}");
             return base.SavingChangesAsync(eventData, result, cancellationToken);
         }
+    }
+
+    // ── Every dial (phase 5) ──────────────────────────────────────────────────
+
+    /// <summary>The scan's record keeps every setting it ran with, not just the five it used to.</summary>
+    [Fact]
+    public async Task Scan_RecordsEverySettingItRanWith()
+    {
+        var factory  = CreateFactory();
+        var (fileId, ownerId) = await SeedWavFileAsync(factory);
+        var settings = EvpDetectionOptions.FromSensitivity(EvpSensitivity.Medium) with
+            { BandLowHz = 200, BandHighHz = 3000, FloorPercentile = 0.25, MinScore = 10 };
+
+        await Build(factory, ownerId).Scan(fileId, EvpSensitivity.Medium, settings, default);
+
+        await using var db = await factory.CreateDbContextAsync();
+        var scan = await db.EvpScans.SingleAsync();
+        Assert.Equal((200.0, 3000.0), (scan.BandLowHz!.Value, scan.BandHighHz!.Value));
+        var stored = System.Text.Json.JsonSerializer.Deserialize<EvpDetectionOptions>(scan.OptionsJson!, EvpScanRecorder.OptionsJson);
+        Assert.Equal(settings, stored);
+    }
+
+    /// <summary>
+    /// How much a new candidate must overlap something already ruled on to be left out is the
+    /// scan's to say. A dismissed span moved so it covers about a third of the candidate's span is
+    /// a different sound at the default half, and the same one at a fifth.
+    /// </summary>
+    [Fact]
+    public async Task Scan_HonorsTheOverlapItWasGiven()
+    {
+        var factory = CreateFactory();
+        var (fileId, ownerId) = await SeedWavFileAsync(factory);
+        var first = Assert.IsAssignableFrom<IEnumerable<AudioMarkerRecord>>(Assert.IsType<OkObjectResult>(
+            (await Build(factory, ownerId).Scan(fileId, EvpSensitivity.Medium, null, default)).Result).Value).ToList();
+        var target = first[0];
+        var length = target.EndSeconds!.Value - target.TimeSeconds;
+
+        await Build(factory, ownerId).Review(fileId, target.Id, new ReviewAudioMarkerRequest(EvpReviewStatus.Dismissed), default);
+        await using (var db = await factory.CreateDbContextAsync())
+        {
+            var dismissed = await db.AudioMarkers.SingleAsync(m => m.Id == target.Id);
+            dismissed.TimeSeconds = target.TimeSeconds + length * 0.65;
+            dismissed.EndSeconds  = dismissed.TimeSeconds + length;
+            await db.SaveChangesAsync();
+        }
+
+        async Task<bool> ProposedAgainAsync(double overlap)
+        {
+            var again = Assert.IsAssignableFrom<IEnumerable<AudioMarkerRecord>>(Assert.IsType<OkObjectResult>(
+                (await Build(factory, ownerId).Scan(fileId, EvpSensitivity.Medium,
+                    EvpDetectionOptions.FromSensitivity(EvpSensitivity.Medium) with { ReviewedOverlapFraction = overlap },
+                    default)).Result).Value).ToList();
+            return again.Any(c => Math.Abs(c.TimeSeconds - target.TimeSeconds) < 0.01);
+        }
+
+        Assert.True(await ProposedAgainAsync(0.5), "a third of an overlap is a different sound at the default");
+        Assert.False(await ProposedAgainAsync(0.2), "at a fifth it is the same sound, already dismissed");
+    }
+
+    [Fact]
+    public async Task Scan_RemembersItsSettingsOnTheRecording_ForItsOwner()
+    {
+        var factory  = CreateFactory();
+        var (fileId, ownerId) = await SeedWavFileAsync(factory);
+        var settings = EvpDetectionOptions.FromSensitivity(EvpSensitivity.High) with { BandHighHz = 2500 };
+
+        await Build(factory, ownerId).Scan(fileId, EvpSensitivity.High, settings, default);
+
+        await using var db = await factory.CreateDbContextAsync();
+        var json = (await db.UploadFileAudioConfigs.SingleAsync(c => c.UploadFileId == fileId)).EvpScanOptionsJson;
+        Assert.Equal(settings, System.Text.Json.JsonSerializer.Deserialize<EvpDetectionOptions>(json!, EvpScanRecorder.OptionsJson));
+    }
+
+    /// <summary>Somebody who may only see the recording can scan it; their settings are not kept on it.</summary>
+    [Fact]
+    public async Task Scan_ByAViewer_RunsButIsNotRemembered()
+    {
+        var factory = CreateFactory();
+        var (fileId, _) = await SeedWavFileAsync(factory);
+        await using (var db = await factory.CreateDbContextAsync())
+        {
+            (await db.UploadFiles.SingleAsync(f => f.Id == fileId)).IsPublic = true;
+            await db.SaveChangesAsync();
+        }
+
+        var result = await Build(factory, Guid.NewGuid()).Scan(fileId, EvpSensitivity.High, null, default);
+
+        Assert.IsType<OkObjectResult>(result.Result);
+        await using var check = await factory.CreateDbContextAsync();
+        Assert.False(await check.UploadFileAudioConfigs.AnyAsync(c => c.UploadFileId == fileId));
+    }
+
+    /// <summary>Settings out of range are refused with the dial named, before anything is decoded.</summary>
+    [Fact]
+    public async Task Scan_RefusesABandThatIsUpsideDown()
+    {
+        var factory = CreateFactory();
+        var (fileId, ownerId) = await SeedWavFileAsync(factory);
+
+        var result = await Build(factory, ownerId).Scan(fileId, EvpSensitivity.Medium,
+            new EvpDetectionOptions(BandLowHz: 3000, BandHighHz: 1000), default);
+
+        var bad = Assert.IsType<BadRequestObjectResult>(result.Result);
+        Assert.Contains("listening range", bad.Value?.ToString());
+    }
+
+    [Fact]
+    public async Task Scan_LeavesOutWhatScoresBelowTheLowestScore()
+    {
+        var factory = CreateFactory();
+        var (fileId, ownerId) = await SeedWavFileAsync(factory);
+
+        var result = await Build(factory, ownerId).Scan(fileId, EvpSensitivity.Medium,
+            EvpDetectionOptions.FromSensitivity(EvpSensitivity.Medium) with { MinScore = 99.9 }, default);
+
+        Assert.Empty(Assert.IsAssignableFrom<IEnumerable<AudioMarkerRecord>>(Assert.IsType<OkObjectResult>(result.Result).Value));
     }
 }
