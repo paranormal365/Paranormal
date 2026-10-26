@@ -195,6 +195,13 @@ else
                 ? Ben.Web.Website.Library.User.MediaPreviewOutcome.Unavailable
                 : Ben.Web.Website.Library.User.MediaPreviewOutcome.Shown);
         }
+        // "Open in editor" is offered to signed-in people only, and on a hard navigation sign-in is
+        // still being resolved when this first renders. The waveform does not wait for it (a list
+        // holds many of these); the menu is redrawn once it is known. Without this the item stayed
+        // missing for a signed-in person until something else re-rendered the player
+        // (AuthReadyPrerenderGuardTests, 10/26/2026).
+        if (await UserState.WaitUntilAuthReadyAsync(RendererInfo.IsInteractive))
+            StateHasChanged();
     }
 
     /// <summary>

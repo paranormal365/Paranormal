@@ -1612,32 +1612,24 @@ public sealed class HelpMediaCapture : BenTestBase
             await Page.WaitForTimeoutAsync(600);
         }
 
-        await modal.GetByRole(AriaRole.Button, new() { Name = "Edit", Exact = false }).First.ClickAsync();
+        await AudioEditorUi.OpenTabAsync(modal, "Edit");
         await Page.WaitForTimeoutAsync(500);
         await ShootAsync("using-the-audio-editor", "editor-overview.png");
 
         // ── The spectrogram ───────────────────────────────────────────────────
-        await modal.GetByRole(AriaRole.Button, new() { Name = "Show Spectrogram", Exact = false })
-                   .First.ClickAsync();
-        await Expect(modal.GetByRole(AriaRole.Button, new() { Name = "Hide Spectrogram", Exact = false }).First)
-            .ToBeVisibleAsync(new() { Timeout = 30_000 });
-        await Page.WaitForTimeoutAsync(4_000);   // the FFT and the draw both run in workers
+        await AudioEditorUi.SetSpectrogramAsync(modal, on: true);
+        await Page.WaitForTimeoutAsync(4_000);   // the plugin computes in a worker
 
         // Viridis and the mel scale, because the point of the picture is that speech is VISIBLE in
         // it. Jet on a linear axis puts a quiet recording's whole voice band in one dark blue strip
         // at the bottom, which illustrates nothing.
-        var colormap = modal.Locator("select").Filter(new() { HasTextString = "irid" }).First;
-        if (await colormap.CountAsync() > 0)
-        {
-            await colormap.SelectOptionAsync(new SelectOptionValue { Label = "Viridis" });
-            await Page.WaitForTimeoutAsync(3_000);
-        }
-        var mel = modal.GetByRole(AriaRole.Button, new() { Name = "Mel Scale", Exact = false }).First;
-        if (await mel.CountAsync() > 0)
-        {
-            await mel.ClickAsync();
-            await Page.WaitForTimeoutAsync(4_000);
-        }
+        await AudioEditorUi.OpenTabAsync(modal, "Display");
+        var colormap = modal.Locator(".audio-display select").Filter(new() { HasTextString = "irid" }).First;
+        await colormap.SelectOptionAsync(new SelectOptionValue { Label = "Viridis" });
+        await Page.WaitForTimeoutAsync(2_000);
+        var scale = modal.Locator(".audio-display select").Filter(new() { HasTextString = "Mel" }).First;
+        await scale.SelectOptionAsync(new SelectOptionValue { Value = "mel" });
+        await Page.WaitForTimeoutAsync(3_000);
 
         // Cropped to the player: the picture is about the waveform and the frequencies under it,
         // and a full-viewport shot reduces both to a strip.

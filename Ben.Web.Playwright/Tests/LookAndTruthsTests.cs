@@ -387,16 +387,16 @@ public class LookAndTruthsTests : BenTestBase
         await Page.GetByText("Open in editor", new() { Exact = true }).ClickAsync();
         await Page.WaitForURLAsync("**/audio/**", new() { Timeout = 30_000 });
 
-        var eqButton = Page.Locator("#toolbar-eq");
-        await Expect(eqButton).ToBeVisibleAsync(new() { Timeout = 30_000 });
+        // The toolbar itself since phase 2 (10/26/2026); it used to be found through its EQ button.
+        var toolbar = Page.Locator("#audio-editor-toolbar");
+        await Expect(toolbar).ToBeVisibleAsync(new() { Timeout = 30_000 });
 
         // AE-2: every toolbar button is fully inside the window. The failure was a button whose
         // left edge sat off the left of the viewport, so its label was cut in half.
         var offscreen = await Page.EvaluateAsync<string[]>(
             """
             (() => {
-                const eq = document.querySelector('#toolbar-eq');
-                const bar = eq.parentElement;
+                const bar = document.querySelector('#audio-editor-toolbar');
                 return [...bar.querySelectorAll('button')]
                     .filter(b => b.getBoundingClientRect().left < 0
                               || b.getBoundingClientRect().right > window.innerWidth)
@@ -412,8 +412,7 @@ public class LookAndTruthsTests : BenTestBase
         var emoji = await Page.EvaluateAsync<string[]>(
             """
             (() => {
-                const eq  = document.querySelector('#toolbar-eq');
-                const bar = eq.parentElement;
+                const bar = document.querySelector('#audio-editor-toolbar');
                 const re  = /[\u{1F300}-\u{1FAFF}\u{2700}-\u{27BF}\u{2600}-\u{26FF}]/u;
                 return [...bar.querySelectorAll('button')]
                     .filter(b => re.test(b.innerText))

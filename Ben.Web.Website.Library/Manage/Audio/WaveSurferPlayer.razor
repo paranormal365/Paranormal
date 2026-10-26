@@ -127,6 +127,12 @@
                     {
                         <option value="@value.ToString(System.Globalization.CultureInfo.InvariantCulture)" selected="@(value == _rate)">@label</option>
                     }
+                    @* A speed set elsewhere (the editor's Listen slider) that is not one of the presets is
+                       shown as itself rather than as a preset it is not. *@
+                    @if (!RateOptions.Any(o => o.Value == _rate))
+                    {
+                        <option value="@_rate.ToString(System.Globalization.CultureInfo.InvariantCulture)" selected>@(_rate.ToString("0.##", System.Globalization.CultureInfo.InvariantCulture))×</option>
+                    }
                 </select>
             </label>
 
@@ -154,6 +160,9 @@
     [Parameter] public EventCallback<int>        OnLoading     { get; set; }
     [Parameter] public EventCallback<string>     OnError       { get; set; }
     [Parameter] public EventCallback<double>     OnZoom        { get; set; }
+
+    /// <summary>The playback speed was changed from this player's own speed menu.</summary>
+    [Parameter] public EventCallback<double>     OnRateChanged { get; set; }
     [Parameter] public EventCallback<double>     OnSeeking     { get; set; }
 
     // Region events
@@ -544,7 +553,10 @@
     {
         if (double.TryParse(e.Value?.ToString(), System.Globalization.NumberStyles.Any,
                             System.Globalization.CultureInfo.InvariantCulture, out var r))
+        {
             await SetPlaybackRateAsync(r);
+            await OnRateChanged.InvokeAsync(r);
+        }
     }
 
     // ── Helpers ───────────────────────────────────────────────────────────────

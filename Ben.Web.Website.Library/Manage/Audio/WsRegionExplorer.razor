@@ -65,7 +65,7 @@
                         {
                             <WaveSurferPlayer @ref="_player"
                                               Config="@BuildConfig()"
-                                              OnReady="@(() => OnPlayerReady())"
+                                              OnReady="@OnPlayerReady"
                                               OnPlay="@(() => { _isPlaying = true; StateHasChanged(); })"
                                               OnPause="@(() => { _isPlaying = false; StateHasChanged(); })"
                                               OnFinish="@(() => { _isPlaying = false; StateHasChanged(); })"
@@ -327,6 +327,13 @@
     /// <summary>Fired after a new clip file is saved so the parent can refresh its clip overlay.</summary>
     [Parameter] public EventCallback<UploadFileRecord> OnClipSaved { get; set; }
 
+    /// <summary>
+    /// The editor's playback speed. One speed for the whole editor (phase 2): the explorer used to
+    /// keep its own, so a region explored at half speed played back at full speed in the editor.
+    /// </summary>
+    [Parameter] public double Speed { get; set; } = 1.0;
+    [Parameter] public EventCallback<double> SpeedChanged { get; set; }
+
     // ── Player state ──────────────────────────────────────────────────────────
 
     private WsAudioSource?  _source;
@@ -475,9 +482,13 @@
     // ── Player ready ────────────────────────────────────────────────────────────
     // The audio IS the region; no locked overlay needed.
 
-    private void OnPlayerReady()
+    private async Task OnPlayerReady()
     {
         _ready = true;
+        // Start at the editor's speed: each region loads a fresh player, which starts at 1×.
+        _playbackRate = Math.Clamp(Speed, 0.25, 3.0);
+        if (_player is not null && Math.Abs(_playbackRate - 1.0) > 0.001)
+            await _player.SetPlaybackRateAsync(_playbackRate);
         StateHasChanged();
     }
 
@@ -507,6 +518,7 @@
         {
             _playbackRate = Math.Clamp(rate, 0.25, 3.0);
             if (_player is not null) await _player.SetPlaybackRateAsync(_playbackRate);
+            await SpeedChanged.InvokeAsync(_playbackRate);
         }
     }
 

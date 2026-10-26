@@ -229,7 +229,7 @@ public class AudioEditorWalkTests : BenTestBase
             $"regions after 1st draw: {afterFirst}, after 2nd: {afterSecond} (design: one user region at a time)");
 
         // Edit panel shows the drawn region's range and enables Cut/Silence.
-        await ToolbarButton("Edit").ClickAsync();
+        await AudioEditorUi.OpenTabAsync(Modal, "Edit");
         await Page.WaitForTimeoutAsync(400);
         var cutEnabled = await Modal.GetByRole(AriaRole.Button, new() { Name = "Cut" }).First.IsEnabledAsync();
         Record("edit-target", cutEnabled ? "PASS" : "FAIL", $"Cut enabled with a drawn region: {cutEnabled}");
@@ -237,7 +237,7 @@ public class AudioEditorWalkTests : BenTestBase
         Record("edit-target", "NOTE", $"edit panel region readout: {rangeText?.Trim()}");
 
         // Silence detection.
-        await ToolbarButton("Detect silence").ClickAsync();
+        await AudioEditorUi.ChooseAsync(Page, "view", "Detect silence");
         await Page.WaitForTimeoutAsync(2500);
         var withSilence = await Regions.CountAsync();
         await SnapAsync("02-silence-on");
@@ -262,12 +262,13 @@ public class AudioEditorWalkTests : BenTestBase
     {
         if (!await ReadyInFullViewAsync()) return;
 
-        await ToolbarButton("Show Spectrogram").ClickAsync();
+        await AudioEditorUi.SetSpectrogramAsync(Modal, on: true);
         await Page.WaitForTimeoutAsync(6000);
         await SnapAsync("03-spectrogram-jet");
 
-        // The colormap picker is the second select in the toolbar once the spectrogram is on.
-        var selects = Modal.Locator("select");
+        // The resolution and colormap pickers are in the Display tab since phase 2.
+        await AudioEditorUi.OpenTabAsync(Modal, "Display");
+        var selects = Modal.Locator(".audio-display select");
         var selectCount = await selects.CountAsync();
         Record("C", "NOTE", $"toolbar selects visible with spectrogram on: {selectCount}");
 
@@ -351,7 +352,7 @@ public class AudioEditorWalkTests : BenTestBase
             await Page.WaitForTimeoutAsync(8000);
             var linearCentroid = await CentroidAsync();
 
-            await Modal.GetByRole(AriaRole.Button, new() { Name = "Mel Scale", Exact = false }).First.ClickAsync();
+            await AudioEditorUi.ChooseAsync(Page, "view", "Mel scale");
             await Page.WaitForTimeoutAsync(5000);
             var melCentroid = await CentroidAsync();
             await SnapAsync("03-spectrogram-mel-on");
@@ -406,7 +407,7 @@ public class AudioEditorWalkTests : BenTestBase
     {
         if (!await ReadyInFullViewAsync()) return;
 
-        await ToolbarButton("EQ / Filters").ClickAsync();
+        await AudioEditorUi.OpenTabAsync(Modal, "Listen");
         await Page.WaitForTimeoutAsync(400);
         await SnapAsync("04-eq-panel");
 
@@ -428,7 +429,7 @@ public class AudioEditorWalkTests : BenTestBase
         if (!await ReadyInFullViewAsync()) return;
 
         await DrawRegionAsync(0.20, 0.30);
-        await ToolbarButton("Edit").ClickAsync();
+        await AudioEditorUi.OpenTabAsync(Modal, "Edit");
         await Page.WaitForTimeoutAsync(400);
 
         // By id, not by name. "Silence" is the name of TWO buttons — the toolbar's silence-detection

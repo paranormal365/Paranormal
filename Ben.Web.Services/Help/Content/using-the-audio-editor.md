@@ -15,30 +15,56 @@ or send it to someone who can see the file. **Back** returns you to where you op
 To listen in a bigger player without leaving the list, choose **Quick look** instead.
 
 ![The audio editor](/help/media/using-the-audio-editor/editor-overview.png)
-*The editor: the waveform in the middle, the toolbar above it, and the panels you open from the
-toolbar stacked below.*
+*The editor: the toolbar above, the waveform in the middle, and its panels in tabs underneath.*
+
+## Finding your way around
+
+The toolbar holds what you use most:
+
+- **Select / Scrub:** whether dragging across the waveform draws a region or moves the playhead.
+- **Clear Regions:** removes the regions you drew. Markers and saved clips stay.
+- **Spectrogram:** shows the recording's frequencies under the waveform.
+- **Scan for EVP:** scans at the sensitivity you last chose. The arrow beside it picks Low, Medium
+  or High, or opens the fine-tuning.
+- **EVP Markers:** the markers you kept and the candidates waiting for you.
+- **Zoom out, fit, zoom in.**
+
+Everything else is in three menus at the right of the toolbar:
+
+- **View:** what's drawn, such as the timeline, the spectrogram's labels, the mel scale, the voice
+  band and silence shading.
+- **Listen:** the playback speed, and the listening tools.
+- **Edit:** making a clip, exploring a stretch, and every change that makes a new file.
+
+Under the waveform, the panels sit in tabs: **EVP Markers**, **Clips**, **Listen**, **Display** and
+**Edit**. **Hide panels** folds them away when you want the room.
 
 ## The two things to know first
 
 **Nothing you do here changes the recording.** Every edit creates a *new* file and leaves the
 original untouched. This is deliberate: a recording is evidence, and altered evidence is worth less
-than untouched evidence. Everything you create is listed under Saved Clips, and each one shows which
+than untouched evidence. Everything you create is listed in the **Clips** tab, and each one shows which
 part of the original it came from.
 
 **The listening tools change what you hear, not the file.** The equalizer, the high-pass and
 low-pass filters, the compressor and the noise gate only affect the sound playing through your
 speakers right now. Turn them on to hear a whisper more clearly; the recording itself isn't changed.
-Edits are in a separate panel, and those are the ones that create a file.
+Edits are in their own tab and menu, and those are the ones that create a file.
 
 Your listening-tool settings *are* remembered for each recording. If you find a filter that lifts a
 voice out of the hiss, it will still be on when you come back to that file. That also means that
-when you reopen a file, you aren't hearing the recording exactly as it was captured. The panel shows
-which tools are on.
+when you reopen a file, you aren't hearing the recording exactly as it was captured. The **Listen**
+tab shows which tools are on.
+
+**There is one playback speed.** Set it from **Listen** in the toolbar, the speed menu under the
+waveform, or the **Listen** tab. All three show the same speed, and so does the window you explore
+a region in. It only changes how the recording plays here. **Edit ▸ Change speed** makes a new file
+at a different speed.
 
 ## Selecting a stretch
 
-Drag across the waveform to draw a region. The edit panel shows its range, and **Cut** and **Silence selection**
-act on it.
+Drag across the waveform to draw a region. The **Edit** tab shows its range, and **Cut** and
+**Silence selection** act on it.
 
 You can have only one drawn region at a time, so drawing a second one replaces the first. Everything
 else on the waveform stays put: markers, clips you've already saved, and any silence the detector
@@ -49,7 +75,7 @@ as a file, rename it, or remove it.
 
 ## The spectrogram
 
-**Show Spectrogram** draws the recording's frequencies over time, above the waveform. It's the most
+**Spectrogram** draws the recording's frequencies over time, under the waveform. It's the most
 useful tool for finding a voice: speech has a recognizable shape, and once you've seen a few, you'll
 spot them in the hiss much faster than you can hear them.
 
@@ -58,32 +84,41 @@ spot them in the hiss much faster than you can hear them.
 recording's energy is low; a voice shows up as brighter marks in the band from a few hundred hertz
 upward.*
 
-Three controls sit next to it:
+Its settings are in the **Display** tab:
 
 - **Resolution** trades detail in time for detail in frequency. A low number gives a blurrier
   picture that shows exactly *when* something happened; a high number shows exactly *what pitch* it
   was, but blurs the timing. 512 or 1024 works well for most speech.
 - **The color ramp** only changes how easy the picture is to read. Try Viridis if Jet's blues and
   reds are hard on your eyes.
-- **Mel** compresses the high frequencies and spreads out the low ones, which is roughly how human
-  hearing works. With it on, speech fills much more of the picture.
+- **Frequency scale** spaces the frequencies out. **Mel** compresses the high frequencies and
+  spreads out the low ones, which is roughly how human hearing works; with it on, speech fills much
+  more of the picture. It is also in the **View** menu.
+- **Frequency range** shows only part of the range, for example 0 to 4000 Hz to look closely at a
+  voice. Leave the top at 0 to see everything.
+- **Brightness** and **Contrast range** help a quiet recording: raise the brightness, or narrow the
+  range to hide more of the background hiss.
+- **Lift high frequencies** makes the upper parts of a voice easier to see.
+- **Window** changes how each slice of sound is measured. Leave it on Hann unless you know you want
+  another.
 
-Right-click the spectrogram to show or hide the frequency labels.
+**View ▸ Voice band** marks 300 to 3,400 Hz, the range the EVP scan listens in. **View ▸
+Spectrogram labels** shows or hides the frequency labels.
 
-The site remembers all of this for each recording — the spectrogram, its resolution, its colors,
+The site remembers most of this for each recording: the spectrogram, its resolution, its colors,
 the mel scale, the timeline, and all the listening tools. Open the file again next week and it looks
 and sounds the way you left it. Settings are only saved for your own recordings. On someone else's
 file you can set things up however you like, but the editor will tell you that it isn't saving them.
 
 ## Silence detection
 
-**Detect silence** shades the parts of the recording that are close to silent, so you can see where
-nothing is happening and skip it. The shading isn't a selection, and no edit will act on it. Adjust
-the threshold if a room's background noise is being counted as sound.
+**View ▸ Detect silence** shades the parts of the recording that are close to silent, so you can see where
+nothing is happening and skip it. The shading isn't a selection, and no edit will act on it. If a
+room's background noise is being counted as sound, change the threshold in the **Display** tab.
 
 ## Scanning for EVP
 
-The **EVP Markers** panel scans the recording for short bursts of speech-like sound and suggests
+The **EVP Markers** tab scans the recording for short bursts of speech-like sound and suggests
 them as candidates. It looks for energy in the voice range that stands out from the sound around
 it, at three sensitivity levels:
 
@@ -121,7 +156,8 @@ paranormal. If you delete the recording, its measurements and choices are delete
 
 Once you've found something, you'll want to share it. There are two ways to make a clip:
 
-- Right-click a region and choose **Create Audio File from Region**.
+- Draw a region and choose **Edit ▸ Make a clip from the selection**, or right-click the region
+  and choose **Create Audio File from Region**.
 - From a marker, use the scissors on its row.
 
 Either way, you name the clip, pick a file type, and choose whether to boost the volume. **Leave the
@@ -134,7 +170,9 @@ privacy setting, so the site tells you instead of quietly doing it.
 
 ## Editing
 
-The **Edit** panel makes new files from the recording:
+The **Edit** menu and the **Edit** tab make new files from the recording. Cut, Silence selection,
+Normalize and Reverse run as soon as you choose them. The others open the **Edit** tab, where you
+choose how much:
 
 | Edit | What it does |
 |---|---|
@@ -157,7 +195,8 @@ such limit; long recordings are exactly what it's for.
 
 ## Exploring a region
 
-**Explore Region** opens a single stretch on its own, loading only that audio. Everything inside is
+**Edit ▸ Explore the selection** (or **Explore Region** on a region's right-click menu) opens a
+single stretch on its own, loading only that audio. Everything inside is
 measured from the start of the region: the position readout, any note you add, and any smaller
 regions you draw. It's the best place to work on a few seconds without a two-hour waveform in the
 way.

@@ -1,0 +1,181 @@
+@namespace Ben.Web.Website.Library.Manage.Audio
+@using Ben.Web.Website.Library.Kit
+
+@*
+    The audio editor's toolbar (phase 2 of ProjectNotes/AudioEditor-EVP-Plan-2026-10-26.md).
+
+    Ben, 10/26/2026: "Put the most obvious and most used buttons on the editor and group and put in
+    menus lesser used and logically grouped methods." It replaces one flat row of eight toggles that
+    each opened a panel, with sub-controls appearing inline and wrapping the row.
+
+    Left to right, the everyday buttons:
+      Select / Scrub, Clear regions | Spectrogram, Scan for EVP ▾, Markers | zoom out, fit, zoom in
+    then three menus and Clips:
+      View ▾    what is drawn: timeline, spectrogram labels, mel scale, voice band, detect silence
+      Listen ▾  how it sounds: playback speed (the ONE speed control) and the listening tools
+      Edit ▾    every change that makes a new file, and making a clip or exploring the selection
+
+    It keeps no state. The editor passes a fresh AudioToolbarState each render and handles every
+    AudioToolbarAction, so nothing here can disagree with what the editor is doing.
+
+    Telerik's ToolBar and DropDownButton/SplitButton, as in the video editor's toolbar. Icons are the
+    site's own (BenIcon) as child content, not Telerik's SvgIcon set. No unknown attributes on any
+    Telerik component: they throw on them, so ids and titles go through their own parameters.
+*@
+
+<div class="audio-toolbar" id="audio-editor-toolbar">
+    <TelerikToolBar OverflowMode="@ToolBarOverflowMode.Menu"
+                    Size="@ThemeConstants.Button.Size.Small"
+                    AriaLabel="Audio editor">
+
+        @* ── Selection ─────────────────────────────────────────────────── *@
+        <ToolBarToggleButton Selected="@State.Scrub"
+                             SelectedChanged="@(_ => Act(AudioToolbarAction.ToggleScrub))"
+                             Enabled="@State.Ready"
+                             Overflow="@ToolBarItemOverflow.Never"
+                             Title="@(State.Scrub ? "Dragging the waveform moves the playhead. Press to draw regions instead." : "Dragging the waveform draws a region. Press to scrub instead.")">
+            <BenIcon Name="@(State.Scrub ? "move" : "mouse-pointer")" />@(State.Scrub ? "Scrub" : "Select")
+        </ToolBarToggleButton>
+        <ToolBarButton OnClick="@(() => Act(AudioToolbarAction.ClearRegions))"
+                       Enabled="@State.Ready"
+                       Overflow="@ToolBarItemOverflow.Never"
+                       Title="Remove the regions you drew. Markers, saved clips and detected silence stay.">
+            <BenIcon Name="x-square" />Clear Regions
+        </ToolBarButton>
+
+        <ToolBarSeparator />
+
+        @* ── Analyze ───────────────────────────────────────────────────── *@
+        <ToolBarToggleButton Selected="@State.Spectrogram"
+                             SelectedChanged="@(_ => Act(AudioToolbarAction.ToggleSpectrogram))"
+                             Enabled="@State.Ready"
+                             Overflow="@ToolBarItemOverflow.Never"
+                             Title="Show the recording's frequencies under the waveform">
+            <BenIcon Name="bar-chart-2" />Spectrogram
+        </ToolBarToggleButton>
+        <ToolBarTemplateItem>
+            <TelerikSplitButton OnClick="@(() => Act(AudioToolbarAction.Scan))"
+                                Enabled="@(State.Ready && !State.Scanning)"
+                                ThemeColor="@ThemeConstants.Button.ThemeColor.Primary"
+                                Size="@ThemeConstants.Button.Size.Small"
+                                Title="@($"Scan for EVP at {State.Sensitivity} sensitivity")">
+                <SplitButtonContent>
+                    <BenIcon Name="activity" />@(State.Scanning ? "Scanning…" : "Scan for EVP")
+                </SplitButtonContent>
+                <SplitButtonItems>
+                    <SplitButtonItem OnClick="@(() => Act(AudioToolbarAction.ScanLow))">@Check(State.Sensitivity == EvpSensitivity.Low)Scan at Low: only strong sounds</SplitButtonItem>
+                    <SplitButtonItem OnClick="@(() => Act(AudioToolbarAction.ScanMedium))">@Check(State.Sensitivity == EvpSensitivity.Medium)Scan at Medium</SplitButtonItem>
+                    <SplitButtonItem OnClick="@(() => Act(AudioToolbarAction.ScanHigh))">@Check(State.Sensitivity == EvpSensitivity.High)Scan at High: faint sounds too</SplitButtonItem>
+                    <SplitButtonItem OnClick="@(() => Act(AudioToolbarAction.FineTune))"><span class="audio-toolbar__check"></span>Fine-tune the scan…</SplitButtonItem>
+                </SplitButtonItems>
+            </TelerikSplitButton>
+        </ToolBarTemplateItem>
+        <ToolBarToggleButton Selected="@(State.InspectorOpen && State.ActiveTab == "markers")"
+                             SelectedChanged="@(_ => Act(AudioToolbarAction.Markers))"
+                             Enabled="@State.Ready"
+                             Overflow="@ToolBarItemOverflow.Never"
+                             Title="Markers you kept, and candidates waiting for your ruling">
+            <BenIcon Name="target" />EVP Markers (@State.MarkerCount)
+        </ToolBarToggleButton>
+
+        <ToolBarSeparator />
+
+        @* ── Zoom ──────────────────────────────────────────────────────── *@
+        <ToolBarButton OnClick="@(() => Act(AudioToolbarAction.ZoomOut))" Enabled="@State.Ready" Title="Zoom out" AriaLabel="Zoom out">
+            <BenIcon Name="zoom-out" />
+        </ToolBarButton>
+        <ToolBarButton OnClick="@(() => Act(AudioToolbarAction.ZoomFit))" Enabled="@State.Ready" Title="Fit the whole recording" AriaLabel="Fit the whole recording">
+            <BenIcon Name="minimize-2" />
+        </ToolBarButton>
+        <ToolBarButton OnClick="@(() => Act(AudioToolbarAction.ZoomIn))" Enabled="@State.Ready" Title="Zoom in" AriaLabel="Zoom in">
+            <BenIcon Name="zoom-in" />
+        </ToolBarButton>
+
+        <ToolBarSpacer />
+
+        @* ── View ▾ ───────────────────────────────────────────────────── *@
+        <ToolBarTemplateItem>
+            <TelerikDropDownButton Enabled="@State.Ready" Size="@ThemeConstants.Button.Size.Small" Title="What is drawn" Id="audio-menu-view">
+                <DropDownButtonContent><BenIcon Name="eye" />View</DropDownButtonContent>
+                <DropDownButtonItems>
+                    <DropDownButtonItem OnClick="@(() => Act(AudioToolbarAction.ToggleTimeline))">@Check(State.Timeline)Timeline</DropDownButtonItem>
+                    <DropDownButtonItem OnClick="@(() => Act(AudioToolbarAction.ToggleSpectrogramLabels))" Enabled="@State.Spectrogram">@Check(State.SpectrogramLabels)Spectrogram labels</DropDownButtonItem>
+                    <DropDownButtonItem OnClick="@(() => Act(AudioToolbarAction.ToggleMelScale))" Enabled="@State.Spectrogram">@Check(State.MelScale)Mel scale</DropDownButtonItem>
+                    <DropDownButtonItem OnClick="@(() => Act(AudioToolbarAction.ToggleVoiceBand))" Enabled="@State.Spectrogram">@Check(State.VoiceBand)Voice band</DropDownButtonItem>
+                    <DropDownButtonItem OnClick="@(() => Act(AudioToolbarAction.ToggleDetectSilence))">@Check(State.DetectSilence)Detect silence</DropDownButtonItem>
+                    <DropDownButtonItem OnClick="@(() => Act(AudioToolbarAction.DisplaySettings))"><span class="audio-toolbar__check"></span>Display settings…</DropDownButtonItem>
+                </DropDownButtonItems>
+            </TelerikDropDownButton>
+        </ToolBarTemplateItem>
+
+        @* ── Listen ▾ ─────────────────────────────────────────────────── *@
+        <ToolBarTemplateItem>
+            <TelerikDropDownButton Enabled="@State.Ready" Size="@ThemeConstants.Button.Size.Small" Title="How it sounds" Id="audio-menu-listen">
+                <DropDownButtonContent><BenIcon Name="headphones" />Listen @SpeedLabel(State.Speed)</DropDownButtonContent>
+                <DropDownButtonItems>
+                    @foreach (var speed in Speeds)
+                    {
+                        var s = speed;
+                        <DropDownButtonItem OnClick="@(() => OnSpeed.InvokeAsync(s))">@Check(Math.Abs(State.Speed - s) < 0.001)Play at @SpeedLabel(s)</DropDownButtonItem>
+                    }
+                    <DropDownButtonItem OnClick="@(() => Act(AudioToolbarAction.ListenSettings))"><span class="audio-toolbar__check"></span>Listening tools: EQ, filters, gate…</DropDownButtonItem>
+                </DropDownButtonItems>
+            </TelerikDropDownButton>
+        </ToolBarTemplateItem>
+
+        @* ── Edit ▾ ───────────────────────────────────────────────────── *@
+        <ToolBarTemplateItem>
+            <TelerikDropDownButton Enabled="@State.Ready" Size="@ThemeConstants.Button.Size.Small" Title="Make a clip, or make a changed copy of the recording" Id="audio-menu-edit">
+                <DropDownButtonContent><BenIcon Name="scissors" />Edit</DropDownButtonContent>
+                <DropDownButtonItems>
+                    <DropDownButtonItem OnClick="@(() => Act(AudioToolbarAction.MakeClip))" Enabled="@State.HasSelection">Make a clip from the selection…</DropDownButtonItem>
+                    <DropDownButtonItem OnClick="@(() => Act(AudioToolbarAction.ExploreSelection))" Enabled="@State.HasSelection">Explore the selection…</DropDownButtonItem>
+                    <DropDownButtonItem OnClick="@(() => Act(AudioToolbarAction.CutSelection))" Enabled="@(State.CanEdit && State.HasSelection)">Cut the selection (new file)</DropDownButtonItem>
+                    <DropDownButtonItem OnClick="@(() => Act(AudioToolbarAction.SilenceSelection))" Enabled="@(State.CanEdit && State.HasSelection)">Silence the selection (new file)</DropDownButtonItem>
+                    <DropDownButtonItem OnClick="@(() => Act(AudioToolbarAction.Normalize))" Enabled="@State.CanEdit">Normalize (new file)</DropDownButtonItem>
+                    <DropDownButtonItem OnClick="@(() => Act(AudioToolbarAction.Reverse))" Enabled="@State.CanEdit">Reverse (new file)</DropDownButtonItem>
+                    <DropDownButtonItem OnClick="@(() => Act(AudioToolbarAction.Gain))" Enabled="@State.CanEdit">Louder or quieter…</DropDownButtonItem>
+                    <DropDownButtonItem OnClick="@(() => Act(AudioToolbarAction.Fade))" Enabled="@State.CanEdit">Fade in and out…</DropDownButtonItem>
+                    <DropDownButtonItem OnClick="@(() => Act(AudioToolbarAction.ChangeSpeed))" Enabled="@State.CanEdit">Change speed…</DropDownButtonItem>
+                    <DropDownButtonItem OnClick="@(() => Act(AudioToolbarAction.ChangePitch))" Enabled="@State.CanEdit">Change pitch…</DropDownButtonItem>
+                </DropDownButtonItems>
+            </TelerikDropDownButton>
+        </ToolBarTemplateItem>
+
+        <ToolBarToggleButton Selected="@(State.InspectorOpen && State.ActiveTab == "clips")"
+                             SelectedChanged="@(_ => Act(AudioToolbarAction.Clips))"
+                             Enabled="@State.Ready"
+                             Title="Clips saved from this recording">
+            <BenIcon Name="paperclip" />Clips (@State.ClipCount)
+        </ToolBarToggleButton>
+    </TelerikToolBar>
+</div>
+
+@code {
+    [Parameter, EditorRequired] public AudioToolbarState State { get; set; } = default!;
+    [Parameter] public EventCallback<AudioToolbarAction> OnAction { get; set; }
+    [Parameter] public EventCallback<double> OnSpeed { get; set; }
+
+    /// <summary>The playback speeds offered. The listening speed only; changing a file's speed is under Edit.</summary>
+    private static readonly double[] Speeds = [0.5, 0.75, 1, 1.25, 1.5, 2];
+
+    private Task Act(AudioToolbarAction action) => OnAction.InvokeAsync(action);
+
+    private static string SpeedLabel(double speed) =>
+        speed.ToString("0.##", System.Globalization.CultureInfo.InvariantCulture) + "×";
+
+    /// <summary>A check mark for a menu item that is on, and the same width of nothing for one that is off.</summary>
+    private static RenderFragment Check(bool on) => builder =>
+    {
+        builder.OpenElement(0, "span");
+        builder.AddAttribute(1, "class", on ? "audio-toolbar__check is-on" : "audio-toolbar__check");
+        builder.AddAttribute(2, "aria-hidden", "true");
+        if (on)
+        {
+            builder.OpenComponent<BenIcon>(3);
+            builder.AddAttribute(4, "Name", "check");
+            builder.CloseComponent();
+        }
+        builder.CloseElement();
+    };
+}

@@ -1,0 +1,156 @@
+@namespace Ben.Web.Website.Library.Manage.Audio
+
+@*
+    The audio editor's Display tab (phase 2): how the spectrogram is drawn, and what counts as
+    silence. The spectrogram's resolution and colors used to appear inside the toolbar when the
+    spectrogram was on, pushing the other buttons onto a second row. Everything else here is new with
+    WaveSurfer 8's spectrogram (phase 1b): the frequency scale and range, the FFT window, brightness,
+    pre-emphasis and per-channel pictures.
+
+    No state of its own: every value comes in as a parameter and every change goes out through its
+    Changed callback, so the editor stays the one place these live.
+*@
+
+<div class="audio-display">
+    <fieldset class="audio-display__group" disabled="@(!Spectrogram)">
+        <legend>Spectrogram</legend>
+        @if (!Spectrogram)
+        {
+            <p class="audio-display__note">Turn the spectrogram on (Spectrogram, in the toolbar) to change these.</p>
+        }
+
+        <label class="audio-display__field">
+            <span>Resolution</span>
+            <select class="form-select form-select-sm" @onchange="@(e => FftSamplesChanged.InvokeAsync(ParseInt(e.Value, FftSamples)))">
+                @foreach (var (value, label) in AudioDisplayOptions.Resolutions)
+                {
+                    <option value="@value" selected="@(value == FftSamples)">@label</option>
+                }
+            </select>
+            <small>Low shows exactly when; high shows exactly what pitch.</small>
+        </label>
+
+        <label class="audio-display__field">
+            <span>Colors</span>
+            <select class="form-select form-select-sm" @onchange="@(e => ColormapChanged.InvokeAsync(e.Value?.ToString() ?? Colormap))">
+                @foreach (var (value, label) in AudioDisplayOptions.Colormaps)
+                {
+                    <option value="@value" selected="@(value == Colormap)">@label</option>
+                }
+            </select>
+        </label>
+
+        <label class="audio-display__field">
+            <span>Frequency scale</span>
+            <select class="form-select form-select-sm" @onchange="@(e => Change(Analysis with { Scale = e.Value?.ToString() ?? Analysis.Scale }))">
+                @foreach (var (value, label) in AudioDisplayOptions.Scales)
+                {
+                    <option value="@value" selected="@(value == Analysis.Scale)">@label</option>
+                }
+            </select>
+            <small>Mel spreads out the low frequencies where voices are.</small>
+        </label>
+
+        <div class="audio-display__field">
+            <span>Frequency range</span>
+            <div class="d-flex align-items-center gap-1">
+                <input type="number" class="form-control form-control-sm" min="0" max="20000" step="50" style="max-width:100px;"
+                       aria-label="Lowest frequency shown, in hertz"
+                       value="@Num(Analysis.FrequencyMin)"
+                       @onchange="@(e => Change(Analysis with { FrequencyMin = Math.Max(0, ParseDouble(e.Value, Analysis.FrequencyMin)) }))" />
+                <span class="small">to</span>
+                <input type="number" class="form-control form-control-sm" min="0" max="24000" step="50" style="max-width:100px;"
+                       aria-label="Highest frequency shown, in hertz, 0 for all"
+                       value="@Num(Analysis.FrequencyMax)"
+                       @onchange="@(e => Change(Analysis with { FrequencyMax = Math.Max(0, ParseDouble(e.Value, Analysis.FrequencyMax)) }))" />
+                <span class="small">Hz</span>
+            </div>
+            <small>0 at the top shows everything the recording holds.</small>
+        </div>
+
+        <label class="audio-display__field">
+            <span>Window</span>
+            <select class="form-select form-select-sm" @onchange="@(e => Change(Analysis with { WindowFunc = e.Value?.ToString() ?? Analysis.WindowFunc }))">
+                @foreach (var (value, label) in AudioDisplayOptions.Windows)
+                {
+                    <option value="@value" selected="@(value == Analysis.WindowFunc)">@label</option>
+                }
+            </select>
+        </label>
+
+        <label class="audio-display__field">
+            <span>Brightness @Num(Analysis.GainDb) dB</span>
+            <input type="range" class="form-range" min="0" max="60" step="1"
+                   value="@Num(Analysis.GainDb)"
+                   @onchange="@(e => Change(Analysis with { GainDb = ParseDouble(e.Value, Analysis.GainDb) }))" />
+        </label>
+
+        <label class="audio-display__field">
+            <span>Contrast range @Num(Analysis.RangeDb) dB</span>
+            <input type="range" class="form-range" min="20" max="120" step="1"
+                   value="@Num(Analysis.RangeDb)"
+                   @onchange="@(e => Change(Analysis with { RangeDb = Math.Max(1, ParseDouble(e.Value, Analysis.RangeDb)) }))" />
+            <small>Smaller hides more of the background hiss.</small>
+        </label>
+
+        <label class="audio-display__field">
+            <span>Lift high frequencies @Num(Analysis.PreEmphasis) dB per octave</span>
+            <input type="range" class="form-range" min="0" max="12" step="1"
+                   value="@Num(Analysis.PreEmphasis)"
+                   @onchange="@(e => Change(Analysis with { PreEmphasis = ParseDouble(e.Value, Analysis.PreEmphasis) }))" />
+            <small>Above 1 kHz, so the upper parts of a voice stand out.</small>
+        </label>
+
+        <label class="audio-display__check">
+            <input type="checkbox" class="form-check-input" checked="@Analysis.SplitChannels"
+                   @onchange="@(e => Change(Analysis with { SplitChannels = e.Value is true }))" />
+            One picture per channel (stereo recordings)
+        </label>
+
+        <button type="button" class="btn btn-outline-secondary btn-sm align-self-start" @onclick="@(() => Change(SpectrogramAnalysis.Default with { Scale = Analysis.Scale }))">
+            Reset to the usual settings (keeps the scale)
+        </button>
+    </fieldset>
+
+    <fieldset class="audio-display__group">
+        <legend>Silence</legend>
+        <label class="audio-display__field">
+            <span>Counts as silence below @Num(SilenceThresholdDb) dB</span>
+            <input type="range" class="form-range" min="-80" max="-10" step="1"
+                   value="@Num(SilenceThresholdDb)"
+                   @onchange="@(e => SilenceThresholdDbChanged.InvokeAsync(ParseDouble(e.Value, SilenceThresholdDb)))" />
+            <small>@(SilenceOn
+                ? "Detect silence is on; the shading follows this."
+                : "Used when Detect silence is on (View, in the toolbar).")</small>
+        </label>
+    </fieldset>
+</div>
+
+@code {
+    [Parameter] public bool Spectrogram { get; set; }
+
+    [Parameter] public int FftSamples { get; set; } = 512;
+    [Parameter] public EventCallback<int> FftSamplesChanged { get; set; }
+
+    [Parameter] public string Colormap { get; set; } = "jet";
+    [Parameter] public EventCallback<string> ColormapChanged { get; set; }
+
+    [Parameter] public SpectrogramAnalysis Analysis { get; set; } = SpectrogramAnalysis.Default;
+    [Parameter] public EventCallback<SpectrogramAnalysis> AnalysisChanged { get; set; }
+
+    [Parameter] public bool SilenceOn { get; set; }
+    [Parameter] public double SilenceThresholdDb { get; set; } = -40;
+    [Parameter] public EventCallback<double> SilenceThresholdDbChanged { get; set; }
+
+    private Task Change(SpectrogramAnalysis next) => AnalysisChanged.InvokeAsync(next);
+
+    private static string Num(double v) => v.ToString("0.##", System.Globalization.CultureInfo.InvariantCulture);
+
+    private static double ParseDouble(object? raw, double fallback) =>
+        double.TryParse(raw?.ToString(), System.Globalization.NumberStyles.Float,
+                        System.Globalization.CultureInfo.InvariantCulture, out var v) ? v : fallback;
+
+    private static int ParseInt(object? raw, int fallback) =>
+        int.TryParse(raw?.ToString(), System.Globalization.NumberStyles.Integer,
+                     System.Globalization.CultureInfo.InvariantCulture, out var v) ? v : fallback;
+}

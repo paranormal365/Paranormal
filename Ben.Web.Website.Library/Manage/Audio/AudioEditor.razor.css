@@ -425,3 +425,51 @@
     .evp-row__actions { width: 100%; justify-content: flex-end; }
     .evp-row__note { max-width: 100%; }
 }
+
+
+/* ============================================================================
+ * Phase 2: the inspector under the player, and the Edit tab's focused group.
+ * BenTabs renders the tab strip and panes with its own scope, hence ::deep.
+ * ========================================================================= */
+.audio-inspector {
+    position: relative;
+    margin-top: .75rem;
+    flex-shrink: 0;
+}
+
+.audio-inspector__fold {
+    position: absolute;
+    top: .1rem;
+    right: 0;
+    z-index: 2;
+    font-size: .8rem;
+    text-decoration: none;
+    color: var(--ben-ink-muted);
+}
+
+.audio-inspector__fold:hover {
+    color: var(--ben-ink);
+}
+
+/* Room for the Hide button at the end of the strip. */
+.audio-inspector ::deep .ben-tabs-scroll {
+    padding-right: 7.5rem;
+}
+
+.audio-inspector.is-folded ::deep .tab-content {
+    display: none;
+}
+
+.audio-inspector__row {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: .5rem 1rem;
+}
+
+/* An Edit-menu item opened this tab for one of these. */
+.audio-edit-group.is-focused {
+    outline: 2px solid var(--ben-accent);
+    outline-offset: 4px;
+    border-radius: 4px;
+}
