@@ -369,6 +369,10 @@ h1, h2, h3, .h1, .h2, .h3, .display-1, .display-2, .display-3, .display-4 {
    transport below the fold, the same failure the banner rule above prevents. Every other page
    still shows it, so the work is not lost from view. */
 .content-wrapper:has(.ben-editor-page) .work-waiting { display: none; }
+/* …and no padding above or below it. .ben-editor-page is sized to the window minus the app bar,
+   so the content area's own top padding pushed its bottom 21px past the window and the main area
+   scrolled by that much on both editors (10/26/2026). The page's header row has its own padding. */
+.content-wrapper:has(.ben-editor-page) { padding-top: 0; padding-bottom: 0; }
 /* A page with its own hero (Shared/PageHero, or anything marked data-own-hero — the store's
    carousel) has its picture and title in one frame already; the section band above it would be a
    second picture and a second title an inch away. */

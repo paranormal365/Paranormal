@@ -50,15 +50,37 @@ which fails the same way on develop. In the short re-run it was
 `The_audio_editors_toolbar_wraps_and_uses_the_sites_icons`, which passed in the full run when it came
 later. It is not the editor; it is the case page on a cold host.
 
+## Bugs fixed along the way (Ben, 10/26/2026: "Fix any bugs … you come across, even if pre-existing")
+
+- **`WaveSurferPlayer.DisposeAsync`** awaited the JS module's own `DisposeAsync` unguarded. When a
+  page with a player closed, the browser was already gone, so it threw `JSDisconnectedException`.
+  The circuit then logged "Unhandled exception in circuit" every time. It is now guarded like the
+  `destroy` call before it. Evidence: the web log of the earlier run had it; the 17-test run after
+  the fix has none.
+- **Editor pages overflowed the window by 21 px.** `.ben-editor-page` is sized to the window minus
+  the app bar, but it sat under `.content-wrapper`'s 21 px top padding. `signal.css` now removes
+  that padding on editor pages. Measured in the browser: the audio editor and My Videos (the video
+  editor) both end at exactly the window's bottom.
+- **The case Files tab "ignoring" its first click** (see the earlier note). The failing runs took 38
+  s, which is the length of four clicks Playwright could not perform at all, not four that landed
+  and were ignored. `ClickUntilAsync` swallowed the reason. It now writes why each click did not
+  happen ("intercepts pointer events", "not stable", …).
+  - After that change it did not happen again: one cold run with a probe and three cold runs
+    without both passed, with every click landing first time.
+  - **Not reproduced, so not claimed fixed.** The next failure will name its cause in the test
+    output.
+
+## Final run
+
+`AudioEditor|AudioPlayer` + the toolbar test, after every fix above: **17 of 17**.
+
 ## Checked in the browser (dark, light, 375 px)
 
 `/audio/{id}?return=%2Fmedia-library` opens from the right-click menu. The tab title is the file
 name, and an .m4a plays and draws. At phone width the page has no sideways scroll; the toolbar
 stacks one button per row, which phase 2's grouping addresses.
 
-Not fixed: `.ben-editor-page` is sized to the window minus the app bar, but it sits under the
-content area's 21 px top padding. The main area therefore scrolls by about 21 px plus the footer.
-This is shared with the video editor; phase 3 (styling) takes it.
+The 21 px overflow found here is fixed (see above).
 
 ## Deploy
 
