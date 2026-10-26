@@ -265,7 +265,7 @@ public class AudioEditorTests : BenTestBase
 
         await DrawRegionAsync(0.20, 0.40);
 
-        await Modal.GetByRole(AriaRole.Button, new() { Name = "Edit", Exact = false }).First.ClickAsync();
+        await AudioEditorUi.OpenTabAsync(Modal, "Edit");
         var readout = Modal.Locator("#edit-region-readout").First;
         await Expect(readout).ToBeVisibleAsync(new() { Timeout = 15_000 });
 
@@ -274,7 +274,7 @@ public class AudioEditorTests : BenTestBase
         Assert.That(before, Does.Not.Contain("Draw a region"),
             "the drag did not produce a selection, so this test cannot say anything about B");
 
-        await Modal.GetByRole(AriaRole.Button, new() { Name = "Detect silence", Exact = false }).First.ClickAsync();
+        await AudioEditorUi.ChooseAsync(Page, "view", "Detect silence");
         await Page.WaitForTimeoutAsync(2_000);   // detection walks the whole decoded buffer
 
         var after = (await readout.InnerTextAsync()).Trim();
@@ -304,7 +304,7 @@ public class AudioEditorTests : BenTestBase
         }
 
         await DrawRegionAsync(0.20, 0.40);
-        await Modal.GetByRole(AriaRole.Button, new() { Name = "Edit", Exact = false }).First.ClickAsync();
+        await AudioEditorUi.OpenTabAsync(Modal, "Edit");
 
         var readout = Modal.Locator("#edit-region-readout").First;
         await Expect(readout).ToBeVisibleAsync(new() { Timeout = 15_000 });
@@ -313,9 +313,15 @@ public class AudioEditorTests : BenTestBase
 
         // Counted, not merely present. Asking whether a Saved Clips section is visible would be a
         // free pass on any run where one already existed, and it is the kind of assertion that
-        // quietly stops testing anything the moment the fixture changes.
-        var clipCards = Modal.Locator("[id^='afp-']");
-        var before    = await clipCards.CountAsync();
+        // quietly stops testing anything the moment the fixture changes. The count is the
+        // toolbar's "Clips (n)", since phase 2 put the list itself in a tab of its own.
+        var clipsButton = Modal.Locator("#audio-editor-toolbar").GetByRole(AriaRole.Button, new() { Name = "Clips", Exact = false });
+        async Task<int> ClipCountAsync()
+        {
+            var m = System.Text.RegularExpressions.Regex.Match(await clipsButton.InnerTextAsync(), @"\((\d+)\)");
+            return m.Success ? int.Parse(m.Groups[1].Value) : -1;
+        }
+        var before = await ClipCountAsync();
         var editError = Modal.Locator(".alert-danger").First;
 
         // By id, not by name: the toolbar's silence-DETECTION toggle is also called "Silence" and
@@ -329,14 +335,17 @@ public class AudioEditorTests : BenTestBase
         var deadline = DateTime.UtcNow.AddSeconds(180);
         while (DateTime.UtcNow < deadline)
         {
-            if (await clipCards.CountAsync() > before) break;
+            if (await ClipCountAsync() > before) break;
             if (await editError.CountAsync() > 0 && await editError.IsVisibleAsync())
                 Assert.Fail($"Silence was refused: {(await editError.InnerTextAsync()).Trim()}");
             await Page.WaitForTimeoutAsync(1_000);
         }
 
-        var after = await clipCards.CountAsync();
+        var after = await ClipCountAsync();
         TestContext.Out.WriteLine($"saved clips {before} -> {after}");
+
+        // And the editor shows where it went.
+        await Expect(Modal.GetByRole(AriaRole.Tab, new() { Name = "Clips" })).ToHaveAttributeAsync("aria-selected", "true");
 
         Assert.That(after, Is.GreaterThan(before),
             "Silence produced neither a saved clip nor a message within three minutes — the walk's "
@@ -530,6 +539,71 @@ public class AudioEditorTests : BenTestBase
     }
 
     /// <summary>
+    /// The lesser-used controls live in the toolbar's menus and land where they say: View ▸ Mel scale
+    /// changes the spectrogram's scale, and Edit ▸ Fade opens the Edit tab on the fade.
+    /// </summary>
+    /// <remarks>
+    /// Phase 2 (10/26/2026) moved them off a flat row of eight toggles. The Spectrogram button reads
+    /// pressed when it is on, which the old toggles never did.
+    /// </remarks>
+    [Test]
+    public async Task Toolbar_menus_hold_the_lesser_used_controls()
+    {
+        if (!await ReadyInFullViewAsync())
+        {
+            Assert.Ignore("Could not open the editor; see the output for where it gave up.");
+            return;
+        }
+
+        await AudioEditorUi.SetSpectrogramAsync(Modal, on: false);
+        await AudioEditorUi.SetSpectrogramAsync(Modal, on: true);   // pressed, and says so
+
+        await AudioEditorUi.OpenTabAsync(Modal, "Display");
+        var scale = Modal.Locator(".audio-display select").Filter(new() { HasTextString = "Mel" }).First;
+        var before = await scale.InputValueAsync();
+
+        await AudioEditorUi.ChooseAsync(Page, "view", "Mel scale");
+        await Expect(scale).Not.ToHaveValueAsync(before, new() { Timeout = 10_000 });
+        TestContext.Out.WriteLine($"scale {before} -> {await scale.InputValueAsync()}");
+
+        await AudioEditorUi.ChooseAsync(Page, "edit", "Fade in and out");
+        await Expect(Modal.GetByRole(AriaRole.Tab, new() { Name = "Edit" })).ToHaveAttributeAsync("aria-selected", "true");
+        await Expect(Modal.Locator(".audio-edit-group.is-focused")).ToContainTextAsync("Fade");
+    }
+
+    /// <summary>
+    /// One playback speed: the toolbar's Listen menu, the player's own speed menu and the Listen tab
+    /// all show and set the same one.
+    /// </summary>
+    /// <remarks>
+    /// There were three: the player's menu (0.5–2×), the region explorer's slider (0.25–3×), and the
+    /// destructive Speed edit, which made a new file and was easy to mistake for the other two. The
+    /// edit stays, under Edit ▸ Change speed; the explorer now shares the editor's speed.
+    /// </remarks>
+    [Test]
+    public async Task One_speed_control_drives_playback_everywhere()
+    {
+        if (!await ReadyInFullViewAsync())
+        {
+            Assert.Ignore("Could not open the editor; see the output for where it gave up.");
+            return;
+        }
+
+        var listen = Page.Locator("#audio-menu-listen");
+        var transport = Modal.Locator(".ws-player-controls select[aria-label=Speed]");
+
+        await AudioEditorUi.ChooseAsync(Page, "listen", "Play at 1.5");
+        await Expect(listen).ToContainTextAsync("1.5×", new() { Timeout = 10_000 });
+        await Expect(transport).ToHaveValueAsync("1.5", new() { Timeout = 10_000 });
+
+        await transport.SelectOptionAsync(new SelectOptionValue { Value = "0.75" });
+        await Expect(listen).ToContainTextAsync("0.75×", new() { Timeout = 10_000 });
+
+        await AudioEditorUi.OpenTabAsync(Modal, "Listen");
+        await Expect(Modal.Locator("label[for=listen-speed]")).ToContainTextAsync("0.75×");
+    }
+
+    /// <summary>
     /// Zoomed in and scrolled, the timeline and the spectrogram show the stretch the waveform shows,
     /// and the spectrogram's frequency labels stay at the left edge.
     /// </summary>
@@ -549,7 +623,7 @@ public class AudioEditorTests : BenTestBase
             return;
         }
 
-        await Modal.GetByRole(AriaRole.Button, new() { Name = "Show Spectrogram", Exact = false }).First.ClickAsync();
+        await AudioEditorUi.SetSpectrogramAsync(Modal, on: true);
         await Expect(Modal.Locator(".ws-spectro-pane canvas").Nth(1)).ToBeAttachedAsync(new() { Timeout = 30_000 });
 
         // Zoom in through the transport's zoom slider, then scroll the waveform a long way along.
@@ -786,10 +860,10 @@ public class AudioEditorTests : BenTestBase
 
         // Turn the spectrogram on only if it is off: on a re-run against a database that already
         // holds this recording's settings, it is on already — which is the feature working.
-        var show = Modal.GetByRole(AriaRole.Button, new() { Name = "Show Spectrogram", Exact = false }).First;
-        if (await show.CountAsync() > 0 && await show.IsVisibleAsync())
-            await show.ClickAsync();
+        await AudioEditorUi.SetSpectrogramAsync(Modal, on: true);
 
+        // The colors are in the Display tab since phase 2.
+        await AudioEditorUi.OpenTabAsync(Modal, "Display");
         var colormap = Modal.Locator("select").Filter(new() { HasTextString = "irid" }).First;
         await Expect(colormap).ToBeVisibleAsync(new() { Timeout = 30_000 });
 
@@ -817,9 +891,10 @@ public class AudioEditorTests : BenTestBase
         await Page.WaitForTimeoutAsync(1_500);
 
         // The spectrogram is on again, and on the ramp that was chosen.
-        await Expect(Modal.GetByRole(AriaRole.Button, new() { Name = "Hide Spectrogram", Exact = false }).First)
-            .ToBeVisibleAsync(new() { Timeout = 30_000 });
+        await Expect(AudioEditorUi.SpectrogramToggle(Modal))
+            .ToHaveAttributeAsync("aria-pressed", "true", new() { Timeout = 30_000 });
 
+        await AudioEditorUi.OpenTabAsync(Modal, "Display");
         var reopened = Modal.Locator("select").Filter(new() { HasTextString = "irid" }).First;
         var chosen   = await reopened.InputValueAsync();
         TestContext.Out.WriteLine($"colormap after reopening: {chosen}");
@@ -942,18 +1017,10 @@ public class AudioEditorTests : BenTestBase
             "the high-pass is on but back at its default frequency, so only half of it was kept");
     }
 
-    /// <summary>
-    /// Opens the EQ and filters panel, whichever way its toggle is currently pointing.
-    /// </summary>
-    /// <remarks>
-    /// The toolbar button reads "EQ / Filters" when the panel is closed and "Hide EQ" when it is
-    /// open, so looking it up by name works exactly once.
-    /// </remarks>
+    /// <summary>Opens the listening tools: the Listen tab since phase 2.</summary>
     private async Task OpenEqPanelAsync()
     {
-        if (await Modal.Locator("#chain-highpass").CountAsync() > 0) return;
-
-        await Modal.Locator("#toolbar-eq").ClickAsync();
+        await AudioEditorUi.OpenTabAsync(Modal, "Listen");
         await Expect(Modal.Locator("#chain-highpass")).ToBeVisibleAsync(new() { Timeout = 20_000 });
     }
 
@@ -990,9 +1057,8 @@ public class AudioEditorTests : BenTestBase
             return;
         }
 
-        // The edit panel is behind the toolbar's "Edit" toggle; it does not exist in the DOM
-        // until it is opened.
-        await Modal.GetByRole(AriaRole.Button, new() { Name = "Edit", Exact = false }).First.ClickAsync();
+        // The edits are in the Edit tab; a tab's panel is not in the DOM until it is opened.
+        await AudioEditorUi.OpenTabAsync(Modal, "Edit");
         await Expect(Modal.GetByRole(AriaRole.Button, new() { Name = "Apply Fade" }))
             .ToBeVisibleAsync(new() { Timeout = 15_000 });
 

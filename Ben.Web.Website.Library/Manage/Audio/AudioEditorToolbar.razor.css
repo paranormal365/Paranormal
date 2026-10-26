@@ -1,0 +1,35 @@
+/* The audio editor's toolbar (phase 2). The Telerik ToolBar carries no scope attribute, so it is
+   reached through this component's own wrapper with ::deep. Signal tokens only; phase 3 restyles
+   Telerik's toolbar sitewide in telerik-signal.css. */
+.audio-toolbar {
+    margin-bottom: .5rem;
+    flex-shrink: 0;
+}
+
+.audio-toolbar ::deep .k-toolbar {
+    background: var(--ben-surface);
+    border: 1px solid var(--ben-line);
+    border-radius: var(--ben-radius);
+    padding: .3rem .4rem;
+    gap: .3rem;
+}
+
+/* A pressed toggle (Scrub, Spectrogram, EVP Markers, Clips) reads as on. */
+.audio-toolbar ::deep .k-toolbar .k-button.k-selected {
+    background: var(--ben-accent-soft);
+    border-color: var(--ben-accent);
+    color: var(--ben-ink);
+}
+
+/* Icon and label on one line. The site's sprite icons are block-level, which stacked each icon
+   over its label inside Telerik's button text. */
+.audio-toolbar ::deep .k-button-text {
+    display: inline-flex;
+    align-items: center;
+    gap: .35rem;
+    white-space: nowrap;
+}
+
+.audio-toolbar ::deep .k-button-text .sa-icon {
+    margin: 0;
+}

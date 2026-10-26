@@ -584,7 +584,7 @@
                 await _module.InvokeVoidAsync("dispose");
                 await _module.DisposeAsync();
             }
-            catch (JSDisconnectedException) { }
+            catch (Exception gone) when (gone is JSDisconnectedException or OperationCanceledException) { }
         }
     }
 }

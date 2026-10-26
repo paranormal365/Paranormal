@@ -111,7 +111,7 @@
             await _module.InvokeVoidAsync("detach", _list);
             await _module.DisposeAsync();
         }
-        catch (JSDisconnectedException) { }
+        catch (Exception gone) when (gone is JSDisconnectedException or OperationCanceledException) { }
     }
 
     internal void Register(BenTab tab)

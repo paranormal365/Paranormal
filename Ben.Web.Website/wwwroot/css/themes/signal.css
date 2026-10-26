@@ -373,6 +373,9 @@ h1, h2, h3, .h1, .h2, .h3, .display-1, .display-2, .display-3, .display-4 {
    so the content area's own top padding pushed its bottom 21px past the window and the main area
    scrolled by that much on both editors (10/26/2026). The page's header row has its own padding. */
 .content-wrapper:has(.ben-editor-page) { padding-top: 0; padding-bottom: 0; }
+/* The audio editor's menu items carry a check mark when on (View ▾, Listen ▾, Scan ▾). Global
+   because Telerik draws its menus at the end of the page, outside the editor's scoped styles. */
+.audio-toolbar__check { display: inline-block; width: 1.1em; margin-right: .35rem; vertical-align: -.1em; }
 /* A page with its own hero (Shared/PageHero, or anything marked data-own-hero — the store's
    carousel) has its picture and title in one frame already; the section band above it would be a
    second picture and a second title an inch away. */

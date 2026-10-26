@@ -162,7 +162,7 @@ else
         }
         // Same reasoning as above, and disposal has even less business throwing: the page is
         // already going away.
-        catch (JSDisconnectedException) { }
+        catch (Exception gone) when (gone is JSDisconnectedException or OperationCanceledException) { }
         catch (JSException) { }
         catch (ObjectDisposedException) { }
     }

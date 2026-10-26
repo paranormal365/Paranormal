@@ -114,6 +114,10 @@ public class AudioScrubModeTests : BenTestBase
         catch { /* see the remarks: a janitor never fails a test */ }
     }
 
+    /// <summary>The toolbar's Select / Scrub toggle: the first toggle on the editor's toolbar.</summary>
+    private ILocator DragModeToggle =>
+        Page.Locator("#audio-editor-toolbar button[aria-pressed]").First;
+
     /// <summary>Right-clicks the compact preview and opens the editor, which is its own page.</summary>
     private async Task OpenFullViewAsync()
     {
@@ -152,18 +156,21 @@ public class AudioScrubModeTests : BenTestBase
 
         await OpenFullViewAsync();
 
-        // Defaults to region-draw mode
-        var createRegionBtn = Page.GetByTitle("Create Region");
-        await Expect(createRegionBtn).ToBeVisibleAsync(new() { Timeout = 15_000 });
+        // Defaults to region-draw mode: the toolbar's toggle reads "Select" and is not pressed.
+        // (Phase 2: it was an icon-only button whose title named the mode it would switch TO.)
+        var toggle = DragModeToggle;
+        await Expect(toggle).ToBeEnabledAsync(new() { Timeout = 30_000 });
+        await Expect(toggle).ToHaveAttributeAsync("aria-pressed", "false");
+        await Expect(toggle).ToContainTextAsync("Select");
 
-        // Toggling switches the tooltip/state to scrub mode
-        await createRegionBtn.ClickAsync();
-        var scrubBtn = Page.GetByTitle("Scrub Playhead");
-        await Expect(scrubBtn).ToBeVisibleAsync(new() { Timeout = 5_000 });
+        // Toggling switches to scrub mode
+        await toggle.ClickAsync();
+        await Expect(toggle).ToHaveAttributeAsync("aria-pressed", "true", new() { Timeout = 5_000 });
+        await Expect(toggle).ToContainTextAsync("Scrub");
 
         // And back again
-        await scrubBtn.ClickAsync();
-        await Expect(Page.GetByTitle("Create Region")).ToBeVisibleAsync(new() { Timeout = 5_000 });
+        await toggle.ClickAsync();
+        await Expect(toggle).ToHaveAttributeAsync("aria-pressed", "false", new() { Timeout = 5_000 });
     }
 
     [Test]
@@ -196,7 +203,7 @@ public class AudioScrubModeTests : BenTestBase
         await Expect(Page.GetByText("Click & drag to mark a region", new() { Exact = false }))
             .ToBeVisibleAsync(new() { Timeout = 15_000 });
 
-        await Page.GetByTitle("Create Region").ClickAsync();
+        await DragModeToggle.ClickAsync();
 
         await Expect(Page.GetByText("Click & drag the waveform to scrub", new() { Exact = false }))
             .ToBeVisibleAsync(new() { Timeout = 5_000 });

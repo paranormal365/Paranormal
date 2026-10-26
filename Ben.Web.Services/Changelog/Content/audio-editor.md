@@ -32,6 +32,15 @@ it is hidden from everybody else, but still takes its number. No other sub-headi
 
 ## Unreleased
 
+- A tidier toolbar. The buttons you use most are on it, and everything else is in three menus:
+  View, Listen and Edit. A button that is on looks pressed.
+- The panels sit in tabs under the waveform (EVP Markers, Clips, Listen, Display and Edit), so
+  opening one no longer pushes the waveform down the page.
+- One playback speed. The Listen menu, the speed menu under the waveform, the Listen tab and the
+  region explorer all show and set the same one.
+- The Display tab has new spectrogram settings: frequency scale (including mel), frequency range,
+  brightness, contrast, high-frequency lift, window, and one picture per channel.
+- Scan for EVP is on the toolbar, with Low, Medium and High a click away.
 - A new spectrogram: sharper, with its own frequency labels, and quick on long recordings because it
   draws only what is in view.
 - Zoomed in, the timeline and the spectrogram now move with the waveform. The time marks used to

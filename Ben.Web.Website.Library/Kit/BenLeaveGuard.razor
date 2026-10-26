@@ -104,7 +104,7 @@
             await _module.InvokeVoidAsync("setGuard", _id, false);
             await _module.DisposeAsync();
         }
-        catch (JSDisconnectedException) { }
+        catch (Exception gone) when (gone is JSDisconnectedException or OperationCanceledException) { }
         catch (ObjectDisposedException) { }
     }
 }

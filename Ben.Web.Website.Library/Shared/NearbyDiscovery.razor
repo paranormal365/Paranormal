@@ -442,7 +442,7 @@
             if (_module is not null)
                 await _module.DisposeAsync();
         }
-        catch (JSDisconnectedException) { }
+        catch (Exception gone) when (gone is JSDisconnectedException or OperationCanceledException) { }
         _dotnetRef?.Dispose();
     }
 }
