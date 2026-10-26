@@ -1128,15 +1128,13 @@ public abstract class BenTestBase : PageTest
         await Expect(expected.First).ToBeVisibleAsync(new() { Timeout = 15_000 });
     }
 
-    /// <summary>The part of Playwright's call log that says why a click could not be made.</summary>
+    /// <summary>Playwright's own account of why a click could not be made: the call log, de-duplicated.</summary>
+    /// <remarks>A bare "Timeout 5000ms exceeded" usually means the locator matched nothing at all,
+    /// which the call log shows as "waiting for …" and nothing after it.</remarks>
     private static string ClickRefusal(Exception ex)
     {
         var lines = ex.Message.Split('\n', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
-        var why = lines.Where(l => l.Contains("intercepts pointer events") || l.Contains("not stable")
-                                || l.Contains("not visible") || l.Contains("not enabled")
-                                || l.Contains("detached") || l.Contains("retrying"))
-                       .Distinct().Take(4).ToList();
-        return why.Count > 0 ? string.Join(" | ", why) : lines.FirstOrDefault() ?? ex.GetType().Name;
+        return string.Join(" | ", lines.Distinct().Take(8));
     }
 
     /// <summary>
@@ -1554,6 +1552,14 @@ public abstract class BenTestBase : PageTest
         // having gone nowhere.
         await ClickUntilUrlAsync(opener, @"/organizations/[0-9a-f\-]+/cases/[0-9a-f\-]+");
         await WaitUntilLoadedAsync();
+
+        // And for the CASE page itself, not just its address. The address changes the moment the
+        // card's button is clicked, while on a cold host the group's page stays on screen a moment
+        // longer, with its rail and the rail's own "Files" link. TabOrRailEntryAsync took that link
+        // for the case's Files tab, the case page then rendered and the link went, and four clicks
+        // timed out on an element that no longer existed. That was the case Files tab that "ignored
+        // its first click" on 10/26/2026. Only the case page has an Overview tab.
+        await Expect(Main.Locator("#tab-overview")).ToBeVisibleAsync(new() { Timeout = 30_000 });
         return true;
     }
 
