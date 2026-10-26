@@ -406,7 +406,8 @@
                             var c = candidate;
                             var isAdjusting = _adjustingCandidateId == c.Id;
                             var score = Math.Clamp(c.DetectionScore ?? 0, 0, 100);
-                            <div class="evp-row evp-row--candidate @(isAdjusting ? "is-adjusting" : null)">
+                            var heard = _heardCandidates.Contains(c.Id);
+                            <div class="evp-row evp-row--candidate @(isAdjusting ? "is-adjusting" : null)" data-heard="@(heard ? "true" : "false")">
                                 <span class="evp-score" title="How much this stood out from the background, not a likelihood of speech">
                                     <span class="evp-score__num">@score.ToString("0")</span>
                                     <span class="evp-score__meter"><span style="width:@(score.ToString("0", System.Globalization.CultureInfo.InvariantCulture))%;"></span></span>
@@ -424,6 +425,13 @@
                                 else
                                 {
                                     <span class="evp-row__time">@FormatMarkerRange(c)</span>
+                                }
+                                @* Which candidates have been listened to. A ruling made after listening counts for
+                                   more in the detector's learning (PlayedFirst, item 253), and a reviewer working
+                                   down a long list can see what is left to hear. *@
+                                @if (heard)
+                                {
+                                    <span class="evp-row__pill evp-row__pill--heard" title="You have listened to this one">heard</span>
                                 }
                                 <span class="evp-row__actions">
                                     <button type="button" class="btn btn-outline-secondary btn-sm ben-grid-action" @onclick="@(() => PlayCandidateAsync(c))" title="Play this stretch with its surrounding context"><BenIcon Name="play" /></button>
@@ -510,11 +518,10 @@
                           Config="@_fullConfig"
                           Resizable="true"
                           OnReady="@OnModalReadyAsync"
-                          OnTimeUpdate="@(t => { _modalTime = t; StateHasChanged(); })"
+                          OnTimeUpdate="@OnModalTimeUpdate"
                           OnFinish="@(() => { _modalTime = 0; _modalPlaying = false; StateHasChanged(); })"
                           OnPlay="@(() => _modalPlaying = true)"
                           OnPause="@(() => _modalPlaying = false)"
-                          OnRegionIn="@OnModalRegionIn"
                           OnRegionContextMenu="@OnRegionRightClick"
                           OnRegionCreated="@OnModalRegionCreated"
                           OnRegionUpdated="@OnModalRegionUpdated"
@@ -1958,17 +1965,44 @@
     private string?             _confirmError;
 
     // Item 253: whether a ruling was made after listening is kept with it, because a Dismiss
-    // made without hearing the sound says much less about the sound. "Heard" is the candidate's
-    // own play button, or the playhead entering it while the recording plays.
+    // made without hearing the sound says much less about the sound.
     private bool                _modalPlaying;
     private bool                _showLearningInfo;
     private readonly HashSet<Guid> _heardCandidates = [];
 
-    private void OnModalRegionIn(string regionId)
+    /// <summary>The longest step between two time updates still taken as playing on, not a jump.</summary>
+    private const double MaxPlaybackStepSeconds = 1.0;
+
+    /// <summary>
+    /// The playhead moved. A candidate is "heard" once playback runs through its middle.
+    /// </summary>
+    /// <remarks>
+    /// <para>It used to be heard as soon as playback entered its region (WaveSurfer's region-in).
+    /// A candidate's region carries 0.4 s of context either side, so two sounds half a second
+    /// apart have overlapping regions, and playing the first ran into the second's lead-in: the
+    /// second was recorded as heard though its sound never played
+    /// (<c>Playing_one_candidate_does_not_mark_its_neighbor_heard</c>, 10/26/2026). WaveSurfer 8
+    /// fires region-in about 50 ms early, which would have made that worse.</para>
+    ///
+    /// <para>The middle of the padded span is where the sound is. Only forward playback counts: a
+    /// click or a drag that jumps the playhead past a candidate has not played it. The candidate's
+    /// Play button no longer counts on its own either, because stopping a quarter-second in is not
+    /// having heard it.</para>
+    /// </remarks>
+    private void OnModalTimeUpdate(double t)
     {
-        if (_modalPlaying && regionId.StartsWith("marker-", StringComparison.Ordinal)
-            && Guid.TryParse(regionId["marker-".Length..], out var id))
-            _heardCandidates.Add(id);
+        var before = _modalTime;
+        _modalTime = t;
+
+        if (_modalPlaying && t > before && t - before <= MaxPlaybackStepSeconds)
+        {
+            foreach (var c in PendingCandidates)
+            {
+                var middle = (c.TimeSeconds + (c.EndSeconds ?? c.TimeSeconds)) / 2;
+                if (before < middle && middle <= t) _heardCandidates.Add(c.Id);
+            }
+        }
+        StateHasChanged();
     }
 
     /// <summary>
@@ -1987,7 +2021,6 @@
     private async Task PlayCandidateAsync(AudioMarkerRecord candidate)
     {
         if (_modalPlayer is null) return;
-        _heardCandidates.Add(candidate.Id);
         await _modalPlayer.PlayRegionAsync($"marker-{candidate.Id}");
     }
 

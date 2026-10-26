@@ -509,6 +509,13 @@ public class AudioEditorTests : BenTestBase
 
         var candidates = panel.Locator(".evp-row--candidate");
         await Expect(candidates).ToHaveCountAsync(3, new() { Timeout = 90_000 });
+
+        // The panel's own stylesheet is in effect. Phase 1 moved this markup into AudioEditor and
+        // left the scoped .razor.css behind on AudioFilePreview, so the panel lost its Signal look
+        // while every test still passed (10/26/2026). A scoped rule that is not applied leaves the
+        // browser default: no rounded corners.
+        var radius = await panel.EvaluateAsync<string>("el => getComputedStyle(el).borderTopLeftRadius");
+        Assert.That(radius, Is.Not.EqualTo("0px"), "the EVP lab's stylesheet is not applied to the panel");
         TestContext.Out.WriteLine($"pictures in {shots}");
         await Expect(candidates.First.Locator(".evp-score__meter > span")).ToBeAttachedAsync();
         await ShootBothAsync(panel, "panel-after-scan");
@@ -523,18 +530,82 @@ public class AudioEditorTests : BenTestBase
     }
 
     /// <summary>
+    /// Playing one candidate does not mark its neighbor as heard.
+    /// </summary>
+    /// <remarks>
+    /// <para>"Heard" feeds the detector's learning: a ruling made after listening counts for more
+    /// (PlayedFirst, item 253). It used to be set the moment playback entered a candidate's
+    /// region, and a candidate's region includes 0.4 s of context either side, so two sounds half a
+    /// second apart have overlapping regions. Playing the first ran into the second's lead-in, and
+    /// the second was recorded as heard though its sound was never played. WaveSurfer 8 fires
+    /// "entered" about 50 ms early, which would make it worse.</para>
+    ///
+    /// <para>A candidate now counts as heard once playback passes its middle, where the sound is.</para>
+    /// </remarks>
+    [Test]
+    public async Task Playing_one_candidate_does_not_mark_its_neighbor_heard()
+    {
+        if (!await ReadyInFullViewAsync(AdjacentPairWav(), "wav", "audio/wav"))
+        {
+            Assert.Ignore("Could not open the editor; see the output for where it gave up.");
+            return;
+        }
+
+        await Modal.GetByRole(AriaRole.Button, new() { Name = "EVP Markers", Exact = false }).First.ClickAsync();
+        var panel = Page.Locator("#evp-markers-panel");
+        await panel.GetByRole(AriaRole.Button, new() { Name = "Scan for EVP" }).ClickAsync();
+
+        var candidates = panel.Locator(".evp-row--candidate");
+        await Expect(candidates).ToHaveCountAsync(2, new() { Timeout = 90_000 });
+        await panel.GetByRole(AriaRole.Button, new() { Name = "Time", Exact = true }).ClickAsync();
+
+        var first  = candidates.Nth(0);
+        var second = candidates.Nth(1);
+        TestContext.Out.WriteLine($"candidates: {(await first.Locator(".evp-row__time").InnerTextAsync()).Trim()} and "
+                                + $"{(await second.Locator(".evp-row__time").InnerTextAsync()).Trim()}");
+
+        await first.GetByTitle("Play this stretch with its surrounding context").ClickAsync();
+        await Page.WaitForTimeoutAsync(3_000);   // the first candidate's whole span, 1.4 s, and some
+        var stoppedAt = await PlayheadTextAsync();
+        TestContext.Out.WriteLine($"after playing the first candidate the playhead reads {stoppedAt}");
+
+        // Play stops at the candidate's end. It did not: the stop listener let WaveSurfer's second
+        // report of its own seek cancel it, so every candidate played on to the end of the
+        // recording (3.5 s to 6.5 s and counting, for a stretch ending at 4.9 s).
+        var m = System.Text.RegularExpressions.Regex.Match(stoppedAt, @"(\d+):(\d+(?:\.\d+)?)");
+        Assert.That(m.Success, Is.True, $"could not read the playhead from '{stoppedAt}'");
+        var seconds = int.Parse(m.Groups[1].Value) * 60
+                    + double.Parse(m.Groups[2].Value, System.Globalization.CultureInfo.InvariantCulture);
+        Assert.That(seconds, Is.LessThan(5.3), "Play did not stop at the end of the candidate");
+
+        await Expect(first).ToHaveAttributeAsync("data-heard", "true", new() { Timeout = 5_000 });
+        Assert.That(await second.GetAttributeAsync("data-heard"), Is.EqualTo("false"),
+            "playing the first candidate marked the second as heard, though only its lead-in was played");
+    }
+
+    /// <summary>
+    /// Twelve seconds of room tone with two voice-like sounds half a second apart (4.0–4.6 s and
+    /// 5.1–5.7 s). Far enough apart to stay two candidates (the join gap is 0.35 s), close enough
+    /// that their padded regions (0.4 s either side) overlap.
+    /// </summary>
+    private static byte[] AdjacentPairWav() => Wav(12, [(4.0, 0.6), (5.1, 0.6)]);
+
+    /// <summary>
     /// Twenty seconds of room tone with three voice-like sounds at 4, 9 and 15 s: three formants in
     /// the telephone band under a syllabic envelope, the shape <c>EvpDetectorTests</c> is built on.
     /// A scan at Medium proposes exactly these three.
     /// </summary>
-    private static byte[] ScannableWav()
+    private static byte[] ScannableWav() => Wav(20, [(4.0, 0.8), (9.0, 0.7), (15.0, 1.0)]);
+
+    /// <summary>Room tone of the given length with voice-like sounds at the given (start, length) seconds.</summary>
+    private static byte[] Wav(int lengthSeconds, (double At, double Seconds)[] sounds)
     {
         const int rate = 16000;
-        var mono = new float[20 * rate];
+        var mono = new float[lengthSeconds * rate];
         var rng = new Random(2024);
         for (var i = 0; i < mono.Length; i++) mono[i] = (float)((rng.NextDouble() * 2 - 1) * 0.004);
 
-        foreach (var (at, seconds) in new[] { (4.0, 0.8), (9.0, 0.7), (15.0, 1.0) })
+        foreach (var (at, seconds) in sounds)
         {
             var start = (int)(at * rate);
             var count = (int)(seconds * rate);

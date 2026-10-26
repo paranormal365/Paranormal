@@ -316,6 +316,14 @@
 .evp-row__pill ::deep .sa-icon { width: .8rem; height: .8rem; stroke: currentColor; --sa-icon-color: currentColor; }
 .evp-row__pill--clip { background: rgba(var(--ben-accent-2-rgb), .16); }
 
+/* A candidate that has been listened to. Quiet on purpose: a list of reviewed candidates is mostly
+   "heard", and the eye should go to the ones that are not. */
+.evp-row__pill--heard {
+    background: transparent;
+    border: 1px solid var(--ben-line-strong);
+    color: var(--ben-ink-muted);
+}
+
 .evp-row__actions { margin-left: auto; display: inline-flex; gap: .25rem; flex-shrink: 0; }
 
 /* The score as a meter: the number to read, the bar to scan a list by. */

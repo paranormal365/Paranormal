@@ -622,54 +622,14 @@ export function playRegion(containerId, regionId) {
   const region = regionsPlugin?.getRegions().find(r => r.id === regionId)
   if (!region) return
 
-  // Cancel any in-progress region-play monitor from a previous call
-  instance._regionPlayCleanup?.()
-  instance._regionPlayCleanup = null
-
   const duration = ws.getDuration()
   if (!duration) return
 
+  // The LIVE region end is read on every check, so resizing or deleting the region while it plays
+  // takes effect without touching the audio file itself.
+  _stopAtEnd(instance, region.start, () => regionsPlugin.getRegions().find(r => r.id === regionId)?.end ?? null)
   ws.seekTo(region.start / duration)
   ws.play()
-
-  // WaveSurfer 7’s .on() returns an unsubscribe function
-  let unsubs = []
-
-  const stopAndClean = () => {
-    unsubs.forEach(u => u?.())
-    unsubs = []
-    if (instance._regionPlayCleanup === stopAndClean)
-      instance._regionPlayCleanup = null
-  }
-
-  // On every timeupdate, read the LIVE region end so that resize/expand/delete
-  // all take effect without touching the audio file itself.
-  unsubs.push(ws.on('timeupdate', () => {
-    const live = regionsPlugin.getRegions().find(r => r.id === regionId)
-    if (!live) {
-      // Region was deleted while playing — stop immediately
-      stopAndClean()
-      ws.pause()
-      return
-    }
-    if (ws.getCurrentTime() >= live.end) {
-      stopAndClean()
-      ws.pause()
-    }
-  }))
-
-  // Clean up if the user manually pauses or the track finishes naturally.
-  // Note: ws.seekTo() above fires a 'seeking' event asynchronously; skipNextSeek
-  // absorbs that first event so it does NOT tear down the region-end monitor.
-  let skipNextSeek = true
-  unsubs.push(ws.on('pause',  stopAndClean))
-  unsubs.push(ws.on('finish', stopAndClean))
-  unsubs.push(ws.on('seeking', () => {
-    if (skipNextSeek) { skipNextSeek = false; return }
-    stopAndClean()
-  }))
-
-  instance._regionPlayCleanup = stopAndClean
 }
 
 /**
@@ -696,11 +656,37 @@ export function playRange(containerId, startSeconds, endSeconds) {
   const start = Math.max(0, Math.min(startSeconds ?? 0, duration))
   const end   = Math.min(Math.max(start + 0.05, endSeconds ?? duration), duration)
 
+  _stopAtEnd(instance, start, () => end)
+  ws.seekTo(start / duration)
+  ws.play()
+}
+
+/**
+ * Pauses playback when it reaches the end of a stretch, for playRegion and playRange.
+ *
+ * Every candidate's and marker's Play button played on to the end of the recording (10/26/2026:
+ * a 2–4 s region was still playing at 6.0 s). Both functions let a 'seeking' event cancel the
+ * stop, ignoring only the first, on the assumption that the first was their own seekTo. WaveSurfer
+ * reports seeks with the playhead's OLD position and not always once, so the function's own seek
+ * looked like somebody clicking elsewhere, and it cancelled itself.
+ *
+ * Seeks are no longer listened to at all. Each time update decides:
+ * - a small step past the end is playback arriving, so pause;
+ * - a big jump backward past the start, or well past the end, is somebody clicking elsewhere on
+ *   the waveform, so stop watching and let it play.
+ * A pause or the end of the track also stops watching.
+ *
+ * @param {object}   instance  the player instance
+ * @param {number}   start     where the stretch starts, in seconds
+ * @param {Function} getEnd    returns where it ends now (read live), or null if it no longer exists
+ */
+function _stopAtEnd(instance, start, getEnd) {
+  const { ws } = instance
   instance._regionPlayCleanup?.()
   instance._regionPlayCleanup = null
 
-  ws.seekTo(start / duration)
-  ws.play()
+  // Larger than any step between two time updates while playing, even at 4× speed.
+  const JUMP_SECONDS = 1.0
 
   let unsubs = []
   const stopAndClean = () => {
@@ -709,17 +695,23 @@ export function playRange(containerId, startSeconds, endSeconds) {
     if (instance._regionPlayCleanup === stopAndClean) instance._regionPlayCleanup = null
   }
 
-  unsubs.push(ws.on('timeupdate', () => {
-    if (ws.getCurrentTime() >= end) { stopAndClean(); ws.pause() }
-  }))
+  // Not armed until the playhead has been seen inside the stretch: the first updates after the
+  // seek can still carry the old position, which would otherwise read as a jump away.
+  let armed = false
 
-  let skipNextSeek = true
+  unsubs.push(ws.on('timeupdate', () => {
+    const end = getEnd()
+    const t = ws.getCurrentTime()
+    if (end == null) { stopAndClean(); ws.pause(); return }   // the region was deleted
+    if (!armed) {
+      if (t >= start - 0.05 && t <= end) armed = true
+      else return
+    }
+    if (t < start - JUMP_SECONDS || t > end + JUMP_SECONDS) { stopAndClean(); return }
+    if (t >= end) { stopAndClean(); ws.pause() }
+  }))
   unsubs.push(ws.on('pause',  stopAndClean))
   unsubs.push(ws.on('finish', stopAndClean))
-  unsubs.push(ws.on('seeking', () => {
-    if (skipNextSeek) { skipNextSeek = false; return }
-    stopAndClean()
-  }))
 
   instance._regionPlayCleanup = stopAndClean
 }
