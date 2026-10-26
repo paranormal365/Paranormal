@@ -438,3 +438,47 @@ body.k-body {
     text-decoration: underline;
     text-underline-offset: .15em;
 }
+
+
+/* ── ToolBar, DropDownButton, SplitButton (10/26/2026, audio editor phase 3) ─────────────────────
+   First used outside the video editor by the audio editor's toolbar. A pressed toggle reads as on
+   with the accent; the menus they open are cards like the rest of the site's popups. Popups are drawn
+   at the end of the page, so these are global. */
+.k-toolbar .k-toggle-button.k-selected,
+.k-toolbar .k-button.k-selected {
+    background: var(--ben-accent-soft);
+    border-color: var(--ben-accent);
+    color: var(--ben-ink);
+}
+
+.k-toolbar .k-button-flat:hover,
+.k-toolbar .k-button-solid-base:hover {
+    background: var(--ben-fill);
+}
+
+.k-menu-popup,
+.k-popup.k-menu-popup {
+    background: var(--ben-surface-raised);
+    border: 1px solid var(--ben-line);
+    border-radius: var(--ben-radius-sm);
+    box-shadow: var(--ben-shadow);
+}
+
+.k-menu-popup .k-menu-link {
+    color: var(--ben-ink);
+    padding: .4rem .75rem;
+}
+
+.k-menu-popup .k-menu-item:hover > .k-menu-link,
+.k-menu-popup .k-menu-item.k-focus > .k-menu-link {
+    background: var(--ben-accent-soft);
+    color: var(--ben-ink);
+}
+
+.k-menu-popup .k-menu-item.k-disabled > .k-menu-link {
+    color: var(--ben-ink-faint);
+}
+
+.k-split-button.k-button-group > .k-button-solid-primary + .k-split-button-arrow {
+    border-left: 1px solid rgba(255, 255, 255, .25);
+}

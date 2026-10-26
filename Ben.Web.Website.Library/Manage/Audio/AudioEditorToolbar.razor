@@ -82,13 +82,13 @@
 
         @* ── Zoom ──────────────────────────────────────────────────────── *@
         <ToolBarButton OnClick="@(() => Act(AudioToolbarAction.ZoomOut))" Enabled="@State.Ready" Title="Zoom out" AriaLabel="Zoom out">
-            <BenIcon Name="zoom-out" />
+            <BenIcon Name="zoom-out" /><span class="audio-toolbar__label">Zoom out</span>
         </ToolBarButton>
         <ToolBarButton OnClick="@(() => Act(AudioToolbarAction.ZoomFit))" Enabled="@State.Ready" Title="Fit the whole recording" AriaLabel="Fit the whole recording">
-            <BenIcon Name="minimize-2" />
+            <BenIcon Name="minimize-2" /><span class="audio-toolbar__label">Fit the whole recording</span>
         </ToolBarButton>
         <ToolBarButton OnClick="@(() => Act(AudioToolbarAction.ZoomIn))" Enabled="@State.Ready" Title="Zoom in" AriaLabel="Zoom in">
-            <BenIcon Name="zoom-in" />
+            <BenIcon Name="zoom-in" /><span class="audio-toolbar__label">Zoom in</span>
         </ToolBarButton>
 
         <ToolBarSpacer />

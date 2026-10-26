@@ -473,3 +473,105 @@
     outline-offset: 4px;
     border-radius: 4px;
 }
+
+
+/* ============================================================================
+ * Phase 3: the rest of the editor in the Signal look. Tokens only, so light and dark follow
+ * (signal-tokens.css). These replace Bootstrap's bg-body-secondary and inline Kendo colors.
+ * ========================================================================= */
+
+/* Size · Type · Duration · Position */
+.audio-facts {
+    display: flex;
+    flex-wrap: wrap;
+    align-content: flex-start;
+    gap: .35rem 1.5rem;
+    flex-shrink: 0;
+    margin-bottom: .5rem;
+    padding: .45rem .8rem;
+    font-size: .85rem;
+    color: var(--ben-ink-muted);
+    background: var(--ben-surface);
+    border: 1px solid var(--ben-line);
+    border-radius: var(--ben-radius);
+}
+
+.audio-facts strong {
+    color: var(--ben-ink);
+    font-weight: 600;
+}
+
+/* The player: a card the waveform, spectrogram and transport sit in. */
+#modal-player-pane {
+    padding: .5rem .6rem .35rem;
+    background: var(--ben-surface);
+    border: 1px solid var(--ben-line);
+    border-radius: var(--ben-radius);
+}
+
+/* The Listen and Edit tabs. */
+.audio-panel {
+    padding: .85rem 1rem;
+    font-size: .85rem;
+    color: var(--ben-ink);
+    background: var(--ben-surface);
+    border: 1px solid var(--ben-line);
+    border-radius: var(--ben-radius);
+}
+
+.audio-panel strong {
+    font-weight: 600;
+}
+
+.audio-panel .text-muted {
+    color: var(--ben-ink-muted) !important;
+}
+
+/* Buttons in the panels: the site's quiet outline style rather than Bootstrap's grey slab. */
+.audio-panel .btn-secondary {
+    color: var(--ben-ink);
+    background: var(--ben-fill);
+    border-color: var(--ben-line-strong);
+}
+
+.audio-panel .btn-secondary:hover:not(:disabled) {
+    background: var(--ben-accent-soft);
+    border-color: var(--ben-accent);
+}
+
+/* The Clips tab. */
+.audio-clips {
+    display: flex;
+    flex-direction: column;
+    gap: .5rem;
+    max-height: 40vh;
+    overflow-y: auto;
+}
+
+.audio-clip {
+    padding: .6rem .75rem;
+    background: var(--ben-surface);
+    border: 1px solid var(--ben-line);
+    border-radius: var(--ben-radius);
+}
+
+.audio-clip__range {
+    display: inline-block;
+    padding: .1rem .5rem;
+    font-size: .75rem;
+    font-weight: 600;
+    font-variant-numeric: tabular-nums;
+    color: var(--ben-ink);
+    background: rgba(var(--ben-audio-clip-rgb), .18);
+    border: 1px solid rgba(var(--ben-audio-clip-rgb), .45);
+    border-radius: var(--ben-radius-pill);
+}
+
+/* The panel tabs, in the site's tab style but sitting on the page's background. */
+.audio-inspector ::deep .nav-tabs {
+    border-bottom-color: var(--ben-line);
+}
+
+.audio-inspector ::deep .tab-content {
+    padding-top: .75rem;
+}

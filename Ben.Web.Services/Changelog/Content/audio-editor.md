@@ -32,6 +32,12 @@ it is hidden from everybody else, but still takes its number. No other sub-headi
 
 ## Unreleased
 
+- The editor remembers more of how you left a recording: the zoom, the playback speed, the open
+  tab, the voice band, scrubbing or selecting, silence detection, and every spectrogram setting.
+- A zoom no longer resets when the spectrogram is turned on or the window is resized.
+- The editor's panels, menus and sliders are in the site's colors in light and dark, and the marks
+  on the waveform (your regions, clips, candidates, markers, silence) follow the theme too.
+- Sliders across the site are in the site's colors rather than a leftover blue.
 - A tidier toolbar. The buttons you use most are on it, and everything else is in three menus:
   View, Listen and Edit. A button that is on looks pressed.
 - The panels sit in tabs under the waveform (EVP Markers, Clips, Listen, Display and Edit), so

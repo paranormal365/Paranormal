@@ -105,8 +105,9 @@ Its settings are in the **Display** tab:
 **View ▸ Voice band** marks 300 to 3,400 Hz, the range the EVP scan listens in. **View ▸
 Spectrogram labels** shows or hides the frequency labels.
 
-The site remembers most of this for each recording: the spectrogram, its resolution, its colors,
-the mel scale, the timeline, and all the listening tools. Open the file again next week and it looks
+The site remembers all of this for each recording: the spectrogram and its settings, the
+timeline, the voice band, the listening tools, the playback speed, how far you were zoomed in, and
+which tab was open. Open the file again next week and it looks
 and sounds the way you left it. Settings are only saved for your own recordings. On someone else's
 file you can set things up however you like, but the editor will tell you that it isn't saving them.
 

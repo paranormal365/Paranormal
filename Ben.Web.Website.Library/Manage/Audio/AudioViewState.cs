@@ -35,6 +35,10 @@ public sealed record AudioViewState
     /// </remarks>
     public AudioListeningChain Chain { get; init; } = AudioListeningChain.Default;
 
+    /// <summary>Zoom, speed, tabs and the rest of how the editor was left (phase 3). Saved beside
+    /// the chain in EditStateJson; see <see cref="AudioWorkspace"/>.</summary>
+    public AudioWorkspace Workspace { get; init; } = AudioWorkspace.Default;
+
     /// <summary>What a recording nobody has set up yet looks like.</summary>
     public static AudioViewState Default { get; } = new();
 
@@ -60,6 +64,7 @@ public sealed record AudioViewState
             Colormap           = spectrogram?.Colormap   ?? Default.Colormap,
             MelScale           = spectrogram?.MelScale   ?? Default.MelScale,
             Chain              = AudioListeningChain.FromJson(record.EditStateJson),
+            Workspace          = AudioWorkspace.FromEditState(record.EditStateJson),
         };
     }
 
@@ -74,7 +79,7 @@ public sealed record AudioViewState
         {
             EnableSpectrogram = SpectrogramVisible,
             EnableTimeline    = TimelineVisible,
-            EditStateJson = Chain.ToJson(),
+            EditStateJson = Workspace.Compose(Chain.ToJson()),
 
             SpectrogramOptionsJson = UploadFileAudioConfigExtensions.SerializeSpectrogramOptions(new WsSpectrogramOptions
             {
