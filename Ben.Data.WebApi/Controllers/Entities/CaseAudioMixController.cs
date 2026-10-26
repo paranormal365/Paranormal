@@ -27,15 +27,21 @@ public sealed class CaseAudioMixController : BenControllerBase
     private readonly IFileStorageService _fileStorage;
 
     private readonly IMediaIngestService _mediaIngest;
+    private readonly IAudioDecoder _decoder;
+    private readonly IAudioEncoder _encoder;
 
     public CaseAudioMixController(IDbContextFactory<BenDataContext> db, IFileStorageService fileStorage,
         IMediaIngestService mediaIngest,
-        Ben.Service.RepositoryService.GenericInterfaces.IOrganizationSecurityService security)
+        Ben.Service.RepositoryService.GenericInterfaces.IOrganizationSecurityService security,
+        IAudioDecoder decoder, IAudioEncoder encoder)
     {
         _db = db;
         _fileStorage = fileStorage;
         _mediaIngest = mediaIngest;
-     _security = security; }
+        _security = security;
+        _decoder = decoder;
+        _encoder = encoder;
+    }
 
     [HttpPost("export")]
     [Microsoft.AspNetCore.RateLimiting.EnableRateLimiting(RateLimiting.AudioProcessingPolicy)]
@@ -96,8 +102,11 @@ public sealed class CaseAudioMixController : BenControllerBase
                 else
                     return BadRequest($"'{uploadFile.FileName}' has no stored audio to mix.");
 
-                openStreams.Add(stream);
-                trackInputs.Add(new AudioMixer.TrackInput(stream, uploadFile.ContentType, track.OffsetSeconds, track.GainDb, track.Pan));
+                // A phone recording or a FLAC clip becomes WAV first; MP3 and WAV go in as they are.
+                var (readable, readableType) = await _decoder.AsReadableAsync(
+                    stream, uploadFile.ContentType, uploadFile.FileName, ct);
+                openStreams.Add(readable);
+                trackInputs.Add(new AudioMixer.TrackInput(readable, readableType, track.OffsetSeconds, track.GainDb, track.Pan));
             }
 
             (mixedBytes, mixContentType, mixExtension) = AudioMixer.Mix(trackInputs);
@@ -114,6 +123,11 @@ public sealed class CaseAudioMixController : BenControllerBase
         {
             foreach (var s in openStreams) await s.DisposeAsync();
         }
+
+        // Saved as asked, FLAC unless WAV was, and measured off the WAV it was made from.
+        var wavBytes = mixedBytes;
+        var saved    = await AudioSave.AsAsync((mixedBytes, mixContentType, mixExtension), request.Format, _encoder, ct);
+        (mixedBytes, mixContentType, mixExtension) = (saved.Bytes, saved.ContentType, saved.Extension);
 
         var storedName  = $"{Guid.NewGuid()}{mixExtension}";
         var storagePath = _fileStorage.CaseFilePath(caseId, $"files/{storedName}");
@@ -152,7 +166,8 @@ public sealed class CaseAudioMixController : BenControllerBase
 
         // Length and format measured off the rendered mix, which is the one thing about it nobody
         // can inherit — and what the mixer needs to draw a clip at its real width (finding 11).
-        if (DerivedAudioMetadata.For(uploadFileEntity.Id, mixedBytes, inherited) is { } metadata)
+        if (DerivedAudioMetadata.For(uploadFileEntity.Id, wavBytes, inherited,
+                codec: mixContentType == "audio/flac" ? "FLAC" : "PCM") is { } metadata)
             db.UploadFileMetadata.Add(metadata);
 
         var caseFile = new CaseFile

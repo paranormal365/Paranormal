@@ -2,6 +2,8 @@ using System.Buffers.Binary;
 using System.Diagnostics;
 using System.Runtime.CompilerServices;
 using Ben.Data.WebApi.Services.FieldSessions;
+using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
 
 namespace Ben.Data.WebApi.Services.Audio;
@@ -26,13 +28,19 @@ namespace Ben.Data.WebApi.Services.Audio;
 /// <see cref="AudioDecodeFailedException"/> carrying ffmpeg's last lines, which every audio
 /// endpoint already turns into a 400.</para>
 /// </remarks>
-public sealed class FfmpegAudioDecoder : IAudioDecoder
+public sealed class FfmpegAudioDecoder : IAudioDecoder, IAudioEncoder
 {
     private const int SampleRate = AudioSourceReader.DetectionSampleRate;
 
     private readonly MediaToolOptions _options;
 
-    public FfmpegAudioDecoder(IOptions<MediaToolOptions> options) => _options = options.Value;
+    private readonly ILogger<FfmpegAudioDecoder> _logger;
+
+    public FfmpegAudioDecoder(IOptions<MediaToolOptions> options, ILogger<FfmpegAudioDecoder>? logger = null)
+    {
+        _options = options.Value;
+        _logger  = logger ?? NullLogger<FfmpegAudioDecoder>.Instance;
+    }
 
     public bool IsAvailable =>
         !string.IsNullOrWhiteSpace(_options.FfmpegPath) && File.Exists(_options.FfmpegPath);
@@ -134,6 +142,39 @@ public sealed class FfmpegAudioDecoder : IAudioDecoder
         finally
         {
             TryDelete(input);
+        }
+    }
+
+    public bool CanEncodeFlac => IsAvailable;
+
+    public async Task<byte[]?> TryWavToFlacAsync(byte[] wav, CancellationToken ct)
+    {
+        if (!IsAvailable) return null;
+
+        var input  = Path.Combine(Path.GetTempPath(), $"ben-flac-{Guid.NewGuid():N}.wav");
+        var output = Path.ChangeExtension(input, ".flac");
+        try
+        {
+            await File.WriteAllBytesAsync(input, wav, ct);
+            // Level 8 is FLAC's smallest; it costs time to write, never to play, and never loses anything.
+            using var process = Start("-i", input, "-c:a", "flac", "-compression_level", "8", "-y", output);
+
+            var stderr = process.StandardError.ReadToEndAsync(CancellationToken.None);
+            await WaitAsync(process, stderr, ct);
+
+            return File.Exists(output) ? await File.ReadAllBytesAsync(output, ct) : null;
+        }
+        catch (Exception ex) when (ex is AudioDecodeFailedException or AudioDecoderUnavailableException
+                                       or IOException or System.ComponentModel.Win32Exception)
+        {
+            // Saved as WAV instead, which loses nothing either; the page says which it got.
+            _logger.LogWarning(ex, "FLAC encoding failed; saving WAV instead");
+            return null;
+        }
+        finally
+        {
+            TryDelete(input);
+            TryDelete(output);
         }
     }
 

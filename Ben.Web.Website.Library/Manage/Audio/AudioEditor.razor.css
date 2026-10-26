@@ -575,3 +575,13 @@
 .audio-inspector ::deep .tab-content {
     padding-top: .75rem;
 }
+
+/* What the last save made (phase 4b): a quiet note at the top of the Clips tab. */
+.audio-save-note {
+    padding: .5rem .75rem;
+    border: 1px solid var(--ben-line);
+    border-left: 3px solid var(--ben-accent);
+    border-radius: var(--ben-radius);
+    background: var(--ben-surface);
+    color: var(--ben-text);
+}

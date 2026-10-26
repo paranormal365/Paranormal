@@ -36,6 +36,7 @@ public sealed class UploadFileAudioEditController : BenControllerBase
 
     private readonly IMediaIngestService _mediaIngest;
     private readonly IAudioDecoder _decoder;
+    private readonly IAudioEncoder _encoder;
 
     public UploadFileAudioEditController(
         IDbContextFactory<BenDataContext> dbContextFactory,
@@ -43,7 +44,8 @@ public sealed class UploadFileAudioEditController : BenControllerBase
         IFileStorageService fileStorage,
         IAuditLogService auditLog,
         IMediaIngestService mediaIngest,
-        IAudioDecoder decoder)
+        IAudioDecoder decoder,
+        IAudioEncoder encoder)
     {
         _dbContextFactory = dbContextFactory;
         _mapper = mapper;
@@ -51,6 +53,7 @@ public sealed class UploadFileAudioEditController : BenControllerBase
         _auditLog = auditLog;
         _mediaIngest = mediaIngest;
         _decoder = decoder;
+        _encoder = encoder;
     }
 
     [HttpPost]
@@ -103,7 +106,8 @@ public sealed class UploadFileAudioEditController : BenControllerBase
                     $"That region starts at {request.Start:0.##}s, and the recording is only "
                     + $"{sourceSeconds:0.##}s long.");
 
-            var (sourceStream, workingType) = await OpenEditableAsync(source, sourceSeconds, ct);
+            var (sourceStream, workingType) = await _decoder.AsReadableAsync(
+                await OpenSourceStreamAsync(source, ct), source.ContentType, source.FileName, ct);
             await using (sourceStream)
             {
                 (editedBytes, outContentType, outExtension) = request.Operation switch
@@ -130,6 +134,11 @@ public sealed class UploadFileAudioEditController : BenControllerBase
             // could not be read, rather than a 500 that reads as "the site is broken" (finding 5).
             return BadRequest($"Couldn't read that audio: {ex.Message}");
         }
+
+        // Saved as asked, FLAC unless WAV was, and measured off the WAV it was made from.
+        var wavBytes = editedBytes;
+        var saved    = await AudioSave.AsAsync((editedBytes, outContentType, outExtension), request.Format, _encoder, ct);
+        (editedBytes, outContentType, outExtension) = (saved.Bytes, saved.ContentType, saved.Extension);
 
         var baseName = System.IO.Path.GetFileNameWithoutExtension(source.FileName);
         var newName  = string.IsNullOrWhiteSpace(request.Label)
@@ -182,7 +191,8 @@ public sealed class UploadFileAudioEditController : BenControllerBase
         // produced rather than inherited, because no audio upload has a metadata row to inherit
         // from (finding 11).
         var inherited = await _mediaIngest.DeriveMetadataAsync(db, fileId, entity.Id, "Audio", ct);
-        if (DerivedAudioMetadata.For(entity.Id, editedBytes, inherited) is { } metadata)
+        if (DerivedAudioMetadata.For(entity.Id, wavBytes, inherited,
+                codec: outContentType == "audio/flac" ? "FLAC" : "PCM") is { } metadata)
             db.UploadFileMetadata.Add(metadata);
 
         try
@@ -200,7 +210,7 @@ public sealed class UploadFileAudioEditController : BenControllerBase
         _ = TryAuditAsync(_auditLog.LogCreateAsync(nameof(UploadFile), entity.Id, entity, userId, AppSources.WebApi));
 
         return CreatedAtAction("GetById", "UploadFile", new { id = entity.Id },
-            _mapper.Map<UploadFileRecord>(entity));
+            _mapper.Map<UploadFileRecord>(entity) with { WavEquivalentBytes = saved.WavBytes });
     }
 
     /// <summary>Removes a written file, never throwing over the failure that led here.</summary>
@@ -208,29 +218,6 @@ public sealed class UploadFileAudioEditController : BenControllerBase
     {
         try { await _fileStorage.DeleteAsync(relativePath, CancellationToken.None); }
         catch { /* the insert already failed; a failed cleanup must not replace that error */ }
-    }
-
-    /// <summary>
-    /// The source as something the edits can read: MP3 and WAV as they are, anything else (the
-    /// phone's .m4a) decoded to WAV first at its own rate and channels.
-    /// </summary>
-    /// <remarks>
-    /// The length limit is checked before decoding, with the same sentence a long MP3 gets, so an
-    /// hour of .m4a is refused from its header rather than after a gigabyte of WAV is built.
-    /// </remarks>
-    private async Task<(Stream Stream, string ContentType)> OpenEditableAsync(
-        UploadFile source, double sourceSeconds, CancellationToken ct)
-    {
-        var stream = await OpenSourceStreamAsync(source, ct);
-        if (AudioSourceReader.Reads(source.ContentType)) return (stream, source.ContentType);
-
-        await using (stream)
-        {
-            AudioSourceReader.EnsureEditable(TimeSpan.FromSeconds(sourceSeconds));
-            var wav = await _decoder.DecodeRangeToWavAsync(
-                stream, source.ContentType, source.FileName, 0, sourceSeconds, ct);
-            return (new MemoryStream(wav), "audio/wav");
-        }
     }
 
     private async Task<Stream> OpenSourceStreamAsync(UploadFile file, CancellationToken ct)

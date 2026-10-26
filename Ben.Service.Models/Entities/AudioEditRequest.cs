@@ -35,6 +35,7 @@ public enum AudioEditOperation
 /// <see cref="GainDb"/> for <c>Gain</c>; <see cref="FadeInSeconds"/>/<see cref="FadeOutSeconds"/> for <c>Fade</c>;
 /// <see cref="SpeedRatio"/> for <c>Speed</c> (2.0 = twice as fast, 0.5 = half speed, pitch preserved);
 /// <see cref="PitchSemitones"/> for <c>Pitch</c> (positive = up, negative = down, duration preserved).
+/// The result is saved as <see cref="Format"/>, FLAC unless asked otherwise.
 /// </summary>
 public record AudioEditRequest(
     AudioEditOperation Operation,
@@ -47,4 +48,5 @@ public record AudioEditRequest(
     bool               IsPublic,
     Guid               UploadFileTypeId,
     double?            SpeedRatio = null,
-    double?            PitchSemitones = null);
+    double?            PitchSemitones = null,
+    AudioSaveFormat    Format = AudioSaveFormat.Flac);

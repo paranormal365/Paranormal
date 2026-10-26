@@ -1,0 +1,16 @@
+@* Which format a clip or an edit is saved in (phase 4b, 10/26/2026). FLAC unless this is ticked:
+   the same samples in a smaller file. WAV is there for programs that cannot open FLAC. MP3 is
+   never offered, because it throws away the quiet sounds an EVP search listens for. *@
+<label class="small mb-0 d-flex align-items-center gap-2 audio-save-format" title="FLAC keeps every sound exactly in a smaller file. Choose WAV only for a program that cannot open FLAC.">
+    <input type="checkbox" id="@Id" checked="@SaveAsWav"
+           @onchange="@(e => SaveAsWavChanged.InvokeAsync((bool?)e.Value ?? false))" />
+    Save as WAV instead of FLAC (a larger file, the same sound)
+</label>
+
+@code {
+    [Parameter] public bool SaveAsWav { get; set; }
+    [Parameter] public EventCallback<bool> SaveAsWavChanged { get; set; }
+
+    /// <summary>The checkbox's id, one per place it appears, for the label and for tests.</summary>
+    [Parameter, EditorRequired] public string Id { get; set; } = "";
+}

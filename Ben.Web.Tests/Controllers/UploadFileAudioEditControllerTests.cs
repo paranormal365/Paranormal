@@ -58,12 +58,13 @@ public class UploadFileAudioEditControllerTests
 
     private static UploadFileAudioEditController Build(
         IDbContextFactory<BenDataContext> factory, Guid userId,
-        IAudioDecoder? decoder = null, Ben.Data.Common.Interfaces.IFileStorageService? storage = null)
+        IAudioDecoder? decoder = null, Ben.Data.Common.Interfaces.IFileStorageService? storage = null,
+        IAudioEncoder? encoder = null)
     {
         var ctrl = new UploadFileAudioEditController(factory, CreateMapper(),
             storage ?? new Mock<Ben.Data.Common.Interfaces.IFileStorageService>().Object,
             new Mock<IAuditLogService>().Object, Ben.Web.Tests.TestMedia.Ingest(),
-            decoder ?? Ben.Web.Tests.TestAudio.Decoder());
+            decoder ?? Ben.Web.Tests.TestAudio.Decoder(), encoder ?? Ben.Web.Tests.TestAudio.Encoder());
         ctrl.ControllerContext = new ControllerContext
         {
             HttpContext = new DefaultHttpContext
@@ -94,7 +95,7 @@ public class UploadFileAudioEditControllerTests
                .Returns(Task.CompletedTask);
 
         var ctrl = new UploadFileAudioEditController(factory, CreateMapper(), storage.Object, new Mock<IAuditLogService>().Object, Ben.Web.Tests.TestMedia.Ingest(),
-            Ben.Web.Tests.TestAudio.Decoder());
+            Ben.Web.Tests.TestAudio.Decoder(), Ben.Web.Tests.TestAudio.Encoder());
         ctrl.ControllerContext = new ControllerContext
         {
             HttpContext = new DefaultHttpContext
@@ -902,5 +903,23 @@ public class UploadFileAudioEditControllerTests
         Assert.Contains("free account", refused.Value?.ToString());
         storage.Verify(s => s.WriteAsync(It.IsAny<string>(), It.IsAny<Stream>(), It.IsAny<CancellationToken>()),
                        Times.Never);
+    }
+
+    // ── Saved as FLAC (phase 4b) ──────────────────────────────────────────────
+
+    [Fact]
+    public async Task Edit_IsSavedAsFlac_ByDefault()
+    {
+        var factory = CreateFactory();
+        var typeId  = await SeedTypeAsync(factory);
+        var (fileId, ownerId) = await SeedFileAsync(factory, CreateSilentWav(seconds: 2));
+        var ctrl    = Build(factory, ownerId, encoder: Ben.Web.Tests.TestAudio.MarkingFlac());
+
+        var result  = await ctrl.Edit(fileId, Request(AudioEditOperation.Reverse, typeId), default);
+
+        var record = Assert.IsType<UploadFileRecord>(Assert.IsType<CreatedAtActionResult>(result.Result).Value);
+        Assert.Equal("audio/flac", record.ContentType);
+        Assert.EndsWith(".flac", record.FileName);
+        Assert.True(record.WavEquivalentBytes > record.FileSize);
     }
 }

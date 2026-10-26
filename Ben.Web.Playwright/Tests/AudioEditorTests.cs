@@ -354,6 +354,61 @@ public class AudioEditorTests : BenTestBase
     }
 
     /// <summary>
+    /// An edit is saved as FLAC, says how big it would have been as WAV, and plays; ticking "Save
+    /// as WAV" saves WAV and says so (phase 4b).
+    /// </summary>
+    /// <remarks>
+    /// The waveform drawn on the new clip's row is the proof a browser can open the FLAC: the row's
+    /// player decodes the file itself, and a file it cannot decode draws nothing.
+    /// </remarks>
+    [Test]
+    public async Task An_edit_is_saved_as_flac_and_says_how_big_each_format_is()
+    {
+        if (!await ReadyInFullViewAsync())
+        {
+            Assert.Ignore("Could not open the editor; see the output for where it gave up.");
+            return;
+        }
+
+        var note = Modal.Locator("#audio-last-save");
+
+        await AudioEditorUi.ChooseAsync(Page, "edit", "Normalize");
+        await Expect(note).ToContainTextAsync("Saved as", new() { Timeout = 120_000 });
+        var said = (await note.InnerTextAsync()).Trim();
+        TestContext.Out.WriteLine($"first save: {said}");
+
+        if (said.Contains("cannot save FLAC yet"))
+        {
+            Assert.Ignore($"This host has no ffmpeg, and the editor said so: {said}");
+            return;
+        }
+        Assert.That(said, Does.StartWith("Saved as FLAC").And.Contain("as WAV it would be").And.Contain("Nothing is lost"));
+
+        // The newest clip is first in the list, and its player has drawn the FLAC it was handed.
+        var newest = Modal.Locator(".audio-clip").First;
+        await Expect(newest.Locator("[id^='ws-']").First).ToBeVisibleAsync(new() { Timeout = 60_000 });
+        var drawn = await newest.EvaluateAsync<bool>(@"row => {
+            const deadline = Date.now() + 30000;
+            return new Promise(done => (function look() {
+                const host = row.querySelector('[id^=""ws-""]');
+                const shadow = host && [...host.querySelectorAll('*')].concat([host]).find(e => e.shadowRoot)?.shadowRoot;
+                if (shadow && shadow.querySelectorAll('canvas').length > 0) return done(true);
+                if (Date.now() > deadline) return done(false);
+                setTimeout(look, 250);
+            })());
+        }");
+        Assert.That(drawn, Is.True, "the saved FLAC never drew a waveform, so a browser could not open it");
+
+        // The other choice, from the Edit tab.
+        await AudioEditorUi.OpenTabAsync(Modal, "Edit");
+        await Modal.Locator("#edit-save-as-wav").CheckAsync();
+        await AudioEditorUi.ChooseAsync(Page, "edit", "Normalize");
+        await Expect(note).ToContainTextAsync("Saved as WAV", new() { Timeout = 120_000 });
+        TestContext.Out.WriteLine($"second save: {(await note.InnerTextAsync()).Trim()}");
+        Assert.That(await note.InnerTextAsync(), Does.Not.Contain("cannot save FLAC"), "WAV was asked for, so nothing needs explaining");
+    }
+
+    /// <summary>
     /// Silence, applied to a region a person drew, produces a file and says it did.
     /// </summary>
     /// <remarks>
@@ -1233,7 +1288,7 @@ public class AudioEditorTests : BenTestBase
         await Expect(publicBox).ToBeVisibleAsync(new() { Timeout = 10_000 });
         await publicBox.CheckAsync();
 
-        await Page.GetByRole(AriaRole.Button, new() { Name = "Save as WAV" }).First.ClickAsync();
+        await Page.GetByRole(AriaRole.Button, new() { Name = "Save clip" }).First.ClickAsync();
 
         var alert = Page.Locator(".alert-danger").First;
         await Expect(alert).ToBeVisibleAsync(new() { Timeout = 20_000 });

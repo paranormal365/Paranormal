@@ -39,6 +39,7 @@ public sealed class UploadFileAudioClipController : BenControllerBase
     private readonly IAuditLogService _auditLog;
     private readonly IMediaIngestService _mediaIngest;
     private readonly IAudioDecoder _decoder;
+    private readonly IAudioEncoder _encoder;
 
     public UploadFileAudioClipController(
         IDbContextFactory<BenDataContext> dbContextFactory,
@@ -46,7 +47,8 @@ public sealed class UploadFileAudioClipController : BenControllerBase
         IFileStorageService fileStorage,
         IAuditLogService auditLog,
         IMediaIngestService mediaIngest,
-        IAudioDecoder decoder)
+        IAudioDecoder decoder,
+        IAudioEncoder encoder)
     {
         _dbContextFactory = dbContextFactory;
         _mapper = mapper;
@@ -54,6 +56,7 @@ public sealed class UploadFileAudioClipController : BenControllerBase
         _auditLog = auditLog;
         _mediaIngest = mediaIngest;
         _decoder = decoder;
+        _encoder = encoder;
     }
 
     /// <summary>
@@ -195,6 +198,11 @@ public sealed class UploadFileAudioClipController : BenControllerBase
             return BadRequest($"Couldn't read that audio: {ex.Message}");
         }
 
+        // Saved as asked, FLAC unless WAV was, and measured off the WAV it was made from.
+        var wavBytes = clippedBytes;
+        var saved    = await AudioSave.AsAsync((clippedBytes, outContentType, outExtension), request.Format, _encoder, ct);
+        (clippedBytes, outContentType, outExtension) = (saved.Bytes, saved.ContentType, saved.Extension);
+
         var baseName = System.IO.Path.GetFileNameWithoutExtension(source.FileName);
         var start    = TimeSpan.FromSeconds(request.Start);
         var end      = TimeSpan.FromSeconds(request.End);
@@ -243,7 +251,8 @@ public sealed class UploadFileAudioClipController : BenControllerBase
         // captured or to imply the clip was measured there — the row says it was inherited, and
         // the duration comes from the clip's own bytes rather than the source's.
         var inherited = await _mediaIngest.DeriveMetadataAsync(db, fileId, entity.Id, "Audio", ct);
-        if (DerivedAudioMetadata.For(entity.Id, clippedBytes, inherited, clippedSeconds) is { } metadata)
+        if (DerivedAudioMetadata.For(entity.Id, wavBytes, inherited, clippedSeconds,
+                AudioCodecName(outContentType)) is { } metadata)
             db.UploadFileMetadata.Add(metadata);
 
         // Saved together with the file: a marker pointing at a clip row that failed to insert would
@@ -269,8 +278,10 @@ public sealed class UploadFileAudioClipController : BenControllerBase
         _ = TryAuditAsync(_auditLog.LogCreateAsync(nameof(UploadFile), entity.Id, entity, userId, AppSources.WebApi));
 
         return CreatedAtAction("GetById", "UploadFile", new { id = entity.Id },
-            _mapper.Map<UploadFileRecord>(entity));
+            _mapper.Map<UploadFileRecord>(entity) with { WavEquivalentBytes = saved.WavBytes });
     }
+
+    private static string AudioCodecName(string contentType) => contentType == "audio/flac" ? "FLAC" : "PCM";
 
     /// <summary>
     /// Opens the source audio as a stream: from disk if StoragePath is set,

@@ -29,13 +29,17 @@ internal static class DerivedAudioMetadata
     /// What <c>IMediaIngestService.DeriveMetadataAsync</c> carried over from the source, or null
     /// when the source had nothing to carry.
     /// </param>
+    /// <param name="codec">
+    /// What the saved file holds: "PCM" for WAV, "FLAC" when the WAV in <paramref name="producedBytes"/>
+    /// was saved as FLAC. The samples are the same either way, so they are measured off the WAV.
+    /// </param>
     /// <param name="durationOverride">
     /// Used instead of the produced file's own length where the caller knows better — a clip's
     /// requested range, which is what the person asked for even when the bytes are a hair shorter.
     /// </param>
     public static UploadFileMetadata? For(
         Guid derivedUploadFileId, byte[] producedBytes, UploadFileMetadata? inherited,
-        double? durationOverride = null)
+        double? durationOverride = null, string codec = "PCM")
     {
         var measured = Measure(producedBytes);
         if (measured is null && inherited is null) return null;
@@ -53,7 +57,7 @@ internal static class DerivedAudioMetadata
             row.DurationSeconds = durationOverride ?? m.Seconds;
             row.SampleRateHz    = m.SampleRate;
             row.Channels        = m.Channels;
-            row.AudioCodec      = "PCM";
+            row.AudioCodec      = codec;
         }
         else if (durationOverride is { } given)
         {
