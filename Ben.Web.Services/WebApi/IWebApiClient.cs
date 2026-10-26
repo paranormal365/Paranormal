@@ -254,6 +254,7 @@ public interface IWebApiClient
     /// <remarks>Same reasoning as <see cref="EditAudioWithReasonAsync"/>.</remarks>
     Task<(UploadFileRecord? Result, string? Error)> ClipAudioWithReasonAsync(
         Guid fileId, ClipAudioRequest request, CancellationToken token = default);
+    Task<ItemResult<UploadFileRecord>> GetUploadFileAsync(Guid fileId, CancellationToken token = default);
     Task<LoadResult<UploadFileRecord>> GetChildClipsAsync(Guid fileId, CancellationToken token = default);
     Task<(byte[] Data, string ContentType)?> GetClipPreviewAsync(Guid fileId, double start, double end, CancellationToken token = default);
 

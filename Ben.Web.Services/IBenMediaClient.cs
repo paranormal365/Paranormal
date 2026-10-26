@@ -231,6 +231,10 @@ public interface IBenMediaClient
     /// </summary>
     Task<(byte[] Data, string ContentType)?> GetClipPreviewAsync(Guid fileId, double start, double end, CancellationToken token = default);
 
+    /// <summary>One file's details, if the caller may see it. A refusal and an unreachable server
+    /// both come back as <c>Failed</c>; only a refusal carries a <c>Reason</c>.</summary>
+    Task<ItemResult<UploadFileRecord>> GetUploadFileAsync(Guid fileId, CancellationToken token = default);
+
     /// <summary>Returns all child clip files that were derived from <paramref name="fileId"/> via the region-clip workflow.</summary>
     Task<LoadResult<UploadFileRecord>> GetChildClipsAsync(Guid fileId, CancellationToken token = default);
 
