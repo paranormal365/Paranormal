@@ -141,6 +141,27 @@
         </div>
     }
 
+    @* Whether this server can read the phone's .m4a. Without ffmpeg nothing fails loudly — people
+       just meet "This server cannot read .m4a yet." — so the cause is shown here. *@
+    @if (!_loading && _mediaTools is not null)
+    {
+        <div class="card mb-3" id="media-tools-health"><div class="card-body d-flex gap-2 align-items-start">
+            <BenIcon Name="@(_mediaTools.Problem is null ? "check-circle" : "alert-triangle")"
+                     Class="@($"mt-1 flex-shrink-0 {(_mediaTools.Problem is null ? "text-success" : "text-warning")}")" />
+            <div>
+                <div class="small text-secondary">Audio decoding</div>
+                @if (_mediaTools.Problem is null)
+                {
+                    <span>@_mediaTools.Version at <code>@_mediaTools.Path</code>. Recordings from the phone can be scanned and clipped.</span>
+                }
+                else
+                {
+                    <span>@_mediaTools.Problem</span>
+                }
+            </div>
+        </div></div>
+    }
+
     @* id, like #events-dashboard and #event-health on the other two tabs: it exists only once the
        charts have arrived, so it is a readiness signal a walk can WAIT for. The site tab was the
        one without one, so ProductWalk checked it by looking for a string instead — a check made
@@ -494,6 +515,7 @@
     private AdminStatsSummary? _summary;
     private AdminStatsCharts? _charts;
     private AdminSignInInsights? _signIns;
+    private MediaToolsHealth? _mediaTools;
 
     /// <summary>Matches the server's own cap, so the caption cannot drift from the list.</summary>
     private const int SignInInsightsPageSize = 10;
@@ -533,6 +555,9 @@
             // to this page, not a precondition for it: if that one endpoint fails, the dashboard
             // should still draw everything else rather than replace itself with an error.
             _signIns = await AdminClient.GetAdminSignInInsightsAsync(_days);
+
+            // Same footing as the sign-in panels: an addition, never a reason to blank the page.
+            _mediaTools ??= await AdminClient.GetMediaToolsHealthAsync();
 
             // Null here is a FAILURE, not "no data" — these endpoints always return an object when
             // they answer at all. The client swallows the status code and returns null for any

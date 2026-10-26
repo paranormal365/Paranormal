@@ -430,6 +430,13 @@ builder.Services.Configure<Ben.Data.WebApi.Services.MediaToolOptions>(
     builder.Configuration.GetSection("MediaTools"));
 builder.Services.AddSingleton<Ben.Data.WebApi.Services.IAvMetadataStripper,
                               Ben.Data.WebApi.Services.AvMetadataStripper>();
+// Audio decoding for scans and clips: NAudio for MP3/WAV, the same ffmpeg for the phone's .m4a.
+// Without ffmpeg an .m4a is refused in a sentence; /admin shows whether it is configured.
+builder.Services.AddSingleton<Ben.Data.WebApi.Services.Audio.NAudioDecoder>();
+builder.Services.AddSingleton<Ben.Data.WebApi.Services.Audio.FfmpegAudioDecoder>();
+builder.Services.AddSingleton<Ben.Data.WebApi.Services.Audio.IAudioDecoder,
+                              Ben.Data.WebApi.Services.Audio.CompositeAudioDecoder>();
+builder.Services.AddScoped<Ben.Data.WebApi.Services.Audio.EvpScanRecorder>();
 builder.Services.AddScoped<Ben.Data.WebApi.Services.Billing.TierChangeNotifier>();
 // Stripe: the card-charging arm of the billing engine. Gateway is a singleton (a thin client
 // around config); fulfillment is scoped like every other database writer. With no SecretKey the

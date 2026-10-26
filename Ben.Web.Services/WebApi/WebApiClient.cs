@@ -735,6 +735,38 @@ public sealed class WebApiClient : IWebApiClient
         return result;
     }
 
+    /// <inheritdoc />
+    public async Task<(IReadOnlyList<AudioMarkerRecord>? Result, string? Error)> ScanAudioForEvpWithReasonAsync(
+        Guid fileId, EvpSensitivity sensitivity, EvpDetectionOptions? options = null, CancellationToken token = default)
+    {
+        using var req = Auth(HttpMethod.Post, $"/api/upload-files/{fileId}/audio-markers/scan?sensitivity={sensitivity}");
+        req.Content = JsonContent.Create(options);
+        using var response = await SendOrUnreachableAsync(req, token);
+
+        if (response.IsSuccessStatusCode)
+            return (await BodyOrDefaultAsync<List<AudioMarkerRecord>>(response, token) ?? [], null);
+        if (response.StatusCode == System.Net.HttpStatusCode.TooManyRequests) return (null, TooManyTries);
+
+        var body = await response.Content.ReadAsStringAsync(token);
+
+        // The one refusal that is an object: the server, not the recording, is what cannot read it.
+        if (body.TrimStart().StartsWith('{'))
+        {
+            try
+            {
+                if (System.Text.Json.JsonSerializer.Deserialize<ScanRefusalRecord>(body,
+                        new System.Text.Json.JsonSerializerOptions(System.Text.Json.JsonSerializerDefaults.Web))
+                    is { Message: { Length: > 0 } message })
+                    return (null, message);
+            }
+            catch (System.Text.Json.JsonException) { }
+            return (null, null);
+        }
+
+        var looksLikeProse = !string.IsNullOrWhiteSpace(body) && body.Length < 400 && !body.TrimStart().StartsWith('<');
+        return (null, looksLikeProse ? body.Trim('"', ' ', '\n') : null);
+    }
+
     // ── Audio Clip ────────────────────────────────────────────────────────────
     public Task<UploadFileRecord?> ClipAudioAsync(Guid fileId, ClipAudioRequest request, CancellationToken token = default)
         => PostAsync<ClipAudioRequest, UploadFileRecord>($"/api/upload-files/{fileId}/clip", request, token);

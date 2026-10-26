@@ -281,3 +281,18 @@ public sealed record AppUserPurgeResult(
     Guid AppUserId, string DisplayName, bool RowRemoved,
     int PersonalFieldSessions, int StoredFiles, int Memberships, int SignInEvents,
     int MessagesReceived, int FollowsAndBlocks);
+
+/// <summary>
+/// Whether this server can read the phone's recordings — the administrator's view of ffmpeg.
+/// </summary>
+/// <param name="FfmpegConfigured">Whether <c>MediaTools:FfmpegPath</c> is set at all.</param>
+/// <param name="Path">The configured path, as set.</param>
+/// <param name="Found">Whether a file exists at that path.</param>
+/// <param name="Version">ffmpeg's own first line, e.g. "ffmpeg version 6.1", when it ran.</param>
+/// <param name="Problem">What is wrong, in a sentence, or null when nothing is.</param>
+public sealed record MediaToolsHealth(
+    bool FfmpegConfigured,
+    string? Path,
+    bool Found,
+    string? Version,
+    string? Problem);

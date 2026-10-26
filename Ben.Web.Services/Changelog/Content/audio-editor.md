@@ -32,6 +32,11 @@ it is hidden from everybody else, but still takes its number. No other sub-headi
 
 ## Unreleased
 
+- Recordings made on the phone (.m4a) can be scanned for EVPs and clipped, the same as MP3 and WAV.
+- When the site cannot read a phone recording, the scan says so instead of saying the recording is
+  broken.
+- Saving a clip counts toward a free account's storage. If the clip would go past it, you are told
+  before anything is saved.
 - The editor remembers more of how you left a recording: the zoom, the playback speed, the open
   tab, the voice band, scrubbing or selecting, silence detection, and every spectrogram setting.
 - A zoom no longer resets when the spectrogram is turned on or the window is resized.

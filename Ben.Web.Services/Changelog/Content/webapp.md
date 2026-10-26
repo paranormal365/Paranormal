@@ -39,6 +39,7 @@ day-by-day account of building it would say nothing to anyone using it now.
 ### Administration
 
 - Making an event's findings public or private, and choosing what shows on the place's page, is recorded in the audit log.
+- The dashboard shows whether the site can read recordings made on the phone, and what is missing when it can't.
 
 ## 2.22.0 · 2026-10-25
 

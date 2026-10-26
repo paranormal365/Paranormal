@@ -25,35 +25,30 @@ namespace Ben.Data.WebApi.Controllers.Entities;
 [Authorize]
 public sealed class AudioMarkerController : BenControllerBase
 {
-    /// <summary>
-    /// Ceiling on one scan's proposals. A detector set too sensitive on a noisy recording can
-    /// produce thousands of runs, and nobody reviews a queue that long — better to reject the scan
-    /// than to bury the file's real markers under it.
-    /// </summary>
-    public const int MaxCandidatesPerScan = 500;
-
-    /// <summary>
-    /// How much a proposal must overlap an already-reviewed span to count as the same event.
-    /// Half is deliberately lenient: the detector's bounds shift slightly with sensitivity, and
-    /// re-proposing something the reviewer already dismissed is worse than missing a near-miss.
-    /// </summary>
-    private const double DuplicateOverlapFraction = 0.5;
+    /// <summary>Ceiling on one scan's proposals — see <see cref="EvpScanRecorder.MaxCandidatesPerScan"/>.</summary>
+    public const int MaxCandidatesPerScan = EvpScanRecorder.MaxCandidatesPerScan;
 
     private readonly IDbContextFactory<BenDataContext> _dbContextFactory;
     private readonly IMapper _mapper;
     private readonly IAuditLogService _auditLog;
     private readonly IFileStorageService _fileStorage;
+    private readonly IAudioDecoder _decoder;
+    private readonly EvpScanRecorder _scanRecorder;
 
     public AudioMarkerController(
         IDbContextFactory<BenDataContext> dbContextFactory,
         IMapper mapper,
         IAuditLogService auditLog,
-        IFileStorageService fileStorage)
+        IFileStorageService fileStorage,
+        IAudioDecoder decoder,
+        EvpScanRecorder scanRecorder)
     {
         _dbContextFactory = dbContextFactory;
         _mapper = mapper;
         _auditLog = auditLog;
         _fileStorage = fileStorage;
+        _decoder = decoder;
+        _scanRecorder = scanRecorder;
     }
 
     [HttpGet]
@@ -186,11 +181,9 @@ public sealed class AudioMarkerController : BenControllerBase
     /// Replaces this file's pending candidates with the results of a fresh scan.
     /// </summary>
     /// <remarks>
-    /// <para><b>Only Pending markers are replaced.</b> Confirmed markers are findings someone stands
-    /// behind and Dismissed ones are the record of what a reviewer already rejected — wiping either
-    /// would make a re-scan resurrect everything the reviewer had worked through. Deleting and
-    /// inserting run in one transaction so a failure can't leave the file showing half of two
-    /// different scans.</para>
+    /// <para>The rules — only Pending markers replaced, one transaction — live in
+    /// <see cref="EvpScanRecorder.ReplacePendingAsync"/>, so a scan made here and a scan made
+    /// anywhere else propose candidates the same way.</para>
     /// <para>Candidates are capped at <see cref="MaxCandidatesPerScan"/>. A detector tuned too
     /// sensitive can propose thousands of runs on a noisy recording, and a review queue that long is
     /// not reviewable — the client is expected to keep the highest-scoring ones.</para>
@@ -205,63 +198,15 @@ public sealed class AudioMarkerController : BenControllerBase
         if (userId == Guid.Empty) return Unauthorized();
 
         var candidates = request.Candidates ?? [];
-        if (candidates.Count > MaxCandidatesPerScan)
-            return BadRequest($"A scan may propose at most {MaxCandidatesPerScan} candidates; got {candidates.Count}.");
-        if (candidates.Any(c => c.EndSeconds <= c.StartSeconds))
-            return BadRequest("Every candidate must end after it starts.");
-        if (candidates.Any(c => c.StartSeconds < 0))
-            return BadRequest("A candidate cannot start before the recording does.");
-        if (candidates.Any(c => c.Score is < 0 or > 100 or float.NaN))
-            return BadRequest("Candidate scores must be between 0 and 100.");
+        if (EvpScanRecorder.CandidateProblem(candidates) is { } problem) return BadRequest(problem);
 
         await using var db = await _dbContextFactory.CreateDbContextAsync(ct);
         if (!await db.UploadFiles.AnyAsync(f => f.Id == fileId, ct)) return NotFound("File not found.");
         if (!await FileAudienceAccess.CanViewFileAsync(db, fileId, userId, ct)) return Forbid();
 
-        var now = DateTime.UtcNow;
-        var stale = await db.AudioMarkers
-            .Where(m => m.UploadFileId == fileId && m.ReviewStatus == EvpReviewStatus.Pending)
-            .ToListAsync(ct);
-
-        var fresh = candidates
-            .OrderBy(c => c.StartSeconds)
-            .Select(c => new AudioMarker
-            {
-                Id                 = Guid.NewGuid(),
-                UploadFileId       = fileId,
-                TimeSeconds        = c.StartSeconds,
-                EndSeconds         = c.EndSeconds,
-                // Deliberately not "Possible EVP": the detector found signal standing out from the
-                // noise floor, which is a different claim from a voice being present.
-                Label              = "Detected signal",
-                ConfidenceLevel    = EvpConfidenceLevel.Possible,
-                IsAutoDetected     = true,
-                DetectionScore     = c.Score,
-                ReviewStatus       = EvpReviewStatus.Pending,
-                DateCreated        = now,
-                CreatedByAppUserId = userId,
-            })
-            .ToList();
-
-        // The in-memory provider used by tests doesn't support transactions, so skip it there
-        // rather than fail every test — same accommodation as CaseController.
-        var transaction = db.Database.IsRelational()
-            ? await db.Database.BeginTransactionAsync(ct)
-            : null;
-        await using (transaction)
-        {
-            db.AudioMarkers.RemoveRange(stale);
-            db.AudioMarkers.AddRange(fresh);
-            await db.SaveChangesAsync(ct);
-            if (transaction is not null) await transaction.CommitAsync(ct);
-        }
-
-        _ = TryAuditAsync(_auditLog.LogCreateAsync(
-            nameof(AudioMarker), fileId,
-            new { Replaced = stale.Count, Created = fresh.Count },
-            userId, AppSources.WebApi));
-
-        return Ok(_mapper.Map<IEnumerable<AudioMarkerRecord>>(fresh));
+        var replaced = await _scanRecorder.ReplacePendingAsync(db, fileId, candidates, userId, ct);
+        AuditReplaced(fileId, replaced, userId);
+        return Ok(_mapper.Map<IEnumerable<AudioMarkerRecord>>(replaced.Fresh));
     }
 
     /// <summary>
@@ -270,8 +215,10 @@ public sealed class AudioMarkerController : BenControllerBase
     /// </summary>
     /// <remarks>
     /// <para>Anything overlapping a marker the reviewer has already ruled on — confirmed or
-    /// dismissed — is dropped before saving. Without that, every re-scan hands back the same
-    /// rejected noise and the review queue never converges.</para>
+    /// dismissed — is dropped before saving (<see cref="EvpScanRecorder.ProposeAsync"/>).</para>
+    /// <para>Reads through <see cref="IAudioDecoder"/>, so the phone's .m4a scans as well as MP3
+    /// and WAV. A host with no ffmpeg answers 400 with a <see cref="ScanRefusalRecord"/> naming
+    /// that, rather than blaming the recording.</para>
     /// <para>Runs synchronously. Detection is a couple of passes over the samples, so a long
     /// recording costs seconds rather than minutes; if that stops being true this wants moving to
     /// the background-render path rather than a longer request timeout.</para>
@@ -310,109 +257,38 @@ public sealed class AudioMarkerController : BenControllerBase
         try
         {
             await using var stream = await OpenSourceStreamAsync(source, ct);
-            analysis = EvpDetector.Analyze(stream, source.ContentType ?? "", settings, MaxCandidatesPerScan);
+            var mono = await _decoder.ReadMono16kAsync(stream, source.ContentType, source.FileName, ct);
+            analysis = EvpDetector.Analyze(mono, AudioSourceReader.DetectionSampleRate, settings, MaxCandidatesPerScan);
         }
-        catch (Exception ex) when (ex is InvalidOperationException or NotSupportedException or FormatException)
+        catch (AudioDecoderUnavailableException ex)
+        {
+            // This server's shortcoming, not the file's — said so, in a shape the editor can tell apart.
+            return BadRequest(new ScanRefusalRecord(ScanRefusalRecord.DecoderUnavailable, ex.Message));
+        }
+        catch (Exception ex) when (ex is InvalidOperationException or NotSupportedException or FormatException
+                                   || AudioSourceReader.IsUndecodable(ex))
         {
             // A file the decoder can't open is a bad request about this file, not a server fault.
             return BadRequest($"Couldn't read that audio: {ex.Message}");
         }
 
-        // Everything a person has already ruled on, so the scan doesn't re-propose it.
-        var reviewed = await db.AudioMarkers.AsNoTracking()
-            .Where(m => m.UploadFileId == fileId && m.ReviewStatus != EvpReviewStatus.Pending)
-            .Select(m => new { m.TimeSeconds, m.EndSeconds })
-            .ToListAsync(ct);
+        var (proposed, refusal) = await _scanRecorder.ProposeAsync(
+            db, fileId, analysis, sensitivity, settings, userId, ct);
+        if (proposed is null) return BadRequest(refusal);
 
-        var proposed = analysis.Candidates
-            .Where(c => !reviewed.Any(r => OverlapsEnough(c, r.TimeSeconds, r.EndSeconds)))
-            .ToList();
-        var fresh = proposed
-            .Select(c => new AudioCandidateRequest(c.StartSeconds, c.EndSeconds, c.Score))
-            .ToList();
-
-        var result = await ReplaceCandidates(fileId, new BulkCreateAudioCandidatesRequest(fresh), ct);
-
-        if (result.Result is OkObjectResult { Value: IEnumerable<AudioMarkerRecord> created })
-            await TryRecordScanAsync(fileId, sensitivity, settings, analysis, proposed, created, ct);
-
-        return result;
+        AuditReplaced(fileId, proposed.Markers, userId);
+        return Ok(_mapper.Map<IEnumerable<AudioMarkerRecord>>(proposed.Markers.Fresh));
     }
 
-    /// <summary>
-    /// Keeps what this scan measured, for the detector to learn from later (item 253).
-    /// </summary>
-    /// <remarks>
-    /// <para>Written after the candidates are saved, in its own save, and allowed to fail: the
-    /// person asked for a scan, not for a training record, and must get their candidates either
-    /// way. A failure is logged, the way a failed audit write is.</para>
-    /// <para>Only scans made here are recorded. <see cref="ReplaceCandidates"/> also accepts
-    /// candidates sent from outside, with scores nobody here measured, and those are not evidence
-    /// of anything the detector did.</para>
-    /// </remarks>
-    private async Task TryRecordScanAsync(
-        Guid fileId, EvpSensitivity sensitivity, EvpDetectionOptions settings, EvpAnalysis analysis,
-        IReadOnlyList<EvpCandidate> proposed, IEnumerable<AudioMarkerRecord> created, CancellationToken ct)
-    {
-        try
-        {
-            // Each marker was made from one proposal's exact bounds, so the bounds pair them.
-            var markerBySpan = created
-                .Where(m => m.EndSeconds is not null)
-                .ToDictionary(m => (m.TimeSeconds, m.EndSeconds!.Value), m => m.Id);
-            var proposedSet = proposed.ToHashSet();
-
-            var scan = new EvpScan
-            {
-                Id                 = Guid.NewGuid(),
-                UploadFileId       = fileId,
-                DateCreated        = DateTime.UtcNow,
-                DetectorVersion    = EvpDetector.Version,
-                Sensitivity        = sensitivity,
-                ThresholdDb        = settings.ThresholdDb,
-                MinDurationSeconds = settings.MinDurationSeconds,
-                MergeGapSeconds    = settings.MergeGapSeconds,
-                ContextPadSeconds  = settings.ContextPadSeconds,
-                MaxEventSeconds    = settings.MaxEventSeconds,
-                RecordingSeconds   = analysis.RecordingSeconds,
-                FoundCount         = analysis.Candidates.Count,
-                ProposedCount      = proposed.Count,
-            };
-            foreach (var c in analysis.Candidates)
-            {
-                var wasProposed = proposedSet.Contains(c);
-                scan.Candidates.Add(new EvpScanCandidate
-                {
-                    Id                = Guid.NewGuid(),
-                    AudioMarkerId     = wasProposed && markerBySpan.TryGetValue((c.StartSeconds, c.EndSeconds), out var markerId)
-                                            ? markerId : null,
-                    Proposed          = wasProposed,
-                    StartSeconds      = c.StartSeconds,
-                    EndSeconds        = c.EndSeconds,
-                    Score             = c.Score,
-                    PeakProminenceDb  = c.Features.PeakProminenceDb,
-                    MeanBandGapDb     = c.Features.MeanBandGapDb,
-                    EventSeconds      = c.Features.EventSeconds,
-                    MeanFloorDb       = c.Features.MeanFloorDb,
-                    PeakBandDb        = c.Features.PeakBandDb,
-                    BandLevelSpreadDb = c.Features.BandLevelSpreadDb,
-                    ZeroCrossingRate  = c.Features.ZeroCrossingRate,
-                });
-            }
-
-            await using var db = await _dbContextFactory.CreateDbContextAsync(ct);
-            db.EvpScans.Add(scan);
-            await db.SaveChangesAsync(ct);
-        }
-        catch (Exception ex) when (ex is not OperationCanceledException)
-        {
-            LogLearningFailure(ex, "scan", fileId);
-        }
-    }
+    private void AuditReplaced(Guid fileId, EvpScanRecorder.Replaced replaced, Guid userId)
+        => _ = TryAuditAsync(_auditLog.LogCreateAsync(
+            nameof(AudioMarker), fileId,
+            new { Replaced = replaced.ReplacedCount, Created = replaced.Fresh.Count },
+            userId, AppSources.WebApi));
 
     /// <summary>
-    /// Keeps one Keep or Dismiss on a detected candidate (item 253). Like
-    /// <see cref="TryRecordScanAsync"/>, it never fails the review it follows.
+    /// Keeps one Keep or Dismiss on a detected candidate (item 253). Like the scan's own record
+    /// (<see cref="EvpScanRecorder"/>), it never fails the review it follows.
     /// </summary>
     private async Task TryRecordRulingAsync(
         AudioMarker before, AudioMarker after, bool? playedFirst, CancellationToken ct)
@@ -455,24 +331,6 @@ public sealed class AudioMarkerController : BenControllerBase
         => HttpContext?.RequestServices?
             .GetService<ILogger<AudioMarkerController>>()?
             .LogError(ex, "EVP learning record ({What}) not written for file {FileId}", what, fileId);
-
-    /// <summary>
-    /// True when a proposal covers enough of an already-reviewed marker to be the same event.
-    /// A reviewed point marker (no end) counts as a hit if the proposal simply contains it.
-    /// </summary>
-    private static bool OverlapsEnough(EvpCandidate candidate, double reviewedStart, double? reviewedEnd)
-    {
-        if (reviewedEnd is not { } end || end <= reviewedStart)
-            return candidate.StartSeconds <= reviewedStart && candidate.EndSeconds >= reviewedStart;
-
-        var overlap = Math.Min(candidate.EndSeconds, end) - Math.Max(candidate.StartSeconds, reviewedStart);
-        if (overlap <= 0) return false;
-
-        // Measured against the shorter of the two, so a long candidate can't dodge the check by
-        // dwarfing a short reviewed span (or the reverse).
-        var shortest = Math.Min(candidate.DurationSeconds, end - reviewedStart);
-        return shortest > 0 && overlap / shortest >= DuplicateOverlapFraction;
-    }
 
     private async Task<Stream> OpenSourceStreamAsync(UploadFile file, CancellationToken ct)
     {

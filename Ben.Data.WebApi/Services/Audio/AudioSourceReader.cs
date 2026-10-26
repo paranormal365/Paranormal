@@ -165,6 +165,20 @@ internal static class AudioSourceReader
     {
         using var waveStream = Open(stream, contentType);
 
+        var provider = MonoAt(waveStream, targetSampleRate);
+
+        var estimate = (long)(waveStream.TotalTime.TotalSeconds * targetSampleRate) + targetSampleRate;
+
+        return (ReadInto(provider, estimate), targetSampleRate);
+    }
+
+    /// <summary>
+    /// <paramref name="waveStream"/> mixed to mono and resampled to <paramref name="targetSampleRate"/>
+    /// as it is read — the chain <see cref="ReadMonoAt"/> drains, for a caller that wants it a
+    /// piece at a time instead.
+    /// </summary>
+    public static ISampleProvider MonoAt(WaveStream waveStream, int targetSampleRate = DetectionSampleRate)
+    {
         ISampleProvider provider = waveStream.ToSampleProvider();
 
         if (provider.WaveFormat.Channels > 1)
@@ -173,9 +187,17 @@ internal static class AudioSourceReader
         if (provider.WaveFormat.SampleRate != targetSampleRate)
             provider = new WdlResamplingSampleProvider(provider, targetSampleRate);
 
-        var estimate = (long)(waveStream.TotalTime.TotalSeconds * targetSampleRate) + targetSampleRate;
+        return provider;
+    }
 
-        return (ReadInto(provider, estimate), targetSampleRate);
+    /// <summary>
+    /// True for the content types <see cref="Open"/> reads, so a caller can choose another decoder
+    /// for everything else without catching an exception to find out.
+    /// </summary>
+    public static bool Reads(string? contentType)
+    {
+        var type = (contentType ?? string.Empty).ToLowerInvariant();
+        return type.Contains("mpeg") || type.Contains("mp3") || type.Contains("wav") || type.Contains("wave");
     }
 
     // ── Reading ───────────────────────────────────────────────────────────────

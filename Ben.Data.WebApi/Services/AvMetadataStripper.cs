@@ -15,6 +15,12 @@ public sealed class MediaToolOptions
 
     /// <summary>How long one remux may take before it is abandoned and the original kept.</summary>
     public int TimeoutSeconds { get; set; } = 120;
+
+    /// <summary>
+    /// How long reading one recording into samples may take before ffmpeg is stopped. Longer than
+    /// a remux because it decodes every frame: a two-hour session is a minute or two of work.
+    /// </summary>
+    public int DecodeTimeoutSeconds { get; set; } = 600;
 }
 
 /// <summary>

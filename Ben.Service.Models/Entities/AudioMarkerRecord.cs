@@ -74,6 +74,21 @@ public record AudioCandidateRequest(
 public record BulkCreateAudioCandidatesRequest(
     IReadOnlyList<AudioCandidateRequest> Candidates);
 
+/// <summary>
+/// Why a scan did not run, when the reason is this server rather than the recording.
+/// </summary>
+/// <remarks>
+/// A 400 body rather than a bare sentence, so the editor can tell "this server cannot read .m4a"
+/// — which an administrator fixes — apart from "this file is broken", which nobody can.
+/// </remarks>
+/// <param name="Reason">A fixed key: <see cref="DecoderUnavailable"/>.</param>
+/// <param name="Message">The sentence to show the person.</param>
+public sealed record ScanRefusalRecord(string Reason, string Message)
+{
+    /// <summary>The server has no ffmpeg to read this kind of recording with.</summary>
+    public const string DecoderUnavailable = "DecoderUnavailable";
+}
+
 /// <summary>The outcome of a person reviewing a candidate.</summary>
 /// <param name="ReviewStatus">Confirmed or Dismissed. Pending is not a decision and is rejected.</param>
 /// <param name="Label">Label to give a confirmed marker. Ignored when dismissing.</param>

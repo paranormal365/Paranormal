@@ -190,6 +190,10 @@ public sealed partial class BenAdminClientAdapter
     public Task<IReadOnlyList<AudioMarkerRecord>?> ScanAudioForEvpAsync(Guid fileId, EvpSensitivity sensitivity, EvpDetectionOptions? options = null, CancellationToken token = default)
         => _api.ScanAudioForEvpAsync(fileId, sensitivity, options, token);
 
+    public Task<(IReadOnlyList<AudioMarkerRecord>? Result, string? Error)> ScanAudioForEvpWithReasonAsync(
+        Guid fileId, EvpSensitivity sensitivity, EvpDetectionOptions? options = null, CancellationToken token = default)
+        => _api.ScanAudioForEvpWithReasonAsync(fileId, sensitivity, options, token);
+
     // ── Audio Clip ────────────────────────────────────────────────────────────
 
     public Task<UploadFileRecord?> ClipAudioAsync(Guid fileId, ClipAudioRequest request, CancellationToken token = default)

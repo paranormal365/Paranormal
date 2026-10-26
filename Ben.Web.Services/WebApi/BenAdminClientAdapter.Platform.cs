@@ -113,6 +113,9 @@ public sealed partial class BenAdminClientAdapter
     public Task<AdminSignInInsights?> GetAdminSignInInsightsAsync(int days = 30, CancellationToken token = default)
         => _api.GetAsync<AdminSignInInsights>($"/api/admin/stats/sign-ins?days={days}", token);
 
+    public Task<MediaToolsHealth?> GetMediaToolsHealthAsync(CancellationToken token = default)
+        => _api.GetAsync<MediaToolsHealth>("/api/admin/media-tools", token);
+
     public async Task<(bool Ok, string? Error)> FlagFieldSessionAsync(
         Guid fieldSessionId, string? reason, CancellationToken token = default)
     {
