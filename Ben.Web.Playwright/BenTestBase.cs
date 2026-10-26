@@ -1088,9 +1088,13 @@ public abstract class BenTestBase : PageTest
             {
                 await target.ClickAsync(new() { Timeout = 5_000 });
             }
-            catch (TimeoutException)
+            catch (TimeoutException ex)
             {
-                continue;   // covered by an overlay mid-render; try again
+                // Covered by an overlay mid-render, still moving, or disabled; try again. Say which:
+                // this was swallowed silently, and a case Files tab that "ignored" four clicks on a
+                // cold host turned out to be four clicks that never happened (10/26/2026).
+                TestContext.Out.WriteLine($"click {attempt + 1} did not happen: {ClickRefusal(ex)}");
+                continue;
             }
 
             try
@@ -1114,6 +1118,7 @@ public abstract class BenTestBase : PageTest
             catch (TimeoutException)
             {
                 // Click was dropped, or the page is still catching up.
+                TestContext.Out.WriteLine($"click {attempt + 1} happened but nothing changed within 8s");
             }
         }
 
@@ -1121,6 +1126,17 @@ public abstract class BenTestBase : PageTest
         // because this is the message somebody will read — a timeout here should mean "it never
         // arrived", not "the machine was busy at the wrong moment".
         await Expect(expected.First).ToBeVisibleAsync(new() { Timeout = 15_000 });
+    }
+
+    /// <summary>The part of Playwright's call log that says why a click could not be made.</summary>
+    private static string ClickRefusal(Exception ex)
+    {
+        var lines = ex.Message.Split('\n', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+        var why = lines.Where(l => l.Contains("intercepts pointer events") || l.Contains("not stable")
+                                || l.Contains("not visible") || l.Contains("not enabled")
+                                || l.Contains("detached") || l.Contains("retrying"))
+                       .Distinct().Take(4).ToList();
+        return why.Count > 0 ? string.Join(" | ", why) : lines.FirstOrDefault() ?? ex.GetType().Name;
     }
 
     /// <summary>

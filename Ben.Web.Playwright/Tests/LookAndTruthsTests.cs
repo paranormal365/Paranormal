@@ -384,7 +384,8 @@ public class LookAndTruthsTests : BenTestBase
         catch (Exception) { Assert.Ignore("the fixture never decoded, so there is no editor to open"); }
 
         await Page.Locator("[id^='afp-']").First.ClickAsync(new() { Button = MouseButton.Right });
-        await Page.GetByText("Open Full View", new() { Exact = false }).ClickAsync();
+        await Page.GetByText("Open in editor", new() { Exact = true }).ClickAsync();
+        await Page.WaitForURLAsync("**/audio/**", new() { Timeout = 30_000 });
 
         var eqButton = Page.Locator("#toolbar-eq");
         await Expect(eqButton).ToBeVisibleAsync(new() { Timeout = 30_000 });

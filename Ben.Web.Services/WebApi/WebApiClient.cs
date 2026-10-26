@@ -755,6 +755,9 @@ public sealed class WebApiClient : IWebApiClient
         => SendExpectingReasonAsync<AudioEditRequest, UploadFileRecord>(
             HttpMethod.Post, $"/api/upload-files/{fileId}/audio-edit", request, token);
 
+    public Task<ItemResult<UploadFileRecord>> GetUploadFileAsync(Guid fileId, CancellationToken token = default)
+        => GetItemAsync<UploadFileRecord>($"/api/upload-files/{fileId}", token);
+
     public Task<LoadResult<UploadFileRecord>> GetChildClipsAsync(Guid fileId, CancellationToken token = default)
         => GetListAsync<UploadFileRecord>($"/api/upload-files/{fileId}/clips", token);
 

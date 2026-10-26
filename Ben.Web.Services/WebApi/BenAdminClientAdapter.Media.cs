@@ -199,6 +199,9 @@ public sealed partial class BenAdminClientAdapter
         Guid fileId, ClipAudioRequest request, CancellationToken token = default)
         => _api.ClipAudioWithReasonAsync(fileId, request, token);
 
+    public Task<ItemResult<UploadFileRecord>> GetUploadFileAsync(Guid fileId, CancellationToken token = default)
+        => _api.GetUploadFileAsync(fileId, token);
+
     public Task<LoadResult<UploadFileRecord>> GetChildClipsAsync(Guid fileId, CancellationToken token = default)
         => _api.GetChildClipsAsync(fileId, token);
 

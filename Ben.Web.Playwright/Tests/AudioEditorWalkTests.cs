@@ -138,7 +138,9 @@ public class AudioEditorWalkTests : BenTestBase
         return true;
     }
 
-    private ILocator Modal => Page.Locator(".modal.show").First;
+    /// <summary>The editor. A fullscreen modal when this walk was written; its own page since
+    /// phase 1 of the 10/26/2026 plan, with the same contents inside <c>#audio-editor</c>.</summary>
+    private ILocator Modal => Page.Locator("#audio-editor");
     private ILocator ModalWaveform => Modal.Locator("[id^='ws-']").First;
     private ILocator Regions => Modal.Locator("[part~='region']");
 
@@ -146,7 +148,8 @@ public class AudioEditorWalkTests : BenTestBase
     {
         var wrapper = Page.Locator("[id^='afp-']").First;
         await wrapper.ClickAsync(new() { Button = MouseButton.Right });
-        await Page.GetByText("Open Full View", new() { Exact = false }).ClickAsync();
+        await Page.GetByText("Open in editor", new() { Exact = true }).ClickAsync();
+        await Page.WaitForURLAsync("**/audio/**", new() { Timeout = 30_000 });
         await Expect(Modal).ToBeVisibleAsync(new() { Timeout = 15_000 });
         // The toolbar enables once the modal's own player reports ready.
         // Generous: by the later cases the Files tab holds a dozen copies of the fixture, each
@@ -197,38 +200,18 @@ public class AudioEditorWalkTests : BenTestBase
         Record("A", "PASS", "full view opened from the context menu");
         await SnapAsync("01-fullview-open");
 
-        // Close with the X.
-        await Modal.Locator(".btn-close").First.ClickAsync();
-        await Page.WaitForTimeoutAsync(500);
-        var closedCount = await Page.Locator(".modal.show").CountAsync();
-        Record("A", closedCount == 0 ? "PASS" : "FAIL", $"after X: {closedCount} modal(s) still shown");
-
-        // Now make the parent re-render: clicking the compact player toggles play, which raises
-        // OnPlay/OnTimeUpdate and StateHasChanged in AudioFilePreview.
-        await Page.Locator("[id^='afp-']").First.ClickAsync();
+        // Leave by the page's Back link. Finding A was a modal that would not stay closed; the
+        // editor is a page now, so the question becomes whether Back leaves and the list returns.
+        await Page.GetByTestId("audio-editor-back").ClickAsync();
         await Page.WaitForTimeoutAsync(1500);
-        var reappeared = await Page.Locator(".modal.show").CountAsync();
-        await SnapAsync("01-after-parent-rerender");
-        Record("A", reappeared == 0 ? "PASS" : "FAIL",
-            reappeared == 0 ? "modal stayed closed after a parent re-render"
-                            : "modal came back on its own after the compact player re-rendered the parent");
+        var left = !Page.Url.Contains("/audio/");
+        await SnapAsync("01-after-back");
+        Record("A", left ? "PASS" : "FAIL", left ? "Back left the editor" : $"still on {Page.Url} after Back");
+        if (!left) return;
 
-        if (reappeared > 0)
-        {
-            // The resurrected modal now covers the page, so nothing beneath it can be clicked. Is
-            // Escape any better than the X was?
-            await Page.Keyboard.PressAsync("Escape");
-            await Page.WaitForTimeoutAsync(800);
-            var afterEscape = await Page.Locator(".modal.show").CountAsync();
-            Record("A", "NOTE", $"after Escape on the resurrected modal: {afterEscape} modal(s) shown");
-            return;
-        }
-
-        // Stop whatever is playing, then reopen.
-        await Page.Locator("[id^='afp-']").First.ClickAsync();
-        await Page.WaitForTimeoutAsync(300);
+        await Expect(Page.Locator("[id^='afp-']").First).ToBeVisibleAsync(new() { Timeout = 60_000 });
         await OpenFullViewAsync();
-        Record("A", "PASS", "reopened from the context menu after closing");
+        Record("A", "PASS", "reopened from the context menu after leaving");
     }
 
     [Test, Order(2)]
@@ -293,7 +276,7 @@ public class AudioEditorWalkTests : BenTestBase
         // bottom, so the centre of brightness climbs. Average colour cannot see that.
         async Task<double> CentroidAsync() =>
             await Page.EvaluateAsync<double>(
-                @"() => { const cs = [...document.querySelectorAll('.modal.show canvas')];
+                @"() => { const cs = [...document.querySelectorAll('#audio-editor canvas')];
                           const c = cs.sort((a,b) => b.width*b.height - a.width*a.height)[0];
                           if (!c) return -1;
                           const ctx = c.getContext('2d', { willReadFrequently: true }); if (!ctx) return -1;
@@ -309,7 +292,7 @@ public class AudioEditorWalkTests : BenTestBase
 
         async Task<string> SampleAsync() =>
             await Page.EvaluateAsync<string>(
-                @"() => { const cs = [...document.querySelectorAll('.modal.show canvas')];
+                @"() => { const cs = [...document.querySelectorAll('#audio-editor canvas')];
                           const c = cs.sort((a,b) => b.width*b.height - a.width*a.height)[0];
                           if (!c) return 'no-canvas';
                           const ctx = c.getContext('2d'); if (!ctx) return 'no-ctx';
@@ -404,7 +387,7 @@ public class AudioEditorWalkTests : BenTestBase
 
         // Did it draw at all? A spectrogram with no pixels is not a colormap problem.
         var drawn = await Page.EvaluateAsync<string>(
-            @"() => { const cs = [...document.querySelectorAll('.modal.show canvas')];
+            @"() => { const cs = [...document.querySelectorAll('#audio-editor canvas')];
                       return cs.map(c => `${c.width}x${c.height}`).join(' | ') || 'no canvases'; }");
         Record("S", "NOTE", $"canvases in the modal: {drawn}");
         RecordConsole("S");
@@ -546,7 +529,7 @@ public class AudioEditorWalkTests : BenTestBase
 
         // I: did closing the explorer leave the parent thinking it is still open?
         var stillOpen = await Page.Locator(".modal.show").CountAsync();
-        Record("I", "NOTE", $"modals shown after closing the explorer: {stillOpen} (1 = only the full view, as expected)");
+        Record("I", "NOTE", $"modals shown after closing the explorer: {stillOpen} (0 expected: the editor is a page, not a modal)");
     }
 
     [Test, Order(7)]
@@ -611,7 +594,7 @@ public class AudioEditorWalkTests : BenTestBase
             await playButtons.First.ClickAsync();
             await Page.WaitForTimeoutAsync(1200);
             var playing = await Page.EvaluateAsync<bool>(
-                "() => [...document.querySelectorAll('.modal.show audio, .modal.show video')].some(m => !m.paused)");
+                "() => [...document.querySelectorAll('#audio-editor audio, #audio-editor video')].some(m => !m.paused)");
             var pauseVisible = await Modal.GetByRole(AriaRole.Button, new() { Name = "Pause", Exact = false }).CountAsync() > 0;
             await SnapAsync("07-marker-play");
             Record("J", (playing || pauseVisible) ? "PASS" : "FAIL",

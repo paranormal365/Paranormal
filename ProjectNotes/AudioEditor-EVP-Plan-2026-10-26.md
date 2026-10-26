@@ -85,7 +85,7 @@ Scanning: one engine (`EvpScanService`) behind a sync endpoint (short files), a 
 sessions), and a session scanner that first **copies the clip out of the `.ben`** into the scanner's own
 (or their group's) files and then treats it like any other audio file.
 
-## Phases (each merges on its own; order matters inside a track, tracks can interleave)
+## Phases (each merges on its own; order matters inside a track, tracks can interleave; 1b was added after phase 1 began)
 
 Tracks: **E** editor · **S** scan engine · **F** field sessions. Migrations: M1 (phase 5), M2 (phase 6),
 M3 (phase 8), M4 (phase 11); Ben applies each on MonsterASP himself. If two phases deploy together, fold
@@ -156,6 +156,98 @@ Changelog: one line per user-visible fix (1, 3, 4, 6, 9, 12).
    `Editor = Page.Locator("#audio-editor")`; same change in `AudioScrubModeTests:118`, `AudioEditorWalkTests:149`,
    `LookAndTruthsTests:387`, `HelpMediaCapture` (`.btn-close` → `GoBackAsync`). New: `The_editor_has_its_own_address`,
    `Back_returns_to_where_you_came_from`, `Quick_look_still_plays`.
+
+---
+
+### Phase 1b (E) — WaveSurfer 8.0.3 and its own spectrogram · 2–3 days · no migration
+
+Added 10/26/2026 at Ben's request, relayed from a review session. It sits after the page shell
+(phase 1, which uses no WaveSurfer API) and before the toolbar rebuild, so everything that talks to
+WaveSurfer (toolbar, spectrogram, overlays, scan mask) is written once, against v8. **The facts
+below come from the review session's reading of wavesurfer.xyz, the GitHub releases and
+`examples/spectrogram.js`; check each one against 8.0.3 itself before relying on it.**
+
+1. **Re-vendor** 8.0.3 core and the plugins Ben listed (10/26/2026), each from its example page:
+   - **regions** (https://wavesurfer.xyz/examples/?regions.js)
+   - **timeline** (?timeline.js)
+   - **minimap** (?minimap.js)
+   - **envelope** (?envelope.js)
+   - **spectrogram** (?spectrogram.js)
+   - **hover** (?hover.js)
+
+   Record the version and SHA in `VENDORED.md`, and delete `plugins/spectrogram-windowed.esm.js`,
+   a deprecated shim. Deep imports need `.js`.
+   - **Zoom is not on Ben's list, but it is vendored anyway.** Checked in the 8.0.3 source
+     (`src/`): the core has no wheel handling, and only `src/plugins/zoom.ts` provides wheel zoom.
+     Leaving it out would silently drop wheel zoom. Ben can overrule.
+   - **Source checkouts** (Ben, 10/26/2026), in `/Users/ben/Documents/GitHub/`:
+     - `wavesurfer.js` at 8.0.3 + 3 commits (cdef4ac, 2026-10-23, including a WebAudio
+       ratechange/volume fix). Check the review session's v8 claims against this source, not the
+       docs.
+     - `NAudio` at 3.3.0+ (we reference 2.2.1). Scans don't need it, because phase 4 decodes .m4a
+       through ffmpeg. It is there if a NAudio upgrade is ever weighed.
+     - `FFMPEG` at 9.1-dev (ceb466cbcd, 2026-10-25). This is reference source, not a build: the Mac
+       runs the prebuilt ffmpeg 9.0 in `Ben.Video.Sidecar/ffmpeg/osx-arm64/`, and production runs
+       its own `MediaTools:FfmpegPath` binary. Use it to check how the AAC decoder and
+       `-ss`/`-t` behave on moov-at-end files (phases 4, 6, 9) before trusting a guess.
+   - **Envelope is on Ben's list.** Phase 0 removed our unused envelope wiring. Ask Ben what he
+     wants from it before wiring it back: a drawn volume curve, kept as a new file the way every
+     other edit is.
+2. **`WaveSurferPlayer.razor.js` onto the v8 model:**
+   - `getState()` signals (`currentTime`, `isPlaying`, `volume`, `loadPhase`, `scrollPosition`)
+     replace hand-written event bookkeeping. `getRenderer().getVisibleRange()` replaces the
+     zoom/scroll listeners (js:241–245).
+   - A `Scope` (`scope.add/listen/timeout/interval/raf`, torn down by `destroy()`) replaces the
+     manual unsubscribe arrays (js:635–719).
+   - **Breaking changes to handle:**
+     - `destroy()` is final, so every open makes a new instance.
+     - A superseded `load()` rejects with `AbortError` and fires no `error` event. Catch it, or
+       `OnWsError` never hears about a replaced load.
+     - `getRenderer()` is no longer an event emitter.
+     - Keep the **MediaElement backend**: the listening chain hangs off the media element, and
+       `getMediaElement()` returns null on WebAudio.
+3. **Stock spectrogram replaces ours.** `SpectrogramPlugin.create({ rendering: 'windowed',
+   progressiveLoading, useWebWorker, … })` replaces:
+   - `toggleSpectrogram`;
+   - `spectrogram-worker.js` and `spectrogram-draw-worker.js`;
+   - the OffscreenCanvas pre-render and the 128 px canvas.
+
+   Map the saved fields onto the new options so nobody's settings reset:
+   - `fftSamples` → `fftSamples`;
+   - colormap → `colorMap` (Jet / Viridis / Inferno passed as 256-entry arrays; `gray` stays);
+   - mel → `scale: 'mel'`, otherwise `'linear'`;
+   - labels → `labels`.
+
+   Verify zoom always sets `minPxPerSec`; the example says a scrolling file misrenders without it.
+4. **Overlays on top of the plugin.** A thin canvas over the spectrogram, placed from
+   `getVisibleRange()`, draws the voice band (300–3400 Hz, the detector's band) and the
+   candidate/marker spans, with frequency → y taken from the plugin's own scale. Small custom
+   plugins go through `WaveSurfer.definePlugin`. Phase 6's scan mask and phase 7's spectrogram
+   overlays use the same layer, which shrinks both phases.
+5. **New dials** in the Display tab (phase 2) / View ▾:
+   - scale (linear, log, mel, bark, erb);
+   - frequency min/max;
+   - window function;
+   - `gainDB` / `rangeDB`;
+   - pre-emphasis (keeps formants visible above 1 kHz);
+   - split channels.
+
+   They are persisted in the `view` part of `EditStateJson` (phase 3).
+6. **Regions in v8:**
+   - The `region-out`-at-a-region's-start misfire is fixed upstream. Our `PlayedFirst` learning
+     signal comes from `OnModalRegionIn`, so neighboring candidates may have been marked "heard"
+     by an in/out ping-pong.
+   - Add `Playing_past_one_candidate_does_not_mark_its_neighbor_heard` (two adjacent candidates;
+     play only the first). Run it on 7.12.11 first to learn whether we shipped the bug, and say
+     so in the README.
+   - v8 regions auto-scroll near the edge while dragging and enforce `minLength` / `maxLength` while
+     drawing. Use these in the bounds-adjust flow.
+7. **Tests:**
+   - `Mel_labels_and_voice_band_line_up_with_the_picture`;
+   - `Spectrogram_settings_survive_leaving_and_reopening`, including a pre-upgrade saved row;
+   - `A_ninety_minute_recording_draws_windowed_without_freezing`;
+   - the `PlayedFirst` test above;
+   - the full `AudioEditor|AudioPlayer|CaseMixer` set on the new version.
 
 ---
 
@@ -373,7 +465,7 @@ finished > 7 days ago (results live in `EvpScans`/markers).
 
 | Item | Build |
 |---|---|
-| Spectrogram taller + resizable | `toggleSpectrogram(height)` (default 256; prerender canvas = height); pane `style="resize:vertical"` + `ResizeObserver` → redraw; replace the `128` literals (js:811, 1216, 1221, 1322); height persisted in `view` |
+| Spectrogram taller + resizable | the stock plugin's `height` (phase 1b) driven by a `style="resize:vertical"` pane + `ResizeObserver` → `setOptions({height})`; height persisted in `view` |
 | Marker/candidate overlays on the spectrogram | `setSpectrogramOverlays(containerId, [{start,end,kind}])`; `_redrawSpectrogramViewport` paints translucent rects + 1 px edges after labels, colors from the phase-3 tokens; called wherever `_markers` changes |
 | Minimap | vendored `plugins/minimap.esm.js` is already wired behind `EnableMinimap`; editor config sets it on (`height 40`, token colors); View ▾ toggle; persisted |
 | Zoom to selection / candidate / fit | `zoomToRange(containerId, start, end, pad=0.15)`: `pxPerSec = wrapperWidth / (span×(1+2pad))`, `ws.zoom`, `ws.setScrollTime`; toolbar buttons + candidate-row Zoom |

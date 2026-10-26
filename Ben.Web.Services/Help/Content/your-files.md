@@ -15,7 +15,7 @@ arrives until you delete it.
 
 From each row you can download, share, replace or delete the file.
 
-Audio files also have a player. Right-click one and choose **Open Full View** to open the editor,
+Audio files also have a player. Right-click one and choose **Open in editor** to open the editor,
 where you can mark regions, view a spectrogram, scan for EVPs, and save clips of what you find. See
 [Using the Audio Editor](/help/using-the-audio-editor).
 
