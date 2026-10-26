@@ -252,6 +252,34 @@ public sealed class AudioApiRoutesTests
         Assert.Null(await client.ScanAudioForEvpAsync(File, EvpSensitivity.Medium));
     }
 
+    /// <summary>
+    /// A server with no ffmpeg refuses an .m4a with a <see cref="ScanRefusalRecord"/>; the prose
+    /// reader drops anything that starts with a brace, so this one is read for its sentence.
+    /// </summary>
+    [Fact]
+    public async Task A_scan_the_server_cannot_read_says_so()
+    {
+        var (client, handler) = Build("""{"reason":"DecoderUnavailable","message":"This server cannot read .m4a yet."}""");
+        handler.Status = HttpStatusCode.BadRequest;
+
+        var (result, error) = await client.ScanAudioForEvpWithReasonAsync(File, EvpSensitivity.Medium);
+
+        Assert.Null(result);
+        Assert.Equal("This server cannot read .m4a yet.", error);
+        Assert.Equal($"/api/upload-files/{File}/audio-markers/scan?sensitivity=Medium", Path(handler));
+    }
+
+    [Fact]
+    public async Task A_scan_refused_for_the_recording_gives_the_sentence()
+    {
+        var (client, handler) = Build("\"Couldn't read that audio: bad header.\"");
+        handler.Status = HttpStatusCode.BadRequest;
+
+        var (_, error) = await client.ScanAudioForEvpWithReasonAsync(File, EvpSensitivity.Medium);
+
+        Assert.Equal("Couldn't read that audio: bad header.", error);
+    }
+
     [Fact]
     public async Task A_candidate_replace_that_did_not_happen_is_null()
     {

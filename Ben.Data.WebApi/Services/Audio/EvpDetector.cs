@@ -126,10 +126,18 @@ internal static class EvpDetector
         Stream sourceStream, string sourceContentType, EvpDetectionOptions options, int maxResults)
     {
         var (mono, sampleRate) = ReadMono(sourceStream, sourceContentType);
-        return new EvpAnalysis(
+        return Analyze(mono, sampleRate, options, maxResults);
+    }
+
+    /// <summary>
+    /// <see cref="Analyze(Stream, string, EvpDetectionOptions, int)"/> over samples a decoder has
+    /// already read — how a scan reaches audio NAudio cannot open.
+    /// </summary>
+    public static EvpAnalysis Analyze(
+        float[] mono, int sampleRate, EvpDetectionOptions options, int maxResults)
+        => new(
             Detect(mono, sampleRate, options, maxResults),
             sampleRate > 0 ? mono.Length / (double)sampleRate : 0);
-    }
 
     /// <summary>
     /// Detects candidates in mono samples. Separate from the decoding overload so the algorithm can

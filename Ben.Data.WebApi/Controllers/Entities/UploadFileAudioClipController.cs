@@ -10,13 +10,15 @@ using NAudio.Wave;
 using Ben.Data.WebApi.Services.Access;
 using Ben.Data.WebApi.Services.Audio;
 using Ben.Data.WebApi.Services;
+using Ben.Data.WebApi.Services.Billing;
 using Microsoft.AspNetCore.RateLimiting;
 
 namespace Ben.Data.WebApi.Controllers.Entities;
 
 /// <summary>
 /// Clips audio from an existing UploadFile to a time range.
-/// Supports WAV and MP3 source formats; always outputs WAV (PCM, lossless).
+/// Reads through <see cref="IAudioDecoder"/> — MP3 and WAV in-process, the phone's .m4a through
+/// ffmpeg where the host has it; always outputs WAV (PCM, lossless).
 /// Use <c>GET preview</c> for an in-browser preview without saving;
 /// <c>POST</c> persists the clip as a new UploadFile record on disk.
 /// </summary>
@@ -36,24 +38,27 @@ public sealed class UploadFileAudioClipController : BenControllerBase
     private readonly IFileStorageService _fileStorage;
     private readonly IAuditLogService _auditLog;
     private readonly IMediaIngestService _mediaIngest;
+    private readonly IAudioDecoder _decoder;
 
     public UploadFileAudioClipController(
         IDbContextFactory<BenDataContext> dbContextFactory,
         IMapper mapper,
         IFileStorageService fileStorage,
         IAuditLogService auditLog,
-        IMediaIngestService mediaIngest)
+        IMediaIngestService mediaIngest,
+        IAudioDecoder decoder)
     {
         _dbContextFactory = dbContextFactory;
         _mapper = mapper;
         _fileStorage = fileStorage;
         _auditLog = auditLog;
         _mediaIngest = mediaIngest;
+        _decoder = decoder;
     }
 
     /// <summary>
     /// Returns clipped audio bytes for a time range without persisting to the database.
-    /// Supports WAV and MP3 sources; always outputs WAV.
+    /// Reads whatever <see cref="IAudioDecoder"/> reads; always outputs WAV.
     /// </summary>
     [HttpGet("preview")]
     public async Task<IActionResult> ClipPreview(
@@ -76,9 +81,10 @@ public sealed class UploadFileAudioClipController : BenControllerBase
             Stream sourceStream = await OpenSourceStreamAsync(source, ct);
             await using (sourceStream)
             {
-                var (bytes, contentType, _) = AudioClipper.Clip(sourceStream, source.ContentType, start, end);
+                var bytes = await _decoder.DecodeRangeToWavAsync(
+                    sourceStream, source.ContentType, source.FileName, start, end, ct);
                 // enableRangeProcessing: a player asks for the piece it needs; without it Safari will not start at all and nothing can seek (2026-09-17).
-                return File(bytes, contentType, enableRangeProcessing: true);
+                return File(bytes, "audio/wav", enableRangeProcessing: true);
             }
         }
         catch (NotSupportedException ex)
@@ -147,25 +153,37 @@ public sealed class UploadFileAudioClipController : BenControllerBase
             // Header only. A clip asked for wholly past the end used to write a 44-byte WAV — a
             // header and no audio — persist it with a 201, and record the requested length as its
             // duration (2026-09-06 audio walk, finding 10).
-            TimeSpan sourceDuration;
+            // An .m4a's length comes from its own header (MediaDuration); one that does not say
+            // is measured from the clip instead, below.
+            double? sourceSeconds;
             await using (var probeStream = await OpenSourceStreamAsync(source, ct))
-                sourceDuration = AudioSourceReader.Probe(probeStream, source.ContentType).Duration;
+                sourceSeconds = await _decoder.DurationSecondsAsync(
+                    probeStream, source.ContentType, source.FileName, ct);
 
-            if (request.Start >= sourceDuration.TotalSeconds)
+            if (request.Start >= sourceSeconds)
                 return BadRequest(
                     $"That clip starts at {request.Start:0.##}s, and the recording is only "
-                    + $"{sourceDuration.TotalSeconds:0.##}s long.");
-
-            // What was actually taken, once the range is clamped to the recording — which is what
-            // the duration should say, rather than what was asked for.
-            clippedSeconds = Math.Min(request.End, sourceDuration.TotalSeconds) - request.Start;
+                    + $"{sourceSeconds:0.##}s long.");
 
             Stream sourceStream = await OpenSourceStreamAsync(source, ct);
             await using (sourceStream)
             {
-                (clippedBytes, outContentType, outExtension) =
-                    AudioClipper.Clip(sourceStream, source.ContentType, request.Start, request.End,
-                                      request.Normalize);
+                clippedBytes = await _decoder.DecodeRangeToWavAsync(
+                    sourceStream, source.ContentType, source.FileName, request.Start, request.End, ct);
+            }
+            if (request.Normalize) clippedBytes = AudioClipper.NormalizePeak(clippedBytes);
+            (outContentType, outExtension) = ("audio/wav", ".wav");
+
+            // What was actually taken, once the range is clamped to the recording — which is what
+            // the duration should say, rather than what was asked for.
+            if (sourceSeconds is { } known)
+                clippedSeconds = Math.Min(request.End, known) - request.Start;
+            else
+            {
+                using var taken = new WaveFileReader(new MemoryStream(clippedBytes));
+                clippedSeconds = taken.TotalTime.TotalSeconds;
+                if (clippedSeconds <= 0)
+                    return BadRequest($"That clip starts at {request.Start:0.##}s, past the end of the recording.");
             }
         }
         catch (NotSupportedException ex)
@@ -205,6 +223,12 @@ public sealed class UploadFileAudioClipController : BenControllerBase
             DateCreated        = DateTime.UtcNow,
             CreatedByAppUserId = userId,
         };
+
+        // A clip is stored under the person, so it is the person's own allowance that has to cover
+        // it — asked BEFORE the bytes are written, and answered with the reason. Members of a paid
+        // group are not capped (the guard says why).
+        if (await AccountStorageGuard.WhyCannotStoreAsync(db, userId, clippedBytes.Length, ct) is { } full)
+            return StatusCode(StatusCodes.Status413PayloadTooLarge, full);
 
         // Write clip to disk before committing the DB record
         var relativePath = _fileStorage.UserFilePath(userId, entity.StoredFileName);
@@ -327,7 +351,7 @@ internal static class AudioClipper
     /// returned untouched — there is no peak to scale, and dividing by one would amplify nothing
     /// into noise.
     /// </summary>
-    private static byte[] NormalizePeak(byte[] wavBytes)
+    internal static byte[] NormalizePeak(byte[] wavBytes)
     {
         using var input  = new MemoryStream(wavBytes);
         using var reader = new WaveFileReader(input);

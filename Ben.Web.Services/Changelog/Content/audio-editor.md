@@ -30,6 +30,14 @@ it is hidden from everybody else, but still takes its number. No other sub-headi
 
 **Tracked from 10/14/2026.** 1.0.0 is the editor as it stood then, summarized.
 
+## Unreleased
+
+- Recordings made on the phone (.m4a) can be scanned for EVPs and clipped, the same as MP3 and WAV.
+- When the site cannot read a phone recording, the scan says so instead of saying the recording is
+  broken.
+- Saving a clip counts toward a free account's storage. If the clip would go past it, you are told
+  before anything is saved.
+
 ## 1.0.0 · 2026-10-02
 
 - Every audio file on the site has a player, and **Open Full View** opens the editor for listening

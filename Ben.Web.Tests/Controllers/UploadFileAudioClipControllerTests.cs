@@ -58,11 +58,14 @@ public class UploadFileAudioClipControllerTests
     }
 
     private static UploadFileAudioClipController Build(
-        IDbContextFactory<BenDataContext> factory, Guid userId)
+        IDbContextFactory<BenDataContext> factory, Guid userId,
+        Ben.Data.WebApi.Services.Audio.IAudioDecoder? decoder = null,
+        Ben.Data.Common.Interfaces.IFileStorageService? storage = null)
     {
         var ctrl = new UploadFileAudioClipController(factory, CreateMapper(),
-            new Moq.Mock<Ben.Data.Common.Interfaces.IFileStorageService>().Object,
-            new Moq.Mock<IAuditLogService>().Object, Ben.Web.Tests.TestMedia.Ingest());
+            storage ?? new Moq.Mock<Ben.Data.Common.Interfaces.IFileStorageService>().Object,
+            new Moq.Mock<IAuditLogService>().Object, Ben.Web.Tests.TestMedia.Ingest(),
+            decoder ?? Ben.Web.Tests.TestAudio.Decoder());
         ctrl.ControllerContext = new ControllerContext
         {
             HttpContext = new DefaultHttpContext
@@ -357,6 +360,85 @@ public class UploadFileAudioClipControllerTests
         Assert.False(await db.UploadFiles.AnyAsync(f => f.ParentFileId == fileId));
     }
 
+    // ── The phone's .m4a, and the free allowance (audio phase 4) ─────────────
+
+    /// <summary>
+    /// Clip and its length check read through <see cref="Ben.Data.WebApi.Services.Audio.IAudioDecoder"/>.
+    /// A WAV labelled <c>audio/mp4</c> could only have been read by the decoder handed in — NAudio,
+    /// which the clip used to call directly, refuses that content type.
+    /// </summary>
+    [Fact]
+    public async Task Clip_OfAnM4a_IsReadThroughTheDecoder()
+    {
+        var factory = CreateFactory();
+        var typeId  = await SeedTypeAsync(factory);
+        var (fileId, ownerId) = await SeedFileAsync(factory, CreateSilentWav(seconds: 2), "audio/mp4");
+        var ctrl    = Build(factory, ownerId, Ben.Web.Tests.TestAudio.ReadingEverythingAsWav());
+
+        var result  = await ctrl.Clip(fileId,
+            new ClipAudioRequest(0.5, 1.5, null, false, typeId), default);
+
+        var created = Assert.IsType<CreatedAtActionResult>(result.Result);
+        var record  = Assert.IsType<UploadFileRecord>(created.Value);
+        Assert.Equal("audio/wav", record.ContentType);
+        Assert.Equal(fileId, record.ParentFileId);
+    }
+
+    [Fact]
+    public async Task Clip_OfAnM4a_PastItsEnd_IsRefused()
+    {
+        var factory = CreateFactory();
+        var typeId  = await SeedTypeAsync(factory);
+        var (fileId, ownerId) = await SeedFileAsync(factory, CreateSilentWav(seconds: 2), "audio/mp4");
+        var ctrl    = Build(factory, ownerId, Ben.Web.Tests.TestAudio.ReadingEverythingAsWav());
+
+        var result  = await ctrl.Clip(fileId,
+            new ClipAudioRequest(30.0, 35.0, null, false, typeId), default);
+
+        var bad = Assert.IsType<BadRequestObjectResult>(result.Result);
+        Assert.Contains("only 2", bad.Value?.ToString());
+    }
+
+    /// <summary>
+    /// A clip is a new file stored under the person, so a free account's allowance covers it like
+    /// any other upload. It was the one personal door that never asked.
+    /// </summary>
+    [Fact]
+    public async Task Clip_PastTheFreeAllowance_IsRefusedBeforeAnythingIsWritten()
+    {
+        var factory = CreateFactory();
+        var typeId  = await SeedTypeAsync(factory);
+        var (fileId, ownerId) = await SeedFileAsync(factory, CreateSilentWav(seconds: 2));
+
+        // Already exactly at the free cap, so any clip at all is one byte too many.
+        await using (var db = await factory.CreateDbContextAsync())
+        {
+            db.UploadFiles.Add(new UploadFile
+            {
+                Id = Guid.NewGuid(), UploadFileTypeId = typeId, AppUserId = ownerId,
+                FileName = "kept.wav", StoredFileName = "kept.wav", ContentType = "audio/wav",
+                StoragePath = $"users/{ownerId}/kept.wav",
+                FileSize = Ben.Data.WebApi.Services.Billing.AccountStorageGuard.DefaultFreeMegabytes * 1024L * 1024L,
+                DateCreated = DateTime.UtcNow, CreatedByAppUserId = ownerId,
+            });
+            await db.SaveChangesAsync();
+        }
+
+        var storage = new Mock<Ben.Data.Common.Interfaces.IFileStorageService>();
+        var ctrl    = Build(factory, ownerId, storage: storage.Object);
+
+        var result  = await ctrl.Clip(fileId,
+            new ClipAudioRequest(0.2, 1.0, null, false, typeId), default);
+
+        var refused = Assert.IsType<ObjectResult>(result.Result);
+        Assert.Equal(413, refused.StatusCode);
+        Assert.Contains("free account", refused.Value?.ToString());
+        storage.Verify(s => s.WriteAsync(It.IsAny<string>(), It.IsAny<Stream>(), It.IsAny<CancellationToken>()),
+                       Times.Never);
+        await using var check = await factory.CreateDbContextAsync();
+        Assert.False(await check.UploadFiles.AnyAsync(f => f.ParentFileId == fileId));
+    }
+
     /// <summary>
     /// A clip whose end runs past the recording is clipped to what is there, and says so: the
     /// duration recorded is what was taken, not what was asked for (finding 11).
@@ -640,7 +722,7 @@ public class UploadFileAudioClipControllerTests
                });
 
         var ctrl = new UploadFileAudioClipController(factory, CreateMapper(), storage.Object,
-            new Mock<IAuditLogService>().Object, Ben.Web.Tests.TestMedia.Ingest());
+            new Mock<IAuditLogService>().Object, Ben.Web.Tests.TestMedia.Ingest(), Ben.Web.Tests.TestAudio.Decoder());
         ctrl.ControllerContext = new ControllerContext
         {
             HttpContext = new DefaultHttpContext
@@ -679,7 +761,7 @@ public class UploadFileAudioClipControllerTests
                });
 
         var ctrl = new UploadFileAudioClipController(factory, CreateMapper(), storage.Object,
-            new Mock<IAuditLogService>().Object, Ben.Web.Tests.TestMedia.Ingest());
+            new Mock<IAuditLogService>().Object, Ben.Web.Tests.TestMedia.Ingest(), Ben.Web.Tests.TestAudio.Decoder());
         ctrl.ControllerContext = new ControllerContext
         {
             HttpContext = new DefaultHttpContext

@@ -247,6 +247,11 @@ public interface IWebApiClient
     Task<AudioMarkerRecord?> ReviewAudioMarkerAsync(Guid fileId, Guid markerId, ReviewAudioMarkerRequest request, CancellationToken token = default);
     Task<IReadOnlyList<AudioMarkerRecord>?> ScanAudioForEvpAsync(Guid fileId, EvpSensitivity sensitivity, EvpDetectionOptions? options = null, CancellationToken token = default);
 
+    /// <summary>Scans, and on refusal hands back the server's own sentence — including the
+    /// <see cref="ScanRefusalRecord"/> a server with no ffmpeg answers for an .m4a.</summary>
+    Task<(IReadOnlyList<AudioMarkerRecord>? Result, string? Error)> ScanAudioForEvpWithReasonAsync(
+        Guid fileId, EvpSensitivity sensitivity, EvpDetectionOptions? options = null, CancellationToken token = default);
+
     // Upload File — Audio Clip
     Task<UploadFileRecord?> ClipAudioAsync(Guid fileId, ClipAudioRequest request, CancellationToken token = default);
 

@@ -248,6 +248,11 @@ start_host() {
     if [[ "$name" == web ]]; then
       export Serilog__WriteTo__0__Args__connectionString="$CONN"
     fi
+    # The phone's .m4a is read through ffmpeg (audio phase 4). Without it the API refuses .m4a
+    # scans and clips in a sentence, so a machine that has ffmpeg tests the path production takes.
+    if [[ "$name" == api ]] && command -v ffmpeg >/dev/null 2>&1; then
+      export MediaTools__FfmpegPath="$(command -v ffmpeg)"
+    fi
     # shellcheck disable=SC2086
     if [[ -n "$extra_env" ]]; then export $extra_env; fi
     nohup dotnet run --no-launch-profile --urls "$bind_url" >"$LOG_DIR/$name.log" 2>&1 &

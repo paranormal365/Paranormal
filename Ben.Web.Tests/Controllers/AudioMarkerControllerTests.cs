@@ -13,6 +13,7 @@ using Moq;
 using System.Security.Claims;
 using Xunit;
 using Ben.Data.WebApi.Services.Access;
+using Ben.Data.WebApi.Services.Audio;
 
 namespace Ben.Web.Tests.Controllers;
 
@@ -69,10 +70,13 @@ public class AudioMarkerControllerTests
     private static AudioMarkerController Build(
         IDbContextFactory<BenDataContext> factory,
         Guid? userId = null,
-        IFileStorageService? storage = null)
+        IFileStorageService? storage = null,
+        IAudioDecoder? decoder = null)
     {
         var ctrl = new AudioMarkerController(
-            factory, CreateMapper(), new Mock<IAuditLogService>().Object, storage ?? new Mock<IFileStorageService>().Object);
+            factory, CreateMapper(), new Mock<IAuditLogService>().Object, storage ?? new Mock<IFileStorageService>().Object,
+            decoder ?? TestAudio.Decoder(),
+            new EvpScanRecorder(factory, Microsoft.Extensions.Logging.Abstractions.NullLogger<EvpScanRecorder>.Instance));
         var claims = userId.HasValue
             ? new ClaimsPrincipal(new ClaimsIdentity([
                 new Claim(ClaimTypes.NameIdentifier, userId.Value.ToString())
@@ -962,6 +966,46 @@ public class AudioMarkerControllerTests
         var result = await Build(factory, ownerId).Scan(fileId, EvpSensitivity.Medium, null, default);
 
         Assert.IsType<BadRequestObjectResult>(result.Result);
+    }
+
+    // ── The phone's .m4a (audio phase 4) ──────────────────────────────────────
+
+    /// <summary>
+    /// The scan reads through <see cref="IAudioDecoder"/>. A WAV labelled <c>audio/mp4</c> could
+    /// only have been read by the decoder handed in — NAudio, which the scan used to call directly,
+    /// refuses that content type outright.
+    /// </summary>
+    [Fact]
+    public async Task Scan_AnM4a_IsReadThroughTheDecoder()
+    {
+        var factory = CreateFactory();
+        var (fileId, ownerId) = await SeedWavFileAsync(factory, contentType: "audio/mp4");
+
+        var result = await Build(factory, ownerId, decoder: Ben.Web.Tests.TestAudio.ReadingEverythingAsWav())
+            .Scan(fileId, EvpSensitivity.Medium, null, default);
+
+        var created = Assert.IsAssignableFrom<IEnumerable<AudioMarkerRecord>>(
+            Assert.IsType<OkObjectResult>(result.Result).Value).ToList();
+        Assert.Equal(2, created.Count);
+    }
+
+    /// <summary>
+    /// A server with no ffmpeg says so in a shape the editor can tell apart from a broken file —
+    /// never a bare sentence blaming the recording.
+    /// </summary>
+    [Fact]
+    public async Task Scan_AnM4a_WithoutFfmpeg_IsRefusedWithTheServersReason()
+    {
+        var factory = CreateFactory();
+        var (fileId, ownerId) = await SeedWavFileAsync(factory, contentType: "audio/mp4");
+
+        var result = await Build(factory, ownerId).Scan(fileId, EvpSensitivity.Medium, null, default);
+
+        var bad = Assert.IsType<BadRequestObjectResult>(result.Result);
+        var refusal = Assert.IsType<ScanRefusalRecord>(bad.Value);
+        Assert.Equal(ScanRefusalRecord.DecoderUnavailable, refusal.Reason);
+        Assert.Equal("This server cannot read .m4a yet.", refusal.Message);
+        Assert.Empty(await MarkersAsync(factory, fileId));
     }
 
     [Fact]

@@ -212,6 +212,13 @@ public interface IBenMediaClient
     Task<IReadOnlyList<AudioMarkerRecord>?> ScanAudioForEvpAsync(
         Guid fileId, EvpSensitivity sensitivity, EvpDetectionOptions? options = null, CancellationToken token = default);
 
+    /// <summary>
+    /// <see cref="ScanAudioForEvpAsync"/>, and on refusal the server's own sentence — so "this
+    /// server cannot read .m4a yet" reaches the person instead of a scan that silently did nothing.
+    /// </summary>
+    Task<(IReadOnlyList<AudioMarkerRecord>? Result, string? Error)> ScanAudioForEvpWithReasonAsync(
+        Guid fileId, EvpSensitivity sensitivity, EvpDetectionOptions? options = null, CancellationToken token = default);
+
     // ── Audio Clip ─────────────────────────────────────────────────
 
     /// <summary>

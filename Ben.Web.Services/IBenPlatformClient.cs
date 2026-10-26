@@ -182,6 +182,9 @@ public interface IBenPlatformClient
     /// <remarks>The one dashboard call that names accounts — see AdminStatsController.</remarks>
     Task<AdminSignInInsights?> GetAdminSignInInsightsAsync(int days = 30, CancellationToken token = default);
 
+    /// <summary>Whether this server's ffmpeg is configured and runs, for reading .m4a. SuperAdmin.</summary>
+    Task<MediaToolsHealth?> GetMediaToolsHealthAsync(CancellationToken token = default);
+
     /// <summary>
     /// Reports a published field session's media, hiding it until a moderator looks.
     /// </summary>

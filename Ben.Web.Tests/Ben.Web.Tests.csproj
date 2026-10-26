@@ -46,6 +46,9 @@
     <None Include="..\Ben.Web.Playwright\Fixtures\test-audio.mp3" Link="Fixtures\test-audio.mp3">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </None>
+    <!-- Three seconds of a phone recording, cut with `ffmpeg -t 3 -c copy` so moov stays after
+         mdat — the layout ffmpeg cannot read from a pipe (audio phase 4). -->
+    <None Include="Fixtures\device-clip.m4a" CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
 
   <!-- The replay conformance fixtures live with the phone's tests (SwiftPM can only bundle files
