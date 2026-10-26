@@ -394,6 +394,13 @@
     public async Task ToggleVoiceBandOverlayAsync(bool show)
         => await Invoke("toggleVoiceBandOverlay", show);
 
+    /// <summary>
+    /// How far a background EVP scan has got, as fractions of the recording (phase 6). Null clears
+    /// the overlay; <paramref name="state"/> "queued" draws it all dimmed.
+    /// </summary>
+    public async Task SetScanProgressAsync(double? processed, double? settled, string? state)
+        => await Invoke("setScanProgress", processed, settled, state);
+
     /// <summary>The frequencies the voice band covers: the EVP scan's listening range (phase 5).</summary>
     public async Task SetVoiceBandAsync(double lowHz, double highHz)
         => await Invoke("setVoiceBand", lowHz, highHz);

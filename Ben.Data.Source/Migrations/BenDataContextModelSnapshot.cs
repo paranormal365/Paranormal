@@ -3528,6 +3528,114 @@ namespace Ben.Data.Source.Migrations
                     b.ToTable("EvpScanCandidates");
                 });
 
+            modelBuilder.Entity("Ben.Data.Source.Entities.EvpScanJob", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<DateTime?>("CancelRequestedUtc")
+                        .HasColumnType("datetime2");
+
+                    b.Property<DateTime>("CreatedUtc")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("Error")
+                        .HasMaxLength(1000)
+                        .HasColumnType("nvarchar(1000)");
+
+                    b.Property<DateTime?>("FinishedUtc")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("OptionsJson")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<int>("Percent")
+                        .HasColumnType("int");
+
+                    b.Property<Guid>("RequestedByAppUserId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<int>("Sensitivity")
+                        .HasColumnType("int");
+
+                    b.Property<DateTime?>("StartedUtc")
+                        .HasColumnType("datetime2");
+
+                    b.Property<int>("Status")
+                        .HasColumnType("int");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("RequestedByAppUserId", "FinishedUtc");
+
+                    b.HasIndex("Status", "CreatedUtc");
+
+                    b.ToTable("EvpScanJobs");
+                });
+
+            modelBuilder.Entity("Ben.Data.Source.Entities.EvpScanJobSegment", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<int?>("CandidateCount")
+                        .HasColumnType("int");
+
+                    b.Property<string>("Error")
+                        .HasMaxLength(1000)
+                        .HasColumnType("nvarchar(1000)");
+
+                    b.Property<Guid?>("EvpScanId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<Guid>("EvpScanJobId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<DateTime?>("FinishedUtc")
+                        .HasColumnType("datetime2");
+
+                    b.Property<int>("Order")
+                        .HasColumnType("int");
+
+                    b.Property<int>("Percent")
+                        .HasColumnType("int");
+
+                    b.Property<double>("ProcessedSeconds")
+                        .HasColumnType("float");
+
+                    b.Property<double>("SettledSeconds")
+                        .HasColumnType("float");
+
+                    b.Property<DateTime?>("StartedUtc")
+                        .HasColumnType("datetime2");
+
+                    b.Property<int>("Status")
+                        .HasColumnType("int");
+
+                    b.Property<float?>("TopScore")
+                        .HasColumnType("real");
+
+                    b.Property<double?>("TotalSeconds")
+                        .HasColumnType("float");
+
+                    b.Property<Guid>("UploadFileId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("EvpScanJobId");
+
+                    b.HasIndex("UploadFileId")
+                        .IsUnique()
+                        .HasDatabaseName("IX_EvpScanJobSegments_OneLivePerFile")
+                        .HasFilter("[FinishedUtc] IS NULL");
+
+                    b.ToTable("EvpScanJobSegments");
+                });
+
             modelBuilder.Entity("Ben.Data.Source.Entities.EvpScanPreset", b =>
                 {
                     b.Property<Guid>("Id")
@@ -17135,6 +17243,36 @@ namespace Ben.Data.Source.Migrations
                     b.Navigation("EvpScan");
                 });
 
+            modelBuilder.Entity("Ben.Data.Source.Entities.EvpScanJob", b =>
+                {
+                    b.HasOne("Ben.Data.Source.Entities.AppUser", "RequestedBy")
+                        .WithMany()
+                        .HasForeignKey("RequestedByAppUserId")
+                        .OnDelete(DeleteBehavior.NoAction)
+                        .IsRequired();
+
+                    b.Navigation("RequestedBy");
+                });
+
+            modelBuilder.Entity("Ben.Data.Source.Entities.EvpScanJobSegment", b =>
+                {
+                    b.HasOne("Ben.Data.Source.Entities.EvpScanJob", "EvpScanJob")
+                        .WithMany("Segments")
+                        .HasForeignKey("EvpScanJobId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("Ben.Data.Source.Entities.UploadFile", "UploadFile")
+                        .WithMany()
+                        .HasForeignKey("UploadFileId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("EvpScanJob");
+
+                    b.Navigation("UploadFile");
+                });
+
             modelBuilder.Entity("Ben.Data.Source.Entities.EvpScanPreset", b =>
                 {
                     b.HasOne("Ben.Data.Source.Entities.AppUser", "AppUser")
@@ -22747,6 +22885,11 @@ namespace Ben.Data.Source.Migrations
             modelBuilder.Entity("Ben.Data.Source.Entities.EvpScan", b =>
                 {
                     b.Navigation("Candidates");
+                });
+
+            modelBuilder.Entity("Ben.Data.Source.Entities.EvpScanJob", b =>
+                {
+                    b.Navigation("Segments");
                 });
 
             modelBuilder.Entity("Ben.Data.Source.Entities.ExperienceCategory", b =>

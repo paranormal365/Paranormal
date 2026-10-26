@@ -15,6 +15,7 @@ public sealed record AudioToolbarState(
     bool Timeline,
     bool DetectSilence,
     bool Scanning,
+    int ScanPercent,
     EvpSensitivity Sensitivity,
     int MarkerCount,
     int ClipCount,

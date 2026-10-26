@@ -74,10 +74,12 @@ public class AudioMarkerControllerTests
         IFileStorageService? storage = null,
         IAudioDecoder? decoder = null)
     {
+        var recorder = new EvpScanRecorder(factory, Microsoft.Extensions.Logging.Abstractions.NullLogger<EvpScanRecorder>.Instance);
         var ctrl = new AudioMarkerController(
-            factory, CreateMapper(), new Mock<IAuditLogService>().Object, storage ?? new Mock<IFileStorageService>().Object,
-            decoder ?? TestAudio.Decoder(),
-            new EvpScanRecorder(factory, Microsoft.Extensions.Logging.Abstractions.NullLogger<EvpScanRecorder>.Instance));
+            factory, CreateMapper(), new Mock<IAuditLogService>().Object, recorder,
+            new Ben.Data.WebApi.Services.Audio.Scanning.EvpScanService(
+                factory, storage ?? new Mock<IFileStorageService>().Object, decoder ?? TestAudio.Decoder(), recorder,
+                Microsoft.Extensions.Logging.Abstractions.NullLogger<Ben.Data.WebApi.Services.Audio.Scanning.EvpScanService>.Instance));
         var claims = userId.HasValue
             ? new ClaimsPrincipal(new ClaimsIdentity([
                 new Claim(ClaimTypes.NameIdentifier, userId.Value.ToString())
@@ -776,7 +778,7 @@ public class AudioMarkerControllerTests
     /// A real WAV with two clear voice-band utterances, so the scan path is exercised end to end
     /// rather than against a stub detector.
     /// </summary>
-    private static byte[] BuildScannableWav(int sampleRate = 16000)
+    internal static byte[] BuildScannableWav(int sampleRate = 16000)
     {
         var mono = new float[20 * sampleRate];
         var rng = new Random(2024);

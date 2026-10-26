@@ -197,8 +197,15 @@
                                     }
                                 </div>
                                 <button type="button" class="btn btn-primary btn-sm evp-lab__scan @(_scanning ? "is-scanning" : null)" @onclick="RunScanAsync" disabled="@_scanning">
-                                    <BenIcon Name="activity" Class="me-1" />@(_scanning ? "Scanning…" : "Scan for EVP")
+                                    <BenIcon Name="activity" Class="me-1" />@(_scanning ? $"Scanning {_scanPercent}%" : "Scan for EVP")
                                 </button>
+                                @if (_scanning && _scanJobId is not null)
+                                {
+                                    <button type="button" class="btn btn-outline-secondary btn-sm" id="evp-scan-stop"
+                                            @onclick="StopScanAsync" disabled="@_stoppingScan">
+                                        <BenIcon Name="square" Class="me-1" />@(_stoppingScan ? "Stopping…" : "Stop")
+                                    </button>
+                                }
                                 <button type="button" class="btn btn-outline-secondary btn-sm" @onclick="@(() => _showScanTuning = !_showScanTuning)">
                                     <BenIcon Name="sliders" Class="me-1" />@(_showScanTuning ? "Hide settings" : "Fine-tune")
                                 </button>
@@ -856,6 +863,8 @@
     {
         _zoomSave?.Cancel();
         _zoomSave?.Dispose();
+        // Only the watching stops; the scan itself carries on in the background.
+        _scanWatch?.Cancel();
         return ValueTask.CompletedTask;
     }
 
@@ -1653,6 +1662,7 @@
         // After the view, not before it: the presets are a second round trip, and the toolbar
         // waits for the view (ToolbarState.Ready).
         await SeedScanSettingsAsync();
+        await ResumeLiveScanAsync();
         StateHasChanged();
     }
 
@@ -1925,6 +1935,7 @@
         Timeline:          _timelineEnabled,
         DetectSilence:     _silenceDetectionEnabled,
         Scanning:          _scanning,
+        ScanPercent:       _scanPercent,
         Sensitivity:       _scanSensitivity,
         MarkerCount:       ConfirmedMarkers.Count(),
         ClipCount:         _childClips.Count,
@@ -2474,6 +2485,22 @@
         }
     }
 
+    // ── Background scans (phase 6) ────────────────────────────────────────────
+
+    /// <summary>The scan being watched, if any; the editor stays usable while it runs.</summary>
+    private Guid?                    _scanJobId;
+    private int                      _scanPercent;
+    private CancellationTokenSource? _scanWatch;
+    private bool                     _stoppingScan;
+
+    /// <summary>How often a running scan is looked at. The first look comes sooner, for a short recording.</summary>
+    private static readonly TimeSpan ScanPollEvery = TimeSpan.FromSeconds(1.5);
+    private static readonly TimeSpan ScanFirstLook = TimeSpan.FromMilliseconds(300);
+
+    /// <summary>
+    /// Starts a background scan and watches it (phase 6). The page stays usable: the waveform is
+    /// dimmed where the scan hasn't reached and turns solid as it goes, and leaving does not stop it.
+    /// </summary>
     private async Task RunScanAsync()
     {
         if (_scanning) return;
@@ -2485,49 +2512,159 @@
         }
 
         _scanning    = true;
+        _scanPercent = 0;
         _scanMessage = null;
         StateHasChanged();
 
+        var (job, refusal) = await AdminClient.StartScanJobAsync(
+            FileId, new StartScanJobRequest(_scanSensitivity, _scanOptions));
+
+        // Null means the scan did not start. "Nothing stood out from the background" is a finding
+        // somebody acts on, so it must never be printed for a request that failed. The server's own
+        // sentence comes first: "This server cannot read .m4a yet." is about the server, and only it
+        // knows that.
+        if (job is null)
+        {
+            _scanning    = false;
+            _scanMessage = refusal is { Length: > 0 }
+                ? $"{refusal} This recording has not been examined."
+                : "The scan couldn't be started just now. This recording has not been "
+                  + "examined — try again rather than reading anything into it.";
+            StateHasChanged();
+            return;
+        }
+
+        _ = WatchScanAsync(job.Id);
+    }
+
+    /// <summary>Picks up a scan of this recording that was started before the page was opened.</summary>
+    private async Task ResumeLiveScanAsync()
+    {
+        if (_scanning) return;
+        var (live, _) = await AdminClient.GetLiveScanJobAsync(FileId);
+        if (live is null) return;
+
+        _scanning    = true;
+        _scanPercent = live.Percent;
+        _scanMessage = "Picking up the scan that was already running.";
+        StateHasChanged();
+        _ = WatchScanAsync(live.Id);
+    }
+
+    /// <summary>Looks at the scan every second and a half until it finishes, drawing its progress.</summary>
+    private async Task WatchScanAsync(Guid jobId)
+    {
+        _scanWatch?.Cancel();
+        var watch = _scanWatch = new CancellationTokenSource();
+        _scanJobId = jobId;
+        string? etag = null;
+        var failures = 0;
+        var delay = ScanFirstLook;
+
         try
         {
-            var (candidates, refusal) = await AdminClient.ScanAudioForEvpWithReasonAsync(
-                FileId, _scanSensitivity, _scanOptions);
-
-            // Null means the scan did not run. "Nothing stood out from the background" is a
-            // finding somebody acts on, so it must never be printed for a request that failed.
-            // The server's own sentence comes first: "This server cannot read .m4a yet." is about
-            // the server, and only it knows that.
-            if (candidates is null)
+            while (!watch.IsCancellationRequested)
             {
-                _scanMessage = refusal is { Length: > 0 }
-                    ? $"{refusal} This recording has not been examined."
-                    : "The scan couldn't be run just now. This recording has not been "
-                      + "examined — try again rather than reading anything into it.";
-                return;
+                await Task.Delay(delay, watch.Token);
+                delay = ScanPollEvery;
+
+                var poll = await AdminClient.GetScanJobAsync(jobId, etag, watch.Token);
+                if (poll.Unchanged) continue;
+                if (poll.Job is not { } job)
+                {
+                    // One missed look is a blip; several mean the scan can't be followed from here.
+                    if (++failures < 5) continue;
+                    _scanMessage = $"{poll.Error} The scan may still be running; reopen the editor to check.";
+                    break;
+                }
+
+                failures = 0;
+                etag = poll.ETag;
+                _scanPercent = job.Percent;
+                await DrawScanProgressAsync(job);
+
+                if (!job.IsLive)
+                {
+                    await FinishScanAsync(job);
+                    break;
+                }
+                await InvokeAsync(StateHasChanged);
             }
-
-            // Reload everything rather than merging the response in: the scan replaces the previous
-            // pending set server-side, so the local list is stale in ways the response alone
-            // doesn't describe.
-            await ClearMarkerRegionsAsync();
-            await OverlayMarkersAsync();
-
-            _scanMessage = candidates.Count switch
-            {
-                0 => "Nothing stood out from the background.",
-                1 => "1 candidate to review.",
-                _ => $"{candidates.Count} candidates to review.",
-            };
         }
-        catch
-        {
-            _scanMessage = "The scan failed. The file may not be readable audio.";
-        }
+        catch (OperationCanceledException) { /* the page closed, or a newer watch took over */ }
         finally
         {
-            _scanning = false;
-            StateHasChanged();
+            if (ReferenceEquals(_scanWatch, watch))
+            {
+                _scanning     = false;
+                _stoppingScan = false;
+                _scanJobId    = null;
+                try
+                {
+                    if (_modalPlayer is not null) await _modalPlayer.SetScanProgressAsync(null, null, null);
+                    await InvokeAsync(StateHasChanged);
+                }
+                catch (Exception ex) when (ex is JSDisconnectedException or ObjectDisposedException or OperationCanceledException) { }
+            }
         }
+    }
+
+    /// <summary>The dimmed and solid parts of the waveform, from the recording's segment of the scan.</summary>
+    private async Task DrawScanProgressAsync(EvpScanJobRecord job)
+    {
+        if (_modalPlayer is null) return;
+        var segment = job.Segments.FirstOrDefault(s => s.UploadFileId == FileId);
+        var total   = segment?.TotalSeconds is > 0 and var t ? t : _modalDuration;
+        if (segment is null || total <= 0) return;
+        await _modalPlayer.SetScanProgressAsync(
+            Math.Clamp(segment.ProcessedSeconds / total, 0, 1),
+            Math.Clamp(segment.SettledSeconds / total, 0, 1),
+            segment.Status == EvpScanJobStatus.Queued ? "queued" : null);
+    }
+
+    private async Task FinishScanAsync(EvpScanJobRecord job)
+    {
+        var segment = job.Segments.FirstOrDefault(s => s.UploadFileId == FileId);
+        switch (job.Status)
+        {
+            case EvpScanJobStatus.Done when segment?.Status == EvpScanJobStatus.Done:
+                // Reload everything rather than merging: the scan replaced the previous pending set
+                // server-side, so the local list is stale in ways the job alone doesn't describe.
+                await ClearMarkerRegionsAsync();
+                await OverlayMarkersAsync();
+                _scanMessage = (segment.CandidateCount ?? 0) switch
+                {
+                    0 => "Nothing stood out from the background.",
+                    1 => "1 candidate to review.",
+                    var n => $"{n} candidates to review.",
+                };
+                break;
+
+            case EvpScanJobStatus.Canceled:
+                _scanMessage = "Stopped. The candidates from before are still here.";
+                break;
+
+            default:
+                var why = segment?.Error ?? job.Error;
+                _scanMessage = why is { Length: > 0 }
+                    ? $"{why} This recording has not been examined."
+                    : "The scan couldn't be finished. This recording has not been examined — try again "
+                      + "rather than reading anything into it.";
+                break;
+        }
+    }
+
+    private async Task StopScanAsync()
+    {
+        if (_scanJobId is not { } id || _stoppingScan) return;
+        _stoppingScan = true;
+        var (stopped, error) = await AdminClient.CancelScanJobAsync(id);
+        if (!stopped)
+        {
+            _stoppingScan = false;
+            _scanMessage  = error ?? "The scan couldn't be stopped just now.";
+        }
+        // The watch sees it finish and says so.
     }
 
     /// <summary>

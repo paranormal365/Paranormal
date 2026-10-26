@@ -214,6 +214,8 @@ namespace Ben.Data.Source.Context
         public virtual DbSet<EvpScan> EvpScans { get; set; }
         public virtual DbSet<EvpScanCandidate> EvpScanCandidates { get; set; }
         public virtual DbSet<EvpScanPreset> EvpScanPresets { get; set; }
+        public virtual DbSet<EvpScanJob> EvpScanJobs { get; set; }
+        public virtual DbSet<EvpScanJobSegment> EvpScanJobSegments { get; set; }
         public virtual DbSet<EvpRuling> EvpRulings { get; set; }
         public virtual DbSet<AuditLog> AuditLogs { get; set; }
         public virtual DbSet<SidecarInstallLog> SidecarInstallLogs { get; set; }
@@ -2665,6 +2667,33 @@ namespace Ben.Data.Source.Context
                 .Property(e => e.Name).HasMaxLength(60);
             modelBuilder.Entity<EvpScanPreset>()
                 .Property(e => e.OptionsJson).HasColumnType("nvarchar(max)");
+
+            // Background scans (phase 6). See EvpScanJob for why the requester has no cascade.
+            modelBuilder.Entity<EvpScanJob>()
+                .HasOne(e => e.RequestedBy).WithMany()
+                .HasForeignKey(e => e.RequestedByAppUserId).OnDelete(DeleteBehavior.NoAction);
+            modelBuilder.Entity<EvpScanJob>()
+                .Property(e => e.OptionsJson).HasColumnType("nvarchar(max)");
+            modelBuilder.Entity<EvpScanJob>()
+                .Property(e => e.Error).HasMaxLength(1000);
+            // "My live scans" for the per-person cap, and the retention sweep.
+            modelBuilder.Entity<EvpScanJob>()
+                .HasIndex(e => new { e.RequestedByAppUserId, e.FinishedUtc });
+            modelBuilder.Entity<EvpScanJob>()
+                .HasIndex(e => new { e.Status, e.CreatedUtc });
+            modelBuilder.Entity<EvpScanJobSegment>()
+                .HasOne(e => e.EvpScanJob).WithMany(e => e.Segments)
+                .HasForeignKey(e => e.EvpScanJobId).OnDelete(DeleteBehavior.Cascade);
+            modelBuilder.Entity<EvpScanJobSegment>()
+                .HasOne(e => e.UploadFile).WithMany()
+                .HasForeignKey(e => e.UploadFileId).OnDelete(DeleteBehavior.Cascade);
+            modelBuilder.Entity<EvpScanJobSegment>()
+                .Property(e => e.Error).HasMaxLength(1000);
+            // One live scan per recording, held by the database: two at once would each replace the
+            // other's Pending candidates.
+            modelBuilder.Entity<EvpScanJobSegment>()
+                .HasIndex(e => e.UploadFileId).IsUnique().HasFilter("[FinishedUtc] IS NULL")
+                .HasDatabaseName("IX_EvpScanJobSegments_OneLivePerFile");
 
             // ── UploadFileVote ───────────────────────────────────────────────
             // One vote per (user, file): unique index enforces the business rule.

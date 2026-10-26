@@ -56,6 +56,16 @@ public readonly record struct EvpFeatures(
 /// <summary>One scan's result: the candidates, and how long the recording was.</summary>
 public sealed record EvpAnalysis(IReadOnlyList<EvpCandidate> Candidates, double RecordingSeconds);
 
+/// <summary>How far a streamed scan has got (phase 6).</summary>
+/// <param name="ProcessedSeconds">Audio read and measured so far.</param>
+/// <param name="TotalSeconds">The recording's length when it was known up front, else null.</param>
+/// <param name="SettledSeconds">
+/// Audio whose result can no longer change: everything up to half a background window behind what
+/// has been read, because the background level at a moment depends on what comes after it too. The
+/// editor draws this part solid.
+/// </param>
+public readonly record struct EvpScanProgress(double ProcessedSeconds, double? TotalSeconds, double SettledSeconds);
+
 /// <summary>
 /// Finds stretches of a recording where voice-band energy rises above the local noise floor.
 /// </summary>
@@ -147,16 +157,56 @@ internal static class EvpDetector
     {
         if (mono.Length == 0 || sampleRate <= 0 || maxResults <= 0) return [];
 
-        var band = BandPass(mono, sampleRate, options);
+        // One chunk through the same path a streamed scan takes, so the two cannot drift apart.
+        var frames = new FrameAccumulator(sampleRate, options);
+        frames.Push(mono);
+        return Candidates(frames.Finish(), sampleRate, options, maxResults);
+    }
 
-        var (bandDb, fullDb) = FrameEnergies(band, mono, sampleRate);
+    /// <summary>
+    /// Detects candidates in audio that arrives a piece at a time (phase 6), reporting progress as
+    /// it goes. Gives exactly what <see cref="Detect(float[], int, EvpDetectionOptions, int)"/>
+    /// gives for the same samples, however they are split.
+    /// </summary>
+    /// <remarks>
+    /// <para>Only the per-frame measurements are kept, not the samples: about 24 bytes per 10 ms,
+    /// so 90 minutes is 13 MB where the samples at 16 kHz would be 345 MB. The background level,
+    /// the gating and the scoring need the whole recording, so they run once the last piece is in.</para>
+    /// <para>Cancellation is checked between pieces.</para>
+    /// </remarks>
+    public static async Task<EvpAnalysis> AnalyzeAsync(
+        IAsyncEnumerable<ReadOnlyMemory<float>> chunks, int sampleRate, EvpDetectionOptions options,
+        int maxResults, double? totalSeconds, IProgress<EvpScanProgress>? progress, CancellationToken ct)
+    {
+        var frames = new FrameAccumulator(sampleRate, options);
+        await foreach (var chunk in chunks.WithCancellation(ct))
+        {
+            ct.ThrowIfCancellationRequested();
+            frames.Push(chunk.Span);
+            var read = frames.SampleCount / (double)sampleRate;
+            progress?.Report(new EvpScanProgress(read, totalSeconds, Math.Max(0, read - options.FloorWindowSeconds / 2)));
+        }
+
+        var data = frames.Finish();
+        var seconds = sampleRate > 0 ? data.SampleCount / (double)sampleRate : 0;
+        var found = data.SampleCount == 0 || sampleRate <= 0 || maxResults <= 0
+            ? []
+            : Candidates(data, sampleRate, options, maxResults);
+        return new EvpAnalysis(found, seconds);
+    }
+
+    /// <summary>From the per-frame measurements to the candidates: the part that needs all of them.</summary>
+    private static IReadOnlyList<EvpCandidate> Candidates(
+        Frames frames, int sampleRate, EvpDetectionOptions options, int maxResults)
+    {
+        var (bandDb, fullDb) = (frames.BandDb, frames.FullDb);
         if (bandDb.Length == 0) return [];
 
         var floorDb = SlidingFloor(bandDb, options);
         var runs    = GateRuns(bandDb, floorDb, options.ThresholdDb, options.ReleaseHysteresisDb);
         var events  = ShapeEvents(runs, sampleRate, options);
 
-        var totalSeconds = mono.Length / (double)sampleRate;
+        var totalSeconds = frames.SampleCount / (double)sampleRate;
 
         // Length rules are applied to the detected energy, before padding — otherwise the context
         // itself would push a 60 ms click past the minimum and back into the queue.
@@ -164,7 +214,7 @@ internal static class EvpDetector
             .Where(e => FrameToSeconds(e.End, sampleRate) - FrameToSeconds(e.Start, sampleRate) >= options.MinDurationSeconds)
             .Select(e =>
             {
-                var features = Measure(e, mono, bandDb, fullDb, floorDb, sampleRate);
+                var features = Measure(e, frames, floorDb, sampleRate);
                 return new EvpCandidate(
                     Math.Max(0,            FrameToSeconds(e.Start, sampleRate) - options.ContextPadSeconds),
                     Math.Min(totalSeconds, FrameToSeconds(e.End,   sampleRate) + options.ContextPadSeconds),
@@ -210,52 +260,90 @@ internal static class EvpDetector
         return kept;
     }
 
-    // ── Band-pass ─────────────────────────────────────────────────────────────
+    // ── Framing, as the samples arrive ────────────────────────────────────────
+
+    /// <summary>What the detector keeps of a recording: one entry per frame, never the samples.</summary>
+    /// <param name="CrossingsBefore">
+    /// Sign changes in the full-band signal before each frame's second sample: with
+    /// <paramref name="CrossingsThrough"/>, the count over any run of frames without the samples.
+    /// </param>
+    /// <param name="CrossingsThrough">Sign changes up to the last sample of each frame's window.</param>
+    private sealed record Frames(
+        double[] BandDb, double[] FullDb, int[] CrossingsBefore, int[] CrossingsThrough, long SampleCount);
 
     /// <summary>
-    /// Cascaded RBJ high-pass and low-pass biquads. Two passes of a second-order section is a
-    /// gentle slope, which is what's wanted: a steep filter rings, and ringing on a transient looks
-    /// exactly like a short voice-band event.
+    /// Band-passes, frames and measures samples as they come, holding only the last window of them.
     /// </summary>
-    private static float[] BandPass(float[] input, int sampleRate, EvpDetectionOptions options)
+    /// <remarks>
+    /// <para>Cascaded RBJ high-pass and low-pass biquads. Two passes of a second-order section is a
+    /// gentle slope, which is what's wanted: a steep filter rings, and ringing on a transient looks
+    /// exactly like a short voice-band event. The filters keep their state between pieces, so a
+    /// recording split anywhere is filtered exactly as it would be whole.</para>
+    /// <para>Each frame's level is summed oldest sample first, the order the array version summed
+    /// in, so the levels match to the last bit and so do the pinned scores.</para>
+    /// </remarks>
+    private sealed class FrameAccumulator
     {
-        var hp = Biquad.HighPass(options.BandLowHz, sampleRate);
-        var lp = Biquad.LowPass(Math.Min(options.BandHighHz, sampleRate / 2.0 - 1), sampleRate);
+        private readonly Biquad _hp, _lp;
+        private readonly int _window, _hop;
+        private readonly float[] _band, _full;
+        private readonly List<double> _bandDb = [], _fullDb = [];
+        private readonly List<int> _crossingsBefore = [], _crossingsThrough = [];
+        private long _count;
+        private bool _previousNonNegative;
+        private int _crossings;
 
-        var output = new float[input.Length];
-        for (var i = 0; i < input.Length; i++)
-            output[i] = (float)lp.Process(hp.Process(input[i]));
-        return output;
-    }
-
-    // ── Framing ───────────────────────────────────────────────────────────────
-
-    private static (double[] BandDb, double[] FullDb) FrameEnergies(
-        float[] band, float[] full, int sampleRate)
-    {
-        var window = Math.Max(1, (int)(WindowSeconds * sampleRate));
-        var hop    = Math.Max(1, (int)(HopSeconds    * sampleRate));
-        if (band.Length < window) return ([], []);
-
-        var count  = 1 + (band.Length - window) / hop;
-        var bandDb = new double[count];
-        var fullDb = new double[count];
-
-        for (var f = 0; f < count; f++)
+        public FrameAccumulator(int sampleRate, EvpDetectionOptions options)
         {
-            var offset = f * hop;
-            bandDb[f] = RmsDb(band, offset, window);
-            fullDb[f] = RmsDb(full, offset, window);
+            _hp     = Biquad.HighPass(options.BandLowHz, sampleRate);
+            _lp     = Biquad.LowPass(Math.Min(options.BandHighHz, sampleRate / 2.0 - 1), sampleRate);
+            _window = Math.Max(1, (int)(WindowSeconds * sampleRate));
+            _hop    = Math.Max(1, (int)(HopSeconds    * sampleRate));
+            _band   = new float[_window];
+            _full   = new float[_window];
         }
-        return (bandDb, fullDb);
-    }
 
-    private static double RmsDb(float[] samples, int offset, int length)
-    {
-        double sum = 0;
-        for (var i = offset; i < offset + length; i++) sum += samples[i] * (double)samples[i];
-        var rms = Math.Sqrt(sum / length);
-        return rms <= 1e-12 ? SilenceFloorDb : Math.Max(SilenceFloorDb, 20.0 * Math.Log10(rms));
+        public long SampleCount => _count;
+
+        public void Push(ReadOnlySpan<float> samples)
+        {
+            foreach (var x in samples)
+            {
+                var slot = (int)(_count % _window);
+                _band[slot] = (float)_lp.Process(_hp.Process(x));
+                _full[slot] = x;
+
+                // A sign change between this sample and the one before it.
+                if (_count > 0 && (x >= 0) != _previousNonNegative) _crossings++;
+                _previousNonNegative = x >= 0;
+                _count++;
+
+                if ((_count - 1) % _hop == 0) _crossingsBefore.Add(_crossings);
+                if (_count >= _window && (_count - _window) % _hop == 0)
+                {
+                    _bandDb.Add(RmsDb(_band));
+                    _fullDb.Add(RmsDb(_full));
+                    _crossingsThrough.Add(_crossings);
+                }
+            }
+        }
+
+        public Frames Finish() => new(
+            [.. _bandDb], [.. _fullDb], [.. _crossingsBefore], [.. _crossingsThrough], _count);
+
+        /// <summary>The window's level, its oldest sample first.</summary>
+        private double RmsDb(float[] ring)
+        {
+            double sum = 0;
+            var oldest = (int)(_count % _window);
+            for (var k = 0; k < _window; k++)
+            {
+                var v = ring[(oldest + k) % _window];
+                sum += v * (double)v;
+            }
+            var rms = Math.Sqrt(sum / _window);
+            return rms <= 1e-12 ? SilenceFloorDb : Math.Max(SilenceFloorDb, 20.0 * Math.Log10(rms));
+        }
     }
 
     private static double FrameToSeconds(int frame, int sampleRate)
@@ -370,9 +458,9 @@ internal static class EvpDetector
     /// <summary>
     /// Everything the score needs, and a few things it doesn't use yet (item 253).
     /// </summary>
-    private static EvpFeatures Measure(
-        Run run, float[] mono, double[] bandDb, double[] fullDb, double[] floorDb, int sampleRate)
+    private static EvpFeatures Measure(Run run, Frames measured, double[] floorDb, int sampleRate)
     {
+        var (bandDb, fullDb) = (measured.BandDb, measured.FullDb);
         double peakProminence = 0, peakBand = double.MinValue;
         double bandSum = 0, fullSum = 0, floorSum = 0, bandSquares = 0;
 
@@ -388,14 +476,13 @@ internal static class EvpDetector
         var frames = run.End - run.Start + 1;
         var bandMean = bandSum / frames;
 
-        // The samples the event's frames cover, for the sign changes.
-        var hop    = Math.Max(1, (int)(HopSeconds    * sampleRate));
-        var window = Math.Max(1, (int)(WindowSeconds * sampleRate));
-        var first  = run.Start * hop;
-        var last   = Math.Min(mono.Length - 1, run.End * hop + window - 1);
-        var crossings = 0;
-        for (var i = first + 1; i <= last; i++)
-            if ((mono[i] >= 0) != (mono[i - 1] >= 0)) crossings++;
+        // The samples the event's frames cover, for the sign changes: counted as they arrived, so
+        // the samples themselves are not needed (phase 6).
+        var hop       = Math.Max(1, (int)(HopSeconds    * sampleRate));
+        var window    = Math.Max(1, (int)(WindowSeconds * sampleRate));
+        var first     = run.Start * hop;
+        var last      = run.End * hop + window - 1;
+        var crossings = measured.CrossingsThrough[run.End] - measured.CrossingsBefore[run.Start];
 
         return new EvpFeatures(
             PeakProminenceDb:  peakProminence,

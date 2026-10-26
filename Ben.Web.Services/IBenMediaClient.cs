@@ -182,6 +182,23 @@ public interface IBenMediaClient
     /// <summary>Returns all EVP markers for the given file, ordered by time.</summary>
     Task<LoadResult<AudioMarkerRecord>> GetAudioMarkersAsync(Guid fileId, CancellationToken token = default);
 
+    // ── Background scans (phase 6) ───────────────────────────────────────────
+    /// <summary>Starts a background scan of one recording, or the server's reason it would not.</summary>
+    Task<(EvpScanJobRecord? Job, string? Error)> StartScanJobAsync(
+        Guid fileId, StartScanJobRequest request, CancellationToken token = default);
+
+    /// <summary>
+    /// How a background scan stands. Pass the ETag from the last answer: an unchanged scan comes
+    /// back as <see cref="ScanJobPoll.Unchanged"/> with no body.
+    /// </summary>
+    Task<ScanJobPoll> GetScanJobAsync(Guid jobId, string? etag, CancellationToken token = default);
+
+    /// <summary>The caller's unfinished scan of this recording; (null, null) when there is none.</summary>
+    Task<(EvpScanJobRecord? Job, string? Error)> GetLiveScanJobAsync(Guid fileId, CancellationToken token = default);
+
+    /// <summary>Stops one of the caller's background scans.</summary>
+    Task<(bool Deleted, string? Error)> CancelScanJobAsync(Guid jobId, CancellationToken token = default);
+
     // ── EVP scan presets (phase 5) ───────────────────────────────────────────
     /// <summary>The caller's own saved scan settings. A refusal is a failed result, never an empty list.</summary>
     Task<LoadResult<EvpScanPresetRecord>> GetEvpScanPresetsAsync(CancellationToken token = default);

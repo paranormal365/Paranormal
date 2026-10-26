@@ -60,7 +60,7 @@
                                 Size="@ThemeConstants.Button.Size.Small"
                                 Title="@(State.CustomScan ? "Scan for EVP with your adjusted settings" : $"Scan for EVP at {State.Sensitivity} sensitivity")">
                 <SplitButtonContent>
-                    <BenIcon Name="activity" />@(State.Scanning ? "Scanning…" : "Scan for EVP")
+                    <BenIcon Name="activity" />@(State.Scanning ? $"Scanning {State.ScanPercent}%" : "Scan for EVP")
                 </SplitButtonContent>
                 <SplitButtonItems>
                     <SplitButtonItem OnClick="@(() => Act(AudioToolbarAction.ScanLow))">@Check(!State.CustomScan && State.Sensitivity == EvpSensitivity.Low)Scan at Low: only strong sounds</SplitButtonItem>

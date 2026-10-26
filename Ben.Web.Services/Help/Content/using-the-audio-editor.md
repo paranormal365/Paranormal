@@ -140,6 +140,16 @@ later scans never touch the markers you've kept.
 Press ▶ on a kept marker to play it. If the marker is a single moment rather than a stretch, you
 hear a couple of seconds on either side, which is usually what you need to tell a voice from a bump.
 
+### While a scan runs
+
+A scan runs in the background, so you can keep listening and working while it goes. The button
+shows how far it has got, and the waveform is dimmed where the scan hasn't reached yet, turning
+solid as it goes. **Stop** ends it early; any candidates from an earlier scan stay where they were.
+
+You can leave the editor during a scan. It carries on, and when you come back the editor picks it
+up where it has got to. One recording is scanned at a time, and you can have up to three scans
+waiting or running.
+
 ### Adjusting the scan
 
 **Fine-tune** opens every setting the scan uses, in four groups. Each box explains itself when you

@@ -32,6 +32,9 @@ it is hidden from everybody else, but still takes its number. No other sub-headi
 
 ## Unreleased
 
+- EVP scans run in the background. The button shows how far a scan has got, the waveform is dimmed
+  where it hasn't reached and turns solid as it goes, and Stop ends it early. You can leave the
+  editor while it runs and pick it up when you come back.
 - Every setting the EVP scan uses can be adjusted in Fine-tune, in four groups: what counts as a
   sound, the pitch range it listens in, how it judges the room's background, and what reaches the
   list. The spectrogram's voice band follows the range.

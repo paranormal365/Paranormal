@@ -31,24 +31,21 @@ public sealed class AudioMarkerController : BenControllerBase
     private readonly IDbContextFactory<BenDataContext> _dbContextFactory;
     private readonly IMapper _mapper;
     private readonly IAuditLogService _auditLog;
-    private readonly IFileStorageService _fileStorage;
-    private readonly IAudioDecoder _decoder;
     private readonly EvpScanRecorder _scanRecorder;
+    private readonly Ben.Data.WebApi.Services.Audio.Scanning.EvpScanService _scanService;
 
     public AudioMarkerController(
         IDbContextFactory<BenDataContext> dbContextFactory,
         IMapper mapper,
         IAuditLogService auditLog,
-        IFileStorageService fileStorage,
-        IAudioDecoder decoder,
-        EvpScanRecorder scanRecorder)
+        EvpScanRecorder scanRecorder,
+        Ben.Data.WebApi.Services.Audio.Scanning.EvpScanService scanService)
     {
         _dbContextFactory = dbContextFactory;
         _mapper = mapper;
         _auditLog = auditLog;
-        _fileStorage = fileStorage;
-        _decoder = decoder;
         _scanRecorder = scanRecorder;
+        _scanService = scanService;
     }
 
     [HttpGet]
@@ -253,12 +250,13 @@ public sealed class AudioMarkerController : BenControllerBase
         if (!(source.ContentType ?? "").StartsWith("audio", StringComparison.OrdinalIgnoreCase))
             return BadRequest("That file isn't audio.");
 
-        EvpAnalysis analysis;
+        Ben.Data.WebApi.Services.Audio.Scanning.EvpScanOutcome? proposed;
+        string? refusal;
         try
         {
-            await using var stream = await OpenSourceStreamAsync(source, ct);
-            var mono = await _decoder.ReadMono16kAsync(stream, source.ContentType, source.FileName, ct);
-            analysis = EvpDetector.Analyze(mono, AudioSourceReader.DetectionSampleRate, settings, MaxCandidatesPerScan);
+            (proposed, refusal) = await _scanService.RunAsync(
+                source, sensitivity, settings, userId,
+                User.IsInRole(Ben.Data.Common.Constants.RoleNames.SuperAdmin), progress: null, ct);
         }
         catch (AudioDecoderUnavailableException ex)
         {
@@ -271,56 +269,10 @@ public sealed class AudioMarkerController : BenControllerBase
             // A file the decoder can't open is a bad request about this file, not a server fault.
             return BadRequest($"Couldn't read that audio: {ex.Message}");
         }
-
-        var (proposed, refusal) = await _scanRecorder.ProposeAsync(
-            db, fileId, analysis, sensitivity, settings, userId, ct);
         if (proposed is null) return BadRequest(refusal);
-
-        await TryRememberSettingsAsync(db, source, settings, userId, ct);
 
         AuditReplaced(fileId, proposed.Markers, userId);
         return Ok(_mapper.Map<IEnumerable<AudioMarkerRecord>>(proposed.Markers.Fresh));
-    }
-
-    /// <summary>
-    /// Keeps the settings this scan ran with on the recording, so the next scan of it starts from
-    /// them (phase 5). Only for someone who may change the recording, the same people whose editor
-    /// view is saved; anybody else's scan still runs, it just isn't remembered.
-    /// </summary>
-    /// <remarks>
-    /// Never fails the scan the person asked for. A view save rewrites the rest of the config row,
-    /// so this column is written here and nowhere else.
-    /// </remarks>
-    private async Task TryRememberSettingsAsync(
-        BenDataContext db, UploadFile file, EvpDetectionOptions settings, Guid userId, CancellationToken ct)
-    {
-        try
-        {
-            if (!await FileAudienceAccess.CanManageFileAsync(
-                    db, file, userId, User.IsInRole(Ben.Data.Common.Constants.RoleNames.SuperAdmin), ct))
-                return;
-
-            var json   = System.Text.Json.JsonSerializer.Serialize(settings, EvpScanRecorder.OptionsJson);
-            var config = await db.UploadFileAudioConfigs.FirstOrDefaultAsync(c => c.UploadFileId == file.Id, ct);
-            if (config is null)
-            {
-                db.UploadFileAudioConfigs.Add(new UploadFileAudioConfig
-                {
-                    Id = Guid.NewGuid(), UploadFileId = file.Id, EvpScanOptionsJson = json,
-                    DateCreated = DateTime.UtcNow, CreatedByAppUserId = userId,
-                });
-            }
-            else
-            {
-                config.EvpScanOptionsJson = json;
-            }
-            await db.SaveChangesAsync(ct);
-        }
-        catch (Exception ex) when (ex is DbUpdateException or InvalidOperationException)
-        {
-            HttpContext?.RequestServices?.GetService<ILogger<AudioMarkerController>>()?
-                .LogWarning(ex, "The scan settings for file {FileId} were not remembered", file.Id);
-        }
     }
 
     private void AuditReplaced(Guid fileId, EvpScanRecorder.Replaced replaced, Guid userId)
@@ -374,15 +326,6 @@ public sealed class AudioMarkerController : BenControllerBase
         => HttpContext?.RequestServices?
             .GetService<ILogger<AudioMarkerController>>()?
             .LogError(ex, "EVP learning record ({What}) not written for file {FileId}", what, fileId);
-
-    private async Task<Stream> OpenSourceStreamAsync(UploadFile file, CancellationToken ct)
-    {
-        if (!string.IsNullOrEmpty(file.StoragePath))
-            return await _fileStorage.OpenReadAsync(file.StoragePath, ct);
-        if (file.FileData is not null)
-            return new MemoryStream(file.FileData);
-        throw new InvalidOperationException($"File {file.Id} has no stored bytes.");
-    }
 
     /// <summary>
     /// Records a person's decision on a candidate: keep it (optionally relabelled and with its
