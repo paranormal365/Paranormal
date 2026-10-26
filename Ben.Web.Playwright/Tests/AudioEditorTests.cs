@@ -474,6 +474,78 @@ public class AudioEditorTests : BenTestBase
             "the remembered settings are the saved preset's, so the list should say so");
     }
 
+    /// <summary>Ten minutes with a few sounds in it: long enough that a scan can be watched and stopped.</summary>
+    private static byte[] LongWav() => Wav(600, [(30.0, 0.8), (200.0, 0.7), (450.0, 1.0)]);
+
+    /// <summary>
+    /// A scan runs in the background (phase 6): the button says how far it has got, the waveform is
+    /// dimmed where it hasn't reached, and the dimming goes when it finishes.
+    /// </summary>
+    [Test]
+    public async Task A_scan_runs_in_the_background_and_shows_how_far_it_has_got()
+    {
+        if (!await ReadyInFullViewAsync(LongWav(), "wav", "audio/wav"))
+        {
+            Assert.Ignore("Could not open the editor; see the output for where it gave up.");
+            return;
+        }
+
+        await AudioEditorUi.OpenTabAsync(Modal, "EVP Markers");
+        var panel = Modal.Locator("#evp-markers-panel");
+
+        // Watch from inside the page, every 50 ms, so a fast scan cannot slip between two looks.
+        await Page.EvaluateAsync(@"() => {
+            window.__scanSeen = { labels: new Set(), mask: false };
+            const look = () => {
+                const btn = document.querySelector('#evp-markers-panel .evp-lab__scan');
+                if (btn) window.__scanSeen.labels.add(btn.textContent.trim());
+                for (const host of document.querySelectorAll('#audio-editor [id^=""ws-""]'))
+                    for (const el of [host, ...host.querySelectorAll('*')])
+                        if (el.shadowRoot?.querySelector('.ws-scan-mask')) window.__scanSeen.mask = true;
+            };
+            window.__scanLook = setInterval(look, 50);
+        }");
+
+        await panel.GetByRole(AriaRole.Button, new() { Name = "Scan for EVP" }).ClickAsync();
+        await Expect(panel.Locator(".evp-lab__msg")).ToContainTextAsync("to review", new() { Timeout = 180_000 });
+
+        var seen = await Page.EvaluateAsync<System.Text.Json.JsonElement>(
+            "() => { clearInterval(window.__scanLook); return { labels: [...window.__scanSeen.labels], mask: window.__scanSeen.mask }; }");
+        var labels = seen.GetProperty("labels").EnumerateArray().Select(l => l.GetString()).ToList();
+        TestContext.Out.WriteLine($"the button read: {string.Join(" | ", labels)}; dimming seen: {seen.GetProperty("mask").GetBoolean()}");
+
+        Assert.That(labels, Has.Some.Matches("^Scanning \\d+%$"), "the button never said how far the scan had got");
+        Assert.That(seen.GetProperty("mask").GetBoolean(), Is.True, "the waveform was never dimmed while the scan ran");
+        var maskLeft = await Modal.EvaluateAsync<bool>(@"el => [...el.querySelectorAll('[id^=""ws-""]')]
+            .some(h => [h, ...h.querySelectorAll('*')].some(e => e.shadowRoot?.querySelector('.ws-scan-mask')))");
+        Assert.That(maskLeft, Is.False, "the dimming stayed after the scan finished");
+        await Expect(panel.Locator(".evp-row--candidate")).ToHaveCountAsync(3, new() { Timeout = 15_000 });
+    }
+
+    /// <summary>Stop ends a scan part way, and the page says what that left behind.</summary>
+    [Test]
+    public async Task A_scan_can_be_stopped()
+    {
+        if (!await ReadyInFullViewAsync(LongWav(), "wav", "audio/wav"))
+        {
+            Assert.Ignore("Could not open the editor; see the output for where it gave up.");
+            return;
+        }
+
+        await AudioEditorUi.OpenTabAsync(Modal, "EVP Markers");
+        var panel = Modal.Locator("#evp-markers-panel");
+        await panel.GetByRole(AriaRole.Button, new() { Name = "Scan for EVP" }).ClickAsync();
+
+        var stop = panel.Locator("#evp-scan-stop");
+        await Expect(stop).ToBeVisibleAsync(new() { Timeout = 30_000 });
+        await stop.ClickAsync();
+
+        await Expect(panel.Locator(".evp-lab__msg")).ToHaveTextAsync("Stopped. The candidates from before are still here.",
+            new() { Timeout = 60_000 });
+        await Expect(panel.GetByRole(AriaRole.Button, new() { Name = "Scan for EVP" })).ToBeEnabledAsync();
+        await Expect(panel.Locator(".evp-row--candidate")).ToHaveCountAsync(0);
+    }
+
     /// <summary>
     /// Silence, applied to a region a person drew, produces a file and says it did.
     /// </summary>

@@ -1006,6 +1006,60 @@ export function setVoiceBand(containerId, lowHz, highHz) {
   _drawSpectrogramOverlay(instance)
 }
 
+/**
+ * How far a background EVP scan has got, drawn over the waveform (phase 6): the part not yet
+ * settled is dimmed, and the stretch being worked on is hatched. Fractions of the recording, 0–1;
+ * null clears it. The layers sit inside WaveSurfer's own scrolling wrapper and are placed in
+ * percent, so they follow zoom and scroll without being redrawn. They take no clicks.
+ */
+export function setScanProgress(containerId, processed, settled, state) {
+  const instance = instances.get(containerId)
+  const wrapper = instance?.ws?.getWrapper?.()
+  if (!wrapper) return
+  let mask = instance._scanMask
+  if (processed == null) {
+    mask?.remove()
+    instance._scanMask = null
+    return
+  }
+  if (!mask || !mask.isConnected) {
+    mask = document.createElement('div')
+    mask.className = 'ws-scan-mask'
+    mask.setAttribute('aria-hidden', 'true')
+    mask.style.cssText = 'position:absolute;inset:0;pointer-events:none;z-index:4;'
+    const dim = document.createElement('div')
+    dim.dataset.part = 'unscanned'
+    dim.style.cssText = 'position:absolute;top:0;bottom:0;right:0;'
+      + 'background:color-mix(in srgb, var(--ben-bg, #fff) 60%, transparent);'
+    const working = document.createElement('div')
+    working.dataset.part = 'scanning'
+    const reduce = window.matchMedia?.('(prefers-reduced-motion: reduce)').matches
+    working.style.cssText = 'position:absolute;top:0;bottom:0;'
+      + 'background:repeating-linear-gradient(135deg, rgba(var(--ben-audio-candidate-rgb, 217, 119, 6), .22) 0 6px, transparent 6px 12px);'
+      + 'background-size:17px 17px;' + (reduce ? '' : 'animation:ws-scan-hatch 1s linear infinite;')
+    mask.append(dim, working)
+    // The wrapper lives in WaveSurfer's shadow root, so the keyframes go there too.
+    const root = wrapper.getRootNode?.()
+    const host = root instanceof ShadowRoot ? root : document.head
+    if (!host.querySelector('#ws-scan-hatch-keyframes')) {
+      const style = document.createElement('style')
+      style.id = 'ws-scan-hatch-keyframes'
+      style.textContent = '@keyframes ws-scan-hatch { to { background-position: 17px 0; } }'
+      host.appendChild(style)
+    }
+    if (getComputedStyle(wrapper).position === 'static') wrapper.style.position = 'relative'
+    wrapper.appendChild(mask)
+    instance._scanMask = mask
+  }
+  const p = Math.max(0, Math.min(1, processed)) * 100
+  const s = Math.max(0, Math.min(p / 100, settled ?? 0)) * 100
+  mask.dataset.state = state ?? 'scanning'
+  const [dim, working] = mask.children
+  dim.style.left = `${s}%`
+  working.style.left = `${s}%`
+  working.style.width = `${Math.max(0, p - s)}%`
+}
+
 /** Shows or hides the voice band over the spectrogram. Remembered while the spectrogram is off. */
 export function toggleVoiceBandOverlay(containerId, show) {
   const instance = instances.get(containerId)

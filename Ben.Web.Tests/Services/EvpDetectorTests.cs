@@ -814,4 +814,67 @@ public class EvpDetectorTests(ITestOutputHelper output)
 
         Assert.DoesNotContain(found, c => c.Exploratory);
     }
+
+    // ── Streaming (phase 6) ───────────────────────────────────────────────────
+
+    private static async IAsyncEnumerable<ReadOnlyMemory<float>> Pieces(float[] samples, int size)
+    {
+        for (var at = 0; at < samples.Length; at += size)
+        {
+            yield return samples.AsMemory(at, Math.Min(size, samples.Length - at));
+            await Task.Yield();
+        }
+    }
+
+    /// <summary>
+    /// A recording handed over in pieces gives exactly what it gives whole: the same candidates
+    /// and every measurement, to the last bit. Seven samples is smaller than a frame and shares no
+    /// factor with the hop; 65,536 is what the decoders hand over.
+    /// </summary>
+    [Theory]
+    [InlineData(7)]
+    [InlineData(160)]
+    [InlineData(65_536)]
+    public async Task Streaming_gives_exactly_what_the_whole_recording_gives(int pieceSize)
+    {
+        var fixture = BuildFixture();
+        var whole   = EvpDetector.Detect(fixture, SampleRate, High, 500);
+
+        var streamed = await EvpDetector.AnalyzeAsync(Pieces(fixture, pieceSize), SampleRate, High, 500, null, null, default);
+
+        Assert.NotEmpty(whole);
+        Assert.Equal(whole, streamed.Candidates);
+        Assert.Equal(30.0, streamed.RecordingSeconds, 6);
+    }
+
+    /// <summary>Progress climbs to the end, and what is settled trails it by half a background window.</summary>
+    [Fact]
+    public async Task Streaming_reports_progress_up_to_the_end()
+    {
+        var seen = new List<EvpScanProgress>();
+        var recorder = new SynchronousProgress(seen);
+
+        await EvpDetector.AnalyzeAsync(Pieces(BuildFixture(), 16_000), SampleRate, Medium, 500, 30, recorder, default);
+
+        Assert.Equal(30, seen.Count);
+        Assert.Equal(30.0, seen[^1].ProcessedSeconds, 6);
+        Assert.All(seen, p => Assert.Equal(Math.Max(0, p.ProcessedSeconds - 5), p.SettledSeconds, 6));
+        Assert.True(seen.Select(p => p.ProcessedSeconds).SequenceEqual(seen.Select(p => p.ProcessedSeconds).Order()));
+    }
+
+    [Fact]
+    public async Task A_canceled_stream_stops()
+    {
+        using var cancel = new CancellationTokenSource();
+        cancel.Cancel();
+
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() =>
+            EvpDetector.AnalyzeAsync(Pieces(BuildFixture(), 16_000), SampleRate, Medium, 500, null, null, cancel.Token));
+    }
+
+    /// <summary><see cref="Progress{T}"/> posts to a context; this records in order, on the spot.</summary>
+    private sealed class SynchronousProgress(List<EvpScanProgress> into) : IProgress<EvpScanProgress>
+    {
+        public void Report(EvpScanProgress value) => into.Add(value);
+    }
 }

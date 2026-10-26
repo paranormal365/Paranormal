@@ -766,11 +766,21 @@ public sealed class WebApiClient : IWebApiClient
         // A scan always answers with a list, so an unreadable body is a failure, not "nothing found".
         if (response.IsSuccessStatusCode)
             return (await BodyOrDefaultAsync<List<AudioMarkerRecord>>(response, token), null);
-        if (response.StatusCode == System.Net.HttpStatusCode.TooManyRequests) return (null, TooManyTries);
+        return (null, await ScanRefusalAsync(response, token));
+    }
 
+    /// <summary>
+    /// Why a scan request was refused, in the server's words, or null when it gave none worth showing.
+    /// </summary>
+    /// <remarks>
+    /// One refusal is an object (<see cref="ScanRefusalRecord"/>): the server, not the recording, is
+    /// what cannot read it. The rest are sentences. A 429 without one of its own is the general
+    /// slow-down sentence.
+    /// </remarks>
+    private static async Task<string?> ScanRefusalAsync(HttpResponseMessage response, CancellationToken token)
+    {
         var body = await response.Content.ReadAsStringAsync(token);
 
-        // The one refusal that is an object: the server, not the recording, is what cannot read it.
         if (body.TrimStart().StartsWith('{'))
         {
             try
@@ -778,15 +788,63 @@ public sealed class WebApiClient : IWebApiClient
                 if (System.Text.Json.JsonSerializer.Deserialize<ScanRefusalRecord>(body,
                         new System.Text.Json.JsonSerializerOptions(System.Text.Json.JsonSerializerDefaults.Web))
                     is { Message: { Length: > 0 } message })
-                    return (null, message);
+                    return message;
             }
             catch (System.Text.Json.JsonException) { }
-            return (null, null);
+            return response.StatusCode == System.Net.HttpStatusCode.TooManyRequests ? TooManyTries : null;
         }
 
         var looksLikeProse = !string.IsNullOrWhiteSpace(body) && body.Length < 400 && !body.TrimStart().StartsWith('<');
-        return (null, looksLikeProse ? body.Trim('"', ' ', '\n') : null);
+        if (looksLikeProse) return body.Trim('"', ' ', '\n');
+        return response.StatusCode == System.Net.HttpStatusCode.TooManyRequests ? TooManyTries : null;
     }
+
+    // ── Background scans (phase 6) ───────────────────────────────────────────
+
+    /// <inheritdoc />
+    public async Task<(EvpScanJobRecord? Job, string? Error)> StartScanJobAsync(
+        Guid fileId, StartScanJobRequest request, CancellationToken token = default)
+    {
+        using var req = Auth(HttpMethod.Post, $"/api/upload-files/{fileId}/scan-jobs");
+        req.Content = JsonContent.Create(request);
+        using var response = await SendOrUnreachableAsync(req, token);
+
+        if (response.IsSuccessStatusCode)
+            return (await BodyOrDefaultAsync<EvpScanJobRecord>(response, token), null);
+        return (null, await ScanRefusalAsync(response, token));
+    }
+
+    /// <inheritdoc />
+    public async Task<ScanJobPoll> GetScanJobAsync(Guid jobId, string? etag, CancellationToken token = default)
+    {
+        using var req = Auth(HttpMethod.Get, $"/api/scan-jobs/{jobId}");
+        if (etag is not null) req.Headers.TryAddWithoutValidation("If-None-Match", etag);
+        using var response = await SendOrUnreachableAsync(req, token);
+
+        if (response.StatusCode == System.Net.HttpStatusCode.NotModified)
+            return new ScanJobPoll(null, etag, Unchanged: true, Error: null);
+        if (response.IsSuccessStatusCode && await BodyOrDefaultAsync<EvpScanJobRecord>(response, token) is { } job)
+            return new ScanJobPoll(job, response.Headers.ETag?.ToString(), Unchanged: false, Error: null);
+        return new ScanJobPoll(null, null, Unchanged: false,
+            Error: await ScanRefusalAsync(response, token) ?? "The scan's progress couldn't be read just now.");
+    }
+
+    /// <inheritdoc />
+    public async Task<(EvpScanJobRecord? Job, string? Error)> GetLiveScanJobAsync(Guid fileId, CancellationToken token = default)
+    {
+        using var req = Auth(HttpMethod.Get, $"/api/upload-files/{fileId}/scan-jobs/live");
+        using var response = await SendOrUnreachableAsync(req, token);
+
+        // A 204 is the answer "nothing running", not a failure.
+        if (response.StatusCode == System.Net.HttpStatusCode.NoContent) return (null, null);
+        if (response.IsSuccessStatusCode && await BodyOrDefaultAsync<EvpScanJobRecord>(response, token) is { } job)
+            return (job, null);
+        return (null, await ScanRefusalAsync(response, token) ?? "Couldn't check for a scan in progress.");
+    }
+
+    /// <inheritdoc />
+    public Task<(bool Deleted, string? Error)> CancelScanJobAsync(Guid jobId, CancellationToken token = default)
+        => DeleteExpectingReasonAsync($"/api/scan-jobs/{jobId}", token);
 
     // ── Audio Clip ────────────────────────────────────────────────────────────
     public Task<UploadFileRecord?> ClipAudioAsync(Guid fileId, ClipAudioRequest request, CancellationToken token = default)

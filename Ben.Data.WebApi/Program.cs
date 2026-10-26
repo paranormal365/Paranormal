@@ -395,6 +395,8 @@ builder.Services.AddScoped<Ben.Data.WebApi.Services.Scheduling.IScheduledJob,
 // the audit log, which item 191 settled is archived rather than deleted.
 builder.Services.AddScoped<Ben.Data.WebApi.Services.Scheduling.IScheduledJob,
                            Ben.Data.WebApi.Services.Scheduling.LogRetentionJob>();
+builder.Services.AddScoped<Ben.Data.WebApi.Services.Scheduling.IScheduledJob,
+                           Ben.Data.WebApi.Services.Scheduling.EvpScanJobRetentionJob>();
 // Tells a free account it is nearly full BEFORE the guard refuses an upload (Ben, 2026-09-22).
 // A limit somebody meets with no warning reads as the site breaking.
 builder.Services.AddScoped<Ben.Data.WebApi.Services.Scheduling.IScheduledJob,
@@ -442,6 +444,12 @@ builder.Services.AddSingleton<Ben.Data.WebApi.Services.Audio.IAudioDecoder,
 builder.Services.AddSingleton<Ben.Data.WebApi.Services.Audio.IAudioEncoder>(
     sp => sp.GetRequiredService<Ben.Data.WebApi.Services.Audio.FfmpegAudioDecoder>());
 builder.Services.AddScoped<Ben.Data.WebApi.Services.Audio.EvpScanRecorder>();
+builder.Services.AddScoped<Ben.Data.WebApi.Services.Audio.Scanning.EvpScanService>();
+// Background scans (phase 6): the doorbell, the runner, and the one worker that takes the
+// oldest queued job. Jobs finished over a week ago are swept by EvpScanJobRetentionJob below.
+builder.Services.AddSingleton<Ben.Data.WebApi.Services.Audio.Scanning.EvpScanQueue>();
+builder.Services.AddScoped<Ben.Data.WebApi.Services.Audio.Scanning.EvpScanRunner>();
+builder.Services.AddHostedService<Ben.Data.WebApi.Services.Audio.Scanning.EvpScanWorker>();
 builder.Services.AddScoped<Ben.Data.WebApi.Services.Billing.TierChangeNotifier>();
 // Stripe: the card-charging arm of the billing engine. Gateway is a singleton (a thin client
 // around config); fulfillment is scoped like every other database writer. With no SecretKey the
