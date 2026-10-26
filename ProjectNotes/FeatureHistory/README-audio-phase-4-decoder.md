@@ -94,9 +94,12 @@ skipped (ffmpeg 9.0.2 at /opt/homebrew/bin).
 ## Deploy notes
 
 - **No migration.**
-- **`MediaTools:FfmpegPath` must be set** on the API for .m4a. Production already sets it in
-  `scripts/deploy-ishaunted.ps1`. After deploy, check that `/admin` → "Audio decoding" shows a
-  version, not a problem.
+- **`MediaTools:FfmpegPath` must be set** on the API for .m4a. *Corrected 10/26/2026:* this said
+  production already sets it in `scripts/deploy-ishaunted.ps1`. That script sets it on the old
+  self-hosted IIS box only; on MonsterASP it is the API site's environment variable
+  `MediaTools__FfmpegPath`, and whether it was ever set there is unknown. Steps are in
+  `README-audio-phase-4-m4a-ui.md`. After deploy, `/admin` → "Audio decoding" shows a version or
+  says what is wrong.
 - New optional setting: `MediaTools:DecodeTimeoutSeconds` (default 600).
 - The API writes `ben-evp-*` scratch files to the system temp folder while decoding and deletes them
   afterwards. The IIS app pool identity must be able to write there (it already does for the
@@ -108,7 +111,6 @@ skipped (ffmpeg 9.0.2 at /opt/homebrew/bin).
 
 ## Left for later
 
-- Step 6 (UI): let .m4a through Scan / Make clip in `MediaLibraryGrid.razor` and the editor, and
-  call `ScanAudioForEvpWithReasonAsync` so the refusal's sentence is shown.
-- The destructive edit (`UploadFileAudioEditController`) and the case mixer still read MP3/WAV only.
-  They were outside this phase.
+- Step 6 (UI) and the destructive edit: done on `feature/audio-phase-4-m4a-ui`, see
+  `README-audio-phase-4-m4a-ui.md`.
+- The case mixer still reads MP3/WAV only.

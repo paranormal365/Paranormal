@@ -34,11 +34,6 @@ public sealed class PersonalUploadDoorsAskTheGuardTests
     /// </remarks>
     private static readonly Dictionary<string, string> NeedNotAsk = new()
     {
-        ["UploadFileAudioEditController.cs"] =
-            "An edit of bytes already counted, so it is smaller than or about the size of its "
-          + "source. (The clip door had the same exemption until it began asking, 10/26/2026.) Wrong if editing ever "
-          + "grows a file materially.",
-
         ["PublicHostedEventRoomController.cs"] =
             "An attendee's photo of a room at somebody else's event. It is stored under the "
           + "attendee, but the event's host is who invited it, and refusing a guest at a paid "

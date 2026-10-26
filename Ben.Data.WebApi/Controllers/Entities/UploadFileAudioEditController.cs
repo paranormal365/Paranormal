@@ -9,6 +9,7 @@ using Microsoft.EntityFrameworkCore;
 using Ben.Data.WebApi.Services.Access;
 using Ben.Data.WebApi.Services.Audio;
 using Ben.Data.WebApi.Services;
+using Ben.Data.WebApi.Services.Billing;
 using Microsoft.AspNetCore.RateLimiting;
 
 namespace Ben.Data.WebApi.Controllers.Entities;
@@ -34,19 +35,22 @@ public sealed class UploadFileAudioEditController : BenControllerBase
     private readonly IAuditLogService _auditLog;
 
     private readonly IMediaIngestService _mediaIngest;
+    private readonly IAudioDecoder _decoder;
 
     public UploadFileAudioEditController(
         IDbContextFactory<BenDataContext> dbContextFactory,
         IMapper mapper,
         IFileStorageService fileStorage,
         IAuditLogService auditLog,
-        IMediaIngestService mediaIngest)
+        IMediaIngestService mediaIngest,
+        IAudioDecoder decoder)
     {
         _dbContextFactory = dbContextFactory;
         _mapper = mapper;
         _fileStorage = fileStorage;
         _auditLog = auditLog;
         _mediaIngest = mediaIngest;
+        _decoder = decoder;
     }
 
     [HttpPost]
@@ -88,29 +92,30 @@ public sealed class UploadFileAudioEditController : BenControllerBase
         try
         {
             // Header only, so an impossible region costs nothing to refuse.
-            TimeSpan sourceDuration;
+            double sourceSeconds;
             await using (var probeStream = await OpenSourceStreamAsync(source, ct))
-                sourceDuration = AudioSourceReader.Probe(probeStream, source.ContentType).Duration;
+                sourceSeconds = await _decoder.DurationSecondsAsync(probeStream, source.ContentType, source.FileName, ct)
+                    ?? throw new AudioDecodeFailedException("its length could not be read.");
 
             if (request.Operation is AudioEditOperation.Cut or AudioEditOperation.Silence
-                && request.Start >= sourceDuration.TotalSeconds)
+                && request.Start >= sourceSeconds)
                 return BadRequest(
                     $"That region starts at {request.Start:0.##}s, and the recording is only "
-                    + $"{sourceDuration.TotalSeconds:0.##}s long.");
+                    + $"{sourceSeconds:0.##}s long.");
 
-            Stream sourceStream = await OpenSourceStreamAsync(source, ct);
+            var (sourceStream, workingType) = await OpenEditableAsync(source, sourceSeconds, ct);
             await using (sourceStream)
             {
                 (editedBytes, outContentType, outExtension) = request.Operation switch
                 {
-                    AudioEditOperation.Cut       => AudioEditor.CutRegion(sourceStream, source.ContentType, request.Start!.Value, request.End!.Value),
-                    AudioEditOperation.Silence   => AudioEditor.SilenceRegion(sourceStream, source.ContentType, request.Start!.Value, request.End!.Value),
-                    AudioEditOperation.Normalize => AudioEditor.Normalize(sourceStream, source.ContentType),
-                    AudioEditOperation.Gain      => AudioEditor.Gain(sourceStream, source.ContentType, request.GainDb!.Value),
-                    AudioEditOperation.Fade      => AudioEditor.Fade(sourceStream, source.ContentType, request.FadeInSeconds ?? 0, request.FadeOutSeconds ?? 0),
-                    AudioEditOperation.Reverse   => AudioEditor.Reverse(sourceStream, source.ContentType),
-                    AudioEditOperation.Speed     => AudioEditor.ChangeSpeed(sourceStream, source.ContentType, request.SpeedRatio!.Value),
-                    AudioEditOperation.Pitch     => AudioEditor.PitchShift(sourceStream, source.ContentType, request.PitchSemitones!.Value),
+                    AudioEditOperation.Cut       => AudioEditor.CutRegion(sourceStream, workingType, request.Start!.Value, request.End!.Value),
+                    AudioEditOperation.Silence   => AudioEditor.SilenceRegion(sourceStream, workingType, request.Start!.Value, request.End!.Value),
+                    AudioEditOperation.Normalize => AudioEditor.Normalize(sourceStream, workingType),
+                    AudioEditOperation.Gain      => AudioEditor.Gain(sourceStream, workingType, request.GainDb!.Value),
+                    AudioEditOperation.Fade      => AudioEditor.Fade(sourceStream, workingType, request.FadeInSeconds ?? 0, request.FadeOutSeconds ?? 0),
+                    AudioEditOperation.Reverse   => AudioEditor.Reverse(sourceStream, workingType),
+                    AudioEditOperation.Speed     => AudioEditor.ChangeSpeed(sourceStream, workingType, request.SpeedRatio!.Value),
+                    AudioEditOperation.Pitch     => AudioEditor.PitchShift(sourceStream, workingType, request.PitchSemitones!.Value),
                     _                            => throw new NotSupportedException($"Unknown operation: {request.Operation}"),
                 };
             }
@@ -160,6 +165,11 @@ public sealed class UploadFileAudioEditController : BenControllerBase
             CreatedByAppUserId = userId,
         };
 
+        // An edit is saved as WAV, so it is several times the size of an MP3 or .m4a it was made
+        // from: a new file under the person, asked for like a clip is, before the bytes are written.
+        if (await AccountStorageGuard.WhyCannotStoreAsync(db, userId, editedBytes.Length, ct) is { } full)
+            return StatusCode(StatusCodes.Status413PayloadTooLarge, full);
+
         var relativePath = _fileStorage.UserFilePath(userId, entity.StoredFileName);
         using (var ms = new MemoryStream(editedBytes))
             await _fileStorage.WriteAsync(relativePath, ms, ct);
@@ -198,6 +208,29 @@ public sealed class UploadFileAudioEditController : BenControllerBase
     {
         try { await _fileStorage.DeleteAsync(relativePath, CancellationToken.None); }
         catch { /* the insert already failed; a failed cleanup must not replace that error */ }
+    }
+
+    /// <summary>
+    /// The source as something the edits can read: MP3 and WAV as they are, anything else (the
+    /// phone's .m4a) decoded to WAV first at its own rate and channels.
+    /// </summary>
+    /// <remarks>
+    /// The length limit is checked before decoding, with the same sentence a long MP3 gets, so an
+    /// hour of .m4a is refused from its header rather than after a gigabyte of WAV is built.
+    /// </remarks>
+    private async Task<(Stream Stream, string ContentType)> OpenEditableAsync(
+        UploadFile source, double sourceSeconds, CancellationToken ct)
+    {
+        var stream = await OpenSourceStreamAsync(source, ct);
+        if (AudioSourceReader.Reads(source.ContentType)) return (stream, source.ContentType);
+
+        await using (stream)
+        {
+            AudioSourceReader.EnsureEditable(TimeSpan.FromSeconds(sourceSeconds));
+            var wav = await _decoder.DecodeRangeToWavAsync(
+                stream, source.ContentType, source.FileName, 0, sourceSeconds, ct);
+            return (new MemoryStream(wav), "audio/wav");
+        }
     }
 
     private async Task<Stream> OpenSourceStreamAsync(UploadFile file, CancellationToken ct)

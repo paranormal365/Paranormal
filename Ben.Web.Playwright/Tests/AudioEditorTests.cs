@@ -286,6 +286,74 @@ public class AudioEditorTests : BenTestBase
     }
 
     /// <summary>
+    /// A recording from the phone (.m4a) scans and edits in the editor like an MP3 (audio phase 4).
+    /// </summary>
+    /// <remarks>
+    /// <para>The fixture is cut from a real device bundle and keeps the phone's layout, with the
+    /// index after the audio, which is why the server copies it to a file before ffmpeg reads it.
+    /// It goes up as <c>audio/x-m4a</c>, which is what Chrome and Safari on a Mac call an .m4a.</para>
+    ///
+    /// <para>A server with no ffmpeg answers "This server cannot read .m4a yet.", and the editor
+    /// shows that sentence. That is ignored here rather than failed: run-e2e.sh configures ffmpeg
+    /// whenever this machine has one, and the sentence is the right answer when it does not.</para>
+    /// </remarks>
+    [Test]
+    public async Task A_phone_recording_can_be_scanned_and_edited()
+    {
+        var m4a = await File.ReadAllBytesAsync(Path.Combine(AppContext.BaseDirectory, "Fixtures", "device-clip.m4a"));
+        if (!await ReadyInFullViewAsync(m4a, "m4a", "audio/x-m4a"))
+        {
+            Assert.Ignore("Could not open the editor; see the output for where it gave up.");
+            return;
+        }
+
+        await AudioEditorUi.OpenTabAsync(Modal, "EVP Markers");
+        var panel = Modal.Locator("#evp-markers-panel");
+        var scan  = panel.GetByRole(AriaRole.Button, new() { Name = "Scan for EVP" });
+        await Expect(scan).ToBeEnabledAsync(new() { Timeout = 30_000 });
+        await scan.ClickAsync();
+
+        var message = panel.Locator(".evp-lab__msg");
+        await Expect(message).ToBeVisibleAsync(new() { Timeout = 120_000 });
+        var said = (await message.InnerTextAsync()).Trim();
+        TestContext.Out.WriteLine($"scan said: {said}");
+
+        if (said.Contains("cannot read .m4a"))
+        {
+            Assert.Ignore($"This host has no ffmpeg, and the editor said so: {said}");
+            return;
+        }
+
+        // A finding, either way. The old answer to an .m4a was "The scan failed. The file may not
+        // be readable audio.", which blamed a recording that was fine.
+        Assert.That(said, Does.Match("Nothing stood out|candidate"), "the scan did not run");
+
+        var clipsButton = Modal.Locator("#audio-editor-toolbar").GetByRole(AriaRole.Button, new() { Name = "Clips", Exact = false });
+        async Task<int> ClipCountAsync()
+        {
+            var m = System.Text.RegularExpressions.Regex.Match(await clipsButton.InnerTextAsync(), @"\((\d+)\)");
+            return m.Success ? int.Parse(m.Groups[1].Value) : -1;
+        }
+        var before    = await ClipCountAsync();
+        var editError = Modal.Locator(".alert-danger").First;
+
+        // Normalize runs straight from the menu. Edits were refused for anything but MP3 and WAV.
+        await AudioEditorUi.ChooseAsync(Page, "edit", "Normalize");
+
+        var deadline = DateTime.UtcNow.AddSeconds(120);
+        while (DateTime.UtcNow < deadline)
+        {
+            if (await ClipCountAsync() > before) break;
+            if (await editError.CountAsync() > 0 && await editError.IsVisibleAsync())
+                Assert.Fail($"Normalize was refused: {(await editError.InnerTextAsync()).Trim()}");
+            await Page.WaitForTimeoutAsync(1_000);
+        }
+
+        Assert.That(await ClipCountAsync(), Is.GreaterThan(before),
+            "Normalize of a phone recording produced neither a saved file nor a message");
+    }
+
+    /// <summary>
     /// Silence, applied to a region a person drew, produces a file and says it did.
     /// </summary>
     /// <remarks>

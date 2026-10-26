@@ -190,9 +190,9 @@ below come from the review session's reading of wavesurfer.xyz, the GitHub relea
        runs the prebuilt ffmpeg 9.0 in `Ben.Video.Sidecar/ffmpeg/osx-arm64/`, and production runs
        its own `MediaTools:FfmpegPath` binary. Use it to check how the AAC decoder and
        `-ss`/`-t` behave on moov-at-end files (phases 4, 6, 9) before trusting a guess.
-   - **Envelope is on Ben's list.** Phase 0 removed our unused envelope wiring. Ask Ben what he
-     wants from it before wiring it back: a drawn volume curve, kept as a new file the way every
-     other edit is.
+   - **Envelope is on Ben's list.** Phase 0 removed our unused envelope wiring. Ben, 10/26/2026:
+     include it if it earns its place. It does, and it is in phase 7 as a drawn volume curve, kept
+     as a new file the way every other edit is.
 2. **`WaveSurferPlayer.razor.js` onto the v8 model:**
    - `getState()` signals (`currentTime`, `isPlaying`, `volume`, `loadPhase`, `scrollPosition`)
      replace hand-written event bookkeeping. `getRenderer().getVisibleRange()` replaces the
@@ -347,6 +347,29 @@ below come from the review session's reading of wavesurfer.xyz, the GitHub relea
 
 ---
 
+### Phase 4b (S+E) — Edits and clips saved without loss, at about half the size · ½ day · no migration
+
+Ben, 10/26/2026, on WAV's size: "I would not recommend a format that loses information." So MP3 is
+never offered: it discards the quietest sounds and what it judges masked, which is what an EVP
+search looks for, and an .m4a converted to MP3 would lose twice.
+
+1. **FLAC is the default for every saved edit and clip.** Lossless, so the decoded samples are
+   bit-for-bit the WAV's, at roughly 50–60 % of its size for room recordings. Browsers play it
+   (Chrome, Edge, Firefox, Safari 11+). Encoded by ffmpeg (`-c:a flac`) through `IAudioDecoder`'s
+   sibling `IAudioEncoder`; with no ffmpeg the save is WAV, as now, and says so.
+2. **The save shows both sizes.** The Make clip dialog and the Edit tab read "Saved as FLAC, 4.1 MB
+   (WAV would be 9.8 MB). Nothing is lost: it plays back identically." A "Save as WAV instead"
+   checkbox for anyone who needs WAV for another program.
+3. `UploadFileAudioClipController` / `UploadFileAudioEditController` take `Format` (Flac default,
+   Wav); `ClipAudioRequest` / `AudioEditRequest` gain it, defaulting to Flac. NAudio cannot read
+   FLAC, so `AudioSourceReader.Reads` stays MP3/WAV and a FLAC source goes through ffmpeg like
+   .m4a; a saved clip can itself be clipped, edited and scanned.
+4. Tests: `A_flac_clip_decodes_to_the_same_samples_as_the_wav` (round-trip through ffmpeg, sample
+   equality), `A_clip_is_smaller_as_flac`, `No_ffmpeg_saves_wav_and_says_so`, Playwright
+   `The_save_says_how_big_each_format_would_be`.
+
+---
+
 ### Phase 5 (S) — Every dial exposed, presets · 1–2 days · **migration M1 `EvpScanSettings`**
 
 1. `EvpDetectionOptions` gains (defaults = today's constants so the default path is bit-identical):
@@ -472,7 +495,11 @@ finished > 7 days ago (results live in `EvpScans`/markers).
 | Loop | `loopRange/stopLoop` via `timeupdate`; Loop toggle loops the selection or the candidate being auditioned |
 | Keyboard | `Manage/Audio/audio-editor-keys.js` (`attach(dotnetRef)`/`detach()`; ignores inputs/contenteditable/open modals) → `[JSInvokable] OnShortcutAsync(key)`. Map: **Space** play/pause · **←/→** ±1 s (Shift ×5) · **[ ]** selection start/end at playhead · **K** keep · **D** / Delete dismiss · **N/P** next/previous candidate · **Z** zoom to selection · **F** fit · **L** loop · **B** compare original (phase 8) · **Esc** clear selection · **?** shortcuts dialog (BenModal) |
 
-Tests: `Keyboard_space_plays_and_bracket_keys_set_the_selection`, `K_keeps_and_D_dismisses_the_focused_candidate`,
+| Volume envelope (Ben, 10/26/2026) | the vendored `plugins/envelope.esm.js` over the waveform, off until Edit ▸ **Draw volume…** turns it on: drag points to pull down a bang or a door beside a faint sound, or bring a quiet stretch up. Live through the listening chain's gain while drawing; **Save as a new file** posts the points to `audio-edit` as a new `Envelope` operation (linear gain between points, clamped −40…+20 dB, the WAV/FLAC path like every edit). Points are not kept on the recording itself. |
+
+Tests: `Envelope_points_reach_the_saved_file` (a −20 dB dip over a fixture tone measures ≈ −20 dB in the
+output, and 0 dB outside it), `AudioEditorTests.Drawing_a_volume_curve_saves_a_new_file`,
+`Keyboard_space_plays_and_bracket_keys_set_the_selection`, `K_keeps_and_D_dismisses_the_focused_candidate`,
 `Zoom_to_selection_fills_the_window` (region ≥ 60 % of the wrapper), `A_candidate_can_be_looped`,
 `Spectrogram_shows_the_candidates` (overlay pixels inside a candidate's bounds via `EvaluateAsync` + `getImageData`).
 

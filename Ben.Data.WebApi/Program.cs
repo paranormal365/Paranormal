@@ -428,6 +428,8 @@ builder.Services.AddScoped<Ben.Data.WebApi.Services.AccountClosureService>();
 // itself unavailable rather than failing an upload.
 builder.Services.Configure<Ben.Data.WebApi.Services.MediaToolOptions>(
     builder.Configuration.GetSection("MediaTools"));
+builder.Services.PostConfigure<Ben.Data.WebApi.Services.MediaToolOptions>(
+    o => o.ResolveAgainst(builder.Environment.ContentRootPath));
 builder.Services.AddSingleton<Ben.Data.WebApi.Services.IAvMetadataStripper,
                               Ben.Data.WebApi.Services.AvMetadataStripper>();
 // Audio decoding for scans and clips: NAudio for MP3/WAV, the same ffmpeg for the phone's .m4a.
