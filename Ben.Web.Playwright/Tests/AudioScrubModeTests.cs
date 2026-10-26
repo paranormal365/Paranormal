@@ -114,15 +114,15 @@ public class AudioScrubModeTests : BenTestBase
         catch { /* see the remarks: a janitor never fails a test */ }
     }
 
-    /// <summary>Right-clicks the compact preview and opens the full-view modal.</summary>
+    /// <summary>Right-clicks the compact preview and opens the editor, which is its own page.</summary>
     private async Task OpenFullViewAsync()
     {
         var wrapper = OurFileCard.Locator("[id^='afp-']").First;
         await Expect(wrapper).ToBeVisibleAsync(new() { Timeout = 15_000 });
 
         await wrapper.ClickAsync(new() { Button = MouseButton.Right });
-        await Page.GetByText("Open Full View", new() { Exact = false }).ClickAsync();
-        await Page.WaitForTimeoutAsync(300); // modal open animation
+        await Page.GetByText("Open in editor", new() { Exact = true }).ClickAsync();
+        await Page.WaitForURLAsync("**/audio/**", new() { Timeout = 30_000 });
     }
 
     [Test]

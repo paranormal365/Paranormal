@@ -32,6 +32,10 @@ it is hidden from everybody else, but still takes its number. No other sub-headi
 
 ## Unreleased
 
+- The editor opens as a page of its own, with an address you can bookmark or share with someone
+  who can see the file. **Back** returns to where you opened it.
+- Right-click a player for **Quick look**: a bigger player with its own controls, without leaving
+  the list.
 - A marker's end can be set past 1:40 on longer recordings, and the fade boxes accept any length up
   to the recording's own.
 - Clicking "Mark a stretch of audio" ticks its box.

@@ -13,6 +13,7 @@
 @inject Ben.Web.Services.IMediaUrlBuilder MediaUrls
 @inject BenToastService Toasts
 @inject NavigationManager Nav
+@inject IBenUserState UserState
 @using Ben.Web.Services.WebApi
 @using Ben.Web.Website.Library.Kit
 
@@ -78,15 +79,25 @@ else
                     OnClick="@(async (AudioContextMenuItem item) => await OnMenuClickAsync(item))">
 </BenContextMenu>
 
-@* ── Full view (temporary) ──────────────────────────────────────────────── *@
-@* Phase 1, safety step: the fullscreen window hosts the extracted AudioEditor unchanged, so the
-   existing tests prove the move lost nothing before the window is replaced by the page. *@
-<BenModal Visible="@_showModal" VisibleChanged="@(v => { _showModal = v; })" Title="@FileName" Size="fullscreen">
+@* ── Quick look ─────────────────────────────────────────────────────────── *@
+@* A bigger player with its own controls, for listening without leaving the list. The editor
+   itself is a page (AudioEditorPage); this window used to BE the editor, fullscreen. *@
+<BenModal @bind-Visible="_showQuickLook" Title="@FileName" Size="lg">
     <ChildContent>
-        @if (_showModal && _source is not null)
+        @if (_showQuickLook && _source is not null)
         {
-            <AudioEditor Source="@EditorSource" />
+            <div data-testid="audio-quick-look">
+                <WaveSurferPlayer Config="@_quickLookConfig" />
+            </div>
         }
+        <div class="dialog-footer-actions">
+            <span class="dialog-footer-spacer"></span>
+            @if (CanOpenEditor)
+            {
+                <a class="btn btn-primary" href="@EditorHref" data-testid="open-in-editor"><BenIcon Name="maximize-2" Class="me-1" />Open in editor</a>
+            }
+            <button type="button" class="btn btn-secondary" @onclick="@(() => _showQuickLook = false)">Close</button>
+        </div>
     </ChildContent>
 </BenModal>
 
@@ -129,13 +140,26 @@ else
     private readonly string _wrapperId = $"afp-{Guid.NewGuid():N}";
     // ── Context menu items ────────────────────────────────────────────────────
 
-    private static readonly List<AudioContextMenuItem> _menuItems =
+    private static readonly List<AudioContextMenuItem> _baseMenuItems =
     [
-        new("play",     "Play"),
-        new("pause",    "Pause"),
-        new("rewind",   "Rewind"),
-        new("fullview", "Open Full View"),
+        new("play",      "Play"),
+        new("pause",     "Pause"),
+        new("rewind",    "Rewind"),
+        new("quicklook", "Quick look"),
     ];
+
+    private static readonly List<AudioContextMenuItem> _editorMenuItems =
+        [.. _baseMenuItems, new("editor", "Open in editor")];
+
+    /// <summary>"Open in editor" only for someone signed in: the page asks a visitor to sign in,
+    /// and these players also sit on public place pages that visitors read.</summary>
+    private List<AudioContextMenuItem> _menuItems => CanOpenEditor ? _editorMenuItems : _baseMenuItems;
+
+    private bool CanOpenEditor => UserState.IsAuthenticated;
+
+    /// <summary>The editor's address, with this page as where Back returns to.</summary>
+    private string EditorHref =>
+        $"/audio/{FileId}?return={Uri.EscapeDataString("/" + Nav.ToBaseRelativePath(Nav.Uri))}";
 
     // ── WsConfig objects ──────────────────────────────────────────────────────
 
@@ -220,21 +244,32 @@ else
                 if (_player is not null) await _player.StopAsync();
                 _currentTime = 0;
                 break;
-            case "fullview":
+            case "quicklook":
                 if (_playing && _player is not null)
                     await _player.PauseAsync();
-                _showModal  = true;
+                _showQuickLook = true;
                 StateHasChanged();
+                break;
+            case "editor":
+                if (_playing && _player is not null)
+                    await _player.PauseAsync();
+                Nav.NavigateTo(EditorHref);
                 break;
         }
     }
 
     private sealed record AudioContextMenuItem(string Action, string Text);
 
-    private bool _showModal;
+    private bool _showQuickLook;
 
-    private UploadFileAudioSource EditorSource => new(
-        FileId,
-        string.IsNullOrWhiteSpace(SourceUrl) ? MediaUrls.Download(FileId) : SourceUrl,
-        FileName, ContentType, FileSize);
+    private WsConfig _quickLookConfig => new()
+    {
+        Source  = _source,
+        Options = new WsOptions { Normalize = true },
+        Plugins = new WsPluginConfig { Hover = true, Timeline = true, Zoom = true },
+        InitialHeight = "160px",
+        MinHeight     = "120px",
+        MaxHeight     = "160px",
+        ShowControls  = true,
+    };
 }

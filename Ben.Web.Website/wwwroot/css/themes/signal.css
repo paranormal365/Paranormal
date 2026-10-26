@@ -365,6 +365,10 @@ h1, h2, h3, .h1, .h2, .h3, .display-1, .display-2, .display-3, .display-4 {
 /* …and no rail beside an editor either: an editor under a group (the video editor, the audio mix)
    would otherwise get the group's menu, and the width it needs would go to a list of links. */
 .app-shell:has(.ben-editor-page) > .app-rail { display: none; }
+/* …nor the "Work waiting" card. It sat over the audio editor's page (10/26/2026) and pushed its
+   transport below the fold, the same failure the banner rule above prevents. Every other page
+   still shows it, so the work is not lost from view. */
+.content-wrapper:has(.ben-editor-page) .work-waiting { display: none; }
 /* A page with its own hero (Shared/PageHero, or anything marked data-own-hero — the store's
    carousel) has its picture and title in one frame already; the section band above it would be a
    second picture and a second title an inch away. */

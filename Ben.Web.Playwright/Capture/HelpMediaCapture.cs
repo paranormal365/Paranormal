@@ -1590,11 +1590,12 @@ public sealed class HelpMediaCapture : BenTestBase
             Path.Combine(AppContext.BaseDirectory, "Fixtures", "test-audio.mp3"));
         await Expect(Page.Locator("[id^='ws-']").First).ToBeVisibleAsync(new() { Timeout = 60_000 });
 
-        // ── The full view ─────────────────────────────────────────────────────
+        // ── The editor (its own page since phase 1 of the 10/26/2026 plan) ────
         await Page.Locator("[id^='afp-']").First.ClickAsync(new() { Button = MouseButton.Right });
-        await Page.GetByText("Open Full View", new() { Exact = false }).ClickAsync();
+        await Page.GetByText("Open in editor", new() { Exact = true }).ClickAsync();
+        await Page.WaitForURLAsync("**/audio/**", new() { Timeout = 30_000 });
 
-        var modal = Page.Locator(".modal.show").First;
+        var modal = Page.Locator("#audio-editor");
         await Expect(modal.GetByRole(AriaRole.Button, new() { Name = "Clear Regions" }))
             .ToBeEnabledAsync(new() { Timeout = 90_000 });
         await Page.WaitForTimeoutAsync(1_500);
@@ -1655,7 +1656,9 @@ public sealed class HelpMediaCapture : BenTestBase
         }
         await ShootAsync("using-the-audio-editor", "evp-candidates.png", selector: "#evp-markers-panel");
 
-        await modal.Locator(".btn-close").First.ClickAsync();
+        // Back to the case the editor was opened from, where the mixer's button is.
+        await Page.GetByTestId("audio-editor-back").ClickAsync();
+        await Page.WaitForURLAsync(u => !u.Contains("/audio/"), new() { Timeout = 30_000 });
         await Page.WaitForTimeoutAsync(800);
 
         // ── The case mixer ────────────────────────────────────────────────────

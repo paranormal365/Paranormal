@@ -8,10 +8,14 @@ order: 53
 
 Every audio file on the site comes with a player. Click the waveform to play it — often that's all
 you need. When you want to listen closely — to find the three seconds that matter in a two-hour
-recording, and keep them — right-click the player and choose **Open Full View**.
+recording, and keep them — right-click the player and choose **Open in editor**.
 
-![The audio editor in full view](/help/media/using-the-audio-editor/editor-overview.png)
-*The full view: the waveform in the middle, the toolbar above it, and the panels you open from the
+The editor opens as a page of its own. Its address belongs to that recording, so you can bookmark it
+or send it to someone who can see the file. **Back** returns you to where you opened it from.
+To listen in a bigger player without leaving the list, choose **Quick look** instead.
+
+![The audio editor](/help/media/using-the-audio-editor/editor-overview.png)
+*The editor: the waveform in the middle, the toolbar above it, and the panels you open from the
 toolbar stacked below.*
 
 ## The two things to know first

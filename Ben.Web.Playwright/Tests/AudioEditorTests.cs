@@ -25,7 +25,50 @@ public class AudioEditorTests : BenTestBase
     private static readonly string TestAudioPath =
         Path.Combine(AppContext.BaseDirectory, "Fixtures", "test-audio.mp3");
 
-    private ILocator Modal => Page.Locator(".modal.show").First;
+    /// <summary>The editor, on its own page since phase 1 of the 10/26/2026 plan. It was a
+    /// fullscreen modal, and everything these tests look for sat inside it, as it sits inside this.</summary>
+    private ILocator Modal => Page.Locator("#audio-editor");
+
+    /// <summary>The compact player on the card for this test's own recording.</summary>
+    private ILocator? _ourPlayer;
+
+    /// <summary>The address the editor opened at, so a test can come back to it.</summary>
+    private string? _editorUrl;
+
+    /// <summary>
+    /// Opens the editor from a compact player's menu: right-click, "Open in editor", and wait for
+    /// the page to be ready to use.
+    /// </summary>
+    private async Task OpenEditorFromPlayerAsync(ILocator player)
+    {
+        await player.ClickAsync(new() { Button = MouseButton.Right });
+        await Page.GetByText("Open in editor", new() { Exact = true }).ClickAsync();
+        await Page.WaitForURLAsync("**/audio/**", new() { Timeout = 30_000 });
+        _editorUrl = Page.Url;
+        await WaitForEditorAsync();
+    }
+
+    private async Task WaitForEditorAsync()
+    {
+        await Expect(Modal).ToBeVisibleAsync(new() { Timeout = 30_000 });
+        await Expect(Modal.GetByRole(AriaRole.Button, new() { Name = "Clear Regions" }))
+            .ToBeEnabledAsync(new() { Timeout = 90_000 });
+    }
+
+    /// <summary>
+    /// Leaves the editor the way a person would, by its Back link, then opens the same recording
+    /// again. Leaving is what saves how it was set up; it used to be closing the window.
+    /// </summary>
+    private async Task LeaveAndReopenEditorAsync()
+    {
+        Assert.That(_editorUrl, Is.Not.Null, "the editor was never opened");
+        await Page.GetByTestId("audio-editor-back").ClickAsync();
+        await Page.WaitForURLAsync(u => !u.Contains("/audio/"), new() { Timeout = 30_000 });
+        await Page.WaitForTimeoutAsync(800);   // the save on the way out is a round trip
+
+        await Page.GotoAsync(_editorUrl!);
+        await WaitForEditorAsync();
+    }
 
 
     /// <summary>
@@ -44,7 +87,7 @@ public class AudioEditorTests : BenTestBase
     /// <para>The library draws waveforms on demand instead, one tap at a time, and everything here
     /// belongs to the seat running the test.</para>
     /// </remarks>
-    private async Task<bool> ReadyInFullViewAsync(byte[]? audio = null, string extension = "mp3", string mimeType = "audio/mpeg")
+    private async Task<bool> ReadyInFullViewAsync(byte[]? audio = null, string extension = "mp3", string mimeType = "audio/mpeg", bool openEditor = true)
     {
         await LoginAsync(UserEmail, UserPassword);
 
@@ -118,13 +161,85 @@ public class AudioEditorTests : BenTestBase
         try { await Expect(ourCard.Locator("[id^='ws-']").First).ToBeVisibleAsync(new() { Timeout = 60_000 }); }
         catch { TestContext.Out.WriteLine("gave up: the waveform never drew"); return false; }
 
-        await ourCard.Locator("[id^='afp-']").First.ClickAsync(new() { Button = MouseButton.Right });
-
-        await Page.GetByText("Open Full View", new() { Exact = false }).ClickAsync();
-        await Expect(Modal).ToBeVisibleAsync(new() { Timeout = 15_000 });
-        await Expect(Modal.GetByRole(AriaRole.Button, new() { Name = "Clear Regions" }))
-            .ToBeEnabledAsync(new() { Timeout = 90_000 });
+        _ourPlayer = ourCard.Locator("[id^='afp-']").First;
+        if (openEditor) await OpenEditorFromPlayerAsync(_ourPlayer);
         return true;
+    }
+
+    /// <summary>
+    /// The editor is a page with an address of its own: opening that address directly, with no
+    /// list behind it, gives the editor on the same recording.
+    /// </summary>
+    [Test]
+    public async Task The_editor_has_its_own_address()
+    {
+        if (!await ReadyInFullViewAsync())
+        {
+            Assert.Ignore("Could not open the editor; see the output for where it gave up.");
+            return;
+        }
+
+        Assert.That(_editorUrl, Does.Match(@"/audio/[0-9a-fA-F-]{36}"), "the editor did not open at /audio/{id}");
+        var title = (await Page.Locator(".audio-editor-page__title").InnerTextAsync()).Trim();
+
+        await Page.GotoAsync($"{BaseUrl}/");
+        await Page.GotoAsync(_editorUrl!);
+        await WaitForEditorAsync();
+
+        Assert.That((await Page.Locator(".audio-editor-page__title").InnerTextAsync()).Trim(), Is.EqualTo(title),
+            "the address opened a different recording");
+    }
+
+    /// <summary>Back leaves the editor for the page it was opened from, not somewhere fixed.</summary>
+    [Test]
+    public async Task Back_returns_to_where_you_came_from()
+    {
+        if (!await ReadyInFullViewAsync())
+        {
+            Assert.Ignore("Could not open the editor; see the output for where it gave up.");
+            return;
+        }
+
+        Assert.That(_editorUrl, Does.Contain("return=%2Fmedia-library"), "the editor was not told where it was opened from");
+        await Page.GetByTestId("audio-editor-back").ClickAsync();
+        await Page.WaitForURLAsync("**/media-library**", new() { Timeout = 30_000 });
+    }
+
+    /// <summary>
+    /// The compact player still has a bigger window for listening without leaving the list, and it
+    /// plays.
+    /// </summary>
+    /// <remarks>
+    /// That window used to be the whole editor, fullscreen. It is now a quick look with its own
+    /// controls and a way into the editor.
+    /// </remarks>
+    [Test]
+    public async Task Quick_look_still_plays()
+    {
+        if (!await ReadyInFullViewAsync(openEditor: false))
+        {
+            Assert.Ignore("Could not reach the recording's player; see the output for where it gave up.");
+            return;
+        }
+
+        await _ourPlayer!.ClickAsync(new() { Button = MouseButton.Right });
+        await Page.GetByText("Quick look", new() { Exact = true }).ClickAsync();
+
+        var look = Page.GetByTestId("audio-quick-look");
+        await Expect(look).ToBeVisibleAsync(new() { Timeout = 15_000 });
+        await Expect(Page.GetByTestId("open-in-editor")).ToBeVisibleAsync();
+
+        var play = look.GetByRole(AriaRole.Button, new() { Name = "Play" });
+        await Expect(play).ToBeVisibleAsync(new() { Timeout = 60_000 });
+        var time = look.Locator(".ws-player-time");
+        var before = (await time.InnerTextAsync()).Trim();
+
+        await play.ClickAsync();
+        await Page.WaitForTimeoutAsync(1_500);
+        var during = (await time.InnerTextAsync()).Trim();
+        TestContext.Out.WriteLine($"quick look time {before} -> {during}");
+
+        Assert.That(during, Is.Not.EqualTo(before), "the quick look did not play");
     }
 
     /// <summary>
@@ -578,15 +693,8 @@ public class AudioEditorTests : BenTestBase
         if (await notSaved.CountAsync() > 0)
             Assert.Fail($"the editor refused to save: {(await notSaved.First.InnerTextAsync()).Trim()}");
 
-        // Close the editor and open it again on the same recording.
-        await Modal.Locator(".btn-close").First.ClickAsync();
-        await Page.WaitForTimeoutAsync(800);
-
-        await Page.Locator("[id^='afp-']").First.ClickAsync(new() { Button = MouseButton.Right });
-        await Page.GetByText("Open Full View", new() { Exact = false }).ClickAsync();
-        await Expect(Modal).ToBeVisibleAsync(new() { Timeout = 15_000 });
-        await Expect(Modal.GetByRole(AriaRole.Button, new() { Name = "Clear Regions" }))
-            .ToBeEnabledAsync(new() { Timeout = 90_000 });
+        // Leave the editor and open it again on the same recording.
+        await LeaveAndReopenEditorAsync();
         await Page.WaitForTimeoutAsync(1_500);
 
         // The spectrogram is on again, and on the ramp that was chosen.
@@ -697,14 +805,7 @@ public class AudioEditorTests : BenTestBase
         if (await notSaved.CountAsync() > 0)
             Assert.Fail($"the editor refused to save: {(await notSaved.First.InnerTextAsync()).Trim()}");
 
-        await Modal.Locator(".btn-close").First.ClickAsync();
-        await Page.WaitForTimeoutAsync(800);
-
-        await Page.Locator("[id^='afp-']").First.ClickAsync(new() { Button = MouseButton.Right });
-        await Page.GetByText("Open Full View", new() { Exact = false }).ClickAsync();
-        await Expect(Modal).ToBeVisibleAsync(new() { Timeout = 15_000 });
-        await Expect(Modal.GetByRole(AriaRole.Button, new() { Name = "Clear Regions" }))
-            .ToBeEnabledAsync(new() { Timeout = 90_000 });
+        await LeaveAndReopenEditorAsync();
         await Page.WaitForTimeoutAsync(1_000);
 
         await OpenEqPanelAsync();

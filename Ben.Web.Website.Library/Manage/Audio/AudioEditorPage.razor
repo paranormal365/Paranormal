@@ -1,0 +1,126 @@
+@page "/audio/{FileId:guid}"
+@page "/field-sessions/{SessionId:guid}/audio/{FileId:guid}"
+@namespace Ben.Web.Website.Library.Manage.Audio
+@inject IBenAdminClient AdminClient
+@inject IBenUserState UserState
+@inject NavigationManager Nav
+@inject Ben.Web.Services.IMediaUrlBuilder MediaUrls
+@using Ben.Web.Services
+@using Ben.Web.Services.WebApi
+@using Ben.Web.Website.Library.Kit
+@using Ben.Web.Website.Library.Help
+
+@*
+  The audio editor's own page (phase 1 of ProjectNotes/AudioEditor-EVP-Plan-2026-10-26.md).
+
+  It was a fullscreen window over whatever list the file was in. A page has an address that can be
+  shared and bookmarked, the browser's Back button leaves it, and it has the whole window to grow
+  into, which the analysis views in later phases need.
+
+  No feature flag: the editor was reachable from case files, the media library, places and admin
+  pages alike, and gating the page on any one of those areas would take it away from the others.
+*@
+
+<PageTitle>@(_source?.FileName ?? "Audio editor")</PageTitle>
+
+@if (!_loaded)
+{
+    <BenLoaderOverlay Visible="true" Text="Opening the recording…" />
+    return;
+}
+
+@if (_needsSignIn)
+{
+    <div class="container py-4">
+        <p class="text-muted">Sign in to open this recording.</p>
+        <a class="btn btn-primary" href="@SignInLink.For(Nav)">Sign in</a>
+    </div>
+    return;
+}
+
+@if (_problem is not null || _source is null)
+{
+    <div class="container py-4" data-testid="audio-editor-problem">
+        <div class="alert alert-warning">@(_problem ?? "This recording couldn't be opened.")</div>
+        <a href="@BackHref" class="btn btn-outline-secondary btn-sm">← Back</a>
+    </div>
+    return;
+}
+
+<div class="ben-editor-page audio-editor-page">
+    <div class="audio-editor-page__head">
+        <a href="@BackHref" class="audio-editor-page__back" data-testid="audio-editor-back">← Back</a>
+        <span class="vr"></span>
+        <h1 class="audio-editor-page__title text-truncate" title="@_source.FileName">@_source.FileName</h1>
+        <HelpLink Slug="using-the-audio-editor" />
+        <span class="audio-editor-page__version ms-auto" title="Audio editor version">Editor @AudioEditorRelease.Version</span>
+    </div>
+
+    <div class="audio-editor-page__body">
+        <AudioEditor Source="@_source" />
+    </div>
+</div>
+
+@code {
+    [Parameter] public Guid FileId { get; set; }
+
+    /// <summary>Set on the field-session address. Session clips open here from phase 9 of the plan.</summary>
+    [Parameter] public Guid? SessionId { get; set; }
+
+    /// <summary>Where Back goes: the page the editor was opened from.</summary>
+    [SupplyParameterFromQuery(Name = "return")] public string? ReturnPath { get; set; }
+
+    private IAudioEditorSource? _source;
+    private bool _loaded;
+    private bool _needsSignIn;
+    private string? _problem;
+
+    /// <summary>
+    /// The return address, if it is a path on this site. Anything else (another host, "//host",
+    /// a scheme) is ignored, the same rule Login.razor applies to its returnUrl.
+    /// </summary>
+    private string BackHref =>
+        ReturnPath is { Length: > 0 } r && r.StartsWith('/') && !r.StartsWith("//") && !r.StartsWith("/\\")
+            ? r
+            : _source?.BackHref ?? "/media-library";
+
+    protected override async Task OnParametersSetAsync()
+    {
+        _loaded = false;
+        _problem = null;
+        _source = null;
+
+        if (!await UserState.WaitUntilAuthReadyAsync(RendererInfo.IsInteractive)) return;
+        if (!UserState.IsAuthenticated) { _needsSignIn = true; _loaded = true; return; }
+
+        if (SessionId is not null)
+        {
+            _problem = "Recordings from a field session can't be opened in the editor yet.";
+            _loaded = true;
+            return;
+        }
+
+        var file = await AdminClient.GetUploadFileAsync(FileId);
+        if (file.SessionExpired) { _needsSignIn = true; }
+        else if (file.Failed)
+        {
+            // A refusal arrives with the server's sentence; an unreachable server with none.
+            _problem = file.Reason is { Length: > 0 } reason
+                ? $"This recording couldn't be opened. {reason}"
+                : "The site couldn't reach the server to open this recording. Try again in a moment.";
+        }
+        else if (file.Item is not { } f)
+        {
+            _problem = "This recording couldn't be found.";
+        }
+        else if (!f.ContentType.StartsWith("audio/", StringComparison.OrdinalIgnoreCase))
+        {
+            _problem = "This file isn't a recording, so it can't be opened in the audio editor.";
+        }
+        else
+        {
+            _source = new UploadFileAudioSource(f.Id, MediaUrls.Download(f.Id), f.FileName, f.ContentType, f.FileSize);
+        }
+        _loaded = true;
+    }
+}
