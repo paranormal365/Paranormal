@@ -2469,14 +2469,19 @@
 
         try
         {
-            var candidates = await AdminClient.ScanAudioForEvpAsync(FileId, _scanSensitivity, _scanOptions);
+            var (candidates, refusal) = await AdminClient.ScanAudioForEvpWithReasonAsync(
+                FileId, _scanSensitivity, _scanOptions);
 
             // Null means the scan did not run. "Nothing stood out from the background" is a
             // finding somebody acts on, so it must never be printed for a request that failed.
+            // The server's own sentence comes first: "This server cannot read .m4a yet." is about
+            // the server, and only it knows that.
             if (candidates is null)
             {
-                _scanMessage = "The scan couldn't be run just now. This recording has not been "
-                             + "examined — try again rather than reading anything into it.";
+                _scanMessage = refusal is { Length: > 0 }
+                    ? $"{refusal} This recording has not been examined."
+                    : "The scan couldn't be run just now. This recording has not been "
+                      + "examined — try again rather than reading anything into it.";
                 return;
             }
 

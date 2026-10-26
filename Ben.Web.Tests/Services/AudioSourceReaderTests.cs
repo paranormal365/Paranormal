@@ -13,6 +13,7 @@ namespace Ben.Web.Tests.Services;
 /// at 8.6 GB and one EVP scan at 5.1 GB, and neither released it (2026-09-06 audio walk, findings
 /// 1 and 1b).
 /// </remarks>
+[Collection(Ben.Web.Tests.AudioEditLimitCollection.Name)]
 public sealed class AudioSourceReaderTests : IDisposable
 {
     private readonly TimeSpan _originalCeiling = AudioSourceReader.MaximumEditDuration;

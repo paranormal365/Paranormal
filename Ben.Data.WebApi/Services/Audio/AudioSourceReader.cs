@@ -122,6 +122,17 @@ internal static class AudioSourceReader
         return (waveStream.TotalTime, waveStream.WaveFormat);
     }
 
+    /// <summary>Refuses a recording longer than <see cref="MaximumEditDuration"/>, saying what to do instead.</summary>
+    /// <exception cref="AudioTooLargeException">It is longer.</exception>
+    public static void EnsureEditable(TimeSpan length)
+    {
+        if (length > MaximumEditDuration)
+            throw new AudioTooLargeException(
+                $"That recording is {Describe(length)} long, and edits are limited to "
+                + $"{Describe(MaximumEditDuration)}. Cut the part you need out of it first — a clip "
+                + "saved from a region can be edited like any other file.");
+    }
+
     /// <summary>
     /// Decodes the whole recording to interleaved samples in [-1, 1].
     /// </summary>
@@ -138,11 +149,7 @@ internal static class AudioSourceReader
     {
         using var waveStream = Open(stream, contentType);
 
-        if (waveStream.TotalTime > MaximumEditDuration)
-            throw new AudioTooLargeException(
-                $"That recording is {Describe(waveStream.TotalTime)} long, and edits are limited to "
-                + $"{Describe(MaximumEditDuration)}. Cut the part you need out of it first — a clip "
-                + "saved from a region can be edited like any other file.");
+        EnsureEditable(waveStream.TotalTime);
 
         var provider = waveStream.ToSampleProvider();
         return (ReadInto(provider, EstimateSamples(waveStream, provider.WaveFormat)), provider.WaveFormat);

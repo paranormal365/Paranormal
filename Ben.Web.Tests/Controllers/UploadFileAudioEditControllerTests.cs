@@ -19,6 +19,7 @@ namespace Ben.Web.Tests.Controllers;
 /// Tests for <see cref="UploadFileAudioEditController"/> — verifies input validation,
 /// parent-file tracking, and unsupported-format rejection for each destructive edit operation.
 /// </summary>
+[Collection(Ben.Web.Tests.AudioEditLimitCollection.Name)]
 public class UploadFileAudioEditControllerTests
 {
     // ── Helpers ───────────────────────────────────────────────────────────────
@@ -56,11 +57,13 @@ public class UploadFileAudioEditControllerTests
     }
 
     private static UploadFileAudioEditController Build(
-        IDbContextFactory<BenDataContext> factory, Guid userId)
+        IDbContextFactory<BenDataContext> factory, Guid userId,
+        IAudioDecoder? decoder = null, Ben.Data.Common.Interfaces.IFileStorageService? storage = null)
     {
         var ctrl = new UploadFileAudioEditController(factory, CreateMapper(),
-            new Mock<Ben.Data.Common.Interfaces.IFileStorageService>().Object,
-            new Mock<IAuditLogService>().Object, Ben.Web.Tests.TestMedia.Ingest());
+            storage ?? new Mock<Ben.Data.Common.Interfaces.IFileStorageService>().Object,
+            new Mock<IAuditLogService>().Object, Ben.Web.Tests.TestMedia.Ingest(),
+            decoder ?? Ben.Web.Tests.TestAudio.Decoder());
         ctrl.ControllerContext = new ControllerContext
         {
             HttpContext = new DefaultHttpContext
@@ -90,7 +93,8 @@ public class UploadFileAudioEditControllerTests
                })
                .Returns(Task.CompletedTask);
 
-        var ctrl = new UploadFileAudioEditController(factory, CreateMapper(), storage.Object, new Mock<IAuditLogService>().Object, Ben.Web.Tests.TestMedia.Ingest());
+        var ctrl = new UploadFileAudioEditController(factory, CreateMapper(), storage.Object, new Mock<IAuditLogService>().Object, Ben.Web.Tests.TestMedia.Ingest(),
+            Ben.Web.Tests.TestAudio.Decoder());
         ctrl.ControllerContext = new ControllerContext
         {
             HttpContext = new DefaultHttpContext
@@ -813,5 +817,90 @@ public class UploadFileAudioEditControllerTests
 
         var bad = Assert.IsType<BadRequestObjectResult>(result.Result);
         Assert.Contains("only 2", bad.Value?.ToString());
+    }
+
+    // ── The phone's .m4a, and the free allowance (audio phase 4) ─────────────
+
+    /// <summary>
+    /// An .m4a is decoded to WAV first and then edited like any other file. A WAV labelled
+    /// <c>audio/mp4</c> could only have been read by the decoder handed in: NAudio, which the
+    /// edits use, refuses that content type.
+    /// </summary>
+    [Fact]
+    public async Task Edit_OfAnM4a_IsReadThroughTheDecoder()
+    {
+        var factory = CreateFactory();
+        var typeId  = await SeedTypeAsync(factory);
+        var (fileId, ownerId) = await SeedFileAsync(factory, CreateSilentWav(seconds: 2), "audio/mp4");
+        var ctrl    = Build(factory, ownerId, Ben.Web.Tests.TestAudio.ReadingEverythingAsWav());
+
+        var result  = await ctrl.Edit(fileId,
+            Request(AudioEditOperation.Cut, typeId, start: 0.5, end: 1.0), default);
+
+        var created = Assert.IsType<CreatedAtActionResult>(result.Result);
+        var record  = Assert.IsType<UploadFileRecord>(created.Value);
+        Assert.Equal("audio/wav", record.ContentType);
+        Assert.Equal(fileId, record.ParentFileId);
+    }
+
+    /// <summary>
+    /// A long .m4a is refused from its length, with the sentence a long MP3 gets, before any of it
+    /// is decoded.
+    /// </summary>
+    [Fact]
+    public async Task Edit_OfAnM4a_PastTheEditLimit_IsRefusedWithTheSameSentence()
+    {
+        var factory = CreateFactory();
+        var typeId  = await SeedTypeAsync(factory);
+        var (fileId, ownerId) = await SeedFileAsync(factory, CreateSilentWav(seconds: 2), "audio/mp4");
+        var ctrl    = Build(factory, ownerId, Ben.Web.Tests.TestAudio.ReadingEverythingAsWav());
+
+        var limit = AudioSourceReader.MaximumEditDuration;
+        AudioSourceReader.MaximumEditDuration = TimeSpan.FromSeconds(1);
+        try
+        {
+            var result = await ctrl.Edit(fileId, Request(AudioEditOperation.Reverse, typeId), default);
+
+            var bad = Assert.IsType<BadRequestObjectResult>(result.Result);
+            Assert.Contains("edits are limited to", bad.Value?.ToString());
+        }
+        finally { AudioSourceReader.MaximumEditDuration = limit; }
+    }
+
+    /// <summary>
+    /// An edit is saved as WAV, several times the size of the MP3 or .m4a it came from, so it is a
+    /// new file under the person like a clip, and a free account's allowance covers it.
+    /// </summary>
+    [Fact]
+    public async Task Edit_PastTheFreeAllowance_IsRefusedBeforeAnythingIsWritten()
+    {
+        var factory = CreateFactory();
+        var typeId  = await SeedTypeAsync(factory);
+        var (fileId, ownerId) = await SeedFileAsync(factory, CreateSilentWav(seconds: 2));
+
+        // Already exactly at the free cap, so any edit at all is one byte too many.
+        await using (var db = await factory.CreateDbContextAsync())
+        {
+            db.UploadFiles.Add(new UploadFile
+            {
+                Id = Guid.NewGuid(), UploadFileTypeId = typeId, AppUserId = ownerId,
+                FileName = "kept.wav", StoredFileName = "kept.wav", ContentType = "audio/wav",
+                StoragePath = $"users/{ownerId}/kept.wav",
+                FileSize = Ben.Data.WebApi.Services.Billing.AccountStorageGuard.DefaultFreeMegabytes * 1024L * 1024L,
+                DateCreated = DateTime.UtcNow, CreatedByAppUserId = ownerId,
+            });
+            await db.SaveChangesAsync();
+        }
+
+        var storage = new Mock<Ben.Data.Common.Interfaces.IFileStorageService>();
+        var ctrl    = Build(factory, ownerId, storage: storage.Object);
+
+        var result  = await ctrl.Edit(fileId, Request(AudioEditOperation.Reverse, typeId), default);
+
+        var refused = Assert.IsType<ObjectResult>(result.Result);
+        Assert.Equal(413, refused.StatusCode);
+        Assert.Contains("free account", refused.Value?.ToString());
+        storage.Verify(s => s.WriteAsync(It.IsAny<string>(), It.IsAny<Stream>(), It.IsAny<CancellationToken>()),
+                       Times.Never);
     }
 }

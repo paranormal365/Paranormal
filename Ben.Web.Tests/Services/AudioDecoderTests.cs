@@ -322,3 +322,47 @@ public class CompositeAudioDecoderTests
         Assert.IsNotType<AudioDecoderUnavailableException>(ex);
     }
 }
+
+/// <summary>
+/// Where the API looks for ffmpeg. On shared hosting nobody knows the site's folder on disk, so a
+/// relative path is taken from the API's own folder, the way the key files already are.
+/// </summary>
+public class MediaToolOptionsTests
+{
+    private static readonly string Root = Path.Combine(Path.GetTempPath(), "ben-site");
+
+    [Fact]
+    public void A_relative_path_is_taken_from_the_site_folder()
+    {
+        var options = new Ben.Data.WebApi.Services.MediaToolOptions
+            { FfmpegPath = Path.Combine("App_Data", "Tools", "ffmpeg.exe") };
+
+        options.ResolveAgainst(Root);
+
+        Assert.Equal(Path.Combine(Root, "App_Data", "Tools", "ffmpeg.exe"), options.FfmpegPath);
+    }
+
+    [Fact]
+    public void An_absolute_path_is_left_as_it_is()
+    {
+        var absolute = Path.Combine(Path.GetTempPath(), "tools", "ffmpeg");
+        var options  = new Ben.Data.WebApi.Services.MediaToolOptions { FfmpegPath = absolute };
+
+        options.ResolveAgainst(Root);
+
+        Assert.Equal(absolute, options.FfmpegPath);
+    }
+
+    [Theory]
+    [InlineData(null)]
+    [InlineData("")]
+    [InlineData("  ")]
+    public void No_path_stays_no_path(string? path)
+    {
+        var options = new Ben.Data.WebApi.Services.MediaToolOptions { FfmpegPath = path };
+
+        options.ResolveAgainst(Root);
+
+        Assert.Equal(path, options.FfmpegPath);
+    }
+}

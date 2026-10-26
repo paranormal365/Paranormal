@@ -7,11 +7,23 @@ namespace Ben.Data.WebApi.Services;
 public sealed class MediaToolOptions
 {
     /// <summary>
-    /// Absolute path to an ffmpeg executable. Empty means the API cannot remux, and audio and
+    /// Path to an ffmpeg executable. Empty means the API cannot remux, and audio and
     /// video pass through with their metadata — the behaviour before item 181, kept as the
     /// fallback so that not configuring a tool is never a failed upload.
     /// </summary>
+    /// <remarks>
+    /// A relative path is taken from the API's own folder (<see cref="ResolveAgainst"/>), so on
+    /// shared hosting it can be <c>App_Data\Tools\ffmpeg.exe</c> like the key files, with no
+    /// need to know where the host keeps the site on disk.
+    /// </remarks>
     public string? FfmpegPath { get; set; }
+
+    /// <summary>Makes a relative <see cref="FfmpegPath"/> absolute, from <paramref name="contentRoot"/>.</summary>
+    public void ResolveAgainst(string contentRoot)
+    {
+        if (!string.IsNullOrWhiteSpace(FfmpegPath) && !Path.IsPathRooted(FfmpegPath))
+            FfmpegPath = Path.GetFullPath(Path.Combine(contentRoot, FfmpegPath));
+    }
 
     /// <summary>How long one remux may take before it is abandoned and the original kept.</summary>
     public int TimeoutSeconds { get; set; } = 120;
