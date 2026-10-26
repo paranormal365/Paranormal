@@ -255,7 +255,7 @@
                 await _module.InvokeVoidAsync("dispose", _containerId);
                 await _module.DisposeAsync();
             }
-            catch (JSDisconnectedException) { /* the circuit is gone; nothing to tidy on the other side */ }
+            catch (Exception gone) when (gone is JSDisconnectedException or OperationCanceledException) { /* the circuit is gone; nothing to tidy on the other side */ }
         }
         _self?.Dispose();
     }

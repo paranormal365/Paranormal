@@ -477,7 +477,7 @@ else
             catch (Exception) { /* the module may already be unloaded */ }
 
             try { await _module.DisposeAsync(); }
-            catch (JSDisconnectedException) { /* circuit already gone */ }
+            catch (Exception gone) when (gone is JSDisconnectedException or OperationCanceledException) { /* circuit already gone */ }
         }
     }
 }

@@ -1689,7 +1689,7 @@
         _self?.Dispose();
         if (_media is not null)
         {
-            try { await _media.DisposeAsync(); } catch (JSDisconnectedException) { }
+            try { await _media.DisposeAsync(); } catch (Exception gone) when (gone is JSDisconnectedException or OperationCanceledException) { }
         }
     }
 
