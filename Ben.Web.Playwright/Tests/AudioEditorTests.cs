@@ -159,7 +159,7 @@ public class AudioEditorTests : BenTestBase
         Assert.That(before, Does.Not.Contain("Draw a region"),
             "the drag did not produce a selection, so this test cannot say anything about B");
 
-        await Modal.GetByRole(AriaRole.Button, new() { Name = "Silence", Exact = false }).First.ClickAsync();
+        await Modal.GetByRole(AriaRole.Button, new() { Name = "Detect silence", Exact = false }).First.ClickAsync();
         await Page.WaitForTimeoutAsync(2_000);   // detection walks the whole decoded buffer
 
         var after = (await readout.InnerTextAsync()).Trim();
@@ -270,6 +270,61 @@ public class AudioEditorTests : BenTestBase
         Assert.That(during, Is.Not.EqualTo(before),
             "the playhead did not move, so nothing was played. A point marker has no span, and "
             + "playing a zero-length region is a seek and a pause in the same instant.");
+    }
+
+    /// <summary>
+    /// A marker can end past 1:40, and the sentence beside its checkbox ticks the checkbox.
+    /// </summary>
+    /// <remarks>
+    /// <para>The "Ends at" box carried <c>max="100"</c>, so on any recording longer than 100 seconds
+    /// its arrows stopped at 100 and any later end was flagged invalid. Typing past it still
+    /// worked, which is why the check is the box's own validity and an arrow step, not a save.</para>
+    ///
+    /// <para>The label beside the checkbox pointed at the "Ends at" box, which does not exist
+    /// until the box is ticked, so clicking the sentence did nothing.</para>
+    /// </remarks>
+    [Test]
+    public async Task A_markers_end_can_pass_100_seconds()
+    {
+        if (!await ReadyInFullViewAsync())
+        {
+            Assert.Ignore("Could not open the full view; see the output for where it gave up.");
+            return;
+        }
+
+        await Modal.GetByRole(AriaRole.Button, new() { Name = "EVP Markers", Exact = false }).First.ClickAsync();
+        await Modal.GetByRole(AriaRole.Button, new() { Name = "Add Marker at", Exact = false }).First.ClickAsync();
+
+        var dialog = Page.Locator(".modal.show").Last;
+        var spanBox = dialog.Locator("label:has-text('Mark a stretch of audio') input[type=checkbox]");
+        await Expect(spanBox).ToBeVisibleAsync(new() { Timeout = 10_000 });
+        if (!await spanBox.IsCheckedAsync())
+        {
+            await dialog.GetByText("Mark a stretch of audio rather than an instant").ClickAsync();
+            await Expect(spanBox).ToBeCheckedAsync(new() { Timeout = 5_000 });
+        }
+
+        var end = dialog.GetByText("Ends at").Locator("..").Locator("input[type=number]");
+        await Expect(end).ToBeVisibleAsync(new() { Timeout = 5_000 });
+
+        await end.FillAsync("100");
+        await end.PressAsync("ArrowUp");
+        var stepped = await end.InputValueAsync();
+        TestContext.Out.WriteLine($"one step up from 100: {stepped}");
+        Assert.That(stepped, Is.Not.EqualTo("100"), "the arrows stopped at 100 seconds");
+
+        await end.FillAsync("150");
+        var tooLong = await end.EvaluateAsync<bool>("el => el.validity.rangeOverflow");
+        Assert.That(tooLong, Is.False, "the box called 2:30 too long on a 3:06 recording");
+
+        await dialog.Locator("input[type=text]").First.FillAsync("ends late");
+        await Page.GetByRole(AriaRole.Button, new() { Name = "Save", Exact = false }).Last.ClickAsync();
+
+        var row = Modal.Locator(".evp-row--marker", new() { HasText = "ends late" }).First;
+        await Expect(row).ToBeVisibleAsync(new() { Timeout = 15_000 });
+        var time = (await row.Locator(".evp-row__time").InnerTextAsync()).Trim();
+        TestContext.Out.WriteLine($"the row shows {time}");
+        Assert.That(time, Does.Contain("2:30"), "the saved marker does not end where it was set");
     }
 
     /// <summary>

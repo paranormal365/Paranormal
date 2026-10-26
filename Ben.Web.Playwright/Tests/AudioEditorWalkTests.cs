@@ -254,7 +254,7 @@ public class AudioEditorWalkTests : BenTestBase
         Record("edit-target", "NOTE", $"edit panel region readout: {rangeText?.Trim()}");
 
         // Silence detection.
-        await ToolbarButton("Silence").ClickAsync();
+        await ToolbarButton("Detect silence").ClickAsync();
         await Page.WaitForTimeoutAsync(2500);
         var withSilence = await Regions.CountAsync();
         await SnapAsync("02-silence-on");

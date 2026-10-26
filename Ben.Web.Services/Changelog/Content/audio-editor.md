@@ -30,6 +30,20 @@ it is hidden from everybody else, but still takes its number. No other sub-headi
 
 **Tracked from 10/14/2026.** 1.0.0 is the editor as it stood then, summarized.
 
+## Unreleased
+
+- A marker's end can be set past 1:40 on longer recordings, and the fade boxes accept any length up
+  to the recording's own.
+- Clicking "Mark a stretch of audio" ticks its box.
+- The speed menu shows the speed the player is actually at.
+- With the mel scale on, the spectrogram's frequency labels sit on the frequencies they name.
+- The voice band on the spectrogram covers 300 Hz to 3.4 kHz, the same range the EVP scan listens
+  in.
+- The two buttons called "Silence" have different names now: **Detect silence** shades the quiet
+  parts, and **Silence selection** is the edit.
+- Buttons and menus use the site's icons in place of emoji, which looked different on every
+  computer.
+
 ## 1.0.0 · 2026-10-02
 
 - Every audio file on the site has a player, and **Open Full View** opens the editor for listening

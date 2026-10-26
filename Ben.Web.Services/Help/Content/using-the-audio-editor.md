@@ -33,8 +33,8 @@ which tools are on.
 
 ## Selecting a stretch
 
-Drag across the waveform to draw a region. The edit panel shows its range, and Cut and Silence act
-on it.
+Drag across the waveform to draw a region. The edit panel shows its range, and **Cut** and **Silence selection**
+act on it.
 
 You can have only one drawn region at a time, so drawing a second one replaces the first. Everything
 else on the waveform stays put: markers, clips you've already saved, and any silence the detector
@@ -73,7 +73,7 @@ file you can set things up however you like, but the editor will tell you that i
 
 ## Silence detection
 
-**Silence** shades the parts of the recording that are close to silent, so you can see where
+**Detect silence** shades the parts of the recording that are close to silent, so you can see where
 nothing is happening and skip it. The shading isn't a selection, and no edit will act on it. Adjust
 the threshold if a room's background noise is being counted as sound.
 
@@ -135,7 +135,7 @@ The **Edit** panel makes new files from the recording:
 | Edit | What it does |
 |---|---|
 | Cut | Removes the selected region and joins the parts on either side |
-| Silence | Replaces the selected region with silence, keeping the length |
+| Silence selection | Replaces the selected region with silence, keeping the length |
 | Normalize | Raises the whole file so its loudest point is just under maximum |
 | Gain | Makes the whole file louder or quieter by a set amount |
 | Fade | Fades the start in and the end out |
@@ -143,7 +143,7 @@ The **Edit** panel makes new files from the recording:
 | Speed | Changes the speed without changing the pitch |
 | Pitch | Changes the pitch without changing the speed |
 
-Cut and Silence use the region you drew. The other six apply to the whole file, whatever is
+Cut and Silence selection use the region you drew. The other six apply to the whole file, whatever is
 selected.
 
 Edits work on recordings up to about half an hour long. For anything longer, you'll see a message
