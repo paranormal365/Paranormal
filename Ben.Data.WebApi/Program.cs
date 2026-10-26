@@ -438,6 +438,9 @@ builder.Services.AddSingleton<Ben.Data.WebApi.Services.Audio.NAudioDecoder>();
 builder.Services.AddSingleton<Ben.Data.WebApi.Services.Audio.FfmpegAudioDecoder>();
 builder.Services.AddSingleton<Ben.Data.WebApi.Services.Audio.IAudioDecoder,
                               Ben.Data.WebApi.Services.Audio.CompositeAudioDecoder>();
+// Clips and edits are saved as FLAC through the same ffmpeg: the same samples as WAV, half the size.
+builder.Services.AddSingleton<Ben.Data.WebApi.Services.Audio.IAudioEncoder>(
+    sp => sp.GetRequiredService<Ben.Data.WebApi.Services.Audio.FfmpegAudioDecoder>());
 builder.Services.AddScoped<Ben.Data.WebApi.Services.Audio.EvpScanRecorder>();
 builder.Services.AddScoped<Ben.Data.WebApi.Services.Billing.TierChangeNotifier>();
 // Stripe: the card-charging arm of the billing engine. Gateway is a singleton (a thin client

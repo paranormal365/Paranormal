@@ -10,7 +10,10 @@ public record MixTrackExportInput(
     bool Solo);
 
 /// <summary>Request body for exporting a multi-track mix down to a single audio file.</summary>
-public record ExportAudioMixRequest(IReadOnlyList<MixTrackExportInput> Tracks);
+/// <param name="Format">FLAC unless asked otherwise; see <see cref="AudioSaveFormat"/>.</param>
+public record ExportAudioMixRequest(
+    IReadOnlyList<MixTrackExportInput> Tracks,
+    AudioSaveFormat Format = AudioSaveFormat.Flac);
 
 /// <summary>
 /// Which tracks of a mix are heard.

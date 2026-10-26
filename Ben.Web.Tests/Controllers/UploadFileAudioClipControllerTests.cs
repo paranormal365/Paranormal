@@ -60,12 +60,13 @@ public class UploadFileAudioClipControllerTests
     private static UploadFileAudioClipController Build(
         IDbContextFactory<BenDataContext> factory, Guid userId,
         Ben.Data.WebApi.Services.Audio.IAudioDecoder? decoder = null,
-        Ben.Data.Common.Interfaces.IFileStorageService? storage = null)
+        Ben.Data.Common.Interfaces.IFileStorageService? storage = null,
+        Ben.Data.WebApi.Services.Audio.IAudioEncoder? encoder = null)
     {
         var ctrl = new UploadFileAudioClipController(factory, CreateMapper(),
             storage ?? new Moq.Mock<Ben.Data.Common.Interfaces.IFileStorageService>().Object,
             new Moq.Mock<IAuditLogService>().Object, Ben.Web.Tests.TestMedia.Ingest(),
-            decoder ?? Ben.Web.Tests.TestAudio.Decoder());
+            decoder ?? Ben.Web.Tests.TestAudio.Decoder(), encoder ?? Ben.Web.Tests.TestAudio.Encoder());
         ctrl.ControllerContext = new ControllerContext
         {
             HttpContext = new DefaultHttpContext
@@ -722,7 +723,8 @@ public class UploadFileAudioClipControllerTests
                });
 
         var ctrl = new UploadFileAudioClipController(factory, CreateMapper(), storage.Object,
-            new Mock<IAuditLogService>().Object, Ben.Web.Tests.TestMedia.Ingest(), Ben.Web.Tests.TestAudio.Decoder());
+            new Mock<IAuditLogService>().Object, Ben.Web.Tests.TestMedia.Ingest(), Ben.Web.Tests.TestAudio.Decoder(),
+            Ben.Web.Tests.TestAudio.Encoder());
         ctrl.ControllerContext = new ControllerContext
         {
             HttpContext = new DefaultHttpContext
@@ -761,7 +763,8 @@ public class UploadFileAudioClipControllerTests
                });
 
         var ctrl = new UploadFileAudioClipController(factory, CreateMapper(), storage.Object,
-            new Mock<IAuditLogService>().Object, Ben.Web.Tests.TestMedia.Ingest(), Ben.Web.Tests.TestAudio.Decoder());
+            new Mock<IAuditLogService>().Object, Ben.Web.Tests.TestMedia.Ingest(), Ben.Web.Tests.TestAudio.Decoder(),
+            Ben.Web.Tests.TestAudio.Encoder());
         ctrl.ControllerContext = new ControllerContext
         {
             HttpContext = new DefaultHttpContext
@@ -778,5 +781,49 @@ public class UploadFileAudioClipControllerTests
         Assert.IsType<CreatedAtActionResult>(result.Result);
         Assert.NotNull(written);
         Assert.Equal(0.0, PeakOf(written!), precision: 3);
+    }
+
+    // ── Saved as FLAC (phase 4b) ──────────────────────────────────────────────
+
+    /// <summary>
+    /// A clip is FLAC unless WAV is asked for, and the answer says how big it would have been as
+    /// WAV, so the page can show both.
+    /// </summary>
+    [Fact]
+    public async Task Clip_IsSavedAsFlac_ByDefault_AndSaysWhatTheWavWouldHaveBeen()
+    {
+        var factory = CreateFactory();
+        var typeId  = await SeedTypeAsync(factory);
+        var (fileId, ownerId) = await SeedFileAsync(factory, CreateSilentWav(seconds: 2));
+        var ctrl    = Build(factory, ownerId, encoder: Ben.Web.Tests.TestAudio.MarkingFlac());
+
+        var result  = await ctrl.Clip(fileId, new ClipAudioRequest(0.5, 1.5, null, false, typeId), default);
+
+        var record = Assert.IsType<UploadFileRecord>(Assert.IsType<CreatedAtActionResult>(result.Result).Value);
+        Assert.Equal("audio/flac", record.ContentType);
+        Assert.EndsWith(".flac", record.FileName);
+        Assert.NotNull(record.WavEquivalentBytes);
+        Assert.True(record.WavEquivalentBytes > record.FileSize);
+
+        await using var db = await factory.CreateDbContextAsync();
+        var meta = await db.UploadFileMetadata.SingleAsync(m => m.UploadFileId == record.Id);
+        Assert.Equal("FLAC", meta.AudioCodec);
+        Assert.Equal(1.0, meta.DurationSeconds!.Value, precision: 2);   // measured off the WAV it came from
+    }
+
+    [Fact]
+    public async Task Clip_AskedForAsWav_StaysWav()
+    {
+        var factory = CreateFactory();
+        var typeId  = await SeedTypeAsync(factory);
+        var (fileId, ownerId) = await SeedFileAsync(factory, CreateSilentWav(seconds: 2));
+        var ctrl    = Build(factory, ownerId, encoder: Ben.Web.Tests.TestAudio.MarkingFlac());
+
+        var result  = await ctrl.Clip(fileId,
+            new ClipAudioRequest(0.5, 1.5, null, false, typeId, Format: AudioSaveFormat.Wav), default);
+
+        var record = Assert.IsType<UploadFileRecord>(Assert.IsType<CreatedAtActionResult>(result.Result).Value);
+        Assert.Equal("audio/wav", record.ContentType);
+        Assert.Null(record.WavEquivalentBytes);
     }
 }

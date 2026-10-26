@@ -127,9 +127,12 @@
                                 <label for="clip-normalize" class="form-label form-label-sm mb-0"
                                        title="Raises the clip's loudest point to just under maximum. An EVP is usually far quieter than the rest of the recording. The original is never modified.">Boost volume</label>
                             </div>
+                            <div class="col-12">
+                                <SaveFormatChoice SaveAsWav="@SaveAsWav" SaveAsWavChanged="@SaveAsWavChanged" Id="explorer-save-as-wav" />
+                            </div>
                             <div class="col-auto">
                                 <button type="button" class="btn btn-primary" @onclick="SaveClipAsync" disabled="@(!(!_isClipping && _clipFileTypeId != Guid.Empty))"><BenIcon Name="save" Class="me-1" />
-                                    @(_isClipping ? "Saving…" : "Save as WAV")
+                                    @(_isClipping ? "Saving…" : "Save clip")
                                 </button>
                             </div>
                         </div>
@@ -332,6 +335,10 @@
     /// keep its own, so a region explored at half speed played back at full speed in the editor.
     /// </summary>
     [Parameter] public double Speed { get; set; } = 1.0;
+
+    /// <summary>The editor's one save-format choice (phase 4b): FLAC unless this is on.</summary>
+    [Parameter] public bool SaveAsWav { get; set; }
+    [Parameter] public EventCallback<bool> SaveAsWavChanged { get; set; }
     [Parameter] public EventCallback<double> SpeedChanged { get; set; }
 
     // ── Player state ──────────────────────────────────────────────────────────
@@ -540,11 +547,13 @@
         {
             var (result, error) = await AdminClient.ClipAudioWithReasonAsync(FileId, new ClipAudioRequest(
                 key.Start, key.End, _clipLabel.Trim().Length > 0 ? _clipLabel.Trim() : null,
-                _clipIsPublic, _clipFileTypeId, _clipNormalize));
+                _clipIsPublic, _clipFileTypeId, _clipNormalize,
+                Format: SaveAsWav ? AudioSaveFormat.Wav : AudioSaveFormat.Flac));
 
             if (result is not null)
             {
-                _clipSuccess = $"Saved as \"{result.FileName}\" ({AudioFormatUtils.FormatSize(result.FileSize)}).";
+                _clipSuccess = $"Saved \"{result.FileName}\". "
+                             + AudioSaveSummary.For(result, SaveAsWav ? AudioSaveFormat.Wav : AudioSaveFormat.Flac);
                 await OnClipSaved.InvokeAsync(result);
             }
             else

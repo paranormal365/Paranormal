@@ -67,4 +67,10 @@ public record UploadFileRecord
     /// place a file appears.
     /// </remarks>
     public string? CaseReference { get; init; }
+
+    /// <summary>
+    /// On the answer to a clip or an edit saved as FLAC only: how big the same file would have been
+    /// as WAV, so the page can show what was saved. Never stored, and null everywhere else.
+    /// </summary>
+    public long? WavEquivalentBytes { get; init; }
 }

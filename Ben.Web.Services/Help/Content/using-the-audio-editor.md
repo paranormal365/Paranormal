@@ -194,6 +194,19 @@ instead, because the whole file has to be held in memory while it's edited. Cut 
 want first — a clip saved from a region can be edited like any other file. The EVP scan has no
 such limit; long recordings are exactly what it's for.
 
+## How clips and edits are saved
+
+Clips, edits and case mixes are saved as **FLAC**. FLAC keeps every sound exactly as it was, in a
+smaller file than WAV, and it plays in every current browser. After each save, the editor tells you
+the size and what it would have been as WAV, and the line stays at the top of the **Clips** tab.
+
+If you need a WAV for a program that can't open FLAC, tick **Save as WAV instead of FLAC** in the clip
+window or the **Edit** tab. It sounds the same; the file is just bigger. The site never saves a
+format such as MP3 that throws sound away, because the quiet sounds it drops are the ones an EVP
+search is listening for.
+
+Recordings from the phone app (.m4a) can be scanned, clipped and edited like any other.
+
 ## Exploring a region
 
 **Edit ▸ Explore the selection** (or **Explore Region** on a region's right-click menu) opens a

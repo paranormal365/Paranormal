@@ -15,7 +15,8 @@ namespace Ben.Data.WebApi.Services.FieldSessions;
 /// The server reads it once.</para>
 ///
 /// <para><b>What it reads.</b> The movie header (<c>mvhd</c>) of an ISO base media file, which is
-/// what .mov, .mp4 and .m4a all are, and the <c>fmt </c> and <c>data</c> chunks of a WAV. Boxes it
+/// what .mov, .mp4 and .m4a all are, the <c>fmt </c> and <c>data</c> chunks of a WAV, and a FLAC's
+/// STREAMINFO. Boxes it
 /// does not need, including the media data itself, are skipped by seeking, so a two-gigabyte video
 /// costs a few small reads. The phone writes <c>moov</c> after <c>mdat</c>, which is exactly why
 /// this seeks rather than reading forward.</para>
@@ -41,11 +42,32 @@ public static class MediaDuration
 
             if (head[..4].SequenceEqual("RIFF"u8) && head[8..12].SequenceEqual("WAVE"u8))
                 return Wav(stream);
+            if (head[..4].SequenceEqual("fLaC"u8))
+                return Flac(stream);
             return IsoBmff(stream, 0, stream.Length);
         }
         catch (IOException) { return null; }
         catch (NotSupportedException) { return null; }
         catch (ArgumentException) { return null; }
+    }
+
+    /// <summary>
+    /// A FLAC's length from its STREAMINFO, the block the format requires first: a 20-bit sample
+    /// rate and a 36-bit sample count. Clips and edits are saved as FLAC (phase 4b), and a clip of a
+    /// clip needs its length before anything is decoded.
+    /// </summary>
+    private static double? Flac(Stream stream)
+    {
+        Span<byte> info = stackalloc byte[26];   // "fLaC", block header, the first 18 bytes of STREAMINFO
+        stream.Position = 0;
+        if (!ReadExactly(stream, info)) return null;
+        if ((info[4] & 0x7F) != 0) return null;  // the first block is not STREAMINFO
+
+        var rate    = (info[18] << 12) | (info[19] << 4) | (info[20] >> 4);
+        var samples = ((long)(info[21] & 0x0F) << 32) | BinaryPrimitives.ReadUInt32BigEndian(info[22..26]);
+
+        // A sample count of 0 means the writer did not know it, as a stream to a pipe does not.
+        return rate > 0 && samples > 0 ? (double)samples / rate : null;
     }
 
     /// <summary>Walks the boxes between two offsets for <c>moov</c>, then <c>mvhd</c> inside it.</summary>

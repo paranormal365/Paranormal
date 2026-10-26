@@ -39,6 +39,26 @@ public static class TestAudio
             => _naudio.DurationSecondsAsync(s, "audio/wav", n, ct);
     }
 
+    /// <summary>
+    /// The encoder production registers, with ffmpeg NOT configured: every clip and edit stays WAV,
+    /// as it was before phase 4b, so a fixture never shells out.
+    /// </summary>
+    public static IAudioEncoder Encoder() => Ffmpeg(null);
+
+    /// <summary>
+    /// A stand-in for ffmpeg's FLAC encoder that wraps the WAV it is given behind a "fLaC" marker,
+    /// so a test can tell the controller asked for FLAC and stored what came back. The real
+    /// round trip is <c>FlacSaveTests</c>, against ffmpeg on this machine.
+    /// </summary>
+    public static IAudioEncoder MarkingFlac() => new MarkingFlacEncoder();
+
+    private sealed class MarkingFlacEncoder : IAudioEncoder
+    {
+        public bool CanEncodeFlac => true;
+        public Task<byte[]?> TryWavToFlacAsync(byte[] wav, CancellationToken ct)
+            => Task.FromResult<byte[]?>([.. "fLaC"u8, .. wav.AsSpan(0, wav.Length / 2)]);
+    }
+
     /// <summary>An ffmpeg decoder pointed at <paramref name="path"/>.</summary>
     public static FfmpegAudioDecoder Ffmpeg(string? path, int decodeTimeoutSeconds = 600)
         => new(Options.Create(new MediaToolOptions { FfmpegPath = path, DecodeTimeoutSeconds = decodeTimeoutSeconds }));

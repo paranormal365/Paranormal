@@ -88,7 +88,7 @@ sessions), and a session scanner that first **copies the clip out of the `.ben`*
 ## Phases (each merges on its own; order matters inside a track, tracks can interleave; 1b was added after phase 1 began)
 
 Tracks: **E** editor · **S** scan engine · **F** field sessions. Migrations: M1 (phase 5), M2 (phase 6),
-M3 (phase 8), M4 (phase 11); Ben applies each on MonsterASP himself. If two phases deploy together, fold
+M3 (phase 8), M5 (phase 9b), M4 (phase 11); Ben applies each on MonsterASP himself. If two phases deploy together, fold
 their migrations into one.
 
 Every phase: branch `feature/<slug>`, a `ProjectNotes/FeatureHistory/README-<slug>.md` describing the phase
@@ -615,6 +615,58 @@ output, and 0 dB outside it), `AudioEditorTests.Drawing_a_volume_curve_saves_a_n
 
 ---
 
+### Phase 9b (S+E) — VoiceNet as the scan's second stage · 2 days · **migration M5 `EvpVoiceLikelihood`**
+
+Ben, 10/26/2026 (relayed from the work-in-progress review session): wire VoiceNet into the EVP scan
+as a second stage of the same scan, not a separate one. It replaces the "VoiceNet re-ranking" entry
+that sat under *Later, gated*; the gate now governs only the default sort (step 6).
+
+1. **Model.** `Services/Audio/OnnxVoiceScorer` (`IVoiceScorer`) mirrors `OnnxNsfwScreener`'s
+   loading, but the model is **committed**, not fetched (decided 10/26/2026): it is ours (trained in
+   `tools/EvpLearn` on LibriSpeech test-clean, CC BY 4.0, plus our synthetic noise) and 1,136,075
+   bytes, where the screener's script exists only because that model is 87 MB and hosted
+   elsewhere. Copy `tools/EvpLearn/runs/20260915-162340/voicenet.onnx` (the run c64354d2 reported)
+   to `Ben.Data.WebApi/Models/voicenet-v1.onnx`, `CopyToOutputDirectory=PreserveNewest`, and check
+   it lands in the single-file publish folder beside the exe (see the "single-file publish swallows
+   content" lesson). The file name is the model version: `EvpScans.VoiceModel` stores
+   `voicenet-v1`, and a retrain ships as `voicenet-v2` beside it. `tools/EvpLearn/runs/` stays
+   ignored; `tools/EvpLearn/README` gains how a retrain is promoted (copy the run's onnx to
+   `Models/voicenet-vN.onnx`, bump the configured name). A missing file (a mis-publish) still
+   registers a `NullVoiceScorer`, WARNs at startup, and reports `IsAvailable` false.
+   Input `"audio"` `[B, 16000]` (1 s, 16 kHz mono, peak-normalized per window); output `"voice"`
+   `[B]` in 0–1. ONNX Runtime 1.29 is already referenced. In-process on IIS: ~121 ms per minute of
+   audio.
+2. **In the scan.** After `EvpDetector` finds and pads candidates (`EvpScanService.RunAsync`,
+   phase 6), each padded span is scored in 1 s windows at a 0.25 s hop and the **maximum** is the
+   candidate's `VoiceLikelihood`. Spans are re-read through `IAudioDecoder.DecodeRangeToWavAsync`
+   (phase 6 streams the decode, so the whole file is not kept in memory), at most `MaxCandidates`
+   of them. `EvpDetector.Version` stays 1 and `Score` is untouched, so
+   `Version_one_scores_are_pinned` still passes; VoiceNet never drops a candidate.
+3. **M5.** `EvpScanCandidates.VoiceLikelihood float null` (the 8th feature) and
+   `AudioMarkers.VoiceLikelihood float null`; null = not measured. `EvpScans.VoiceModel nvarchar(64)
+   null` names the model run that measured it, so a retrained model's numbers are never mixed with
+   the old one's. `AudioMarkerRecord.VoiceLikelihood`; the scan answer carries
+   `VoiceUnmeasuredReason` when the scorer is absent or failed ("Voice-likeness is not measured on
+   this server: the model is not installed.").
+4. **Editor.** Each queue row shows two readings, **Stood out** (today's 0–100) and **Voice-like**
+   (0–100, or "not measured" with the reason in its title); sort by either. Fine-tune gains one
+   slider, **Hide below voice-like …**, default 0: the person's filter, applied client-side, never
+   the model's. Nothing is hidden by default.
+5. **Wording.** Help and ad copy say it ranks how voice-shaped a sound is, never "likely EVP".
+6. **Gate before the default sort flips to voice-like first:** `tools/EvpLab score --voicenet` over
+   Ben's real recordings (room tone, sessions with known talking) and the production Keep/Dismiss
+   history must show kept-above-dismissed separation and under about one false alarm a minute on
+   real room tone. Until then the column ships with the default order unchanged. If it fails,
+   retrain with Ben's real room tone as backgrounds (scripts exist) rather than change the
+   architecture. **Silero VAD is out**: it is blind below the noise floor and adds nothing VoiceNet
+   does not.
+7. **Tests.** Unit: model absent ⇒ not measured with the reason; present ⇒ a value in 0–1 per
+   candidate; pinned scores unchanged; max-over-windows on a fixture with speech in one window.
+   Controller: the feature stored on both tables and returned. Playwright: both readings visible,
+   sort by voice-like, the slider hides rows client-side and 0 hides none.
+
+---
+
 ### Phase 10 (S) — Batch scans and the Scans page · 1–2 days · no migration
 
 1. `POST api/evp-scans {FileIds[], Sensitivity, Options}` → per item `{FileId, JobId | Refusal}` (non-audio, unviewable
@@ -663,16 +715,15 @@ output, and 0 dB outside it), `AudioEditorTests.Drawing_a_volume_curve_saves_a_n
 3. `audio-editor.md` `## Unreleased` → `## 2.0.0 · date`; `AudioEditorRelease.Version = "2.0.0"` in the same commit;
    `website.md` entries for the session entrances and `/audio/scans`; `/changes` headings per Ben's versioning memory.
 4. `Future-Improvements.md`: item 253 status (misses, blind review, exploration, features 8–9, admin page: BUILT;
-   refit: future), item 242 (VoiceNet re-ranking: gated, below), the storage-cap bundle bug, stereo views, the
+   refit: future), item 242 (VoiceNet: phase 9b, default sort gated), the storage-cap bundle bug, stereo views, the
    never-built audio items from `Media-Editor-Phase.md` (frequency brush/notch, spectrogram PNG, clip comparison).
 5. Memory: update `project_audio_editor_audit.md` / `project_evp_learning_253.md`.
 
 ---
 
 ### Later, gated (not in this plan's commitments)
-- **VoiceNet re-ranking** (`OnnxVoiceScorer` mirroring `OnnxNsfwScreener`; model fetched by script; separate
-  "voice-likeness" meter; never touches `Score`): only after `tools/EvpLab score --voicenet` on the Windows server beats
-  the bench at −6/−12 dB with 0 % impostors and ≤ 1 % noise, numbers recorded in FeatureHistory.
+- **VoiceNet as the default order**: the scorer itself is phase 9b; only flipping the default sort to
+  voice-like first waits on its gate (phase 9b, step 6).
 - **Refit job** (`EvpWeightRefitJob : IScheduledJob` like `WeightRefitJob`; `EvpScoringVersions`; gate = held-out
   AUC beats active AND fixture ordering passes; SuperAdmin activate/rollback on `/admin/evp`): after ≥ 500 rulings
   from ≥ 20 files and the phase-11 histograms show separation.

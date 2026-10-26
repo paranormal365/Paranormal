@@ -53,7 +53,8 @@ public class CaseAudioMixControllerTests
 
     private static CaseAudioMixController BuildController(
         IDbContextFactory<BenDataContext> factory, Guid userId, Dictionary<string, byte[]> store, Action<byte[]>? onExportWritten = null,
-        bool isSuperAdmin = false)
+        bool isSuperAdmin = false, Ben.Data.WebApi.Services.Audio.IAudioDecoder? decoder = null,
+        Ben.Data.WebApi.Services.Audio.IAudioEncoder? encoder = null)
     {
         var storage = new Mock<IFileStorageService>();
         storage.Setup(s => s.CaseFilePath(It.IsAny<Guid>(), It.IsAny<string>())).Returns("export/mix.wav");
@@ -68,7 +69,8 @@ public class CaseAudioMixControllerTests
                    return Task.CompletedTask;
                });
 
-        var ctrl = new CaseAudioMixController(factory, storage.Object, Ben.Web.Tests.TestMedia.Ingest(), new Ben.Service.RepositoryService.Services.OrganizationSecurityService(factory));
+        var ctrl = new CaseAudioMixController(factory, storage.Object, Ben.Web.Tests.TestMedia.Ingest(), new Ben.Service.RepositoryService.Services.OrganizationSecurityService(factory),
+            decoder ?? Ben.Web.Tests.TestAudio.Decoder(), encoder ?? Ben.Web.Tests.TestAudio.Encoder());
         ctrl.ControllerContext = new ControllerContext
         {
             HttpContext = new DefaultHttpContext
@@ -482,5 +484,29 @@ public class CaseAudioMixControllerTests
         Assert.NotNull(metadata);
         Assert.Equal(2.0, metadata!.DurationSeconds!.Value, 1);
         Assert.Equal(2, metadata.Channels);
+    }
+
+    // ── Phone recordings and FLAC clips (phase 4b) ────────────────────────────
+
+    /// <summary>
+    /// Clips are FLAC now, and phone recordings are .m4a, so the mixer reads both through the
+    /// decoder. A WAV labelled <c>audio/flac</c> could only have been read that way: NAudio, which
+    /// the mixer calls, refuses the type.
+    /// </summary>
+    [Fact]
+    public async Task Export_OfAFlacClip_IsReadThroughTheDecoder_AndSavedAsFlac()
+    {
+        var (factory, orgId, caseId, userId) = await SeedAsync();
+        var store    = new Dictionary<string, byte[]>();
+        var caseFile = await SeedCaseFileAsync(factory, caseId, userId, store, "a.flac", CreateSineWav(440, 1), "audio/flac");
+        byte[]? exported = null;
+        var ctrl = BuildController(factory, userId, store, bytes => exported = bytes,
+            decoder: Ben.Web.Tests.TestAudio.ReadingEverythingAsWav(), encoder: Ben.Web.Tests.TestAudio.MarkingFlac());
+
+        var result = await ctrl.Export(orgId, caseId, RequestFor((caseFile.Id, false, false)), default);
+
+        Assert.IsType<OkObjectResult>(result.Result);
+        Assert.NotNull(exported);
+        Assert.True(exported!.AsSpan(0, 4).SequenceEqual("fLaC"u8), "the mix was not saved as FLAC");
     }
 }

@@ -52,6 +52,7 @@ public record UpdateRegionNoteRequest(
 /// The EVP marker this clip was cut from, when there is one. Links the two so the marker can show
 /// its clip and the clip can be traced back to the finding that justified it.
 /// </param>
+/// <param name="Format">FLAC unless asked otherwise; see <see cref="AudioSaveFormat"/>.</param>
 public record ClipAudioRequest(
     double  Start,
     double  End,
@@ -59,4 +60,5 @@ public record ClipAudioRequest(
     bool    IsPublic,
     Guid    UploadFileTypeId,
     bool    Normalize      = false,
-    Guid?   SourceMarkerId = null);
+    Guid?   SourceMarkerId = null,
+    AudioSaveFormat Format = AudioSaveFormat.Flac);

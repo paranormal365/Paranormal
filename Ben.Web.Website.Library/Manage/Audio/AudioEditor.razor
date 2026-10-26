@@ -364,6 +364,12 @@
             <BenTab Title="Clips" Id="clips" Icon="paperclip" Badge="@_childClips.Count">
                 @if (_inspectorOpen)
                 {
+                @* What the last save made, in which format and at what size. Kept here because the
+                   notice that says it first fades (phase 4b). *@
+                @if (_lastSaveSummary is not null)
+                {
+                    <div class="audio-save-note small mt-2" id="audio-last-save">@_lastSaveSummary</div>
+                }
                 @* Child clips section *@
                 @if (_childClipsError is not null)
                 {
@@ -514,6 +520,7 @@
                         {
                             <div class="alert alert-warning py-1 px-2 small mb-2">@_fileTypesError</div>
                         }
+                        <SaveFormatChoice @bind-SaveAsWav="@_saveAsWav" Id="edit-save-as-wav" />
                         <div class="d-flex gap-3 flex-wrap">
                             <div class="d-flex flex-column gap-1" style="min-width:180px;">
                                 <strong class="small">Region</strong>
@@ -594,7 +601,8 @@
                       @bind-Visible="@_showRegionExplorer"
                       Speed="@_speed"
                       SpeedChanged="@SetSpeedAsync"
-                      OnClipSaved="@(async _ => await OverlayChildClipRegionsAsync())" />
+                      @bind-SaveAsWav="@_saveAsWav"
+                      OnClipSaved="@(async saved => { _lastSaveSummary = AudioSaveSummary.For(saved, SaveFormat); await OverlayChildClipRegionsAsync(); })" />
 }
 
 @* ── Region label edit dialog ────────────────────────────────── *@
@@ -814,6 +822,9 @@
                 </label>
             </div>
             <div class="col-12">
+                <SaveFormatChoice @bind-SaveAsWav="@_saveAsWav" Id="clip-save-as-wav" />
+            </div>
+            <div class="col-12">
                 <div class="small text-secondary">
                     Normalizing raises the clip's loudest point to just under maximum. An EVP is
                     usually far quieter than the rest of the recording, so without it the clip can be
@@ -844,7 +855,7 @@
                 Cancel
             </button>
             <button type="button" class="btn btn-primary" @onclick="SaveClipAsync" disabled="@(!(!_isSavingClip && _saveClipTypeId != Guid.Empty))"><BenIcon Name="save" Class="me-1" />
-                @(_isSavingClip ? "Saving…" : "Save as WAV")
+                @(_isSavingClip ? "Saving…" : "Save clip")
             </button>
             @* Nothing else in this dialog is gated on the file type, so a missing type reads as a dead
                button. Say why. *@
@@ -977,6 +988,14 @@
     private double _clipPostPad = 1.0;
     /// <summary>On by default — the usual reason to clip an EVP is to be able to hear it.</summary>
     private bool   _clipNormalize = AudioClipDefaults.Normalize;
+
+    /// <summary>
+    /// Clips and edits are saved as FLAC, the same samples as WAV at about half the size, unless
+    /// this is on (phase 4b). One choice for the clip dialog, the Edit tab and the explorer.
+    /// </summary>
+    private bool    _saveAsWav;
+    private string? _lastSaveSummary;
+    private AudioSaveFormat SaveFormat => _saveAsWav ? AudioSaveFormat.Wav : AudioSaveFormat.Flac;
 
     /// <summary>Where the clip actually starts once padding is applied, never before the file does.</summary>
     private double ClipStart => Math.Max(0, ClipSourceStart - _clipPrePad);
@@ -1465,7 +1484,7 @@
                 ClipStart, ClipEnd,
                 string.IsNullOrWhiteSpace(_saveClipLabel) ? null : _saveClipLabel.Trim(),
                 _saveClipIsPublic, _saveClipTypeId,
-                _clipNormalize, _clipSourceMarker?.Id));
+                _clipNormalize, _clipSourceMarker?.Id, SaveFormat));
 
             if (result is not null)
             {
@@ -1488,7 +1507,8 @@
 
                 // Refresh child clips and overlay the newly saved one
                 await OverlayChildClipRegionsAsync();
-                Notify($"Saved \"{result.FileName}\"", "success");
+                _lastSaveSummary = AudioSaveSummary.For(result, SaveFormat);
+                Notify($"Saved \"{result.FileName}\". {_lastSaveSummary}", "success");
                 // Show where it went: the new file is the first thing in the Clips tab.
                 OpenTab("clips");
             }
@@ -2573,12 +2593,14 @@
                 _saveClipIsPublic,
                 _saveClipTypeId,
                 operation == AudioEditOperation.Speed ? _editSpeedRatio : null,
-                operation == AudioEditOperation.Pitch ? _editPitchSemitones : null));
+                operation == AudioEditOperation.Pitch ? _editPitchSemitones : null,
+                SaveFormat));
 
             if (result is not null)
             {
                 await OverlayChildClipRegionsAsync();
-                Notify($"Saved \"{result.FileName}\"", "success");
+                _lastSaveSummary = AudioSaveSummary.For(result, SaveFormat);
+                Notify($"Saved \"{result.FileName}\". {_lastSaveSummary}", "success");
                 // Show where it went: the new file is the first thing in the Clips tab.
                 OpenTab("clips");
             }

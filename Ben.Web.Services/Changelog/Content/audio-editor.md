@@ -32,6 +32,10 @@ it is hidden from everybody else, but still takes its number. No other sub-headi
 
 ## Unreleased
 
+- Clips, edits and case mixes are saved as FLAC: every sound kept exactly, in a smaller file than
+  WAV. After saving, the editor shows the size and what it would have been as WAV. A WAV is still
+  one tick away for programs that can't open FLAC.
+- A FLAC clip or a phone recording can go into a case mix.
 - Recordings made on the phone (.m4a) can be scanned for EVPs, clipped and edited, the same as MP3
   and WAV.
 - When the site cannot read a phone recording, the scan says so instead of saying the recording is
