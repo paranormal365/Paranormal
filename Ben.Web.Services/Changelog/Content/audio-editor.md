@@ -32,6 +32,15 @@ it is hidden from everybody else, but still takes its number. No other sub-headi
 
 ## Unreleased
 
+- A new spectrogram: sharper, with its own frequency labels, and quick on long recordings because it
+  draws only what is in view.
+- Zoomed in, the timeline and the spectrogram now move with the waveform. The time marks used to
+  stay at the start of the recording.
+- The Play button on an EVP candidate or a marker stops at the end of it. It used to carry on to the
+  end of the recording.
+- A candidate you have listened to says "heard". It counts once you have played its middle, not
+  just the edge it shares with the one before it.
+- The EVP lab looks the way it should again on the editor's page.
 - The editor opens as a page of its own, with an address you can bookmark or share with someone
   who can see the file. **Back** returns to where you opened it.
 - Right-click a player for **Quick look**: a bigger player with its own controls, without leaving

@@ -235,17 +235,6 @@ export async function create(containerId, options, plugins, dotnetRef, audioUrl)
   ws.on('error',      (err)       => safe(dotnetRef.invokeMethodAsync('OnWsError',      err?.message ?? String(err))))
   ws.on('zoom',       (pps)       => safe(dotnetRef.invokeMethodAsync('OnWsZoom',       pps)))
   ws.on('seeking',    (time)      => safe(dotnetRef.invokeMethodAsync('OnWsSeeking',    time)))
-  // Keep spectrogram in sync with zoom and horizontal scroll.
-  // When the pre-render canvas is ready, drawImage is instant — no debounce needed,
-  // which also makes the spectrogram follow the audio playhead smoothly.
-  ws.on('zoom', () => {
-    if (instances.get(containerId)?._prerenderCanvas) _redrawSpectrogramViewport(containerId)
-    else _scheduleSpectrogramRedraw(containerId, false)
-  })
-  ws.on('scroll', () => {
-    if (instances.get(containerId)?._prerenderCanvas) _redrawSpectrogramViewport(containerId)
-    else _scheduleSpectrogramRedraw(containerId, true)
-  })
 
   // ── Regions events ───────────────────────────────────────────────────────
   if (regionsPlugin) {
@@ -293,7 +282,16 @@ export async function create(containerId, options, plugins, dotnetRef, audioUrl)
   })
   resizeObserver.observe(container.parentElement ?? container)
 
-  instances.set(containerId, { ws, regionsPlugin, resizeObserver })
+  instances.set(containerId, { ws, regionsPlugin, resizeObserver, containerId })
+
+  // The timeline and the spectrogram draw into panes of their own, outside the waveform's scroll
+  // box, so they are moved with it here. See _syncPanesToWaveform.
+  const sync = () => _syncPanesToWaveform(instances.get(containerId))
+  instances.get(containerId)._paneSyncUnsubs = [
+    ws.on('scroll', sync),
+    ws.on('zoom', () => requestAnimationFrame(sync)),
+    ws.on('redrawcomplete', sync),
+  ]
 
   // ── Custom drag-to-create / drag-to-scrub (only when requested) ─────────
   // We implement both manually instead of relying on RegionsPlugin's/WaveSurfer's
@@ -463,7 +461,24 @@ export async function create(containerId, options, plugins, dotnetRef, audioUrl)
   }
 
   if (audioUrl) {
-    await ws.load(audioUrl)
+    await _load(ws, audioUrl)
+  }
+}
+
+/**
+ * Loads a recording, treating a load that was REPLACED as nothing to report.
+ *
+ * WaveSurfer 8 rejects a load() that a newer load() superseded with an AbortError, and emits no
+ * 'error' for it (v7 resolved it silently). So OnWsError never hears of it, which is right, but the
+ * rejection would otherwise surface through Blazor's interop as a failure of a load that simply
+ * stopped mattering. A real failure still rejects, and still emits 'error' for the page to show.
+ */
+async function _load(ws, url) {
+  try {
+    await ws.load(url)
+  } catch (err) {
+    if (err?.name === 'AbortError') return
+    throw err
   }
 }
 
@@ -486,7 +501,7 @@ export function setZoom(containerId, minPxPerSec)  { instances.get(containerId)?
 
 export async function load(containerId, url) {
   const ws = instances.get(containerId)?.ws
-  if (ws) await ws.load(url)
+  if (ws) await _load(ws, url)
 }
 
 // ── Getters ───────────────────────────────────────────────────────────────────
@@ -722,223 +737,319 @@ export function updateRegionLabel(containerId, regionId, label) {
   if (region) region.setOptions({ content: label ?? '' })
 }
 
-// ── Spectrogram (Web-Worker FFT) ─────────────────────────────────────────────
+// ── Spectrogram (WaveSurfer 8's own plugin) ─────────────────────────────────
+//
+// Phase 1b of ProjectNotes/AudioEditor-EVP-Plan-2026-10-26.md. This was a hand-built spectrogram:
+// two workers, an OffscreenCanvas pre-render and a fixed 128 px canvas that redrew itself on every
+// zoom and scroll. It is now the stock SpectrogramPlugin, drawn into a pane under the waveform,
+// which follows zoom and scroll itself and renders long recordings a window at a time. The
+// functions keep their names and arguments, so nothing on the C# side changed.
+//
+// What stays ours is a thin overlay canvas over the pane for the voice band (and, from later phases,
+// candidates and markers). It places frequencies through the plugin's own scale functions
+// (hzToScale in spectrogram-render-utils), so it lines up with the picture under it.
+
+/** The band the EVP detector listens in (EvpDetector.HighPassHz / LowPassHz on the server). */
+const VOICE_BAND_HZ = [300, 3400]
+
+/** Height of the spectrogram pane, in px. Phase 7 makes it resizable. */
+const SPECTROGRAM_HEIGHT = 160
+
+/** Longer than this, the spectrogram renders the visible window rather than the whole file. */
+const WINDOWED_AFTER_SECONDS = 10 * 60
+
+async function _loadSpectrogramPlugin() {
+  if (!SpectrogramPlugin) {
+    const mod = await import('/js/wavesurfer/plugins/spectrogram.esm.js')
+    SpectrogramPlugin = mod.default
+  }
+  return SpectrogramPlugin
+}
+
+/** The plugin's options for what the editor has chosen. */
+function _spectrogramOptions(instance, settings, pane) {
+  const duration = instance.ws.getDuration?.() ?? 0
+  return {
+    container:        pane,
+    height:           SPECTROGRAM_HEIGHT,
+    labels:           settings.showLabels,
+    labelsColor:      'rgba(255,255,255,0.85)',
+    labelsHzColor:    'rgba(255,255,255,0.6)',
+    labelsBackground: 'rgba(0,0,0,0.25)',
+    fftSamples:       settings.fftSamples,
+    scale:            settings.melScale ? 'mel' : 'linear',
+    colorMap:         settings.colormap === 'grayscale' ? 'gray' : _makeColormap(settings.colormap),
+    rendering:        duration > WINDOWED_AFTER_SECONDS ? 'windowed' : 'full',
+    progressiveLoading: duration > WINDOWED_AFTER_SECONDS,
+    useWebWorker:     true,
+  }
+}
+
+/** Builds (or rebuilds) the plugin into the pane, with its events wired to the C# side. */
+async function _mountSpectrogram(instance, dotnetRef) {
+  const sp = instance.spectro
+  const Plugin = await _loadSpectrogramPlugin()
+  sp.plugin?.destroy()
+  sp.pane.querySelectorAll(':scope > :not(canvas.ws-spectro-overlay)').forEach(el => el.remove())
+
+  const safe = (fn) => fn.catch(() => {})
+  const plugin = instance.ws.registerPlugin(Plugin.create(_spectrogramOptions(instance, sp.settings, sp.pane)))
+  plugin.on('progress', (fraction) =>
+    safe(dotnetRef.invokeMethodAsync('OnWsSpectrogramProgress', Math.round((fraction ?? 0) * 100))))
+  plugin.on('ready', () => {
+    _drawSpectrogramOverlay(instance)
+    safe(dotnetRef.invokeMethodAsync('OnWsSpectrogramReady'))
+  })
+  plugin.on('error', () => safe(dotnetRef.invokeMethodAsync('OnWsSpectrogramReady')))
+  sp.plugin = plugin
+  _syncPanesToWaveform(instance)
+}
 
 /**
- * Enables or disables the custom canvas spectrogram for the given player.
- * When enabling, a Web Worker computes FFT data; progress/ready events fire
- * back through the dotnetRef so Blazor can update its UI if desired.
- * The loading-progress text is managed purely in the DOM for performance.
+ * Keeps the panes under the waveform scrolled with it.
  *
- * @param {string}               containerId  Player container ID
- * @param {boolean}              enable       true = show, false = remove
- * @param {boolean}              showLabels   Render frequency-axis labels
- * @param {number}               fftSamples   FFT window size (128/256/512/1024/2048/4096)
- * @param {DotNetObjectReference} dotnetRef   Used to fire progress/ready/menu callbacks
+ * The timeline (in the "-tl" div since the audio walk, so it is never clipped) and the spectrogram
+ * pane both lay their contents out across the recording's whole width, in the waveform's pixels,
+ * and draw the part near the waveform's scroll position. But nothing scrolled them. Zoomed in, the
+ * time ticks and the spectrogram stayed at the start of the recording while the waveform moved on
+ * (found 10/26/2026; the timeline had done this since it moved out of the waveform).
+ *
+ * Each pane's scrolling box gets the waveform's scroll position. A spacer keeps its scroll width at
+ * least the waveform's, since a box only scrolls as far as its content reaches and these draw lazily.
+ * The spectrogram's frequency labels are shifted back so they stay at the left edge.
+ */
+function _syncPanesToWaveform(instance) {
+  if (!instance) return
+  const scrollEl = _wsScrollEl(document.getElementById(instance.containerId))
+  if (!scrollEl) return
+  const left = scrollEl.scrollLeft
+  const width = scrollEl.scrollWidth
+
+  const follow = (box) => {
+    if (!box) return
+    let spacer = box.querySelector(':scope > .ws-scroll-spacer')
+    if (!spacer) {
+      spacer = document.createElement('div')
+      spacer.className = 'ws-scroll-spacer'
+      spacer.style.cssText = 'position:absolute;top:0;height:1px;width:1px;pointer-events:none;'
+      box.appendChild(spacer)
+    }
+    spacer.style.left = `${Math.max(0, width - 1)}px`
+    box.scrollLeft = left
+  }
+
+  follow(document.getElementById(`${instance.containerId}-tl`)?.querySelector('[part="timeline"]'))
+
+  const inner = instance.spectro?.pane?.querySelector(':scope > div')
+  if (inner) {
+    follow(inner)
+    const labels = inner.querySelector('[part="spec-labels"]')
+    if (labels) labels.style.transform = `translateX(${inner.scrollLeft}px)`
+  }
+}
+
+/**
+ * Shows or hides the spectrogram under the waveform.
+ *
+ * @param {string}                containerId  Player container ID
+ * @param {boolean}               enable       true = show, false = remove
+ * @param {boolean}               showLabels   Frequency-axis labels
+ * @param {number}                fftSamples   FFT window size (128–4096)
+ * @param {DotNetObjectReference} dotnetRef    progress / ready / right-click callbacks
+ * @param {string}                colormap     jet | viridis | inferno | grayscale
+ * @param {boolean}               melScale     mel-spaced frequency axis
  */
 export async function toggleSpectrogram(containerId, enable, showLabels, fftSamples, dotnetRef, colormap, melScale) {
   const instance = instances.get(containerId)
   if (!instance) return
 
-  const canvasId = `${containerId}-spectro`
-
   if (!enable) {
-    document.getElementById(`${canvasId}-wrapper`)?.remove()
-    if (instance._spectrogramDebounceTimer) { clearTimeout(instance._spectrogramDebounceTimer); delete instance._spectrogramDebounceTimer }
-    instance.spectrogramWorker?.terminate()
-    delete instance.spectrogramWorker
-    instance._spectrogramDrawWorker?.terminate()
-    delete instance._spectrogramDrawWorker
-    delete instance._spectrogramDrawVersion
-    delete instance._spectrogramCache
-    instance._spectrogramPrerenderWorker?.terminate()
-    delete instance._spectrogramPrerenderWorker
-    delete instance._prerenderCanvas
-    delete instance._prerenderWidth
-    delete instance.spectrogramData
-    delete instance.spectrogramMeta
-    // Restore the player container to its pre-spectrogram height
-    const _waveEl2 = document.getElementById(containerId)
-    const _playerEl2 = _waveEl2?.parentElement
-    if (_playerEl2 && instance._savedPlayerHeight !== undefined) {
-      _playerEl2.style.height = instance._savedPlayerHeight
-      delete instance._savedPlayerHeight
-      instance.ws.setOptions({ height: 'auto' })
-    }
+    if (instance.spectro?.pane) instance._resizeSpectroOverlay?.unobserve(instance.spectro.pane)
+    instance.spectro?.plugin?.destroy()
+    instance.spectro?.pane?.remove()
+    _restorePlayerHeight(containerId, instance)
+    delete instance.spectro
     return
   }
+  if (instance.spectro) return
 
-  // Expand the player container so the waveform keeps its current height and
-  // the spectrogram adds below it.  Only shrink the waveform if the expanded
-  // size would exceed the player's CSS max-height.
-  const SPECTRO_H  = 128   // canvas height (px) defined in _ensureSpectrogramCanvas
-  const _waveEl    = document.getElementById(containerId)
-  const _playerEl  = _waveEl?.parentElement
-  if (_playerEl && instance._savedPlayerHeight === undefined) {
-    const curH = _playerEl.offsetHeight
-    const maxH = parseFloat(getComputedStyle(_playerEl).maxHeight) || 9999
-    instance._savedPlayerHeight = _playerEl.style.height   // save inline value
-    _playerEl.style.height = `${Math.min(curH + SPECTRO_H, maxH)}px`
-    instance.ws.setOptions({ height: 'auto' })
-  }
+  const waveformEl = document.getElementById(containerId)
+  if (!waveformEl) return
 
-  // Already computed — rebuild the canvas from cached data (respects current zoom/scroll)
-  if (instance.spectrogramData) {
-    _ensureSpectrogramCanvas(canvasId, containerId, dotnetRef)
-    instance.spectrogramMeta.showLabels = showLabels
-    if (colormap !== undefined) instance.spectrogramMeta.colormap = colormap
-    if (melScale !== undefined) instance.spectrogramMeta.melScale = melScale
-    _hideSpectrogramLoading(canvasId)
-    if (!instance._prerenderCanvas) _startSpectrogramPrerender(containerId)  // restart pre-render
-    _redrawSpectrogramViewport(containerId)
-    return
-  }
-
-  const ws          = instance.ws
-  const audioBuffer = ws.getDecodedData?.()
-  if (!audioBuffer) {
-    console.warn('WaveSurfer audio not yet decoded — spectrogram unavailable')
-    return
-  }
-
-  // Create wrapper + loading text + canvas in the DOM
-  const canvas = _ensureSpectrogramCanvas(canvasId, containerId, dotnetRef)
-  if (!canvas) return
-
-  const noverlap   = Math.floor(fftSamples / 2)
-  const channelCopy = new Float32Array(audioBuffer.getChannelData(0))
-
-  const worker = new Worker('/js/wavesurfer/spectrogram-worker.js')
-  instance.spectrogramWorker = worker
-
-  // The caller's own state, not a hard-coded default: hiding the spectrogram tears this object
-  // down, so showing it again used to come back as jet with the mel scale off however the
-  // toolbar was set (2026-09-06 audio walk, finding C).
-  instance.spectrogramMeta = {
-    sampleRate: audioBuffer.sampleRate,
-    fftSamples,
-    showLabels,
-    colormap: colormap ?? 'jet',
-    melScale: melScale ?? false,
-  }
+  // The pane goes straight under the waveform; the player grows by its height so the waveform
+  // keeps its own, unless that would pass the player's max-height.
+  const pane = document.createElement('div')
+  pane.id = `${containerId}-spectro-wrapper`
+  pane.className = 'ws-spectro-pane'
+  pane.style.cssText = `position:relative;width:100%;height:${SPECTROGRAM_HEIGHT}px;cursor:context-menu;`
+  const overlay = document.createElement('canvas')
+  overlay.className = 'ws-spectro-overlay'
+  overlay.style.cssText = 'position:absolute;inset:0;width:100%;height:100%;pointer-events:none;z-index:5;'
+  pane.appendChild(overlay)
+  waveformEl.parentNode.insertBefore(pane, waveformEl.nextSibling)
+  _growPlayerHeight(containerId, instance, SPECTROGRAM_HEIGHT)
 
   const safe = (fn) => fn.catch(() => {})
+  pane.addEventListener('contextmenu', (ev) => {
+    ev.preventDefault()
+    ev.stopPropagation()
+    safe(dotnetRef.invokeMethodAsync('OnWsSpectrogramContextMenu', ev.clientX, ev.clientY))
+  })
 
-  worker.onmessage = (e) => {
-    if (e.data.type === 'progress') {
-      _updateSpectrogramLoading(canvasId, e.data.percent)
-      safe(dotnetRef.invokeMethodAsync('OnWsSpectrogramProgress', e.data.percent))
-    } else if (e.data.type === 'done') {
-      instance.spectrogramData = e.data.data
-      _hideSpectrogramLoading(canvasId)
-      _startSpectrogramPrerender(containerId)   // build full pre-render for instant playback tracking
-      _redrawSpectrogramViewport(containerId)    // immediate viewport render (slow path until pre-render ready)
-      safe(dotnetRef.invokeMethodAsync('OnWsSpectrogramReady'))
-      worker.terminate()
-      delete instance.spectrogramWorker
-    }
+  instance.spectro = {
+    pane,
+    overlay,
+    plugin: null,
+    dotnetRef,
+    settings: { showLabels, fftSamples, colormap: colormap ?? 'jet', melScale: melScale ?? false },
+    showVoiceBand: instance.spectro?.showVoiceBand ?? instance._showVoiceBand ?? false,
   }
-  worker.onerror = () => {
-    _hideSpectrogramLoading(canvasId)
-    safe(dotnetRef.invokeMethodAsync('OnWsSpectrogramReady'))
-  }
+  instance._resizeSpectroOverlay ??= new ResizeObserver(() => _drawSpectrogramOverlay(instance))
+  instance._resizeSpectroOverlay.observe(pane)
 
-  worker.postMessage(
-    { channels: [channelCopy], sampleRate: audioBuffer.sampleRate, fftSamples, noverlap },
-    [channelCopy.buffer]
-  )
+  await _mountSpectrogram(instance, dotnetRef)
+}
+
+/** A setting the plugin can change in place; the picture redraws from what it already computed. */
+async function _setSpectrogramOption(containerId, change, options) {
+  const instance = instances.get(containerId)
+  const sp = instance?.spectro
+  if (!sp?.plugin) return
+  Object.assign(sp.settings, change)
+  await sp.plugin.setOptions(options)
+  _drawSpectrogramOverlay(instance)
+}
+
+export async function setSpectrogramResolution(containerId, fftSamples, showLabels, dotnetRef, colormap) {
+  await _setSpectrogramOption(containerId, { fftSamples }, { fftSamples })
+}
+
+export async function setSpectrogramColormap(containerId, colormap, showLabels, fftSamples, dotnetRef) {
+  await _setSpectrogramOption(containerId, { colormap },
+    { colorMap: colormap === 'grayscale' ? 'gray' : _makeColormap(colormap) })
+}
+
+export async function setSpectrogramMelScale(containerId, useMel, dotnetRef) {
+  const scale = useMel ? 'mel' : 'linear'
+  await _setSpectrogramOption(containerId, { melScale: useMel, scale }, { scale })
 }
 
 /**
- * Re-computes the spectrogram canvas at a new FFT resolution.
- * Clears cached data, shows a fresh loading indicator, and re-runs the Web Worker.
+ * The plugin's other analysis and display settings, for the editor's Display tab (phase 2).
+ * Only the names below are passed on; anything else in `opts` is ignored.
  *
- * @param {string}               containerId  Player container ID
- * @param {number}               fftSamples   FFT window size (128/256/512/1024/2048/4096)
- * @param {boolean}              showLabels   Whether to render frequency-axis labels
- * @param {DotNetObjectReference} dotnetRef   Progress / ready callbacks
+ * @param {string} containerId
+ * @param {object} opts  any of: scale ('linear'|'logarithmic'|'mel'|'bark'|'erb'), frequencyMin,
+ *                       frequencyMax, windowFunc, gainDB, rangeDB, preEmphasis, splitChannels
  */
-export async function setSpectrogramResolution(containerId, fftSamples, showLabels, dotnetRef, colormap) {
+export async function setSpectrogramAnalysis(containerId, opts) {
+  const allowed = ['scale', 'frequencyMin', 'frequencyMax', 'windowFunc', 'gainDB', 'rangeDB', 'preEmphasis', 'splitChannels']
+  const change = Object.fromEntries(Object.entries(opts ?? {}).filter(([k, v]) => allowed.includes(k) && v !== null && v !== undefined))
+  if (Object.keys(change).length === 0) return
+  const settings = { ...change }
+  if (change.scale) settings.melScale = change.scale === 'mel'
+  await _setSpectrogramOption(containerId, settings, change)
+}
+
+/** Labels are fixed when the plugin is made, so turning them on or off builds it again. */
+export async function updateSpectrogramLabels(containerId, showLabels) {
   const instance = instances.get(containerId)
-  if (!instance?.spectrogramMeta) return   // spectrogram not currently shown
+  const sp = instance?.spectro
+  if (!sp || sp.settings.showLabels === showLabels) return
+  sp.settings.showLabels = showLabels
+  await _mountSpectrogram(instance, sp.dotnetRef)
+}
 
-  const canvasId = `${containerId}-spectro`
+/** Shows or hides the voice band over the spectrogram. Remembered while the spectrogram is off. */
+export function toggleVoiceBandOverlay(containerId, show) {
+  const instance = instances.get(containerId)
+  if (!instance) return
+  instance._showVoiceBand = show
+  if (instance.spectro) instance.spectro.showVoiceBand = show
+  _drawSpectrogramOverlay(instance)
+}
 
-  // Terminate any in-progress computation (FFT worker, draw worker, pre-render worker)
-  if (instance._spectrogramDebounceTimer) { clearTimeout(instance._spectrogramDebounceTimer); delete instance._spectrogramDebounceTimer }
-  instance.spectrogramWorker?.terminate()
-  delete instance.spectrogramWorker
-  instance._spectrogramDrawWorker?.terminate()
-  delete instance._spectrogramDrawWorker
-  delete instance._spectrogramDrawVersion
-  delete instance._spectrogramCache
-  instance._spectrogramPrerenderWorker?.terminate()
-  delete instance._spectrogramPrerenderWorker
-  delete instance._prerenderCanvas
-  delete instance._prerenderWidth
-  delete instance.spectrogramData
-
-  // Show loading text again
-  const loadingEl = document.getElementById(`${canvasId}-loading`)
-  if (loadingEl) {
-    loadingEl.textContent = 'Generating spectrogram… 0%'
-    loadingEl.style.display = ''
-  }
-
-  // Clear the canvas
-  const canvas = document.getElementById(canvasId)
-  if (canvas) {
-    const ctx = canvas.getContext('2d')
-    ctx.clearRect(0, 0, canvas.width, canvas.height)
-  }
-
-  const ws          = instance.ws
-  const audioBuffer = ws.getDecodedData?.()
-  if (!audioBuffer) return
-
-  const noverlap    = Math.floor(fftSamples / 2)
-  const channelCopy = new Float32Array(audioBuffer.getChannelData(0))
-
-  const safe = (fn) => fn.catch(() => {})
-
-  const worker = new Worker('/js/wavesurfer/spectrogram-worker.js')
-  instance.spectrogramWorker = worker
-
-  // MERGED, not replaced. Rebuilding this object from scratch dropped every setting the caller
-  // did not happen to pass: changing the FFT size reverted the colormap to jet and switched the
-  // mel scale off, while the toolbar still showed both as they were. Anything not being changed
-  // here keeps its current value (2026-09-06 audio walk, finding C).
-  instance.spectrogramMeta = {
-    ...instance.spectrogramMeta,
-    sampleRate: audioBuffer.sampleRate,
-    fftSamples,
-    showLabels,
-    colormap: colormap ?? instance.spectrogramMeta?.colormap ?? 'jet',
-  }
-
-  worker.onmessage = (e) => {
-    if (e.data.type === 'progress') {
-      _updateSpectrogramLoading(canvasId, e.data.percent)
-      safe(dotnetRef.invokeMethodAsync('OnWsSpectrogramProgress', e.data.percent))
-    } else if (e.data.type === 'done') {
-      instance.spectrogramData = e.data.data
-      _hideSpectrogramLoading(canvasId)
-      _startSpectrogramPrerender(containerId)   // rebuild pre-render at new resolution
-      _redrawSpectrogramViewport(containerId)    // immediate viewport render (slow path until pre-render ready)
-      safe(dotnetRef.invokeMethodAsync('OnWsSpectrogramReady'))
-      worker.terminate()
-      delete instance.spectrogramWorker
+/**
+ * The plugin's frequency-to-scale mapping, copied from spectrogram-render-utils.ts (hzToScale and
+ * the functions it calls, 8.0.3) so the voice band sits where the picture puts those frequencies on
+ * every scale the plugin offers. If the plugin changes these, change them here.
+ */
+const _ERB_A = (1000 * Math.log(10)) / (24.7 * 4.37)
+const _BARK_ZERO_OFFSET = 0.15 * (2 + 0.53) - 0.53
+function _hzToScale(hz, scale) {
+  switch (scale) {
+    case 'mel':         return 2595 * Math.log10(1 + hz / 700)
+    case 'logarithmic': return Math.log10(Math.max(1, hz))
+    case 'erb':         return _ERB_A * Math.log10(1 + hz * 0.00437)
+    case 'bark': {
+      let bark = (26.81 * hz) / (1960 + hz) - 0.53
+      if (bark < 2) bark += 0.15 * (2 - bark)
+      if (bark > 20.1) bark += 0.22 * (bark - 20.1)
+      return bark - _BARK_ZERO_OFFSET
     }
+    default:            return hz
   }
-  worker.onerror = () => {
-    _hideSpectrogramLoading(canvasId)
-    safe(dotnetRef.invokeMethodAsync('OnWsSpectrogramReady'))
-  }
+}
 
-  worker.postMessage(
-    { channels: [channelCopy], sampleRate: audioBuffer.sampleRate, fftSamples, noverlap },
-    [channelCopy.buffer]
-  )
+/** Redraws the overlay canvas: the voice band, at the pane's current size. */
+function _drawSpectrogramOverlay(instance) {
+  const sp = instance?.spectro
+  if (!sp) return
+  const canvas = sp.overlay
+  const W = canvas.clientWidth, H = canvas.clientHeight
+  if (!W || !H) return
+  const dpr = window.devicePixelRatio || 1
+  if (canvas.width !== Math.round(W * dpr) || canvas.height !== Math.round(H * dpr)) {
+    canvas.width = Math.round(W * dpr)
+    canvas.height = Math.round(H * dpr)
+  }
+  const ctx = canvas.getContext('2d')
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0)
+  ctx.clearRect(0, 0, W, H)
+  if (!sp.showVoiceBand) return
+
+  const sampleRate = instance.ws.getDecodedData?.()?.sampleRate
+  if (!sampleRate) return
+  // The axis runs from frequencyMin to frequencyMax (Nyquist when unset), as the plugin draws it.
+  const scale = sp.settings.scale ?? (sp.settings.melScale ? 'mel' : 'linear')
+  const fMin = sp.settings.frequencyMin ?? 0
+  const fMax = sp.settings.frequencyMax || sampleRate / 2
+  const lo = _hzToScale(fMin, scale), hi = _hzToScale(fMax, scale)
+  const yFor = (hz) => H - ((_hzToScale(hz, scale) - lo) / (hi - lo)) * H
+
+  const yTop = Math.max(0, yFor(VOICE_BAND_HZ[1]))
+  const yBottom = Math.min(H, yFor(VOICE_BAND_HZ[0]))
+  if (yBottom <= yTop) return
+  // A light fill and firm edges: on a recording sampled at 8 kHz the band is most of the picture,
+  // and a 15% tint alone over the spectrogram's blues barely showed (10/26/2026).
+  ctx.fillStyle = 'rgba(16,185,129,0.12)'
+  ctx.fillRect(0, yTop, W, yBottom - yTop)
+  ctx.strokeStyle = 'rgba(52,211,153,0.95)'
+  ctx.lineWidth = 1.5
+  ctx.setLineDash([6, 4])
+  ctx.beginPath()
+  ctx.moveTo(0, yTop + 0.75);    ctx.lineTo(W, yTop + 0.75)
+  ctx.moveTo(0, yBottom - 0.75); ctx.lineTo(W, yBottom - 0.75)
+  ctx.stroke()
+  ctx.setLineDash([])
+}
+
+/** Grows the player by `extra` px so the waveform keeps its height, within the player's max-height. */
+function _growPlayerHeight(containerId, instance, extra) {
+  const playerEl = document.getElementById(containerId)?.parentElement
+  if (!playerEl || instance._savedPlayerHeight !== undefined) return
+  const maxH = parseFloat(getComputedStyle(playerEl).maxHeight) || 9999
+  instance._savedPlayerHeight = playerEl.style.height
+  playerEl.style.height = `${Math.min(playerEl.offsetHeight + extra, maxH)}px`
+  instance.ws.setOptions({ height: 'auto' })
+}
+
+function _restorePlayerHeight(containerId, instance) {
+  const playerEl = document.getElementById(containerId)?.parentElement
+  if (!playerEl || instance._savedPlayerHeight === undefined) return
+  playerEl.style.height = instance._savedPlayerHeight
+  delete instance._savedPlayerHeight
+  instance.ws.setOptions({ height: 'auto' })
 }
 
 /**
@@ -972,80 +1083,7 @@ export function toggleTimeline(containerId, visible) {
   }
 }
 
-/**
- * Redraws the spectrogram canvas with the cached FFT data, toggling labels.
- */
-export function updateSpectrogramLabels(containerId, showLabels) {
-  const instance = instances.get(containerId)
-  if (!instance?.spectrogramData) return
-  if (instance.spectrogramMeta) instance.spectrogramMeta.showLabels = showLabels
-  _redrawSpectrogramViewport(containerId)
-}
-
 // ── Internal helpers ──────────────────────────────────────────────────────────
-
-/**
- * Pre-renders the entire spectrogram into an OffscreenCanvas at high resolution.
- * Once ready, all viewport operations (zoom, scroll, playback tracking) become
- * instant GPU-accelerated drawImage crops instead of Worker renders.
- *
- * Pre-render width = min(8192, max(2048, nFrames)) so there is roughly one
- * pre-render pixel per FFT frame for typical fftSamples values.
- *
- * @param {string} containerId  Player container ID
- */
-function _startSpectrogramPrerender(containerId) {
-  const instance = instances.get(containerId)
-  if (!instance?.spectrogramData) return
-
-  // Terminate any previous pre-render (e.g. resolution change mid-render)
-  instance._spectrogramPrerenderWorker?.terminate()
-  delete instance._spectrogramPrerenderWorker
-
-  const nFrames    = instance.spectrogramData.length
-  const nBins      = Math.floor((instance.spectrogramMeta?.fftSamples ?? 512) / 2)
-  const prerenderW = Math.min(8192, Math.max(2048, nFrames))
-
-  // Flatten all FFT frames into a single transferable Float32Array
-  const flat = new Float32Array(nFrames * nBins)
-  for (let i = 0; i < nFrames; i++)
-    flat.set(instance.spectrogramData[i], i * nBins)
-
-  const w = new Worker('/js/wavesurfer/spectrogram-draw-worker.js')
-  instance._spectrogramPrerenderWorker = w
-
-  w.onmessage = (e) => {
-    const { pixels, width, height } = e.data
-    const inst = instances.get(containerId)
-    if (!inst?.spectrogramData) return  // spectrogram was disabled while rendering
-
-    // Paint into an OffscreenCanvas so subsequent drawImage calls are GPU-backed
-    const oc  = new OffscreenCanvas(width, height)
-    oc.getContext('2d').putImageData(new ImageData(pixels, width, height), 0, 0)
-    inst._prerenderCanvas = oc
-    inst._prerenderWidth  = width
-
-    // Refresh the visible viewport now that instant drawImage is available
-    _redrawSpectrogramViewport(containerId)
-
-    w.terminate()
-    delete inst._spectrogramPrerenderWorker
-  }
-  w.onerror = () => {
-    w.terminate()
-    const inst = instances.get(containerId)
-    if (inst) delete inst._spectrogramPrerenderWorker
-  }
-
-  // cacheKey 'prerender' and version 1 are just placeholders—ignored by the main thread handler
-  w.postMessage(
-    { flat, nFrames, nBins, width: prerenderW, height: 128, version: 1, cacheKey: 'prerender',
-      colormap: _makeColormap(instance.spectrogramMeta?.colormap ?? 'jet'),
-      melScale:   instance.spectrogramMeta?.melScale   ?? false,
-      sampleRate: instance.spectrogramMeta?.sampleRate ?? 44100 },
-    [flat.buffer]
-  )
-}
 
 /**
  * Returns WaveSurfer's internal scroll container.
@@ -1065,43 +1103,6 @@ function _wsScrollEl(container) {
     }
   }
   return null
-}
-
-/**
- * Shows a "Recalculating spectrogram…" message in the loading div above the
- * canvas while a new viewport render is being computed in the background.
- */
-function _showSpectrogramRecalculating(canvasId) {
-  const el = document.getElementById(`${canvasId}-loading`)
-  if (el) { el.textContent = 'Recalculating spectrogram…'; el.style.display = '' }
-}
-
-/**
- * Schedules a spectrogram viewport redraw, debouncing scroll events so that
- * rapid scrolling only triggers one redraw per idle window.
- *
- * @param {string}  containerId  Player container ID
- * @param {boolean} debounce     true = scroll (60 ms debounce), false = zoom (immediate)
- */
-function _scheduleSpectrogramRedraw(containerId, debounce) {
-  const instance = instances.get(containerId)
-  if (!instance?.spectrogramData) return
-
-  if (instance._spectrogramDebounceTimer) {
-    clearTimeout(instance._spectrogramDebounceTimer)
-    instance._spectrogramDebounceTimer = null
-  }
-
-  if (debounce) {
-    // Scroll: silent background update — no loading message during playback auto-scroll.
-    // The render fires once the scroll settles (60 ms quiet window).
-    instance._spectrogramDebounceTimer = setTimeout(() => {
-      instance._spectrogramDebounceTimer = null
-      _redrawSpectrogramViewport(containerId)
-    }, 60)
-  } else {
-    _redrawSpectrogramViewport(containerId)
-  }
 }
 
 /**
@@ -1131,264 +1132,7 @@ function _wsTimeAtClientX(ws, container, clientX) {
   return Math.max(0, Math.min(duration, ((clientX - rect.left) / rect.width) * duration))
 }
 
-/**
- * Redraws the spectrogram canvas showing only the currently visible time window.
- * Called after zoom and scroll events so the spectrogram stays aligned with the waveform.
- *
- * @param {string} containerId  Player container ID
- */
-function _redrawSpectrogramViewport(containerId) {
-  const instance = instances.get(containerId)
-  if (!instance?.spectrogramData) return
-
-  const canvasId = `${containerId}-spectro`
-  const canvas   = document.getElementById(canvasId)
-  if (!canvas) return
-
-  const container  = document.getElementById(containerId)
-  const scrollEl   = _wsScrollEl(container)
-  const scrollLeft  = scrollEl?.scrollLeft  ?? 0
-  const scrollWidth = scrollEl?.scrollWidth ?? 0
-  const clientWidth = scrollEl?.clientWidth ?? canvas.parentElement?.offsetWidth ?? 800
-  const isZoomed    = scrollWidth > clientWidth + 1
-  const canvasW     = Math.max(1, canvas.parentElement?.offsetWidth ?? clientWidth ?? 800)
-
-  const { sampleRate = 44100, fftSamples = 512, showLabels = false } = instance.spectrogramMeta ?? {}
-  const colormap  = _makeColormap(instance.spectrogramMeta?.colormap ?? 'jet')
-  const melScale  = instance.spectrogramMeta?.melScale ?? false
-  const fMax      = sampleRate / 2
-  const melMax    = 2595 * Math.log10(1 + fMax / 700)
-  const nBins = Math.floor(fftSamples / 2)
-
-  // Visible fraction of the total audio
-  let startFrac = 0, endFrac = 1
-  if (isZoomed && scrollWidth > 0) {
-    startFrac = Math.max(0, scrollLeft / scrollWidth)
-    endFrac   = Math.min(1, (scrollLeft + clientWidth) / scrollWidth)
-  }
-
-  // ── Fast path: GPU-accelerated crop from pre-render OffscreenCanvas ──────────
-  // ~1 ms, synchronous. Enables smooth playback tracking at any zoom level.
-  if (instance._prerenderCanvas) {
-    const prerenderW = instance._prerenderWidth
-    const srcX     = Math.floor(startFrac * prerenderW)
-    const srcWidth = Math.max(1, Math.ceil((endFrac - startFrac) * prerenderW))
-
-    if (canvas.width !== canvasW || canvas.height !== 128) {
-      canvas.width  = canvasW
-      canvas.height = 128
-    }
-    const ctx = canvas.getContext('2d')
-    ctx.imageSmoothingEnabled = true
-    ctx.imageSmoothingQuality = 'high'
-    ctx.drawImage(instance._prerenderCanvas, srcX, 0, srcWidth, 128, 0, 0, canvasW, 128)
-    if (showLabels) _drawSpectrogramLabels(canvas, sampleRate, melScale)
-    if (instance._showVoiceBand) _drawVoiceBandOverlay(canvas, sampleRate, melScale)
-    _hideSpectrogramLoading(canvasId)
-    return
-  }
-
-  // ── Slow path: Worker render (pre-render not yet ready) ────────────────────
-  const nFrames = instance.spectrogramData.length
-  let startFrame = 0, endFrame = nFrames
-  if (isZoomed && scrollWidth > 0) {
-    startFrame = Math.max(0, Math.floor(startFrac * nFrames))
-    endFrame   = Math.min(nFrames, Math.ceil(endFrac * nFrames))
-  }
-  endFrame = Math.max(startFrame + 1, endFrame)
-
-  // Cache lookup
-  if (!instance._spectrogramCache) instance._spectrogramCache = new Map()
-  const cacheKey = `${startFrame}:${endFrame}:${canvasW}:${showLabels ? 1 : 0}:${instance._showVoiceBand ? 1 : 0}`
-  const cached   = instance._spectrogramCache.get(cacheKey)
-
-  if (cached) {
-    canvas.width  = canvasW
-    canvas.height = 128
-    canvas.getContext('2d').putImageData(cached, 0, 0)
-    if (instance._showVoiceBand) _drawVoiceBandOverlay(canvas, sampleRate, melScale)
-    _hideSpectrogramLoading(canvasId)
-    return
-  }
-
-  _showSpectrogramRecalculating(canvasId)
-
-  if (!instance._spectrogramDrawWorker) {
-    const w = new Worker('/js/wavesurfer/spectrogram-draw-worker.js')
-    instance._spectrogramDrawWorker  = w
-    instance._spectrogramDrawVersion = 0
-
-    w.onmessage = (e) => {
-      const { pixels, width, height, version, cacheKey: ck } = e.data
-      const inst = instances.get(containerId)
-      if (!inst || version !== inst._spectrogramDrawVersion) return  // stale — discard
-
-      const c = document.getElementById(canvasId)
-      if (!c) return
-
-      c.width  = width
-      c.height = height
-      const ctx = c.getContext('2d')
-      ctx.putImageData(new ImageData(pixels, width, height), 0, 0)
-
-      const { sampleRate: sr = 44100, melScale: ms = false } = inst.spectrogramMeta ?? {}
-      if (ck.split(':')[3] === '1') {
-        _drawSpectrogramLabels(c, sr, ms)
-      }
-      if (inst._showVoiceBand) {
-        _drawVoiceBandOverlay(c, sr, ms)
-      }
-
-      if (!inst._spectrogramCache) inst._spectrogramCache = new Map()
-      if (inst._spectrogramCache.size >= 30)
-        inst._spectrogramCache.delete(inst._spectrogramCache.keys().next().value)
-      inst._spectrogramCache.set(ck, ctx.getImageData(0, 0, width, height))
-      _hideSpectrogramLoading(canvasId)
-    }
-    w.onerror = () => _hideSpectrogramLoading(canvasId)
-  }
-
-  instance._spectrogramDrawVersion = (instance._spectrogramDrawVersion ?? 0) + 1
-
-  const sliceLen = endFrame - startFrame
-  const flat     = new Float32Array(sliceLen * nBins)
-  for (let i = 0; i < sliceLen; i++)
-    flat.set(instance.spectrogramData[startFrame + i], i * nBins)
-
-  instance._spectrogramDrawWorker.postMessage(
-    { flat, nFrames: sliceLen, nBins, width: canvasW, height: 128,
-      version: instance._spectrogramDrawVersion, cacheKey,
-      colormap:   _makeColormap(instance.spectrogramMeta?.colormap ?? 'jet'),
-      melScale:   instance.spectrogramMeta?.melScale   ?? false,
-      sampleRate: instance.spectrogramMeta?.sampleRate ?? 44100 },
-    [flat.buffer]
-  )
-}
-
-function _ensureSpectrogramCanvas(canvasId, containerId, dotnetRef) {
-  if (document.getElementById(canvasId)) return document.getElementById(canvasId)
-
-  const waveformEl = document.getElementById(containerId)
-  if (!waveformEl) return null
-
-  const wrapper  = document.createElement('div')
-  wrapper.id     = `${canvasId}-wrapper`
-  wrapper.style.cssText = 'position:relative;width:100%;'
-
-  const loadingEl = document.createElement('div')
-  loadingEl.id    = `${canvasId}-loading`
-  loadingEl.style.cssText = 'font-size:0.72rem;color:var(--kendo-color-subtle-text,#888);font-style:italic;padding:2px 4px;'
-  loadingEl.textContent   = 'Generating spectrogram… 0%'
-
-  const canvas = document.createElement('canvas')
-  canvas.id    = canvasId
-  canvas.style.cssText = 'display:block;width:100%;height:128px;cursor:context-menu;'
-
-  wrapper.appendChild(loadingEl)
-  wrapper.appendChild(canvas)
-
-  // Insert immediately after the waveform container
-  waveformEl.parentNode.insertBefore(wrapper, waveformEl.nextSibling)
-
-  // Right-click → context menu
-  const safe = (fn) => fn.catch(() => {})
-  canvas.addEventListener('contextmenu', (ev) => {
-    ev.preventDefault()
-    ev.stopPropagation()
-    safe(dotnetRef.invokeMethodAsync('OnWsSpectrogramContextMenu', ev.clientX, ev.clientY))
-  })
-
-  return canvas
-}
-
-function _updateSpectrogramLoading(canvasId, percent) {
-  const el = document.getElementById(`${canvasId}-loading`)
-  if (el) el.textContent = `Generating spectrogram… ${percent}%`
-}
-
-function _hideSpectrogramLoading(canvasId) {
-  const el = document.getElementById(`${canvasId}-loading`)
-  if (el) el.style.display = 'none'
-}
-
-/**
- * Overlays frequency-axis gridlines and labels on an already-drawn spectrogram canvas.
- * Fast canvas text calls only — safe to call on the main thread after putImageData.
- */
-function _drawSpectrogramLabels(canvas, sampleRate, melScale) {
-  const W = canvas.width
-  const H = canvas.height
-  if (!W || !H) return
-  const ctx     = canvas.getContext('2d')
-  const nyquist = sampleRate / 2
-  // The same mapping the picture and the voice band use. Labels were always placed on a linear
-  // scale, so with Mel on "1kHz" sat far below the 1 kHz the image showed.
-  const freqToY = _spectrogramFreqToY(H, sampleRate, melScale)
-  ctx.font      = '10px monospace'
-  ctx.textAlign = 'left'
-  for (const freq of [250, 500, 1000, 2000, 4000, 8000, 16000]) {
-    if (freq >= nyquist) continue
-    const y = freqToY(freq)
-    ctx.strokeStyle = 'rgba(255,255,255,0.3)'
-    ctx.setLineDash([3, 3])
-    ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(W, y); ctx.stroke()
-    ctx.setLineDash([])
-    ctx.fillStyle = 'rgba(255,255,255,0.85)'
-    ctx.fillText(freq >= 1000 ? `${freq / 1000}kHz` : `${freq}Hz`, 4, y - 2)
-  }
-}
-
-/**
- * Pixel row for a frequency on a spectrogram canvas of height H — linear, or mel-spaced exactly
- * as spectrogram-draw-worker.js spaces the image (hz2mel over hz2mel(nyquist)). Labels, the voice
- * band and anything else drawn over the image must place itself through this.
- */
-function _spectrogramFreqToY(H, sampleRate, melScale) {
-  const nyquist = sampleRate / 2
-  const hz2mel  = (hz) => 2595 * Math.log10(1 + hz / 700)
-  const melMax  = hz2mel(nyquist)
-  return melScale
-    ? (freq) => H - Math.floor((hz2mel(freq) / melMax) * H)
-    : (freq) => H - Math.floor((freq / nyquist) * H)
-}
-
-/**
- * The band the EVP detector listens in (EvpDetector.HighPassHz / LowPassHz on the server).
- * The overlay used to stop at 3 kHz, so a candidate between 3 and 3.4 kHz was flagged in a
- * stretch the picture said was outside the voice band.
- */
-const VOICE_BAND_HZ = [300, 3400]
-
-/**
- * Shades the band the EVP detector listens in on an already-drawn spectrogram canvas —
- * anomalies that fall outside it stand out visually against normal speech.
- */
-function _drawVoiceBandOverlay(canvas, sampleRate, melScale) {
-  const W = canvas.width
-  const H = canvas.height
-  if (!W || !H) return
-  const freqToY = _spectrogramFreqToY(H, sampleRate, melScale)
-
-  const yTop    = Math.max(0, freqToY(VOICE_BAND_HZ[1]))
-  const yBottom = Math.min(H, freqToY(VOICE_BAND_HZ[0]))
-  if (yBottom <= yTop) return
-
-  const ctx = canvas.getContext('2d')
-  ctx.fillStyle = 'rgba(16,185,129,0.15)'
-  ctx.fillRect(0, yTop, W, yBottom - yTop)
-  ctx.strokeStyle = 'rgba(16,185,129,0.6)'
-  ctx.setLineDash([4, 3])
-  ctx.strokeRect(0, yTop, W, yBottom - yTop)
-  ctx.setLineDash([])
-}
-
 /** Toggles the voice-frequency-band overlay and forces a redraw so it appears/disappears immediately. */
-export function toggleVoiceBandOverlay(containerId, show) {
-  const instance = instances.get(containerId)
-  if (!instance) return
-  instance._showVoiceBand = show
-  _redrawSpectrogramViewport(containerId)
-}
 
 /**
  * Detects low-amplitude (silent) stretches of the decoded audio and shades them as
@@ -1467,11 +1211,12 @@ export function destroy(containerId) {
   instance._regionPlayCleanup?.()
   instance.dragCleanup?.()
   instance.resizeObserver?.disconnect()
-  if (instance._spectrogramDebounceTimer) clearTimeout(instance._spectrogramDebounceTimer)
-  instance.spectrogramWorker?.terminate()
-  instance._spectrogramPrerenderWorker?.terminate()
-  instance._spectrogramDrawWorker?.terminate()
+  instance._paneSyncUnsubs?.forEach(u => u?.())
+  instance.spectro?.plugin?.destroy()
+  instance._resizeSpectroOverlay?.disconnect()
   try { instance.audioCtx?.close() } catch { /* ignore */ }
+  // Final in WaveSurfer 8: a destroyed instance cannot be loaded again. The editor and every player
+  // make a new one through create(), so nothing here reuses it.
   try { instance.ws?.destroy() } catch { /* ignore */ }
   instances.delete(containerId)
 }
@@ -1618,22 +1363,6 @@ function _makeColormap(name) {
     map.push([r, g, b, 1])
   }
   return map
-}
-
-export async function setSpectrogramColormap(containerId, colormap, showLabels, fftSamples, dotnetRef) {
-  await setSpectrogramResolution(containerId, fftSamples, showLabels, dotnetRef, colormap)
-}
-
-export async function setSpectrogramMelScale(containerId, useMel, dotnetRef) {
-  const inst = instances.get(containerId)
-  if (!inst?.spectrogramMeta) return
-  inst.spectrogramMeta.melScale = useMel
-  // Invalidate the pre-render cache so it rebuilds with the new axis mapping
-  delete inst._prerenderCanvas
-  delete inst._prerenderWidth
-  inst._spectrogramCache?.clear()
-  _startSpectrogramPrerender(containerId)
-  _redrawSpectrogramViewport(containerId)
 }
 
 export function setNoiseGate(containerId, enabled, threshold, attack, release) {

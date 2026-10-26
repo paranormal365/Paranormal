@@ -365,6 +365,21 @@
         => await Invoke("setCompressor", enabled, threshold, ratio, attack, release);
     public async Task SetNoiseGateAsync(bool enabled, double threshold, double attack, double release)
         => await Invoke("setNoiseGate", enabled, threshold, attack, release);
+    /// <summary>
+    /// The spectrogram's other settings (phase 1b), for the Display tab phase 2 builds. Only the
+    /// non-null ones are applied; the picture redraws in place.
+    /// </summary>
+    /// <param name="scale">linear, logarithmic, mel, bark or erb.</param>
+    /// <param name="windowFunc">hann, hamming, blackman, bartlett, cosine, gauss, lanczoz, rectangular or triangular.</param>
+    public async Task SetSpectrogramAnalysisAsync(string? scale = null, double? frequencyMin = null, double? frequencyMax = null,
+        string? windowFunc = null, double? gainDb = null, double? rangeDb = null, double? preEmphasis = null, bool? splitChannels = null)
+        => await Invoke("setSpectrogramAnalysis", new Dictionary<string, object?>
+        {
+            ["scale"] = scale, ["frequencyMin"] = frequencyMin, ["frequencyMax"] = frequencyMax,
+            ["windowFunc"] = windowFunc, ["gainDB"] = gainDb, ["rangeDB"] = rangeDb,
+            ["preEmphasis"] = preEmphasis, ["splitChannels"] = splitChannels,
+        });
+
     public async Task SetSpectrogramMelScaleAsync(bool useMel)
         => await Invoke("setSpectrogramMelScale", useMel, _dotnetRef);
     public async Task ToggleVoiceBandOverlayAsync(bool show)
@@ -557,9 +572,12 @@
         {
             try { await _module.InvokeVoidAsync("destroy", _containerId); } catch { }
             // Guarded like the line above. When the page closes, the browser is already gone and
-            // this throws JSDisconnectedException, which the circuit logged as an unhandled error
-            // every time a page with a player was closed (seen in the e2e web log, 10/26/2026).
-            try { await _module.DisposeAsync(); } catch (JSDisconnectedException) { }
+            // this throws JSDisconnectedException, or is going and it throws TaskCanceledException.
+            // The circuit logged either as an unhandled error every time a page with a player
+            // closed (both seen in e2e web logs, 10/26/2026).
+            try { await _module.DisposeAsync(); }
+            catch (JSDisconnectedException) { }
+            catch (OperationCanceledException) { }
         }
         _dotnetRef?.Dispose();
     }

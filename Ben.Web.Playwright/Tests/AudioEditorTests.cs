@@ -530,6 +530,54 @@ public class AudioEditorTests : BenTestBase
     }
 
     /// <summary>
+    /// Zoomed in and scrolled, the timeline and the spectrogram show the stretch the waveform shows,
+    /// and the spectrogram's frequency labels stay at the left edge.
+    /// </summary>
+    /// <remarks>
+    /// <para>Both draw into panes of their own under the waveform: the timeline since the audio walk
+    /// moved it out so it is never clipped, the spectrogram since WaveSurfer 8's plugin replaced the
+    /// hand-built one (phase 1b). Neither pane scrolled with the waveform. Zoomed in and scrolled to
+    /// 1,700 px, the timeline still showed 0 s (measured 10/26/2026), so its ticks named the wrong
+    /// times.</para>
+    /// </remarks>
+    [Test]
+    public async Task The_timeline_and_spectrogram_follow_the_waveform_when_zoomed()
+    {
+        if (!await ReadyInFullViewAsync(ScannableWav(), "wav", "audio/wav"))
+        {
+            Assert.Ignore("Could not open the editor; see the output for where it gave up.");
+            return;
+        }
+
+        await Modal.GetByRole(AriaRole.Button, new() { Name = "Show Spectrogram", Exact = false }).First.ClickAsync();
+        await Expect(Modal.Locator(".ws-spectro-pane canvas").Nth(1)).ToBeAttachedAsync(new() { Timeout = 30_000 });
+
+        // Zoom in through the transport's zoom slider, then scroll the waveform a long way along.
+        var zoom = Modal.Locator(".ws-player-controls input[type=range]").Last;
+        await zoom.FillAsync("400");
+        await zoom.DispatchEventAsync("input");
+        await Page.WaitForTimeoutAsync(1_000);
+
+        var positions = await Page.EvaluateAsync<double[]>(@"async () => {
+            const host = document.querySelector('#audio-editor [id^=""ws-""]:not([id$=""-tl""])');
+            const scroll = [...host.children].find(c => c.shadowRoot)?.shadowRoot.querySelector('[part=""scroll""]');
+            scroll.scrollLeft = 1700;
+            await new Promise(r => setTimeout(r, 800));
+            const timeline = document.getElementById(host.id + '-tl').querySelector('[part=""timeline""]');
+            const spectrogram = document.querySelector('#audio-editor .ws-spectro-pane > div');
+            const labels = spectrogram.querySelector('[part=""spec-labels""]');
+            return [scroll.scrollLeft, timeline.scrollLeft, spectrogram.scrollLeft,
+                    labels.getBoundingClientRect().left - spectrogram.getBoundingClientRect().left];
+        }");
+        TestContext.Out.WriteLine($"waveform {positions[0]}, timeline {positions[1]}, spectrogram {positions[2]}, labels offset {positions[3]}");
+
+        Assert.That(positions[0], Is.GreaterThan(1000), "the waveform did not scroll, so there was nothing to follow");
+        Assert.That(positions[1], Is.EqualTo(positions[0]).Within(1), "the timeline did not follow the waveform");
+        Assert.That(positions[2], Is.EqualTo(positions[0]).Within(1), "the spectrogram did not follow the waveform");
+        Assert.That(positions[3], Is.EqualTo(0).Within(2), "the frequency labels scrolled away with the picture");
+    }
+
+    /// <summary>
     /// Playing one candidate does not mark its neighbor as heard.
     /// </summary>
     /// <remarks>
