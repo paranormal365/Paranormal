@@ -128,7 +128,7 @@
                                        title="Raises the clip's loudest point to just under maximum. An EVP is usually far quieter than the rest of the recording. The original is never modified.">Boost volume</label>
                             </div>
                             <div class="col-auto">
-                                <button type="button" class="btn btn-success" @onclick="SaveClipAsync" disabled="@(!(!_isClipping && _clipFileTypeId != Guid.Empty))"><BenIcon Name="save" Class="me-1" />
+                                <button type="button" class="btn btn-primary" @onclick="SaveClipAsync" disabled="@(!(!_isClipping && _clipFileTypeId != Guid.Empty))"><BenIcon Name="save" Class="me-1" />
                                     @(_isClipping ? "Saving…" : "Save as WAV")
                                 </button>
                             </div>
@@ -167,7 +167,7 @@
                                                 @* TimeOffset is absolute; show clip-relative time *@
                                                 <span class="badge bg-primary me-1"
                                                       title="File time: @FormatTime(note.TimeOffset.Value)">
-                                                    ⏱ +@FormatTime(note.TimeOffset.Value - LoadedStart)
+                                                    <BenIcon Name="clock" Class="me-1" />+@FormatTime(note.TimeOffset.Value - LoadedStart)
                                                 </span>
                                             }
                                             else
@@ -202,7 +202,7 @@
                                                 <label for="@($"enp-{note.Id}")" class="form-label form-label-sm mb-0">Public</label>
                                                 @if (note.TimeOffset.HasValue)
                                                 {
-                                                    <span class="text-secondary small ms-2">⏱ @FormatTime(_editTimeOffset ?? note.TimeOffset ?? 0)</span>
+                                                    <span class="text-secondary small ms-2"><BenIcon Name="clock" Class="me-1" />@FormatTime(_editTimeOffset ?? note.TimeOffset ?? 0)</span>
                                                 }
                                             </div>
                                         }
@@ -377,10 +377,10 @@
 
     private static readonly List<RegionMenuItem> _subMenuItems =
     [
-        new("play",    "▶  Play Region"),
-        new("explore", "⤢  Explore Region"),
-        new("label",   "✏  Edit Label"),
-        new("delete",  "🗑  Delete Region"),
+        new("play",    "Play Region"),
+        new("explore", "Explore Region"),
+        new("label",   "Edit Label"),
+        new("delete",  "Delete Region"),
     ];
 
     // ── Lifecycle ─────────────────────────────────────────────────────────────

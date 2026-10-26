@@ -54,7 +54,7 @@
     {
         <div class="ws-player-error alert alert-danger alert-sm mb-0 py-1 px-2 small"
              style="flex:0 0 auto;">
-            ⚠ @_errorMessage
+            <BenIcon Name="alert-triangle" Class="me-1" />@_errorMessage
         </div>
     }
 
@@ -77,13 +77,13 @@
 
             @* Play / Pause *@
             <button class="btn btn-sm btn-outline-primary" title="@(_playing ? "Pause" : "Play")"
-                    @onclick="PlayPauseAsync">
-                @(_playing ? "⏸" : "▶")
+                    aria-label="@(_playing ? "Pause" : "Play")" @onclick="PlayPauseAsync">
+                <BenIcon Name="@(_playing ? "pause" : "play")" />
             </button>
 
             @* Stop *@
-            <button class="btn btn-sm btn-outline-secondary" title="Stop" @onclick="StopAsync">
-                ⏹
+            <button class="btn btn-sm btn-outline-secondary" title="Stop" aria-label="Stop" @onclick="StopAsync">
+                <BenIcon Name="square" />
             </button>
 
             @* Time display *@
@@ -120,21 +120,16 @@
             @* Playback rate *@
             <label class="d-flex align-items-center gap-1 small mb-0" title="Speed">
                 <BenIcon Name="fast-forward" />
-                <select class="form-select form-select-sm" style="width:auto;" @onchange="OnRateChange">
-                    <option value="0.5">0.5×</option>
-                    <option value="0.75">0.75×</option>
-                    <option value="1" selected>1×</option>
-                    <option value="1.25">1.25×</option>
-                    <option value="1.5">1.5×</option>
-                    <option value="2">2×</option>
+                @* Each option reads the rate the player is actually at. A hard-coded "selected" on 1×
+                   showed 1× again whenever this bar re-rendered, while playback stayed at 1.5×. *@
+                <select class="form-select form-select-sm" style="width:auto;" aria-label="Speed" @onchange="OnRateChange">
+                    @foreach (var (value, label) in RateOptions)
+                    {
+                        <option value="@value.ToString(System.Globalization.CultureInfo.InvariantCulture)" selected="@(value == _rate)">@label</option>
+                    }
                 </select>
             </label>
 
-            @* Consumer-supplied extra controls *@
-            @if (ExtraControls is not null)
-            {
-                @ExtraControls
-            }
         </div>
     }
 </div>
@@ -148,11 +143,6 @@
     /// When null the player uses <see cref="WsConfig.Default"/>.
     /// </summary>
     [Parameter] public WsConfig? Config { get; set; }
-
-    // ── Supplementary rendering parameters ───────────────────────────────────
-
-    /// <summary>Additional controls rendered inside the built-in controls bar.</summary>
-    [Parameter] public RenderFragment? ExtraControls { get; set; }
 
     // ── Event callbacks ───────────────────────────────────────────────────────
 
@@ -175,10 +165,6 @@
     [Parameter] public EventCallback<string>        OnRegionOut     { get; set; }
 
     [Parameter] public EventCallback<WsRegionContextMenuArgs> OnRegionContextMenu { get; set; }
-
-    // Envelope events
-    [Parameter] public EventCallback<List<WsEnvelopePoint>> OnEnvelopePointsChanged  { get; set; }
-    [Parameter] public EventCallback<double>                 OnEnvelopeVolumeChanged  { get; set; }
 
     // Spectrogram events
     [Parameter] public EventCallback<int>       OnSpectrogramProgress    { get; set; }
@@ -292,7 +278,16 @@
     }
 
     public async Task SetMutedAsync(bool muted)     => await Invoke("setMuted", muted);
-    public async Task SetPlaybackRateAsync(double r) => await Invoke("setPlaybackRate", r);
+    public async Task SetPlaybackRateAsync(double r)
+    {
+        _rate = r;
+        await Invoke("setPlaybackRate", r);
+    }
+
+    private double _rate = 1;
+
+    private static readonly (double Value, string Label)[] RateOptions =
+        [(0.5, "0.5×"), (0.75, "0.75×"), (1, "1×"), (1.25, "1.25×"), (1.5, "1.5×"), (2, "2×")];
     public async Task SetZoomAsync(double minPxPerSec) => await Invoke("setZoom", minPxPerSec);
 
     public async Task LoadAsync(string url)
@@ -439,15 +434,6 @@
     public async Task<List<WsRegionData>> GetRegionsAsync()
         => _module is null ? [] : await _module.InvokeAsync<List<WsRegionData>>("getRegions", _containerId);
 
-    // Envelope
-    public async Task SetEnvelopePointsAsync(List<WsEnvelopePoint> pts) => await Invoke("setEnvelopePoints", pts);
-    public async Task AddEnvelopePointAsync(WsEnvelopePoint pt)          => await Invoke("addEnvelopePoint", pt);
-    public async Task RemoveEnvelopePointAsync(string id)                => await Invoke("removeEnvelopePoint", id);
-    public async Task SetEnvelopeVolumeAsync(double v)                   => await Invoke("setEnvelopeVolume", v);
-
-    public async Task<List<WsEnvelopePoint>> GetEnvelopePointsAsync()
-        => _module is null ? [] : await _module.InvokeAsync<List<WsEnvelopePoint>>("getEnvelopePoints", _containerId);
-
     // ── JS-invokable callbacks ────────────────────────────────────────────────
 
     [JSInvokable] public async Task OnWsReady(double duration)
@@ -516,9 +502,6 @@
     [JSInvokable] public async Task OnWsRegionClicked(string id)      => await OnRegionClicked.InvokeAsync(id);
     [JSInvokable] public async Task OnWsRegionIn(string id)           => await OnRegionIn.InvokeAsync(id);
     [JSInvokable] public async Task OnWsRegionOut(string id)          => await OnRegionOut.InvokeAsync(id);
-
-    [JSInvokable] public async Task OnWsEnvelopePointsChanged(List<WsEnvelopePoint> pts) => await OnEnvelopePointsChanged.InvokeAsync(pts);
-    [JSInvokable] public async Task OnWsEnvelopeVolumeChanged(double v)                  => await OnEnvelopeVolumeChanged.InvokeAsync(v);
 
     // Spectrogram callbacks
     [JSInvokable] public async Task OnWsSpectrogramProgress(int percent)  => await OnSpectrogramProgress.InvokeAsync(percent);

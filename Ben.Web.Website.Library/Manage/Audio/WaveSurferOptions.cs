@@ -353,33 +353,6 @@ public class WsSpectrogramOptions
     public bool? MelScale { get; set; }
 }
 
-public class WsEnvelopeOptions
-{
-    [JsonPropertyName("volume")]
-    public double? Volume { get; set; }
-
-    [JsonPropertyName("lineWidth")]
-    public string? LineWidth { get; set; }
-
-    [JsonPropertyName("lineColor")]
-    public string? LineColor { get; set; }
-
-    [JsonPropertyName("dragLine")]
-    public bool? DragLine { get; set; }
-
-    [JsonPropertyName("dragPointSize")]
-    public int? DragPointSize { get; set; }
-
-    [JsonPropertyName("dragPointFill")]
-    public string? DragPointFill { get; set; }
-
-    [JsonPropertyName("dragPointStroke")]
-    public string? DragPointStroke { get; set; }
-
-    [JsonPropertyName("points")]
-    public List<WsEnvelopePoint>? Points { get; set; }
-}
-
 // ── Plugin Config ─────────────────────────────────────────────────────────────
 
 /// <summary>
@@ -428,18 +401,6 @@ public class WsPluginConfig
 
     [JsonPropertyName("spectrogramOptions")]
     public WsSpectrogramOptions? SpectrogramOptions { get; set; }
-
-    [JsonPropertyName("spectrogramWindowed")]
-    public bool SpectrogramWindowed { get; set; }
-
-    [JsonPropertyName("spectrogramWindowedOptions")]
-    public WsSpectrogramOptions? SpectrogramWindowedOptions { get; set; }
-
-    [JsonPropertyName("envelope")]
-    public bool Envelope { get; set; }
-
-    [JsonPropertyName("envelopeOptions")]
-    public WsEnvelopeOptions? EnvelopeOptions { get; set; }
 }
 
 // ── DTOs ──────────────────────────────────────────────────────────────────────
@@ -556,19 +517,6 @@ public class WsRegionParams
 
     [JsonPropertyName("maxLength")]
     public double? MaxLength { get; set; }
-}
-
-/// <summary>A single volume-control point on the Envelope plugin. PascalCase of <c>EnvelopePoint</c>.</summary>
-public class WsEnvelopePoint
-{
-    [JsonPropertyName("id")]
-    public string? Id { get; set; }
-
-    [JsonPropertyName("time")]
-    public double Time { get; set; }
-
-    [JsonPropertyName("volume")]
-    public double Volume { get; set; }
 }
 
 /// <summary>Coordinates payload used by the spectrogram context-menu callback.</summary>
@@ -702,10 +650,6 @@ public static class UploadFileAudioConfigExtensions
                 MinimapOptions           = Deserialize<WsMinimapOptions>(record.MinimapOptionsJson),
                 Spectrogram              = record.EnableSpectrogram,
                 SpectrogramOptions       = Deserialize<WsSpectrogramOptions>(record.SpectrogramOptionsJson),
-                SpectrogramWindowed      = record.EnableSpectrogramWindowed,
-                SpectrogramWindowedOptions = Deserialize<WsSpectrogramOptions>(record.SpectrogramWindowedOptionsJson),
-                Envelope                 = record.EnableEnvelope,
-                EnvelopeOptions          = Deserialize<WsEnvelopeOptions>(record.EnvelopeOptionsJson),
                 Regions                  = record.EnableRegions,
             },
 

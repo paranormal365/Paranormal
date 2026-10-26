@@ -57,7 +57,7 @@ else
             <div style="position:absolute;inset:0;display:flex;align-items:center;
                         justify-content:center;z-index:2;pointer-events:none;
                         background:rgba(0,0,0,.18);border-radius:4px;">
-                <span style="font-size:1.6rem;color:#fff;text-shadow:0 1px 6px rgba(0,0,0,.7);">▶</span>
+                <span style="font-size:1.6rem;color:#fff;filter:drop-shadow(0 1px 6px rgba(0,0,0,.7));"><BenIcon Name="play" /></span>
             </div>
         }
 
@@ -122,17 +122,13 @@ else
                         </button>
                         @* Clear user-drawn regions *@
                         <button type="button" class="btn @(ThemeConstants.Button.FillMode.Outline == ThemeConstants.Button.FillMode.Solid ? "btn-secondary" : "btn-outline-secondary") btn-sm text-nowrap" @onclick="ClearUserRegionsAsync" disabled="@(!(_modalReady))">
-                            <BenIcon Name="trash-2" Class="me-1" />Clear Regions
+                            <BenIcon Name="x-square" Class="me-1" />Clear Regions
                         </button>
                         @* Spectrogram toggle *@
                         <button type="button" class="btn @(ThemeConstants.Button.FillMode.Outline == ThemeConstants.Button.FillMode.Solid ? "btn-secondary" : "btn-outline-secondary") btn-sm text-nowrap" @onclick="ToggleSpectrogramAsync" disabled="@(!(_modalReady))">
                             <BenIcon Name="bar-chart-2" Class="me-1" />@(_spectrogramEnabled ? "Hide Spectrogram" : "Show Spectrogram")
                         </button>
-                        @* Spectrogram resolution — only shown when spectrogram is active *@
-                        @if (_viewNotSavedReason is not null)
-                        {
-                            <span class="small text-secondary" title="Only the owner of a recording can save how it is set up">@_viewNotSavedReason</span>
-                        }
+                        @* Spectrogram options — only shown when the spectrogram is on *@
                         @if (_spectrogramEnabled)
                         {
                             <BenSelect Class="form-select-sm" Data="@_resolutionOptions" Value="@_spectrogramFftSamples" ValueChanged="@((int v) => _ = OnSpectrogramResolutionChangedAsync(v))" TextField="@nameof(SpectrogramResolutionOption.Label)" ValueField="@nameof(SpectrogramResolutionOption.Value)" Width="155px" Enabled="@_modalReady" />
@@ -166,7 +162,7 @@ else
                         </button>
                         @* Silence detection toggle *@
                         <button type="button" class="btn @(ThemeConstants.Button.FillMode.Outline == ThemeConstants.Button.FillMode.Solid ? "btn-secondary" : "btn-outline-secondary") btn-sm text-nowrap" @onclick="ToggleSilenceDetectionAsync" disabled="@(!(_modalReady))">
-                            <BenIcon Name="volume-x" Class="me-1" />Silence
+                            <BenIcon Name="volume-x" Class="me-1" />Detect silence
                         </button>
                         @if (_silenceDetectionEnabled)
                         {
@@ -182,6 +178,12 @@ else
                     @(_regionDrawMode
                         ? "Click & drag to mark a region — right-click to play, save, or edit"
                         : "Click & drag the waveform to scrub — audio plays while dragging")
+                    @* Why this setup won't be remembered. It sat between the Spectrogram button and
+                       its options, where it read as a spectrogram message. *@
+                    @if (_viewNotSavedReason is not null)
+                    {
+                        <span class="fst-normal ms-2" title="Only the owner of a recording can save how it is set up">@_viewNotSavedReason</span>
+                    }
                 </div>
 
                 @* EQ / Processing panel *@
@@ -532,15 +534,15 @@ else
                                     @(_regionSelection.Target is not { } sel ? "Draw a region on the waveform first" : $"{FormatTime(sel.Start)}–{FormatTime(sel.End)}")
                                 </span>
                                 <div class="d-flex gap-1">
-                                    <button type="button" class="btn btn-secondary btn-sm" id="edit-op-cut" @onclick="@(() => ApplyAudioEditAsync(AudioEditOperation.Cut))" disabled="@(!(CanApplyEdit(requiresRegion: true)))">✂ Cut</button>
-                                    <button type="button" class="btn btn-secondary btn-sm" id="edit-op-silence" @onclick="@(() => ApplyAudioEditAsync(AudioEditOperation.Silence))" disabled="@(!(CanApplyEdit(requiresRegion: true)))">🔇 Silence</button>
+                                    <button type="button" class="btn btn-secondary btn-sm" id="edit-op-cut" @onclick="@(() => ApplyAudioEditAsync(AudioEditOperation.Cut))" disabled="@(!(CanApplyEdit(requiresRegion: true)))"><BenIcon Name="scissors" Class="me-1" />Cut</button>
+                                    <button type="button" class="btn btn-secondary btn-sm" id="edit-op-silence" @onclick="@(() => ApplyAudioEditAsync(AudioEditOperation.Silence))" disabled="@(!(CanApplyEdit(requiresRegion: true)))"><BenIcon Name="volume-x" Class="me-1" />Silence selection</button>
                                 </div>
                             </div>
                             <div class="d-flex flex-column gap-1" style="min-width:160px;">
                                 <strong class="small">Whole File</strong>
                                 <div class="d-flex gap-1">
-                                    <button type="button" class="btn btn-secondary btn-sm" id="edit-op-normalize" @onclick="@(() => ApplyAudioEditAsync(AudioEditOperation.Normalize))" disabled="@(!(CanApplyEdit()))">📶 Normalize</button>
-                                    <button type="button" class="btn btn-secondary btn-sm" id="edit-op-reverse" @onclick="@(() => ApplyAudioEditAsync(AudioEditOperation.Reverse))" disabled="@(!(CanApplyEdit()))">⏪ Reverse</button>
+                                    <button type="button" class="btn btn-secondary btn-sm" id="edit-op-normalize" @onclick="@(() => ApplyAudioEditAsync(AudioEditOperation.Normalize))" disabled="@(!(CanApplyEdit()))"><BenIcon Name="bar-chart-2" Class="me-1" />Normalize</button>
+                                    <button type="button" class="btn btn-secondary btn-sm" id="edit-op-reverse" @onclick="@(() => ApplyAudioEditAsync(AudioEditOperation.Reverse))" disabled="@(!(CanApplyEdit()))"><BenIcon Name="rewind" Class="me-1" />Reverse</button>
                                 </div>
                             </div>
                             <div class="d-flex flex-column gap-1" style="min-width:180px;">
@@ -551,8 +553,8 @@ else
                             <div class="d-flex flex-column gap-1" style="min-width:200px;">
                                 <strong class="small">Fade In / Out (seconds)</strong>
                                 <div class="d-flex gap-1">
-                                    <input type="number" class="form-control" min="0" max="100" step="1" style="max-width:80px;" @bind="_editFadeIn" @bind:event="oninput" />
-                                    <input type="number" class="form-control" min="0" max="100" step="1" style="max-width:80px;" @bind="_editFadeOut" @bind:event="oninput" />
+                                    <input type="number" class="form-control form-control-sm" min="0" max="@MaxSecondsAttribute" step="0.5" style="max-width:80px;" aria-label="Fade in, in seconds" @bind="_editFadeIn" @bind:event="oninput" />
+                                    <input type="number" class="form-control form-control-sm" min="0" max="@MaxSecondsAttribute" step="0.5" style="max-width:80px;" aria-label="Fade out, in seconds" @bind="_editFadeOut" @bind:event="oninput" />
                                 </div>
                                 <button type="button" class="btn btn-secondary btn-sm" id="edit-op-fade" @onclick="@(() => ApplyAudioEditAsync(AudioEditOperation.Fade))" disabled="@(!(CanApplyEdit()))">Apply Fade</button>
                             </div>
@@ -696,8 +698,10 @@ else
                     <text> – @FormatTime(_markerEndSeconds) <span class="text-secondary">(@((_markerEndSeconds - _markerTimeSeconds).ToString("0.0"))s)</span></text>
                 }
             </div>
-            <label class="d-flex align-items-center gap-2 mt-1 small" for="audiofilepreview-togglemarkerspan-bool-e-value-dc5d">
-                <input type="checkbox" checked="@_markerIsSpan"
+            @* The label names its own checkbox. It used to point at the "Ends at" box, which does not
+               exist until the box is ticked, so clicking the sentence did nothing. *@
+            <label class="d-flex align-items-center gap-2 mt-1 small" for="marker-is-span">
+                <input id="marker-is-span" type="checkbox" checked="@_markerIsSpan"
                        @onchange="@(e => ToggleMarkerSpan((bool?)e.Value ?? false))" />
                 Mark a stretch of audio rather than an instant
             </label>
@@ -705,7 +709,8 @@ else
             {
                 <div class="d-flex align-items-center gap-2 mt-1">
                     <span class="small text-secondary">Ends at</span>
-                    <input id="audiofilepreview-togglemarkerspan-bool-e-value-dc5d" type="number" class="form-control" min="0" max="100" step="0.1" style="max-width:110px;" @bind="@_markerEndSeconds" @bind:event="oninput" />
+                    @* No max of 100: that capped a marker's end at 1:40 on every longer recording. *@
+                    <input id="marker-end-seconds" type="number" class="form-control form-control-sm" min="0" max="@MaxSecondsAttribute" step="0.1" style="max-width:110px;" aria-label="Ends at, in seconds" @bind="@_markerEndSeconds" @bind:event="oninput" />
                     <span class="small text-secondary">s</span>
                 </div>
             }
@@ -974,6 +979,12 @@ else
     private double _currentTime;
     private double _modalTime;
     private double _modalDuration;
+
+    /// <summary>The recording's length for an input's max, in the invariant culture. Empty until the
+    /// player knows the length, which leaves the input unbounded rather than capped at a guess.</summary>
+    private string? MaxSecondsAttribute => _modalDuration > 0
+        ? Math.Ceiling(_modalDuration).ToString(System.Globalization.CultureInfo.InvariantCulture)
+        : null;
     private bool   _showModal;
     private bool   _modalReady;
     private IReadOnlyList<UploadFileRecord> _childClips = [];
@@ -991,7 +1002,7 @@ else
 
     private static readonly List<SpectrogramMenuItem> _spectrogramMenuItems =
     [
-        new("labels", "🔤  Toggle Labels"),
+        new("labels", "Toggle Labels"),
     ];
 
     private record SpectrogramResolutionOption(int Value, string Label);
@@ -1094,11 +1105,11 @@ else
 
     private static readonly List<RegionContextMenuItem> _regionMenuItems =
     [
-        new("play",    "▶  Play Region"),
-        new("explore", "⤢  Explore Region (clip or add a note)"),
-        new("save",    "🎵  Create Audio File from Region"),
-        new("label",   "✏  Edit Label"),
-        new("delete",  "🗑  Delete Region"),
+        new("play",    "Play Region"),
+        new("explore", "Explore Region (clip or add a note)"),
+        new("save",    "Create Audio File from Region"),
+        new("label",   "Edit Label"),
+        new("delete",  "Delete Region"),
     ];
 
     // ── Region Explorer (clip + notes) ──────────────────────────────────────────
@@ -1112,10 +1123,10 @@ else
 
     private static readonly List<AudioContextMenuItem> _menuItems =
     [
-        new("play",     "▶  Play"),
-        new("pause",    "⏸  Pause"),
-        new("rewind",   "⏮  Rewind"),
-        new("fullview", "⤢  Open Full View"),
+        new("play",     "Play"),
+        new("pause",    "Pause"),
+        new("rewind",   "Rewind"),
+        new("fullview", "Open Full View"),
     ];
 
     // ── WsConfig objects ──────────────────────────────────────────────────────

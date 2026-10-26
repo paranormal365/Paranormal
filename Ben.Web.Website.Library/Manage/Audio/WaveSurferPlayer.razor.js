@@ -9,7 +9,7 @@
  *   npm run build:blazor
  */
 
-// Map of containerId → { ws, regionsPlugin, envelopePlugin, resizeObserver }
+// Map of containerId → { ws, regionsPlugin, resizeObserver }
 const instances = new Map()
 
 // Timeline is hidden automatically when the player is shorter than this.
@@ -40,8 +40,6 @@ let TimelinePlugin = null
 let ZoomPlugin = null
 let MinimapPlugin = null
 let SpectrogramPlugin = null
-let SpectrogramWindowedPlugin = null
-let EnvelopePlugin = null
 
 async function loadCore() {
   if (!WaveSurfer) {
@@ -125,8 +123,6 @@ export async function create(containerId, options, plugins, dotnetRef, audioUrl)
     zoom:                 { value: ZoomPlugin },
     minimap:              { value: MinimapPlugin },
     spectrogram:          { value: SpectrogramPlugin },
-    spectrogramWindowed:  { value: SpectrogramWindowedPlugin },
-    envelope:             { value: EnvelopePlugin },
   }
 
   await Promise.all([
@@ -136,8 +132,6 @@ export async function create(containerId, options, plugins, dotnetRef, audioUrl)
     ensurePlugin(plugins.zoom,                '/js/wavesurfer/plugins/zoom.esm.js',                 caches.zoom),
     ensurePlugin(plugins.minimap,             '/js/wavesurfer/plugins/minimap.esm.js',              caches.minimap),
     ensurePlugin(plugins.spectrogram,         '/js/wavesurfer/plugins/spectrogram.esm.js',          caches.spectrogram),
-    ensurePlugin(plugins.spectrogramWindowed, '/js/wavesurfer/plugins/spectrogram-windowed.esm.js', caches.spectrogramWindowed),
-    ensurePlugin(plugins.envelope,            '/js/wavesurfer/plugins/envelope.esm.js',             caches.envelope),
   ])
 
   // Update module-level caches
@@ -147,13 +141,10 @@ export async function create(containerId, options, plugins, dotnetRef, audioUrl)
   if (caches.zoom.value)                ZoomPlugin                = caches.zoom.value
   if (caches.minimap.value)             MinimapPlugin             = caches.minimap.value
   if (caches.spectrogram.value)         SpectrogramPlugin         = caches.spectrogram.value
-  if (caches.spectrogramWindowed.value) SpectrogramWindowedPlugin = caches.spectrogramWindowed.value
-  if (caches.envelope.value)            EnvelopePlugin            = caches.envelope.value
 
   // Build plugin instances
   const wsPlugins = []
   let regionsPlugin = null
-  let envelopePlugin = null
 
   if (plugins.regions && RegionsPlugin) {
     regionsPlugin = RegionsPlugin.create()
@@ -177,12 +168,6 @@ export async function create(containerId, options, plugins, dotnetRef, audioUrl)
     wsPlugins.push(MinimapPlugin.create(plugins.minimapOptions ?? { height: 50 }))
   if (plugins.spectrogram && SpectrogramPlugin)
     wsPlugins.push(SpectrogramPlugin.create(plugins.spectrogramOptions ?? {}))
-  if (plugins.spectrogramWindowed && SpectrogramWindowedPlugin)
-    wsPlugins.push(SpectrogramWindowedPlugin.create(plugins.spectrogramWindowedOptions ?? {}))
-  if (plugins.envelope && EnvelopePlugin) {
-    envelopePlugin = EnvelopePlugin.create(plugins.envelopeOptions ?? {})
-    wsPlugins.push(envelopePlugin)
-  }
 
   const container = document.getElementById(containerId)
   if (!container) throw new Error(`WaveSurferPlayer: container #${containerId} not found`)
@@ -292,12 +277,6 @@ export async function create(containerId, options, plugins, dotnetRef, audioUrl)
     regionsPlugin.on('region-out',     (r)  => safe(dotnetRef.invokeMethodAsync('OnWsRegionOut',     r.id)))
   }
 
-  // ── Envelope events ──────────────────────────────────────────────────────
-  if (envelopePlugin) {
-    envelopePlugin.on('points-change',  (pts)    => safe(dotnetRef.invokeMethodAsync('OnWsEnvelopePointsChanged',  pts)))
-    envelopePlugin.on('volume-change',  (volume) => safe(dotnetRef.invokeMethodAsync('OnWsEnvelopeVolumeChanged', volume)))
-  }
-
   // ── ResizeObserver — keeps WaveSurfer in sync with CSS resize ───────────
   // WaveSurfer 7 has an internal ResizeObserver for fillParent, but attaching
   // our own ensures the waveform redraws promptly after a manual CSS resize.
@@ -314,7 +293,7 @@ export async function create(containerId, options, plugins, dotnetRef, audioUrl)
   })
   resizeObserver.observe(container.parentElement ?? container)
 
-  instances.set(containerId, { ws, regionsPlugin, envelopePlugin, resizeObserver })
+  instances.set(containerId, { ws, regionsPlugin, resizeObserver })
 
   // ── Custom drag-to-create / drag-to-scrub (only when requested) ─────────
   // We implement both manually instead of relying on RegionsPlugin's/WaveSurfer's
@@ -750,14 +729,6 @@ export function updateRegionLabel(containerId, regionId, label) {
   const region = regionsPlugin?.getRegions().find((r) => r.id === regionId)
   if (region) region.setOptions({ content: label ?? '' })
 }
-
-// ── Envelope API ──────────────────────────────────────────────────────────────
-
-export function setEnvelopePoints(containerId, points)  { instances.get(containerId)?.envelopePlugin?.setPoints(points) }
-export function addEnvelopePoint(containerId, point)    { instances.get(containerId)?.envelopePlugin?.addPoint(point) }
-export function removeEnvelopePoint(containerId, id)    { instances.get(containerId)?.envelopePlugin?.removePoint(id) }
-export function setEnvelopeVolume(containerId, volume)  { instances.get(containerId)?.envelopePlugin?.setVolume(volume) }
-export function getEnvelopePoints(containerId)          { return instances.get(containerId)?.envelopePlugin?.getPoints() ?? [] }
 
 // ── Spectrogram (Web-Worker FFT) ─────────────────────────────────────────────
 
@@ -1219,7 +1190,7 @@ function _redrawSpectrogramViewport(containerId) {
     ctx.imageSmoothingEnabled = true
     ctx.imageSmoothingQuality = 'high'
     ctx.drawImage(instance._prerenderCanvas, srcX, 0, srcWidth, 128, 0, 0, canvasW, 128)
-    if (showLabels) _drawSpectrogramLabels(canvas, sampleRate, nBins)
+    if (showLabels) _drawSpectrogramLabels(canvas, sampleRate, melScale)
     if (instance._showVoiceBand) _drawVoiceBandOverlay(canvas, sampleRate, melScale)
     _hideSpectrogramLoading(canvasId)
     return
@@ -1268,9 +1239,9 @@ function _redrawSpectrogramViewport(containerId) {
       const ctx = c.getContext('2d')
       ctx.putImageData(new ImageData(pixels, width, height), 0, 0)
 
-      const { sampleRate: sr = 44100, fftSamples: fs = 512, melScale: ms = false } = inst.spectrogramMeta ?? {}
+      const { sampleRate: sr = 44100, melScale: ms = false } = inst.spectrogramMeta ?? {}
       if (ck.split(':')[3] === '1') {
-        _drawSpectrogramLabels(c, sr, Math.floor(fs / 2))
+        _drawSpectrogramLabels(c, sr, ms)
       }
       if (inst._showVoiceBand) {
         _drawVoiceBandOverlay(c, sr, ms)
@@ -1349,73 +1320,23 @@ function _hideSpectrogramLoading(canvasId) {
 }
 
 /**
- * Draws a spectrogram to a canvas synchronously using a pixel-buffer approach
- * (O(W×H) output iterations instead of O(nFrames×nBins) fillRect calls).
- * Used for the initial render once FFT data is ready. Subsequent viewport
- * redraws triggered by zoom/scroll use the async Worker path in
- * _redrawSpectrogramViewport instead.
- */
-function _drawSpectrogram(canvas, data, showLabels, sampleRate, fftSamples) {
-  if (!data?.length) return
-
-  const W     = Math.max(1, canvas.parentElement?.offsetWidth || 800)
-  const H     = 128
-  canvas.width  = W
-  canvas.height = H
-
-  const nFrames = data.length
-  const nBins   = Math.floor(fftSamples / 2)
-
-  // Normalise over the visible slice
-  let maxMag = 1e-9
-  for (const frame of data)
-    for (const v of frame)
-      if (v > maxMag) maxMag = v
-
-  // O(W×H) pixel-buffer render — one putImageData instead of millions of fillRects
-  const pixels = new Uint8ClampedArray(W * H * 4)
-  for (let px = 0; px < W; px++) {
-    const frame = data[Math.min(nFrames - 1, Math.floor(px * nFrames / W))]
-    for (let py = 0; py < H; py++) {
-      let binIdx
-      if (melScale) {
-        const fracFromTop = py / (H - 1)
-        const mel  = melMax * (1 - fracFromTop)
-        const freq = 700 * (Math.pow(10, mel / 2595) - 1)
-        binIdx = Math.min(nBins - 1, Math.max(0, Math.round(freq / fMax * nBins)))
-      } else {
-        binIdx = nBins - 1 - Math.min(nBins - 1, Math.floor(py * nBins / H))
-      }
-      const t     = frame[binIdx] / maxMag
-      const ci    = Math.min(255, Math.floor(t * 255))
-      const c     = colormap[ci]
-      const idx   = (py * W + px) * 4
-      pixels[idx]     = Math.round(c[0] * 255)
-      pixels[idx + 1] = Math.round(c[1] * 255)
-      pixels[idx + 2] = Math.round(c[2] * 255)
-      pixels[idx + 3] = 255
-    }
-  }
-  canvas.getContext('2d').putImageData(new ImageData(pixels, W, H), 0, 0)
-
-  if (showLabels) _drawSpectrogramLabels(canvas, sampleRate, nBins)
-}
-
-/**
  * Overlays frequency-axis gridlines and labels on an already-drawn spectrogram canvas.
  * Fast canvas text calls only — safe to call on the main thread after putImageData.
  */
-function _drawSpectrogramLabels(canvas, sampleRate, nBins) {
+function _drawSpectrogramLabels(canvas, sampleRate, melScale) {
   const W = canvas.width
   const H = canvas.height
   if (!W || !H) return
   const ctx     = canvas.getContext('2d')
   const nyquist = sampleRate / 2
+  // The same mapping the picture and the voice band use. Labels were always placed on a linear
+  // scale, so with Mel on "1kHz" sat far below the 1 kHz the image showed.
+  const freqToY = _spectrogramFreqToY(H, sampleRate, melScale)
   ctx.font      = '10px monospace'
   ctx.textAlign = 'left'
   for (const freq of [250, 500, 1000, 2000, 4000, 8000, 16000]) {
     if (freq >= nyquist) continue
-    const y = H - Math.floor((freq / nyquist) * H)
+    const y = freqToY(freq)
     ctx.strokeStyle = 'rgba(255,255,255,0.3)'
     ctx.setLineDash([3, 3])
     ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(W, y); ctx.stroke()
@@ -1426,26 +1347,38 @@ function _drawSpectrogramLabels(canvas, sampleRate, nBins) {
 }
 
 /**
- * Shades the 300 Hz–3 kHz human-voice range on an already-drawn spectrogram canvas —
- * anomalies that fall outside this band stand out visually against normal speech.
+ * Pixel row for a frequency on a spectrogram canvas of height H — linear, or mel-spaced exactly
+ * as spectrogram-draw-worker.js spaces the image (hz2mel over hz2mel(nyquist)). Labels, the voice
+ * band and anything else drawn over the image must place itself through this.
+ */
+function _spectrogramFreqToY(H, sampleRate, melScale) {
+  const nyquist = sampleRate / 2
+  const hz2mel  = (hz) => 2595 * Math.log10(1 + hz / 700)
+  const melMax  = hz2mel(nyquist)
+  return melScale
+    ? (freq) => H - Math.floor((hz2mel(freq) / melMax) * H)
+    : (freq) => H - Math.floor((freq / nyquist) * H)
+}
+
+/**
+ * The band the EVP detector listens in (EvpDetector.HighPassHz / LowPassHz on the server).
+ * The overlay used to stop at 3 kHz, so a candidate between 3 and 3.4 kHz was flagged in a
+ * stretch the picture said was outside the voice band.
+ */
+const VOICE_BAND_HZ = [300, 3400]
+
+/**
+ * Shades the band the EVP detector listens in on an already-drawn spectrogram canvas —
+ * anomalies that fall outside it stand out visually against normal speech.
  */
 function _drawVoiceBandOverlay(canvas, sampleRate, melScale) {
   const W = canvas.width
   const H = canvas.height
   if (!W || !H) return
-  const nyquist = sampleRate / 2
-  const melMax  = 2595 * Math.log10(1 + nyquist / 700)
+  const freqToY = _spectrogramFreqToY(H, sampleRate, melScale)
 
-  const freqToY = (freq) => {
-    if (melScale) {
-      const mel = 2595 * Math.log10(1 + freq / 700)
-      return H - Math.floor((mel / melMax) * H)
-    }
-    return H - Math.floor((freq / nyquist) * H)
-  }
-
-  const yTop    = Math.max(0, freqToY(3000))
-  const yBottom = Math.min(H, freqToY(300))
+  const yTop    = Math.max(0, freqToY(VOICE_BAND_HZ[1]))
+  const yBottom = Math.min(H, freqToY(VOICE_BAND_HZ[0]))
   if (yBottom <= yTop) return
 
   const ctx = canvas.getContext('2d')
