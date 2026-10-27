@@ -268,6 +268,12 @@ public interface IWebApiClient
     /// <summary>The EVP learning tables read back (audio phase 11), or the server's reason. SuperAdmin.</summary>
     Task<(Ben.Service.Models.Admin.AdminEvpSummary? Summary, string? Error)> GetAdminEvpSummaryAsync(int days = 30, CancellationToken token = default);
 
+    /// <summary>How EVP candidates are scored (audio phase 13), or the server's reason. SuperAdmin.</summary>
+    Task<(Ben.Service.Models.Admin.AdminEvpScoring? Scoring, string? Error)> GetAdminEvpScoringAsync(CancellationToken token = default);
+
+    /// <summary>A POST with no body; null when it worked, else the server's sentence.</summary>
+    Task<string?> PostForReasonAsync(string url, CancellationToken token = default);
+
     /// <summary>Scans several recordings in one background job; each comes back accepted or with its reason.</summary>
     Task<(BatchScanResult? Result, string? Error)> StartBatchScanAsync(StartBatchScanRequest request, CancellationToken token = default);
 

@@ -201,13 +201,17 @@ scan missed. Your marker is saved as usual.
 
 ### Why a candidate was found
 
-Every candidate has a **Why?** button (the ⓘ on its row). It opens its score in three parts:
+Every candidate has a **Why?** button (the ⓘ on its row). It opens its score in three parts. With
+the built-in weights they are:
 
 - **Stood out**, up to 50 points: how far it rose above the room around it. 20 dB or more counts in
   full.
 - **In the listening range**, up to 30: how much of its sound was in the range the scan listens in.
 - **Length**, up to 20: speech-length sounds score highest; a click or a long stretch of talking
   scores less.
+
+Once the site has learned from enough decisions, the points each part is worth may change (see below);
+**Why?** always shows the points the scan that found it used.
 
 Under that are the measurements it was made from: how loud the room was, its loudest moment, how
 much its level moved (speech rises and falls, a hum holds steady), and how hiss-like it was. The
@@ -290,9 +294,13 @@ measurements, along with whether you played the candidate first and whether you 
 marker you place where the scan found nothing is saved as a miss. No audio is copied, and nothing
 records who made the choice.
 
-Nothing changes how the scan scores yet. A future version will use this to rank candidates more the
-way investigators do. It will learn which sounds people tend to keep, not whether a sound is
-paranormal. If you delete the recording, its measurements and choices are deleted with it.
+Once there are enough decisions (at least 500, from at least 20 recordings), the site works out how
+much each part of the score should count, so the sounds investigators keep rise toward the top. It
+only learns how to weigh the same three parts; the score is still how much a sound stood out, and it
+learns which sounds people tend to keep, not whether a sound is paranormal. New weights are tested
+on recordings they didn't learn from and only used if they rank better, and a site administrator
+decides whether to use them. Scans already made keep their scores. If you delete the recording, its
+measurements and choices are deleted with it.
 
 ![How the smarter detector works](/help/media/using-the-audio-editor/evp-smarter-detector.png)
 *What a scan and a review save, and what they don't.*

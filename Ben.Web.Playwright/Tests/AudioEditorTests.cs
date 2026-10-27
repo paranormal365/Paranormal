@@ -820,9 +820,11 @@ public class AudioEditorTests : BenTestBase
             return;
         }
         var name = _lastUploadedName!;
-        await SetBlindReviewAsync(true);
         try
         {
+            // Inside the try: if switching it on fails half way, the finally still switches it off, or
+            // every later test on this seat runs blind (10/27: one failure here failed seven others).
+            await SetBlindReviewAsync(true);
             await OpenOurRecordingAsync(name);
             var panel = await ScanForThreeAsync();
             await Expect(panel.Locator("#evp-blind-note")).ToBeVisibleAsync();
@@ -848,7 +850,13 @@ public class AudioEditorTests : BenTestBase
         await Expect(box).ToBeVisibleAsync(new() { Timeout = 30_000 });
         // A click before the page is live ticks the box in the browser and saves nothing.
         await WaitForTheCircuitAsync();
-        if (await box.IsCheckedAsync() != on) await box.ClickAsync();
+        if (await box.IsCheckedAsync() != on)
+        {
+            await box.ClickAsync();
+            // The box ticks at once; "Saved" comes when the server has it. Reloading before that read
+            // the old value while the save was still on its way.
+            await Expect(Page.Locator("#evp-blind-saved")).ToBeVisibleAsync(new() { Timeout = 15_000 });
+        }
         await Expect(box).ToBeCheckedAsync(new() { Checked = on, Timeout = 10_000 });
         // Saved, not only ticked: a reload reads it back.
         await Page.ReloadAsync();
@@ -875,6 +883,18 @@ public class AudioEditorTests : BenTestBase
         await Expect(Page.Locator("#admin-evp-decoder")).ToBeVisibleAsync(new() { Timeout = 30_000 });
         if (await Page.Locator("#admin-evp-no-rulings").CountAsync() == 0)
             await Expect(Page.GetByTestId("admin-evp-histogram")).ToHaveCountAsync(9);
+
+        // How candidates are scored (phase 13): built-in until somebody switches a passing fit on, and
+        // Fit now answers in words either way (a run's own decisions may or may not be enough to fit).
+        var scoring = Page.Locator("#admin-evp-scoring");
+        await Expect(scoring).ToBeVisibleAsync(new() { Timeout = 30_000 });
+        await Expect(scoring.Locator("#admin-evp-scoring-active")).ToHaveTextAsync("Built-in weights");
+        await Expect(scoring.Locator("#admin-evp-scoring-progress")).ToContainTextAsync("500 decisions");
+        await WaitForTheCircuitAsync();
+        await scoring.Locator("#admin-evp-fit").ClickAsync();
+        await Expect(scoring.Locator("#admin-evp-scoring-message"))
+            .ToContainTextAsync(new System.Text.RegularExpressions.Regex("Nothing to learn from|Fitted"), new() { Timeout = 30_000 });
+        await Expect(scoring.Locator("#admin-evp-scoring-active")).ToHaveTextAsync("Built-in weights");
     }
 
     /// <summary>

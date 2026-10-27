@@ -188,6 +188,18 @@ public interface IBenPlatformClient
     /// <summary>The EVP learning tables read back over a window of days (audio phase 11), or the server's reason. SuperAdmin.</summary>
     Task<(AdminEvpSummary? Summary, string? Error)> GetAdminEvpSummaryAsync(int days = 30, CancellationToken token = default);
 
+    /// <summary>How EVP candidates are scored, and every fit of the weights (audio phase 13). SuperAdmin.</summary>
+    Task<(AdminEvpScoring? Scoring, string? Error)> GetAdminEvpScoringAsync(CancellationToken token = default);
+
+    /// <summary>Fits the score's weights now; null on success, else the server's reason. SuperAdmin.</summary>
+    Task<string?> FitEvpScoreAsync(CancellationToken token = default);
+
+    /// <summary>Switches a passing fit on for new scans; null on success, else the reason. SuperAdmin.</summary>
+    Task<string?> ActivateEvpScoringAsync(int version, CancellationToken token = default);
+
+    /// <summary>Goes back to the built-in weights; null on success, else the reason. SuperAdmin.</summary>
+    Task<string?> UseBuiltInEvpScoringAsync(CancellationToken token = default);
+
     /// <summary>
     /// Reports a published field session's media, hiding it until a moderator looks.
     /// </summary>

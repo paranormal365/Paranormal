@@ -1,6 +1,8 @@
 using Ben.Data.Common.Constants;
 using Ben.Data.Common.Enums;
 using Ben.Data.Source.Context;
+using Ben.Data.WebApi.Services.Audio;
+using Ben.Data.WebApi.Services.Audio.Learning;
 using Ben.Service.Models.Admin;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
@@ -22,7 +24,7 @@ namespace Ben.Data.WebApi.Controllers.Admin;
 [ApiController]
 [Route("api/admin/evp")]
 [Authorize(Policy = RoleNames.SuperAdmin)]
-public sealed class AdminEvpController(IDbContextFactory<BenDataContext> dbContextFactory) : ControllerBase
+public sealed class AdminEvpController(IDbContextFactory<BenDataContext> dbContextFactory) : BenControllerBase
 {
     public const int MaxDays = 365;
     private const int Bins = 10;
@@ -92,6 +94,65 @@ public sealed class AdminEvpController(IDbContextFactory<BenDataContext> dbConte
             await db.EvpMisses.AsNoTracking().CountAsync(m => m.DateCreated >= since, ct),
             perDay,
             histograms));
+    }
+
+    // ── How candidates are scored (phase 13) ─────────────────────────────────
+
+    [HttpGet("scoring")]
+    public async Task<ActionResult<AdminEvpScoring>> Scoring(CancellationToken ct)
+    {
+        await using var db = await dbContextFactory.CreateDbContextAsync(ct);
+        var decisions = await EvpScoring.DecisionsAsync(db, ct);
+        var fits = await db.EvpScoringVersions.AsNoTracking().OrderByDescending(v => v.Version).ToListAsync(ct);
+        var active = fits.FirstOrDefault(v => v.IsActive);
+        var weights = active is null ? EvpScoreWeights.BuiltIn : EvpScoring.ToWeights(active);
+
+        return Ok(new AdminEvpScoring(
+            weights.Version, new AdminEvpWeights(weights.Prominence, weights.Band, weights.Duration),
+            decisions.Count, decisions.Select(d => d.RecordingId).Distinct().Count(),
+            EvpScoreRefit.MinimumDecisions, EvpScoreRefit.MinimumRecordings,
+            fits.Select(f => new AdminEvpFit(f.Version, new AdminEvpWeights(f.WeightProminence, f.WeightBand, f.WeightDuration),
+                f.Decisions, f.Recordings, f.HeldOutDecisions, f.HeldOutAuc, f.BaselineHeldOutAuc,
+                f.PassedGate, f.GateNote, f.IsActive, f.DateCreated, f.ActivatedUtc)).ToList()));
+    }
+
+    /// <summary>Fits now rather than waiting for the nightly job. Records the fit; switches nothing on.</summary>
+    [HttpPost("scoring/fit")]
+    public async Task<IActionResult> FitNow([FromServices] EvpScoring scoring, CancellationToken ct)
+    {
+        var row = await scoring.FitAndRecordAsync(evenIfNothingNew: true, ct);
+        return row is null
+            ? Conflict("Nothing to learn from yet: the recordings it learns from need both kept and dismissed candidates.")
+            : NoContent();
+    }
+
+    /// <summary>Switches a fit on for new scans. Only one that passed its gate.</summary>
+    [HttpPost("scoring/{version:int}/activate")]
+    public async Task<IActionResult> Activate(int version, CancellationToken ct)
+    {
+        await using var db = await dbContextFactory.CreateDbContextAsync(ct);
+        var fit = await db.EvpScoringVersions.FirstOrDefaultAsync(v => v.Version == version, ct);
+        if (fit is null) return NotFound("There is no such fit.");
+        if (!fit.PassedGate) return Conflict($"This fit did not pass its gate: {fit.GateNote}");
+
+        // Two saves: the one-active index refuses a moment with two switched on.
+        foreach (var on in await db.EvpScoringVersions.Where(v => v.IsActive).ToListAsync(ct)) on.IsActive = false;
+        await db.SaveChangesAsync(ct);
+        fit.IsActive = true;
+        fit.ActivatedUtc = DateTime.UtcNow;
+        fit.ActivatedByAppUserId = GetCurrentUserId();
+        await db.SaveChangesAsync(ct);
+        return NoContent();
+    }
+
+    /// <summary>Goes back to the built-in weights for new scans.</summary>
+    [HttpPost("scoring/built-in")]
+    public async Task<IActionResult> UseBuiltIn(CancellationToken ct)
+    {
+        await using var db = await dbContextFactory.CreateDbContextAsync(ct);
+        foreach (var on in await db.EvpScoringVersions.Where(v => v.IsActive).ToListAsync(ct)) on.IsActive = false;
+        await db.SaveChangesAsync(ct);
+        return NoContent();
     }
 
     /// <summary>Ten equal bins between <paramref name="lo"/> and <paramref name="hi"/>; values outside go in the end bins.</summary>

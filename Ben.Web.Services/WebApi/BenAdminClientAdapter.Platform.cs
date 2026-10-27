@@ -119,6 +119,18 @@ public sealed partial class BenAdminClientAdapter
     public Task<(AdminEvpSummary? Summary, string? Error)> GetAdminEvpSummaryAsync(int days = 30, CancellationToken token = default)
         => _api.GetAdminEvpSummaryAsync(days, token);
 
+    public Task<(AdminEvpScoring? Scoring, string? Error)> GetAdminEvpScoringAsync(CancellationToken token = default)
+        => _api.GetAdminEvpScoringAsync(token);
+
+    public Task<string?> FitEvpScoreAsync(CancellationToken token = default)
+        => _api.PostForReasonAsync("/api/admin/evp/scoring/fit", token);
+
+    public Task<string?> ActivateEvpScoringAsync(int version, CancellationToken token = default)
+        => _api.PostForReasonAsync($"/api/admin/evp/scoring/{version}/activate", token);
+
+    public Task<string?> UseBuiltInEvpScoringAsync(CancellationToken token = default)
+        => _api.PostForReasonAsync("/api/admin/evp/scoring/built-in", token);
+
     public async Task<(bool Ok, string? Error)> FlagFieldSessionAsync(
         Guid fieldSessionId, string? reason, CancellationToken token = default)
     {

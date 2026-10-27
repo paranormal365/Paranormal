@@ -213,6 +213,7 @@ namespace Ben.Data.Source.Context
         public virtual DbSet<AudioMarker> AudioMarkers { get; set; }
         public virtual DbSet<EvpScan> EvpScans { get; set; }
         public virtual DbSet<EvpMiss> EvpMisses { get; set; }
+        public virtual DbSet<EvpScoringVersion> EvpScoringVersions { get; set; }
         public virtual DbSet<EvpScanCandidate> EvpScanCandidates { get; set; }
         public virtual DbSet<EvpScanPreset> EvpScanPresets { get; set; }
         public virtual DbSet<EvpScanJob> EvpScanJobs { get; set; }
@@ -2728,6 +2729,13 @@ namespace Ben.Data.Source.Context
                 .HasForeignKey(e => e.UploadFileId).OnDelete(DeleteBehavior.Cascade);
             modelBuilder.Entity<EvpMiss>().HasIndex(e => e.UploadFileId);
             modelBuilder.Entity<EvpMiss>().HasIndex(e => e.DateCreated);
+            // Fitted score weights (phase 13): numbered once, at most one switched on.
+            modelBuilder.Entity<EvpScoringVersion>().HasIndex(e => e.Version).IsUnique();
+            modelBuilder.Entity<EvpScoringVersion>()
+                .HasIndex(e => e.IsActive).IsUnique().HasFilter("[IsActive] = 1")
+                .HasDatabaseName("IX_EvpScoringVersions_OneActive");
+            modelBuilder.Entity<EvpScoringVersion>().Property(e => e.GateNote).HasMaxLength(500);
+            modelBuilder.Entity<EvpScan>().Property(e => e.ScoringVersion).HasDefaultValue(1);
             modelBuilder.Entity<FieldSessionAnalysisCopy>().Property(e => e.SourceRelativePath).HasMaxLength(500);
             modelBuilder.Entity<UploadFile>().Property(e => e.SourceClipPath).HasMaxLength(500);
             modelBuilder.Entity<UploadFile>()
