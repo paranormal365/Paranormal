@@ -32,6 +32,12 @@ it is hidden from everybody else, but still takes its number. No other sub-headi
 
 ## Unreleased
 
+- Field sessions can be scanned for EVPs: by whoever recorded one, the group it was sent to, an
+  event's organizers and confirmed staff, and the venue of a public place it was published to. Each
+  works on their own copy of the recordings, or their group's, and the session itself never changes.
+- A candidate heard after a question asked during the session is noted with the question.
+- An EVP saved from a group's copy belongs to the group, and says which session and recording it
+  came from.
 - Why? on each candidate: its score in three parts, each with a sentence, and what was measured.
 - The detector lane shows what the scan saw along the whole recording, and the level lane how loud
   it is.

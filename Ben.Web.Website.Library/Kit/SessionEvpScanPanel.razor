@@ -1,0 +1,304 @@
+@namespace Ben.Web.Website.Library.Kit
+@using Ben.Web.Services
+@using Ben.Data.Common.Enums
+@using Ben.Service.Models.Entities
+@using Ben.Service.Models.FieldSessions
+@inject IBenAdminClient AdminClient
+@inject IBenUserState UserState
+@inject IMediaUrlBuilder MediaUrls
+@inject NavigationManager Nav
+@implements IDisposable
+
+@*
+    Scanning a field session for EVPs (phase 9 of ProjectNotes/AudioEditor-EVP-Plan-2026-10-26.md).
+
+    Everything here works on the person's own copy of each recording, or their group's. The session
+    stays exactly as it was sent: nothing on this panel can change it, which is why an organizer can
+    scan a guest's night without touching the guest's files.
+
+    One call decides what shows (GET …/analysis): who may scan, whose copy, the recordings and any
+    scan already running. A refusal shows the server's sentence, except on the public archive page,
+    where every visitor would see one and only the place's venue can do anything here.
+*@
+
+@if (_view is null && _error is null)
+{
+    return;
+}
+
+@if (_view is { MayScan: false } refused && (QuietWhenRefused || refused.Refusal == ScanRefusal.NotSignedIn))
+{
+    return;
+}
+
+<div class="card mt-3 session-evp" id="evp-scan" data-testid="session-evp-panel">
+    <div class="card-header py-2 d-flex align-items-center gap-2 flex-wrap">
+        <BenIcon Name="mic" />
+        <span>Scan for EVPs</span>
+        @if (_view is { MayScan: true, Scopes.Count: > 1 } chooser)
+        {
+            <span class="ms-auto small text-muted">Work on</span>
+            <BenSelect TItem="AnalysisScopeRecord" TValue="string" Data="@chooser.Scopes"
+                       TextField="Label" ValueField="@nameof(AnalysisScopeRecord.Label)"
+                       Value="@ChosenLabel" ValueChanged="@ChooseScopeAsync"
+                       Class="form-select-sm w-auto" AriaLabel="Whose copy to work on" />
+        }
+        else if (_view is { MayScan: true, Scopes.Count: 1 } single)
+        {
+            <span class="ms-auto small text-muted" data-testid="session-evp-scope">@single.Scopes[0].Label</span>
+        }
+    </div>
+    <div class="card-body">
+        @if (_error is not null)
+        {
+            <p class="text-muted small mb-0" role="status">@_error</p>
+        }
+        else if (_view is { MayScan: false } no)
+        {
+            <p class="text-muted small mb-0" data-testid="session-evp-refusal">@no.Message</p>
+        }
+        else if (_view is { } view)
+        {
+            <p class="small text-muted mb-2">
+                Scanning works on @(Chosen?.Scope == AnalysisScope.Person ? "your own copy" : "the group's copy")
+                of each recording. The session itself stays exactly as it was sent.
+            </p>
+
+            @if (!view.DecoderAvailable)
+            {
+                <div class="alert alert-warning py-2 small mb-2" data-testid="session-evp-decoder">
+                    This server can't read the phone's recordings yet, so they can't be scanned here.
+                </div>
+            }
+
+            <div class="d-flex align-items-center gap-2 flex-wrap mb-2">
+                @if (_job is { IsLive: true } running)
+                {
+                    <div class="flex-grow-1" style="min-width:12rem">
+                        <div class="progress" role="progressbar" aria-label="Scan progress"
+                             aria-valuenow="@running.Percent" aria-valuemin="0" aria-valuemax="100">
+                            <div class="progress-bar" style="width:@(running.Percent)%"></div>
+                        </div>
+                    </div>
+                    <span class="small font-monospace" data-testid="session-scan-percent">Scanning @(running.Percent)%</span>
+                    <button type="button" class="btn btn-outline-secondary btn-sm" @onclick="StopAsync"
+                            data-testid="session-scan-stop">Stop</button>
+                }
+                else
+                {
+                    <button type="button" class="btn btn-primary btn-sm" data-testid="session-scan"
+                            disabled="@(!view.DecoderAvailable || _starting)" @onclick="ScanAllAsync">
+                        <BenIcon Name="search" Class="me-1" />
+                        @(view.Clips.Count == 1 ? "Scan the recording" : $"Scan all {view.Clips.Count} recordings")
+                    </button>
+                }
+                @if (_status is not null)
+                {
+                    <span class="small text-muted" role="status" data-testid="session-scan-status">@_status</span>
+                }
+            </div>
+
+            <ul class="list-group list-group-flush">
+                @foreach (var clip in view.Clips)
+                {
+                    <li class="list-group-item px-0 d-flex align-items-center gap-3 flex-wrap" @key="clip.FileId"
+                        data-testid="session-evp-clip">
+                        <span class="font-monospace small">@System.IO.Path.GetFileName(clip.RelativePath)</span>
+                        @if (clip.CopyUploadFileId is null)
+                        {
+                            <span class="small text-muted">not scanned yet</span>
+                        }
+                        else
+                        {
+                            <span class="small" data-testid="session-evp-counts">
+                                @clip.PendingCount to review · @clip.ConfirmedCount kept
+                            </span>
+                        }
+                        <a class="btn btn-outline-secondary btn-sm ms-auto text-nowrap" href="@EditorHref(clip.FileId)"
+                           data-testid="session-evp-open">Open in editor</a>
+                    </li>
+                }
+            </ul>
+        }
+
+        @if (_evps.Count > 0)
+        {
+            <h6 class="mt-3 mb-2">EVPs pulled from this session</h6>
+            <ul class="list-group list-group-flush" data-testid="session-evps">
+                @foreach (var evp in _evps)
+                {
+                    <li class="list-group-item px-0 d-flex align-items-center gap-3 flex-wrap" @key="evp.FileId">
+                        <span class="small">@evp.FileName</span>
+                        <span class="small text-muted">
+                            @System.IO.Path.GetFileName(evp.SourceClipPath ?? "")
+                            @if (evp.RegionStart is { } at)
+                            {
+                                <text> at @Clock(at)</text>
+                            }
+                            · saved by @evp.MadeBy
+                        </span>
+                        <audio controls preload="none" class="ms-auto" src="@MediaUrls.Download(evp.FileId)"></audio>
+                    </li>
+                }
+            </ul>
+        }
+    </div>
+</div>
+
+@code {
+    [Parameter, EditorRequired] public Guid SessionId { get; set; }
+
+    /// <summary>Render nothing when this person may not scan: the public archive page, seen by everybody.</summary>
+    [Parameter] public bool QuietWhenRefused { get; set; }
+
+    private FieldSessionAnalysisView? _view;
+    private string? _error;
+    private EvpScanJobRecord? _job;
+    private string? _status;
+    private bool _starting;
+    private AnalysisScopeRecord? _chosen;
+    private IReadOnlyList<SessionEvpRecord> _evps = [];
+    private CancellationTokenSource? _watching;
+    private Guid _loadedFor;
+
+    private AnalysisScopeRecord? Chosen => _chosen ?? _view?.Scopes.FirstOrDefault();
+    private string? ChosenLabel => Chosen?.Label;
+
+    protected override async Task OnParametersSetAsync()
+    {
+        if (_loadedFor == SessionId) return;
+        _loadedFor = SessionId;
+        if (!await UserState.WaitUntilAuthReadyAsync(RendererInfo.IsInteractive) || !UserState.IsAuthenticated) return;
+        await LoadAsync();
+    }
+
+    private async Task LoadAsync()
+    {
+        var (view, error) = await AdminClient.GetFieldSessionAnalysisAsync(SessionId, Chosen?.Scope, Chosen?.OrganizationId);
+        _view = view;
+        _error = view is null ? error : null;
+        if (view is { MayScan: true })
+        {
+            var evps = await AdminClient.GetFieldSessionEvpsAsync(SessionId);
+            _evps = evps.Failed ? [] : evps.Items;
+            if (view.LiveJob is { IsLive: true } live && _watching is null)
+            {
+                _job = live;
+                _status = "Picking up the scan that was already running.";
+                Watch(live.Id);
+            }
+        }
+    }
+
+    private async Task ChooseScopeAsync(string? label)
+    {
+        _chosen = _view?.Scopes.FirstOrDefault(s => s.Label == label);
+        await LoadAsync();
+    }
+
+    private async Task ScanAllAsync()
+    {
+        if (_view is null || Chosen is not { } scope) return;
+        _starting = true;
+        _status = null;
+        try
+        {
+            var (job, error) = await AdminClient.StartFieldSessionScanAsync(SessionId,
+                new StartSessionScanRequest(EvpSensitivity.Medium, null, scope.Scope, scope.OrganizationId));
+            if (job is null)
+            {
+                _status = error ?? "The scan couldn't be started just now.";
+                return;
+            }
+            _job = job;
+            Watch(job.Id);
+        }
+        finally
+        {
+            _starting = false;
+        }
+    }
+
+    private async Task StopAsync()
+    {
+        if (_job is null) return;
+        var (_, error) = await AdminClient.CancelScanJobAsync(_job.Id);
+        if (error is not null) _status = error;
+    }
+
+    /// <summary>Asks how the scan stands every second and a half until it finishes; leaving the page stops the asking, never the scan.</summary>
+    private void Watch(Guid jobId)
+    {
+        _watching?.Cancel();
+        var stop = _watching = new CancellationTokenSource();
+        _ = InvokeAsync(async () =>
+        {
+            string? etag = null;
+            using var timer = new PeriodicTimer(TimeSpan.FromSeconds(1.5));
+            try
+            {
+                while (await timer.WaitForNextTickAsync(stop.Token))
+                {
+                    var poll = await AdminClient.GetScanJobAsync(jobId, etag, stop.Token);
+                    if (poll.Unchanged) continue;
+                    if (poll.Job is not { } job)
+                    {
+                        _status = poll.Error;
+                        StateHasChanged();
+                        continue;
+                    }
+                    etag = poll.ETag;
+                    _job = job;
+                    if (!job.IsLive)
+                    {
+                        _status = Finished(job);
+                        await LoadAsync();
+                        StateHasChanged();
+                        return;
+                    }
+                    _status = null;
+                    StateHasChanged();
+                }
+            }
+            catch (OperationCanceledException) { }
+            finally
+            {
+                if (ReferenceEquals(_watching, stop)) _watching = null;
+            }
+        });
+    }
+
+    private static string Finished(EvpScanJobRecord job)
+    {
+        if (job.Status == EvpScanJobStatus.Canceled) return job.Error ?? "Stopped.";
+        if (job.Status == EvpScanJobStatus.Failed) return job.Error ?? "The scan stopped unexpectedly.";
+        var found = job.Segments.Sum(s => s.CandidateCount ?? 0);
+        var failed = job.Segments.Count(s => s.Status == EvpScanJobStatus.Failed);
+        var sentence = found == 0 ? "Nothing stood out from the background." : $"{Plural(found, "candidate")} to review.";
+        return failed == 0 ? sentence : $"{sentence} {Plural(failed, "recording")} couldn't be read.";
+    }
+
+    private string EditorHref(Guid fileId)
+    {
+        var whose = Chosen switch
+        {
+            { Scope: AnalysisScope.Person } => "mine=true&",
+            { OrganizationId: { } org } => $"group={org}&",
+            _ => "",
+        };
+        // Back comes here, whichever page this is: a venue reaches it from the public archive, and
+        // the private session page would tell them it isn't theirs.
+        var here = "/" + Nav.ToBaseRelativePath(Nav.Uri).Split('#')[0];
+        return $"/field-sessions/{SessionId}/audio/{fileId}?{whose}return={Uri.EscapeDataString(here)}";
+    }
+
+    private static string Plural(int n, string noun) => n == 1 ? $"1 {noun}" : $"{n} {noun}s";
+
+    private static string Clock(double seconds)
+    {
+        var t = TimeSpan.FromSeconds(seconds);
+        return t.TotalHours >= 1 ? $"{(int)t.TotalHours}:{t.Minutes:00}:{t.Seconds:00}" : $"{t.Minutes}:{t.Seconds:00}";
+    }
+
+    public void Dispose() => _watching?.Cancel();
+}

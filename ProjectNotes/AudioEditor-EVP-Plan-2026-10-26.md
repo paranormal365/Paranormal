@@ -88,7 +88,7 @@ sessions), and a session scanner that first **copies the clip out of the `.ben`*
 ## Phases (each merges on its own; order matters inside a track, tracks can interleave; 1b was added after phase 1 began)
 
 Tracks: **E** editor · **S** scan engine · **F** field sessions. Migrations: M1 (phase 5), M2 (phase 6),
-M3 (phase 8), M5 (phase 9b), M4 (phase 11); Ben applies each on MonsterASP himself. If two phases deploy together, fold
+M3 (phase 8), M4 (phase 9, added 10/27: its tables were left out of M2), M5 (phase 9b), M6 (phase 11); Ben applies each on MonsterASP himself. If two phases deploy together, fold
 their migrations into one.
 
 Every phase: branch `feature/<slug>`, a `ProjectNotes/FeatureHistory/README-<slug>.md` describing the phase
@@ -538,7 +538,7 @@ output, and 0 dB outside it), `AudioEditorTests.Drawing_a_volume_curve_saves_a_n
 
 ---
 
-### Phase 9 (F) — Scan a committed `.ben` session · 3–4 days · tables already in M2
+### Phase 9 (F) — Scan a committed `.ben` session · 3–4 days · **migration M4 `FieldSessionAnalysisCopies`** (built 10/27)
 
 1. **Policy.** Move `MayReadAsync/MayContributeAsync/IsEventTeamAsync/IsHostedTeamAsync` bodies unchanged into
    `Services/Access/FieldSessionAccess` (controller methods become forwards; existing tests prove it). New
@@ -682,7 +682,7 @@ that sat under *Later, gated*; the gate now governs only the default sort (step 
 
 ---
 
-### Phase 11 (S) — Learning that reads its tables · 2 days · **migration M4 `EvpLearningReads`**
+### Phase 11 (S) — Learning that reads its tables · 2 days · **migration M6 `EvpLearningReads`**
 
 1. `Services/Audio/Fft.cs` lifted verbatim from `SmbPitchShifter.cs:155` (pitch shifter calls it; pin a shifted-fixture
    hash before the move). Features 8–9 per frame (Hann 512-point FFT of the 400-sample frame): `SpectralFlatness`
@@ -750,5 +750,5 @@ plugin · `ApexChart` · `BenTabs`, `BenModal`, `BenContextMenu`, `BenTextBox`, 
 4. Walk: `BEN_E2E_DB=IsHauntedDb_audio_walk scripts/run-e2e.sh --keep --filter TestCategory=AudioEditorWalk`, read
    the verdicts and every screenshot (a capture is evidence — check it).
 5. Help: rebuild screenshots + PDF; read the four pictures.
-6. Deploy notes per phase README: which migration (M1–M4), `MediaTools:FfmpegPath` must be set, the worker is a hosted
+6. Deploy notes per phase README: which migration (M1–M6), `MediaTools:FfmpegPath` must be set, the worker is a hosted
    service (restart the API).

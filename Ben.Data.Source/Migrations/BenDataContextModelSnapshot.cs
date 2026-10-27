@@ -3550,6 +3550,9 @@ namespace Ben.Data.Source.Migrations
                         .HasMaxLength(1000)
                         .HasColumnType("nvarchar(1000)");
 
+                    b.Property<Guid?>("FieldSessionUploadId")
+                        .HasColumnType("uniqueidentifier");
+
                     b.Property<DateTime?>("FinishedUtc")
                         .HasColumnType("datetime2");
 
@@ -3573,6 +3576,9 @@ namespace Ben.Data.Source.Migrations
                         .HasColumnType("int");
 
                     b.HasKey("Id");
+
+                    b.HasIndex("FieldSessionUploadId")
+                        .HasFilter("[FieldSessionUploadId] IS NOT NULL");
 
                     b.HasIndex("RequestedByAppUserId", "FinishedUtc");
 
@@ -4091,6 +4097,68 @@ namespace Ben.Data.Source.Migrations
                         .IsUnique();
 
                     b.ToTable("FieldLaunchRecipients");
+                });
+
+            modelBuilder.Entity("Ben.Data.Source.Entities.FieldSessionAnalysisCopy", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<Guid>("CopyUploadFileId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<DateTime>("DateCreated")
+                        .HasColumnType("datetime2");
+
+                    b.Property<Guid>("FieldSessionUploadFileId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<Guid>("FieldSessionUploadId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<Guid>("MadeByAppUserId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<int>("Scope")
+                        .HasColumnType("int");
+
+                    b.Property<Guid?>("ScopeAppUserId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<Guid?>("ScopeOrganizationId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<string>("SourceRelativePath")
+                        .IsRequired()
+                        .HasMaxLength(500)
+                        .HasColumnType("nvarchar(500)");
+
+                    b.Property<string>("SourceSha256")
+                        .HasMaxLength(64)
+                        .HasColumnType("nvarchar(64)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("CopyUploadFileId")
+                        .IsUnique();
+
+                    b.HasIndex("FieldSessionUploadId");
+
+                    b.HasIndex("FieldSessionUploadFileId", "ScopeAppUserId")
+                        .IsUnique()
+                        .HasDatabaseName("IX_FieldSessionAnalysisCopies_OnePerPerson")
+                        .HasFilter("[ScopeAppUserId] IS NOT NULL");
+
+                    b.HasIndex("FieldSessionUploadFileId", "ScopeOrganizationId")
+                        .IsUnique()
+                        .HasDatabaseName("IX_FieldSessionAnalysisCopies_OnePerGroup")
+                        .HasFilter("[ScopeOrganizationId] IS NOT NULL");
+
+                    b.ToTable("FieldSessionAnalysisCopies", t =>
+                        {
+                            t.HasCheckConstraint("CK_FieldSessionAnalysisCopies_Scope", "([Scope] = 0 AND [ScopeAppUserId] IS NOT NULL AND [ScopeOrganizationId] IS NULL) OR ([Scope] = 1 AND [ScopeOrganizationId] IS NOT NULL AND [ScopeAppUserId] IS NULL)");
+                        });
                 });
 
             modelBuilder.Entity("Ben.Data.Source.Entities.FieldSessionShareLink", b =>
@@ -13375,6 +13443,13 @@ namespace Ben.Data.Source.Migrations
                     b.Property<int>("SortOrder")
                         .HasColumnType("int");
 
+                    b.Property<string>("SourceClipPath")
+                        .HasMaxLength(500)
+                        .HasColumnType("nvarchar(500)");
+
+                    b.Property<Guid?>("SourceFieldSessionUploadId")
+                        .HasColumnType("uniqueidentifier");
+
                     b.Property<string>("StoragePath")
                         .HasMaxLength(500)
                         .HasColumnType("nvarchar(500)");
@@ -13404,6 +13479,9 @@ namespace Ben.Data.Source.Migrations
                     b.HasIndex("OwnerOrganizationId");
 
                     b.HasIndex("ParentFileId");
+
+                    b.HasIndex("SourceFieldSessionUploadId")
+                        .HasFilter("[SourceFieldSessionUploadId] IS NOT NULL");
 
                     b.HasIndex("UpdatedByAppUserId");
 
@@ -17456,6 +17534,17 @@ namespace Ben.Data.Source.Migrations
                         .IsRequired();
 
                     b.Navigation("FieldLaunch");
+                });
+
+            modelBuilder.Entity("Ben.Data.Source.Entities.FieldSessionAnalysisCopy", b =>
+                {
+                    b.HasOne("Ben.Data.Source.Entities.UploadFile", "CopyUploadFile")
+                        .WithMany()
+                        .HasForeignKey("CopyUploadFileId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("CopyUploadFile");
                 });
 
             modelBuilder.Entity("Ben.Data.Source.Entities.FieldSessionShareLink", b =>

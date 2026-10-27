@@ -233,6 +233,9 @@ builder.Services.AddSingleton<Ben.Data.WebApi.Services.FieldSessions.IBenBundleS
 // A session's replay timeline, built once per session and audience and served to everybody
 // watching (10/14/2026). Singleton: the cache is the point.
 builder.Services.AddSingleton<Ben.Data.WebApi.Services.FieldSessions.FieldSessionTimelineService>();
+// A scanner's own copy of a session recording (phase 9 of the audio plan); the session is only read.
+builder.Services.AddScoped<Ben.Data.WebApi.Services.FieldSessions.FieldSessionAnalysisCopies>();
+builder.Services.AddScoped<Ben.Data.WebApi.Services.Audio.Scanning.EvpQuestionContext>();
 // Author-written page markup is cleaned at the point it is stored, so what is in the database is
 // what will be rendered — see ICmsMarkupSanitizer for why provenance alone is not enough.
 builder.Services.AddSingleton<Ben.Data.WebApi.Services.ICmsMarkupSanitizer, Ben.Data.WebApi.Services.CmsMarkupSanitizer>();

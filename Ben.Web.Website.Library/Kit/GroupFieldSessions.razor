@@ -73,6 +73,12 @@
                                 <td class="text-end text-nowrap">
                                     <a class="btn btn-secondary btn-sm text-nowrap" data-testid="group-session-play"
                                        href="@($"/field-sessions/{row.Id}")">Play back</a>
+                                    @if (row.Files.Any(f => HasSound(f.RelativePath)))
+                                    {
+                                        @* The group's own copy; the guest's session stays as it was sent (phase 9). *@
+                                        <a class="btn btn-outline-secondary btn-sm text-nowrap ms-1" data-testid="group-session-scan"
+                                           href="@($"/field-sessions/{row.Id}#evp-scan")">Scan for EVPs</a>
+                                    }
                                     @if (HostedEventId is not null)
                                     {
                                         var it = row;
@@ -148,4 +154,7 @@
             _loading = false;
         }
     }
+
+    private static bool HasSound(string? path)
+        => System.IO.Path.GetExtension(path ?? "").ToLowerInvariant() is ".m4a" or ".mp3" or ".wav" or ".aac" or ".caf" or ".flac";
 }

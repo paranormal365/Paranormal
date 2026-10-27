@@ -112,29 +112,13 @@ public sealed partial class FieldSessionUploadController
             || await IsLaunchedPersonAsync(db, userId, l => l.HostedEventId == hostedId, ct);
     }
 
-    /// <summary>Who may READ a tour date's or event's sessions: the group, and the date's guides.</summary>
-    private static async Task<bool> IsEventTeamAsync(
+    private static Task<bool> IsEventTeamAsync(
         BenDataContext db, Guid eventId, Guid userId, CancellationToken ct, Guid? organizationId = null)
-    {
-        var organization = organizationId ?? await db.OrgCalendarEvents.AsNoTracking()
-            .Where(e => e.Id == eventId).Select(e => e.OrganizationId).FirstOrDefaultAsync(ct);
-        return await db.OrganizationUserMemberships.AsNoTracking()
-                   .AnyAsync(m => m.OrganizationId == organization && m.AppUserId == userId && m.IsActive, ct)
-            || await db.OrgCalendarEventGuides.AsNoTracking()
-                   .AnyAsync(g => g.OrgCalendarEventId == eventId && g.AppUserId == userId, ct);
-    }
+        => Services.Access.FieldSessionAccess.IsEventTeamAsync(db, eventId, userId, ct, organizationId);
 
-    /// <summary>Who may READ a hosted event's sessions: the group, and the event's confirmed staff.</summary>
-    private static async Task<bool> IsHostedTeamAsync(
+    private static Task<bool> IsHostedTeamAsync(
         BenDataContext db, Guid hostedId, Guid userId, CancellationToken ct, Guid? organizationId = null)
-    {
-        var organization = organizationId ?? await db.HostedEvents.AsNoTracking()
-            .Where(h => h.Id == hostedId).Select(h => h.OrganizationId).FirstOrDefaultAsync(ct);
-        return await db.OrganizationUserMemberships.AsNoTracking()
-                   .AnyAsync(m => m.OrganizationId == organization && m.AppUserId == userId && m.IsActive, ct)
-            || await db.HostedEventStaff.AsNoTracking()
-                   .AnyAsync(s => s.HostedEventId == hostedId && s.AppUserId == userId && s.DateConfirmed != null, ct);
-    }
+        => Services.Access.FieldSessionAccess.IsHostedTeamAsync(db, hostedId, userId, ct, organizationId);
 
     /// <summary>Somebody a launch of this thing reached, or let in — whenever that was.</summary>
     private static Task<bool> IsLaunchedPersonAsync(

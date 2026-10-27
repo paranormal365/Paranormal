@@ -867,6 +867,51 @@ public sealed class WebApiClient : IWebApiClient
     public Task<(bool Deleted, string? Error)> CancelScanJobAsync(Guid jobId, CancellationToken token = default)
         => DeleteExpectingReasonAsync($"/api/scan-jobs/{jobId}", token);
 
+    // ── Scanning a session for EVPs (phase 9 of the audio plan) ──────────────
+
+    /// <inheritdoc />
+    public Task<(Ben.Service.Models.FieldSessions.FieldSessionAnalysisView? View, string? Error)> GetFieldSessionAnalysisAsync(
+        Guid sessionId, Ben.Data.Common.Enums.AnalysisScope? scope = null, Guid? organizationId = null,
+        CancellationToken token = default)
+    {
+        var query = scope is null ? "" : $"?scope={scope}" + (organizationId is { } org ? $"&organizationId={org}" : "");
+        return GetWithReasonAsync<Ben.Service.Models.FieldSessions.FieldSessionAnalysisView>(
+            $"/api/field-sessions/{sessionId}/analysis{query}", token);
+    }
+
+    /// <inheritdoc />
+    public Task<(Ben.Service.Models.FieldSessions.AnalysisCopyRecord? Copy, string? Error)> EnsureFieldSessionAnalysisCopyAsync(
+        Guid sessionId, Guid fileId, Ben.Service.Models.FieldSessions.AnalysisCopyRequest request,
+        CancellationToken token = default)
+        => PostWithScanReasonAsync<Ben.Service.Models.FieldSessions.AnalysisCopyRequest, Ben.Service.Models.FieldSessions.AnalysisCopyRecord>(
+            $"/api/field-sessions/{sessionId}/clips/{fileId}/analysis-copy", request,
+            "Your copy of that recording couldn't be made just now.", token);
+
+    /// <inheritdoc />
+    public Task<(EvpScanJobRecord? Job, string? Error)> StartFieldSessionScanAsync(
+        Guid sessionId, Ben.Service.Models.FieldSessions.StartSessionScanRequest request,
+        CancellationToken token = default)
+        => PostWithScanReasonAsync<Ben.Service.Models.FieldSessions.StartSessionScanRequest, EvpScanJobRecord>(
+            $"/api/field-sessions/{sessionId}/scan-jobs", request,
+            "The scan couldn't be started just now.", token);
+
+    /// <inheritdoc />
+    public Task<LoadResult<Ben.Service.Models.FieldSessions.SessionEvpRecord>> GetFieldSessionEvpsAsync(
+        Guid sessionId, CancellationToken token = default)
+        => GetListAsync<Ben.Service.Models.FieldSessions.SessionEvpRecord>($"/api/field-sessions/{sessionId}/evps", token);
+
+    /// <summary>A POST whose refusal (a sentence or a <see cref="ScanRefusalRecord"/>) is worth showing.</summary>
+    private async Task<(TRes? Result, string? Error)> PostWithScanReasonAsync<TReq, TRes>(
+        string url, TReq request, string fallback, CancellationToken token) where TRes : class
+    {
+        using var req = Auth(HttpMethod.Post, url);
+        req.Content = JsonContent.Create(request);
+        using var response = await SendOrUnreachableAsync(req, token);
+        if (response.IsSuccessStatusCode && await BodyOrDefaultAsync<TRes>(response, token) is { } body)
+            return (body, null);
+        return (null, await ScanRefusalAsync(response, token) ?? fallback);
+    }
+
     // ── Audio Clip ────────────────────────────────────────────────────────────
     public Task<UploadFileRecord?> ClipAudioAsync(Guid fileId, ClipAudioRequest request, CancellationToken token = default)
         => PostAsync<ClipAudioRequest, UploadFileRecord>($"/api/upload-files/{fileId}/clip", request, token);

@@ -28,7 +28,8 @@ public sealed class EvpScanService(
     IFileStorageService fileStorage,
     IAudioDecoder decoder,
     EvpScanRecorder recorder,
-    ILogger<EvpScanService> logger)
+    ILogger<EvpScanService> logger,
+    EvpQuestionContext? questions = null)
 {
     /// <returns>
     /// The outcome, or null and the reason when the candidates could not be saved (too many, say).
@@ -53,8 +54,13 @@ public sealed class EvpScanService(
                 total, progress, ct);
         }
 
+        // A copy of a field session's recording: each candidate heard during a question says which.
+        var noteFor = file.SourceFieldSessionUploadId is not null && questions is not null
+            ? await questions.ForAsync(file.Id, ct)
+            : null;
+
         await using var db = await dbContextFactory.CreateDbContextAsync(ct);
-        var (proposed, problem) = await recorder.ProposeAsync(db, file.Id, analysis, sensitivity, settings, userId, ct);
+        var (proposed, problem) = await recorder.ProposeAsync(db, file.Id, analysis, sensitivity, settings, userId, ct, noteFor);
         if (proposed is null) return (null, problem);
 
         await TryRememberSettingsAsync(db, file, settings, userId, isSuperAdmin, ct);

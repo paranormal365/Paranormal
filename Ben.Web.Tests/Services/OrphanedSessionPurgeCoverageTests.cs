@@ -1,6 +1,7 @@
 using System.Reflection;
 using System.Text.RegularExpressions;
 using Ben.Data.Source.Entities;
+using Microsoft.EntityFrameworkCore;
 using Xunit;
 
 namespace Ben.Web.Tests.Services;
@@ -76,10 +77,23 @@ public sealed class OrphanedSessionPurgeCoverageTests
         return data;
     }
 
+    /// <summary>
+    /// Tables that name a session WITHOUT a foreign key, on purpose: nothing about them can stop a
+    /// session being deleted, so the purge has nothing to clear first. Each says why it has none, and
+    /// <see cref="The_exempt_tables_really_have_no_foreign_key"/> fails the moment one gains one.
+    /// </summary>
+    private static readonly Dictionary<string, string> NoForeignKey = new()
+    {
+        // Phase 9 of the audio plan (10/27/2026).
+        [nameof(EvpScanJob)] = "a scan job only remembers which session's page to show it on; it is swept after a week",
+        [nameof(FieldSessionAnalysisCopy)] = "a scanner's copy is their file, not the session's, and outlives it",
+    };
+
     [Theory]
     [MemberData(nameof(ReferencingEntities))]
     public void The_purge_clears_every_table_that_points_at_a_session(string entityName)
     {
+        if (NoForeignKey.ContainsKey(entityName)) return;
         var code = PurgeCode();
 
         // The DbSet is named for the entity's plural; both spellings are accepted because the
@@ -101,5 +115,20 @@ public sealed class OrphanedSessionPurgeCoverageTests
     public void The_scan_actually_covers_the_citation_table()
     {
         Assert.Contains(nameof(CaseReportSectionFieldSession), ReferencingEntityNames());
+    }
+
+    [Fact]
+    public void The_exempt_tables_really_have_no_foreign_key()
+    {
+        using var db = new Ben.Data.Source.Context.BenDataContext(
+            new Microsoft.EntityFrameworkCore.DbContextOptionsBuilder<Ben.Data.Source.Context.BenDataContext>()
+                .UseInMemoryDatabase(Guid.NewGuid().ToString()).Options);
+        var session = db.Model.FindEntityType(typeof(FieldSessionUpload))!;
+
+        foreach (var name in NoForeignKey.Keys)
+        {
+            var entity = db.Model.GetEntityTypes().Single(e => e.ClrType.Name == name);
+            Assert.DoesNotContain(entity.GetForeignKeys(), fk => fk.PrincipalEntityType == session);
+        }
     }
 }

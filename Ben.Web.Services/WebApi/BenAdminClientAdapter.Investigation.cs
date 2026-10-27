@@ -174,6 +174,25 @@ public sealed partial class BenAdminClientAdapter
         Guid sessionId, CancellationToken token = default)
         => _api.GetAsync<Ben.Service.Models.FieldSessions.SessionTimeline>($"/api/field-sessions/{sessionId}/timeline", token);
 
+    public Task<(Ben.Service.Models.FieldSessions.FieldSessionAnalysisView? View, string? Error)> GetFieldSessionAnalysisAsync(
+        Guid sessionId, Ben.Data.Common.Enums.AnalysisScope? scope = null, Guid? organizationId = null,
+        CancellationToken token = default)
+        => _api.GetFieldSessionAnalysisAsync(sessionId, scope, organizationId, token);
+
+    public Task<(Ben.Service.Models.FieldSessions.AnalysisCopyRecord? Copy, string? Error)> EnsureFieldSessionAnalysisCopyAsync(
+        Guid sessionId, Guid fileId, Ben.Service.Models.FieldSessions.AnalysisCopyRequest request,
+        CancellationToken token = default)
+        => _api.EnsureFieldSessionAnalysisCopyAsync(sessionId, fileId, request, token);
+
+    public Task<(EvpScanJobRecord? Job, string? Error)> StartFieldSessionScanAsync(
+        Guid sessionId, Ben.Service.Models.FieldSessions.StartSessionScanRequest request,
+        CancellationToken token = default)
+        => _api.StartFieldSessionScanAsync(sessionId, request, token);
+
+    public Task<LoadResult<Ben.Service.Models.FieldSessions.SessionEvpRecord>> GetFieldSessionEvpsAsync(
+        Guid sessionId, CancellationToken token = default)
+        => _api.GetFieldSessionEvpsAsync(sessionId, token);
+
     // ── Sharing a session by link (item 207) ──────────────────────────────────
 
     public Task<LoadResult<FieldSessionShareRecord>> GetFieldSessionSharesAsync(

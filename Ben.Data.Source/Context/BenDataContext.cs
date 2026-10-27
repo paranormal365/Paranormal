@@ -216,6 +216,7 @@ namespace Ben.Data.Source.Context
         public virtual DbSet<EvpScanPreset> EvpScanPresets { get; set; }
         public virtual DbSet<EvpScanJob> EvpScanJobs { get; set; }
         public virtual DbSet<EvpScanJobSegment> EvpScanJobSegments { get; set; }
+        public virtual DbSet<FieldSessionAnalysisCopy> FieldSessionAnalysisCopies { get; set; }
         public virtual DbSet<EvpRuling> EvpRulings { get; set; }
         public virtual DbSet<AuditLog> AuditLogs { get; set; }
         public virtual DbSet<SidecarInstallLog> SidecarInstallLogs { get; set; }
@@ -2694,6 +2695,35 @@ namespace Ben.Data.Source.Context
             modelBuilder.Entity<EvpScanJobSegment>()
                 .HasIndex(e => e.UploadFileId).IsUnique().HasFilter("[FinishedUtc] IS NULL")
                 .HasDatabaseName("IX_EvpScanJobSegments_OneLivePerFile");
+            modelBuilder.Entity<EvpScanJob>()
+                .HasIndex(e => e.FieldSessionUploadId).HasFilter("[FieldSessionUploadId] IS NOT NULL");
+
+            // A scanner's copy of a session recording (phase 9). Only the copy has a foreign key; see
+            // FieldSessionAnalysisCopy for why the session columns have none.
+            modelBuilder.Entity<FieldSessionAnalysisCopy>()
+                .HasOne(e => e.CopyUploadFile).WithMany()
+                .HasForeignKey(e => e.CopyUploadFileId).OnDelete(DeleteBehavior.Cascade);
+            modelBuilder.Entity<FieldSessionAnalysisCopy>()
+                .HasIndex(e => e.CopyUploadFileId).IsUnique();
+            modelBuilder.Entity<FieldSessionAnalysisCopy>()
+                .HasIndex(e => e.FieldSessionUploadId);
+            modelBuilder.Entity<FieldSessionAnalysisCopy>()
+                .HasIndex(e => new { e.FieldSessionUploadFileId, e.ScopeAppUserId }).IsUnique()
+                .HasFilter("[ScopeAppUserId] IS NOT NULL")
+                .HasDatabaseName("IX_FieldSessionAnalysisCopies_OnePerPerson");
+            modelBuilder.Entity<FieldSessionAnalysisCopy>()
+                .HasIndex(e => new { e.FieldSessionUploadFileId, e.ScopeOrganizationId }).IsUnique()
+                .HasFilter("[ScopeOrganizationId] IS NOT NULL")
+                .HasDatabaseName("IX_FieldSessionAnalysisCopies_OnePerGroup");
+            modelBuilder.Entity<FieldSessionAnalysisCopy>()
+                .ToTable(t => t.HasCheckConstraint("CK_FieldSessionAnalysisCopies_Scope",
+                    "([Scope] = 0 AND [ScopeAppUserId] IS NOT NULL AND [ScopeOrganizationId] IS NULL) "
+                    + "OR ([Scope] = 1 AND [ScopeOrganizationId] IS NOT NULL AND [ScopeAppUserId] IS NULL)"));
+            modelBuilder.Entity<FieldSessionAnalysisCopy>().Property(e => e.SourceSha256).HasMaxLength(64);
+            modelBuilder.Entity<FieldSessionAnalysisCopy>().Property(e => e.SourceRelativePath).HasMaxLength(500);
+            modelBuilder.Entity<UploadFile>().Property(e => e.SourceClipPath).HasMaxLength(500);
+            modelBuilder.Entity<UploadFile>()
+                .HasIndex(e => e.SourceFieldSessionUploadId).HasFilter("[SourceFieldSessionUploadId] IS NOT NULL");
 
             // ── UploadFileVote ───────────────────────────────────────────────
             // One vote per (user, file): unique index enforces the business rule.
