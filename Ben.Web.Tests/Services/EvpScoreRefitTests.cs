@@ -71,10 +71,13 @@ public sealed class EvpScoreRefitTests
     private static List<EvpDecision> Decisions(int count, int recordings, int seed = 7)
     {
         var random = new Random(seed);
-        var ids = Enumerable.Range(0, recordings).Select(_ => Guid.NewGuid()).ToList();
+        var ids = Recordings(recordings);
         return Enumerable.Range(0, count).Select(i =>
         {
-            var kept = i % 2 == 0;
+            // Kept and dismissed alternate WITHIN each recording, so every recording, the held-back
+            // ones included, has both. Alternating on i alone gave a recording only one kind
+            // whenever the recording count was even.
+            var kept = (i / recordings) % 2 == 0;
             var features = kept
                 ? new EvpFeatures(6 + random.NextDouble() * 4, -1, 0.5 + random.NextDouble() * 1.5, 0, 0, 0, 0)
                 : i % 4 == 1
@@ -83,6 +86,30 @@ public sealed class EvpScoreRefitTests
             return new EvpDecision(ids[i % recordings], features, kept, i % 3 == 0 ? 2 : 1);
         }).ToList();
     }
+
+    /// <summary>
+    /// Recording ids that are the same on every run, with exactly every fifth one held back.
+    /// </summary>
+    /// <remarks>
+    /// <see cref="EvpScoreRefit.IsHeldOut"/> decides from the id, and these tests used
+    /// <c>Guid.NewGuid()</c>, so each run split the decisions differently. One run in about
+    /// eighteen held back recordings with only kept decisions or only dismissed ones, and the gate
+    /// refused with "no kept and dismissed decisions to test on" (measured over 1,000 runs,
+    /// 10/27/2026). The first byte decides the split, so it is the recording's number.
+    /// </remarks>
+    private static List<Guid> Recordings(int count)
+        => [.. Enumerable.Range(0, count).Select(r =>
+        {
+            var bytes = new byte[16];
+            bytes[0] = (byte)r;
+            bytes[15] = 0xE7;
+            return new Guid(bytes);
+        })];
+
+    [Fact]
+    public void The_test_recordings_hold_back_every_fifth()
+        => Assert.Equal([0, 5, 10, 15, 20, 25],
+                        Recordings(30).Select((id, r) => (id, r)).Where(x => EvpScoreRefit.IsHeldOut(x.id)).Select(x => x.r));
 
     [Fact]
     public void A_fit_learns_what_people_keep_and_passes_its_gate()
@@ -115,7 +142,7 @@ public sealed class EvpScoreRefitTests
     {
         // People keep exactly what the built-in score already ranks first.
         var random = new Random(3);
-        var ids = Enumerable.Range(0, 30).Select(_ => Guid.NewGuid()).ToList();
+        var ids = Recordings(30);
         var decisions = Enumerable.Range(0, 600).Select(i =>
         {
             var f = new EvpFeatures(random.NextDouble() * 25, -random.NextDouble() * 12, random.NextDouble() * 4, 0, 0, 0, 0);
@@ -139,7 +166,14 @@ public sealed class EvpScoreRefitTests
     {
         var id = Guid.NewGuid();
         Assert.Equal(EvpScoreRefit.IsHeldOut(id), EvpScoreRefit.IsHeldOut(new Guid(id.ToString())));
-        var share = Enumerable.Range(0, 5000).Count(_ => EvpScoreRefit.IsHeldOut(Guid.NewGuid())) / 5000.0;
+        // Seeded, so the share is the same number on every run rather than a draw.
+        var random = new Random(11);
+        var share = Enumerable.Range(0, 5000).Count(_ =>
+        {
+            var bytes = new byte[16];
+            random.NextBytes(bytes);
+            return EvpScoreRefit.IsHeldOut(new Guid(bytes));
+        }) / 5000.0;
         Assert.InRange(share, 0.15, 0.25);
     }
 
