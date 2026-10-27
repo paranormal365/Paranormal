@@ -12720,7 +12720,15 @@ typing at once loses the bold (4.5), because the tool waits for the server. So t
 
 ---
 
-## 242. EVP analysis that can tell a voice from noise, and says how sure it is (FUTURE — business-critical; parked 2026-09-15 for Claude usage)
+## 242. EVP analysis that can tell a voice from noise, and says how sure it is (VoiceNet SHIPPED 10/27/2026 in audio editor 2.0.0; fine-tuning on the site's recordings is FUTURE)
+
+> **Status, 10/27/2026.** VoiceNet (ours, `tools/EvpLearn`, LibriSpeech + synthetic noise) runs as the
+> EVP scan's second stage: every candidate gets a **Voice-like** reading beside its score, sortable and
+> filterable, never changing the score (audio plan phase 9b). Still to come, by Ben's decisions of
+> 10/27: (1) making Voice-like the default sort, gated on a bench run over Ben's real recordings and the
+> Keep/Dismiss history; (2) **fine-tuning VoiceNet from v1 on the site's own recordings** once there are
+> enough, keeping v1's training (Ben: no permission step; the "No audio is copied" copy on the site must
+> change first). See `ProjectNotes/AudioEditor-EVP-Plan-2026-10-26.md`, "Later: VoiceNet fine-tuned".
 
 Ben, 2026-09-15: a small AI service that processes audio when someone analyses it for EVPs, then (separately, later) one
 for long video feeds. His outline: spectrogram analysis (voices leave formants even when buried), anomaly detection over
@@ -13622,7 +13630,14 @@ pressed; the upload cap stays 600 MB; the lead plus group managers may launch.
   in the background from a push, and starting a microphone unasked needs the person's tap).
 - Which roles count as "lead" for each of the three (guide, event staff role, investigation lead).
 
-## 253. The EVP detector learns from every Keep and Dismiss (STEP ONE BUILT 10/02/2026 — feature/evp-learning-253; the re-fit is still future)
+## 253. The EVP detector learns from every Keep and Dismiss (STEP ONE BUILT 10/02/2026; reads BUILT 10/27/2026; the re-fit is audio plan phase 13)
+
+> **Status, 10/27/2026 (audio editor 2.0.0).** Built: exploration samples (phase 5); features 8 and 9,
+> spectral flatness and voiced share, plus voice-likeness as a feature (phases 9b, 11); misses, when a
+> hand marker lands where the scan found nothing; blind review on the profile, kept on each ruling;
+> and `/admin/evp`, which reads it all back with kept-vs-dismissed charts per measurement. **The re-fit
+> is next:** Ben chose (10/27) to include training as phase 13, a gated refit job of the score's weights
+> (≥ 500 decisions from ≥ 20 recordings, must beat version 1 on held-out decisions, SuperAdmin activates).
 
 Ben, 10/02/2026: *"I would like to be able to use the audio editor EVP detector to learn the more it
 is used."* This is the cheap first step toward item 242, and it works with today's detector. Item
@@ -13957,3 +13972,23 @@ shows for a finished session, filling in as they happen.
 On a real phone: record a session with video and audio while sending the camera and the readings
 somewhere at the same time, and measure what breaks (frame rate, recording gaps, heat, battery).
 That decides the design.
+
+---
+
+## 262. Audio editor: what 2.0.0 left for later (FUTURE — 10/27/2026)
+
+The audio editor and EVP plan (`ProjectNotes/AudioEditor-EVP-Plan-2026-10-26.md`) shipped as editor
+2.0.0. Deliberately left out, to come back to:
+
+- **Stereo channel views:** Mixed / Left / Right / Split for the waveform and spectrogram. Phone
+  recordings are mono, so this waits for someone bringing stereo recorders.
+- **Frequency brush and notch:** paint out a band on the spectrogram (a hum, a fridge) and hear the
+  result; saved as a new file like every edit. Listed in `Media-Editor-Phase.md`, never built.
+- **Export the spectrogram as a picture:** a PNG of the visible stretch, for a report or a post.
+- **Clip comparison:** two clips side by side, waveform and spectrogram, synced playback, for "is
+  this the same voice?".
+- **The score's re-fit** is audio plan phase 13 (item 253); **VoiceNet's default sort and its
+  fine-tuning** are item 242.
+- Fixed rather than recorded, for the record: a published or event-linked `.ben` was charged to its
+  owner's storage allowance (fixed in audio phase 9).
+

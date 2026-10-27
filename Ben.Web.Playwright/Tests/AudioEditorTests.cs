@@ -846,6 +846,8 @@ public class AudioEditorTests : BenTestBase
         await Page.GotoAsync($"{BaseUrl}/profile");
         var box = Page.Locator("#evp-blind-review");
         await Expect(box).ToBeVisibleAsync(new() { Timeout = 30_000 });
+        // A click before the page is live ticks the box in the browser and saves nothing.
+        await WaitForTheCircuitAsync();
         if (await box.IsCheckedAsync() != on) await box.ClickAsync();
         await Expect(box).ToBeCheckedAsync(new() { Checked = on, Timeout = 10_000 });
         // Saved, not only ticked: a reload reads it back.
@@ -1506,10 +1508,10 @@ public class AudioEditorTests : BenTestBase
     /// the telephone band under a syllabic envelope, the shape <c>EvpDetectorTests</c> is built on.
     /// A scan at Medium proposes exactly these three.
     /// </summary>
-    private static byte[] ScannableWav() => Wav(20, [(4.0, 0.8), (9.0, 0.7), (15.0, 1.0)]);
+    internal static byte[] ScannableWav() => Wav(20, [(4.0, 0.8), (9.0, 0.7), (15.0, 1.0)]);
 
     /// <summary>Room tone of the given length with voice-like sounds at the given (start, length) seconds.</summary>
-    private static byte[] Wav(int lengthSeconds, (double At, double Seconds)[] sounds)
+    internal static byte[] Wav(int lengthSeconds, (double At, double Seconds)[] sounds)
     {
         const int rate = 16000;
         var mono = new float[lengthSeconds * rate];

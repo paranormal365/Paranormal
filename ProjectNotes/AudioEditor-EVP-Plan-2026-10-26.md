@@ -725,6 +725,37 @@ using anybody's recordings to train would need their permission first.
 
 ---
 
+### Phase 13 (S) — The score learns from Keep and Dismiss · added 10/27/2026 · migration M7
+
+Ben, 10/27/2026, asked whether training could be included, and chose **re-weighting the score** (not
+retraining VoiceNet, which stays on hold: that would copy people's audio into training).
+
+- `EvpWeightRefitJob : IScheduledJob` (like `WeightRefitJob`) fits the score's weights from the stored
+  measurements and each candidate's latest Keep/Dismiss. No audio, no names.
+- `EvpScoringVersions`: each fit is kept with its weights, the decisions it learned from, and how well it
+  ranks on held-out decisions. The detector's built-in weights are version 1 and stay the default.
+- **The gate:** a fit can only become active with at least 500 decisions from 20 or more recordings,
+  when it ranks kept above dismissed better than version 1 on decisions it did not learn from, and when
+  the fixture ordering tests still pass. SuperAdmin activates it, or rolls back, on `/admin/evp`.
+- Scores record which version made them, so old and new are never mixed.
+
+### Later: VoiceNet fine-tuned on the site's recordings (Ben, 10/27/2026)
+
+"When we get enough recordings on the site, we will use them to add to the VoiceNet training... I don't
+want to lose the training it has, just make it smarter for our unique purposes." Ben's call: it uses
+existing recordings to detect better and generates nothing, so no permission step.
+
+- **Fine-tune from v1, never from scratch:** start from `voicenet-v1`'s weights (`tools/EvpLearn`,
+  `runs/20260915-162340/model.pt`), add the site's material, keep LibriSpeech in the mix so v1's
+  ability isn't lost, and ship the result as `voicenet-v2.onnx` beside v1 (readings are stored per model).
+- **Labels from the site:** kept and dismissed candidates (and misses) are the voice / not-voice
+  examples, from the copies of the recordings; real room tone from Ben's recordings as backgrounds.
+- **Before the first fine-tune, update what the site promises:** the "How it works" window, the help
+  page and the privacy policy say "No audio is copied". Fine-tuning copies audio into training, so they
+  must say recordings may be used to improve detection.
+- **Gate:** v2 replaces v1 only if it beats v1 on held-out kept/dismissed candidates and on the bench
+  (voices found by level, impostors, noise).
+
 ### Later, gated (not in this plan's commitments)
 - **VoiceNet as the default order**: the scorer itself is phase 9b; only flipping the default sort to
   voice-like first waits on its gate (phase 9b, step 6).

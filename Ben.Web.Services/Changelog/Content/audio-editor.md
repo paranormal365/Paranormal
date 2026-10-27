@@ -30,7 +30,7 @@ it is hidden from everybody else, but still takes its number. No other sub-headi
 
 **Tracked from 10/14/2026.** 1.0.0 is the editor as it stood then, summarized.
 
-## Unreleased
+## 2.0.0 · 2026-10-27
 
 - Review blind: a setting on your profile hides each candidate's readings until you keep or dismiss
   it, so you decide by what you hear.

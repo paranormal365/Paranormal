@@ -163,8 +163,9 @@ it, at three sensitivity levels:
   sure something is there.
 
 ![The candidates a scan produced](/help/media/using-the-audio-editor/evp-candidates.png)
-*Each candidate shows its score (with a bar for easy comparison), when it happens and how long it
-lasts. The four round buttons play it, adjust where it starts and ends, keep it, or dismiss it.*
+*Each candidate shows two readings, Stood out and Voice-like, when it happens and how long it lasts.
+The round buttons play it, zoom to it, explain it, adjust where it starts and ends, keep it, or
+dismiss it.*
 
 A scan only makes suggestions; you make the decisions. Each candidate waits for you to **keep** it
 or **dismiss** it. Keeping one asks you for a label, because an unnamed marker isn't a finding
@@ -212,11 +213,17 @@ Under that are the measurements it was made from: how loud the room was, its lou
 much its level moved (speech rises and falls, a hum holds steady), and how hiss-like it was. The
 score is how much a sound stood out, never how likely it is to be a voice.
 
-**View ▸ Detector lane** shows the same thing along the whole recording, under the waveform: the
+### Reading the lanes
+
+![The detector lane under the waveform](/help/media/using-the-audio-editor/detector-lane.png)
+*The detector lane: the level in the listening range, the room's background below it, the dashed
+line a sound had to cross, and shading where the scan's gate opened.*
+
+**View ▸ Detector lane** shows what the scan saw along the whole recording, under the waveform: the
 level in the listening range, the room's background, the dashed line a sound had to cross, and
 shading wherever the scanner's gate opened. A shaded stretch with no candidate on it was too short
 to keep. **View ▸ Level lane** shows how loud the recording is at every moment, with the silence
-line when silence detection is on.
+line when silence detection is on. Both are remembered for each recording.
 
 Above the waveform, a thin strip marks every candidate and kept marker across the whole recording;
 stronger candidates are bolder. Click one to go to it and hear it.
@@ -253,7 +260,10 @@ hold the pointer over it.
   into one, and how much audio to keep either side.
 - **Where it listens:** the range of pitches it pays attention to. 300 to 3,400 Hz is the
   telephone range, where most speech sits. Lower the bottom for a deep voice, or lower the top to
-  shut out hiss. The voice band on the spectrogram follows this range.
+  shut out hiss. The voice band on the spectrogram follows this range. Moving the range mostly
+  changes how a sound is *scored* rather than whether it is found: the room's background is measured
+  in the same range, so a sound partly outside it can still stand out, but scores lower for "in the
+  listening range".
 - **The room's background:** how many seconds either side count as "the room", and how quiet a part
   of that counts as its background. A shorter stretch keeps up with a room that changes, such as a
   furnace starting; a longer one is steadier.
@@ -274,14 +284,50 @@ settings you last used on it.
 
 Your choices also help the scanner improve, and **How it works** on the panel's banner explains how.
 Each scan saves a few measurements of every sound it finds, such as how far it rose above the
-background and how much of it was in the voice range. Each keep or dismiss is saved alongside those
-measurements, along with whether you played the candidate first. No audio is copied, and nothing
-records who made the choice. A future version will use this to rank candidates more the way
-investigators do. It will learn which sounds people tend to keep, not whether a sound is
+background, how much of it was in the voice range, how hiss-like it was, how much of it had a
+speaking voice's pitch, and how voice-like it read. Each keep or dismiss is saved alongside those
+measurements, along with whether you played the candidate first and whether you decided blind. A
+marker you place where the scan found nothing is saved as a miss. No audio is copied, and nothing
+records who made the choice.
+
+Nothing changes how the scan scores yet. A future version will use this to rank candidates more the
+way investigators do. It will learn which sounds people tend to keep, not whether a sound is
 paranormal. If you delete the recording, its measurements and choices are deleted with it.
 
 ![How the smarter detector works](/help/media/using-the-audio-editor/evp-smarter-detector.png)
 *What a scan and a review save, and what they don't.*
+
+## Scanning a field session
+
+A session recorded with the phone app can be scanned for EVPs from its own page: **Scan for EVPs**
+sits under the recordings. Who can scan it:
+
+- **The person who recorded it.**
+- **The group it was sent to:** the people on the investigation, and active members of the group.
+- **An event's organizers and confirmed staff,** when it was sent to their event or tour date.
+- **The venue of a public place** it was published to, once its recordings are approved for show.
+
+Anybody else, including visitors to the public archive and people with a shared link, can watch the
+session but not scan it.
+
+![Scanning a field session](/help/media/using-the-audio-editor/session-scan.png)
+*Scan for EVPs on a session's page: the copy you're working on, each recording with what it holds,
+and the EVPs pulled from the session.*
+
+**The session itself never changes.** Scanning works on a copy of each recording: your own, in your
+files, or your group's, in the group's files, where its members and the event's confirmed staff can
+open it. The card says which. Each copy has its own markers, so two people
+scanning the same session don't see each other's work. If you can work on more than one copy (your
+own and your group's, say), choose which at the top of the card.
+
+**Scan all** scans every recording in the background. **Open in editor** opens one, with the
+session's date and the recording's name beside its title. A candidate heard after a question asked
+during the session (the app's EVP questions) is noted with that question, so you hear it as an
+answer to something.
+
+An EVP saved from a group's copy belongs to the group and says which session and recording it came
+from. **EVPs pulled from this session** lists those you can open. A group's list of sessions has a
+**Scan for EVPs** link on every session with sound.
 
 ## Making a clip
 
@@ -378,3 +424,5 @@ do this, and the Mixer button only appears if you have it.
   see the recording sees them too.
 - **Your editor setup** belongs to the recording as well — the spectrogram, its settings, and all
   the listening tools — and is saved only if the recording is yours.
+- **A copy of a field session's recording** is a file in your files, or in your group's, and counts
+  where it is stored. Deleting the copy deletes its markers; the session is never touched.
