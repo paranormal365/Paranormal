@@ -41,7 +41,12 @@ public class OrphanedSessionsTests : BenTestBase
     {
         await LoginAsync(MemberEmail, MemberPassword);
         await Page.GotoAsync($"{BaseUrl}/admin/orphaned-sessions");
-        await Page.WaitForLoadStateAsync(LoadState.NetworkIdle);
+
+        // The proof is being sent somewhere else. Waiting for the network to go quiet timed out on a
+        // busy run, because a live page's connection never does, and the checks below passed before
+        // the page had drawn anything (release e2e run, 10/27/2026).
+        await Page.WaitForURLAsync(url => !url.Contains("/admin/orphaned-sessions", StringComparison.OrdinalIgnoreCase),
+                                   new() { Timeout = 30_000 });
 
         // The page navigates away rather than rendering a refusal: an admin tool a member cannot
         // use should not be a screen they can look at.
