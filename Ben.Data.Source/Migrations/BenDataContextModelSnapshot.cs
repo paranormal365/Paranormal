@@ -3461,6 +3461,12 @@ namespace Ben.Data.Source.Migrations
                     b.Property<double>("ThresholdDb")
                         .HasColumnType("float");
 
+                    b.Property<byte[]>("TraceBlob")
+                        .HasColumnType("varbinary(max)");
+
+                    b.Property<int?>("TraceBucketMs")
+                        .HasColumnType("int");
+
                     b.Property<Guid>("UploadFileId")
                         .HasColumnType("uniqueidentifier");
 

@@ -275,6 +275,105 @@ public sealed class AudioMarkerController : BenControllerBase
         return Ok(_mapper.Map<IEnumerable<AudioMarkerRecord>>(proposed.Markers.Fresh));
     }
 
+    /// <summary>The most points a trace answer carries; longer recordings are thinned to fit (phase 8).</summary>
+    public const int MaxTracePoints = 60_000;
+
+    /// <summary>
+    /// What the detector saw on this recording's latest scan, for the editor's detector lane
+    /// (phase 8, 10/26/2026).
+    /// </summary>
+    /// <remarks>
+    /// Thinned to <paramref name="maxPoints"/> when longer: the loudest level in each group is kept,
+    /// so no candidate's peak is thinned away, and the background is averaged.
+    /// </remarks>
+    [HttpGet("scan-trace")]
+    public async Task<ActionResult<EvpTraceRecord>> ScanTrace(Guid fileId, [FromQuery] int maxPoints = 20_000, CancellationToken ct = default)
+    {
+        var userId = GetCurrentUserId();
+        if (userId == Guid.Empty) return Unauthorized();
+
+        await using var db = await _dbContextFactory.CreateDbContextAsync(ct);
+        if (!await db.UploadFiles.AnyAsync(f => f.Id == fileId, ct)) return NotFound("File not found.");
+        if (!await FileAudienceAccess.CanViewFileAsync(db, fileId, userId, ct)) return Forbid();
+
+        var scan = await db.EvpScans.AsNoTracking()
+            .Where(s => s.UploadFileId == fileId)
+            .OrderByDescending(s => s.DateCreated)
+            .FirstOrDefaultAsync(ct);
+        if (scan is null) return NotFound("This recording hasn't been scanned yet.");
+        if (EvpTraceCodec.Decode(scan.TraceBlob) is not { } trace)
+            return NotFound("This recording's last scan was made before the detector's view was kept. Scan it again to see it.");
+
+        var hysteresis = 2.0;
+        if (scan.OptionsJson is { } json)
+        {
+            try { hysteresis = System.Text.Json.JsonSerializer.Deserialize<EvpDetectionOptions>(json, EvpScanRecorder.OptionsJson)?.ReleaseHysteresisDb ?? 2.0; }
+            catch (System.Text.Json.JsonException) { }
+        }
+
+        var (band, full, floor, bucket) = Thin(trace, Math.Clamp(maxPoints, 100, MaxTracePoints));
+        return Ok(new EvpTraceRecord(
+            scan.Id, scan.DateCreated, bucket, scan.ThresholdDb, scan.ThresholdDb - hysteresis, scan.RecordingSeconds,
+            band, full, floor, trace.GateRuns.Select(r => new EvpSpanRecord(r.Start, r.End)).ToList()));
+    }
+
+    internal static (float[] Band, float[] Full, float[] Floor, double BucketSeconds) Thin(EvpTrace trace, int maxPoints)
+    {
+        var count = trace.BandDb.Length;
+        if (count <= maxPoints) return (trace.BandDb, trace.FullDb, trace.FloorDb, trace.BucketSeconds);
+
+        var per = (int)Math.Ceiling(count / (double)maxPoints);
+        var n = (count + per - 1) / per;
+        var band = new float[n]; var full = new float[n]; var floor = new float[n];
+        for (var i = 0; i < n; i++)
+        {
+            var from = i * per; var to = Math.Min(count, from + per);
+            float b = float.MinValue, f = float.MinValue; double fl = 0;
+            for (var j = from; j < to; j++)
+            {
+                b = Math.Max(b, trace.BandDb[j]);
+                f = Math.Max(f, trace.FullDb[j]);
+                fl += trace.FloorDb[j];
+            }
+            band[i] = b; full[i] = f; floor[i] = (float)(fl / (to - from));
+        }
+        return (band, full, floor, trace.BucketSeconds * per);
+    }
+
+    /// <summary>
+    /// Why the detector proposed this marker (phase 8): its score in three parts, with what each
+    /// measured in a sentence, and the measurements themselves.
+    /// </summary>
+    [HttpGet("{markerId:guid}/detection")]
+    public async Task<ActionResult<EvpCandidateDetailRecord>> Detection(Guid fileId, Guid markerId, CancellationToken ct)
+    {
+        var userId = GetCurrentUserId();
+        if (userId == Guid.Empty) return Unauthorized();
+
+        await using var db = await _dbContextFactory.CreateDbContextAsync(ct);
+        if (!await db.UploadFiles.AnyAsync(f => f.Id == fileId, ct)) return NotFound("File not found.");
+        if (!await FileAudienceAccess.CanViewFileAsync(db, fileId, userId, ct)) return Forbid();
+
+        var found = await db.EvpScanCandidates.AsNoTracking()
+            .Where(c => c.AudioMarkerId == markerId && c.EvpScan.UploadFileId == fileId)
+            .OrderByDescending(c => c.EvpScan.DateCreated)
+            .FirstOrDefaultAsync(ct);
+        if (found is null) return NotFound("This marker wasn't found by a scan, so there is nothing to explain.");
+
+        var features = new EvpFeatures(found.PeakProminenceDb, found.MeanBandGapDb, found.EventSeconds,
+            found.MeanFloorDb, found.PeakBandDb, found.BandLevelSpreadDb, found.ZeroCrossingRate);
+        var why = EvpDetector.Explain(features);
+        return Ok(new EvpCandidateDetailRecord(
+            found.Score,
+            [
+                new EvpScoreTermRecord("Stood out", why.ProminencePoints, 50, why.Prominence),
+                new EvpScoreTermRecord("In the listening range", why.BandPoints, 30, why.Band),
+                new EvpScoreTermRecord("Length", why.DurationPoints, 20, why.Duration),
+            ],
+            found.PeakProminenceDb, found.MeanFloorDb, found.PeakBandDb, found.EventSeconds,
+            found.BandLevelSpreadDb, found.ZeroCrossingRate));
+    }
+
     private void AuditReplaced(Guid fileId, EvpScanRecorder.Replaced replaced, Guid userId)
         => _ = TryAuditAsync(_auditLog.LogCreateAsync(
             nameof(AudioMarker), fileId,

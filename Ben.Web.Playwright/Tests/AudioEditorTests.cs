@@ -677,6 +677,85 @@ public class AudioEditorTests : BenTestBase
         await Expect(Modal.Locator("#audio-last-save")).ToContainTextAsync("Saved as", new() { Timeout = 15_000 });
     }
 
+    // ── Phase 8: the detector's own view ──────────────────────────────────────
+
+    /// <summary>How many pixels of a lane's canvas are drawn on (non-transparent), sampled on a grid.</summary>
+    private Task<int> LaneInkAsync(string kind) => Modal.EvaluateAsync<int>(@"(el, kind) => {
+        const c = el.querySelector(`.ws-lane--${kind} canvas`);
+        if (!c || !c.width) return -1;
+        const d = c.getContext('2d').getImageData(0, 0, c.width, c.height).data;
+        let n = 0;
+        for (let i = 3; i < d.length; i += 4 * 7) if (d[i] > 0) n++;
+        return n;
+    }", kind);
+
+    /// <summary>
+    /// The detector lane shows what the scan saw, a candidate's "Why?" explains its score, and the
+    /// lanes come back on reopening (phase 8).
+    /// </summary>
+    [Test]
+    public async Task The_detector_lane_and_why_explain_a_candidate()
+    {
+        if (!await ReadyInFullViewAsync(ScannableWav(), "wav", "audio/wav"))
+        {
+            Assert.Ignore("Could not open the editor; see the output for where it gave up.");
+            return;
+        }
+        var panel = await ScanForThreeAsync();
+
+        await AudioEditorUi.ChooseAsync(Page, "view", "Detector lane");
+        Assert.That(await WaitForAsync(() => LaneInkAsync("detector"), n => n > 50), Is.GreaterThan(50), "the detector lane drew nothing");
+        await AudioEditorUi.ChooseAsync(Page, "view", "Level lane");
+        Assert.That(await WaitForAsync(() => LaneInkAsync("level"), n => n > 50), Is.GreaterThan(50), "the level lane drew nothing");
+
+        var first = panel.Locator(".evp-row--candidate").First;
+        await first.GetByTitle("Why the scan found this").ClickAsync();
+        var why = panel.Locator(".evp-why");
+        await Expect(why).ToContainTextAsync("dB above the room", new() { Timeout = 15_000 });
+        await Expect(why.Locator(".evp-why__terms li")).ToHaveCountAsync(3);
+        await Expect(why).ToContainTextAsync("not how likely it is to be a voice");
+
+        await LeaveAndReopenEditorAsync();
+        Assert.That(await WaitForAsync(() => LaneInkAsync("detector"), n => n > 50, 20_000), Is.GreaterThan(50), "the detector lane was not remembered");
+        Assert.That(await WaitForAsync(() => LaneInkAsync("level"), n => n > 50, 20_000), Is.GreaterThan(50), "the level lane was not remembered");
+    }
+
+    /// <summary>
+    /// The strip above the waveform shows every candidate, and a click goes to one; B switches to the
+    /// original and back; the meter moves while something plays (phase 8).
+    /// </summary>
+    [Test]
+    public async Task The_strip_the_compare_switch_and_the_meter_work()
+    {
+        if (!await ReadyInFullViewAsync(ScannableWav(), "wav", "audio/wav"))
+        {
+            Assert.Ignore("Could not open the editor; see the output for where it gave up.");
+            return;
+        }
+        var panel = await ScanForThreeAsync();
+
+        var marks = Modal.Locator("#evp-strip .evp-strip__mark");
+        await Expect(marks).ToHaveCountAsync(3, new() { Timeout = 10_000 });
+        await marks.Nth(1).ClickAsync();
+        await Expect(panel.Locator(".evp-row--candidate.is-focused")).ToHaveCountAsync(1, new() { Timeout = 10_000 });
+
+        // The meter has ink while that candidate plays.
+        var meterInk = await WaitForAsync(() => Modal.EvaluateAsync<int>(@"el => {
+            const c = el.querySelector('#audio-meter');
+            if (!c || !c.width) return -1;
+            const d = c.getContext('2d').getImageData(0, 0, c.width, c.height).data;
+            let n = 0; for (let i = 3; i < d.length; i += 16) if (d[i] > 0) n++;
+            return n;
+        }"), n => n > 0, 10_000);
+        Assert.That(meterInk, Is.GreaterThan(0), "the meter never moved while a candidate played");
+
+        await Page.EvaluateAsync("() => document.activeElement?.blur()");
+        await Page.Keyboard.PressAsync("b");
+        await Expect(Modal.Locator("#audio-original-chip")).ToBeVisibleAsync(new() { Timeout = 10_000 });
+        await Page.Keyboard.PressAsync("b");
+        await Expect(Modal.Locator("#audio-original-chip")).ToHaveCountAsync(0, new() { Timeout = 10_000 });
+    }
+
     /// <summary>Ten minutes with a few sounds in it: long enough that a scan can be watched and stopped.</summary>
     private static byte[] LongWav() => Wav(600, [(30.0, 0.8), (200.0, 0.7), (450.0, 1.0)]);
 

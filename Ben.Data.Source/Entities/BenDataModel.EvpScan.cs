@@ -50,6 +50,16 @@ namespace Ben.Data.Source.Entities
         public double? BandLowHz { get; set; }
         public double? BandHighHz { get; set; }
 
+        /// <summary>
+        /// What the detector saw, packed by <c>EvpTraceCodec</c> (phase 8): the levels a tenth of a
+        /// second at a time and where its gate opened, for the editor's detector lane. Null before
+        /// phase 8, or when it could not be kept.
+        /// </summary>
+        public byte[]? TraceBlob { get; set; }
+
+        /// <summary>The trace's bucket length in milliseconds; null with no trace.</summary>
+        public int? TraceBucketMs { get; set; }
+
         /// <summary>Length of the recording that was scanned.</summary>
         public double RecordingSeconds { get; set; }
 

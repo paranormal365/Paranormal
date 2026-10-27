@@ -877,4 +877,71 @@ public class EvpDetectorTests(ITestOutputHelper output)
     {
         public void Report(EvpScanProgress value) => into.Add(value);
     }
+
+    // ── The detector's own view (phase 8) ─────────────────────────────────────
+
+    private static Task<EvpAnalysis> AnalyzeWholeAsync(float[] samples, EvpDetectionOptions options)
+        => EvpDetector.AnalyzeAsync(Pieces(samples, 65_536), SampleRate, options, 500, null, null, default);
+
+    [Fact]
+    public async Task The_trace_covers_the_whole_recording_a_tenth_of_a_second_at_a_time()
+    {
+        var analysis = await AnalyzeWholeAsync(BuildFixture(), Medium);
+        var trace = analysis.Trace!;
+
+        Assert.Equal(0.1, trace.BucketSeconds, 6);
+        Assert.InRange(trace.BandDb.Length * trace.BucketSeconds, 29.8, 30.01);
+        Assert.Equal(trace.BandDb.Length, trace.FloorDb.Length);
+        Assert.Equal(trace.BandDb.Length, trace.FullDb.Length);
+    }
+
+    /// <summary>Every candidate's sound sits inside a stretch where the gate opened: the lane can always show why.</summary>
+    [Fact]
+    public async Task Every_candidate_lies_inside_a_gate_opening()
+    {
+        var analysis = await AnalyzeWholeAsync(BuildFixture(), High);
+
+        Assert.NotEmpty(analysis.Candidates);
+        Assert.All(analysis.Candidates, c =>
+        {
+            var sound = (Start: DetectedStart(c), End: DetectedEnd(c));
+            Assert.Contains(analysis.Trace!.GateRuns, r => r.Start <= sound.Start + 0.011 && r.End >= sound.Start);
+        });
+    }
+
+    /// <summary>At each candidate the voice-band level stands above the background by at least the threshold.</summary>
+    [Fact]
+    public async Task At_each_candidate_the_level_crosses_the_line()
+    {
+        var analysis = await AnalyzeWholeAsync(BuildFixture(), Medium);
+        var t = analysis.Trace!;
+
+        Assert.All(analysis.Candidates, c =>
+        {
+            var from = (int)(DetectedStart(c) / t.BucketSeconds);
+            var to   = (int)Math.Ceiling(DetectedEnd(c) / t.BucketSeconds);
+            Assert.Contains(Enumerable.Range(from, to - from), b => t.BandDb[b] >= t.FloorDb[b] + Medium.ThresholdDb - 0.5);
+        });
+    }
+
+    [Fact]
+    public void The_explanation_adds_up_to_the_score()
+    {
+        var found = EvpDetector.Detect(BuildFixture(), SampleRate, High, 500);
+
+        Assert.NotEmpty(found);
+        Assert.All(found, c =>
+        {
+            var why = EvpDetector.Explain(c.Features);
+            Assert.Equal(c.Score, why.Total, 3);
+            Assert.InRange(why.ProminencePoints, 0, 50);
+            Assert.InRange(why.BandPoints, 0, 30);
+            Assert.InRange(why.DurationPoints, 0, 20);
+            Assert.False(string.IsNullOrWhiteSpace(why.Prominence + why.Band + why.Duration));
+        });
+    }
+
+    [Fact]
+    public void A_short_sound_is_explained_as_short()
+        => Assert.Contains("very short", EvpDetector.Explain(new EvpFeatures(12, -3, 0.12, -50, -38, 2, 0.1)).Duration);
 }

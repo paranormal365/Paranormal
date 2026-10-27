@@ -38,7 +38,9 @@ Everything else is in three menus at the right of the toolbar:
 - **View:** what's drawn, such as the timeline, the spectrogram's labels, the mel scale, the voice
   band, silence shading and the **overview strip**: the whole recording in a thin strip under the
   waveform, with the part in view outlined, so you can drag around a long recording while zoomed in.
-- **Listen:** the playback speed, and the listening tools.
+- **Listen:** the playback speed, the listening tools, and **Hear the original**, which plays the
+  recording as it is, round every listening tool, so you can hear what the filters change (B on the
+  keyboard). An "Original" tag shows while it's on.
 - **Edit:** making a clip, exploring a stretch, and every change that makes a new file.
 
 Under the waveform, the panels sit in tabs: **EVP Markers**, **Clips**, **Listen**, **Display** and
@@ -94,10 +96,14 @@ work anywhere on the editor's page, except while you're typing in a box.
 | Z | Zoom to the selection, or to the highlighted candidate. |
 | F | Fit the whole recording. |
 | L | Loop on or off. |
+| B | Hear the original, without the listening tools, and back again. |
 | Esc | Clear the selection, or put the volume line away. |
 | ? | The list of shortcuts. |
 
 ## The spectrogram
+
+Beside the hint above the waveform, a small meter shows what you're hearing while it plays: the
+frequencies, and the level, with the loudest moment held for a second.
 
 **Spectrogram** draws the recording's frequencies over time, under the waveform. It's the most
 useful tool for finding a voice: speech has a recognizable shape, and once you've seen a few, you'll
@@ -167,6 +173,29 @@ later scans never touch the markers you've kept.
 
 Press ▶ on a kept marker to play it. If the marker is a single moment rather than a stretch, you
 hear a couple of seconds on either side, which is usually what you need to tell a voice from a bump.
+
+### Why a candidate was found
+
+Every candidate has a **Why?** button (the ⓘ on its row). It opens its score in three parts:
+
+- **Stood out**, up to 50 points: how far it rose above the room around it. 20 dB or more counts in
+  full.
+- **In the listening range**, up to 30: how much of its sound was in the range the scan listens in.
+- **Length**, up to 20: speech-length sounds score highest; a click or a long stretch of talking
+  scores less.
+
+Under that are the measurements it was made from: how loud the room was, its loudest moment, how
+much its level moved (speech rises and falls, a hum holds steady), and how hiss-like it was. The
+score is how much a sound stood out, never how likely it is to be a voice.
+
+**View ▸ Detector lane** shows the same thing along the whole recording, under the waveform: the
+level in the listening range, the room's background, the dashed line a sound had to cross, and
+shading wherever the scanner's gate opened. A shaded stretch with no candidate on it was too short
+to keep. **View ▸ Level lane** shows how loud the recording is at every moment, with the silence
+line when silence detection is on.
+
+Above the waveform, a thin strip marks every candidate and kept marker across the whole recording;
+stronger candidates are bolder. Click one to go to it and hear it.
 
 ### While a scan runs
 

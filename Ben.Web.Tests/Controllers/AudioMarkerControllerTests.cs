@@ -1493,4 +1493,87 @@ public class AudioMarkerControllerTests
 
         Assert.Empty(Assert.IsAssignableFrom<IEnumerable<AudioMarkerRecord>>(Assert.IsType<OkObjectResult>(result.Result).Value));
     }
+
+    // ── The detector's own view (phase 8) ─────────────────────────────────────
+
+    [Fact]
+    public async Task ScanTrace_AfterAScan_ShowsWhatTheDetectorSaw()
+    {
+        var factory = CreateFactory();
+        var (fileId, ownerId) = await SeedWavFileAsync(factory);
+        await Build(factory, ownerId).Scan(fileId, EvpSensitivity.Medium, null, default);
+
+        var result = await Build(factory, ownerId).ScanTrace(fileId, ct: default);
+
+        var trace = Assert.IsType<EvpTraceRecord>(Assert.IsType<OkObjectResult>(result.Result).Value);
+        Assert.Equal(6.0, trace.ThresholdDb);
+        Assert.Equal(4.0, trace.ReleaseDb);
+        Assert.InRange(trace.BandDb.Length * trace.BucketSeconds, 19.8, 20.01);
+        Assert.NotEmpty(trace.GateRuns);
+    }
+
+    [Fact]
+    public async Task ScanTrace_NeverScanned_SaysSo()
+    {
+        var factory = CreateFactory();
+        var (fileId, ownerId) = await SeedWavFileAsync(factory);
+
+        var result = await Build(factory, ownerId).ScanTrace(fileId, ct: default);
+
+        Assert.Contains("hasn't been scanned", Assert.IsType<NotFoundObjectResult>(result.Result).Value?.ToString());
+    }
+
+    /// <summary>A scan made before traces were kept says to scan again, rather than showing an empty lane.</summary>
+    [Fact]
+    public async Task ScanTrace_FromBeforeTracesWereKept_SaysToScanAgain()
+    {
+        var factory = CreateFactory();
+        var (fileId, ownerId) = await SeedWavFileAsync(factory);
+        await using (var db = await factory.CreateDbContextAsync())
+        {
+            db.EvpScans.Add(new EvpScan { Id = Guid.NewGuid(), UploadFileId = fileId, DateCreated = DateTime.UtcNow, ThresholdDb = 6 });
+            await db.SaveChangesAsync();
+        }
+
+        var result = await Build(factory, ownerId).ScanTrace(fileId, ct: default);
+
+        Assert.Contains("Scan it again", Assert.IsType<NotFoundObjectResult>(result.Result).Value?.ToString());
+    }
+
+    [Fact]
+    public async Task ScanTrace_ForSomeoneWhoCannotSeeTheFile_IsForbidden()
+    {
+        var factory = CreateFactory();
+        var (fileId, _) = await SeedWavFileAsync(factory);
+
+        Assert.IsType<ForbidResult>((await Build(factory, Guid.NewGuid()).ScanTrace(fileId, ct: default)).Result);
+    }
+
+    [Fact]
+    public async Task Detection_ExplainsACandidate_InThreePartsThatAddUp()
+    {
+        var factory = CreateFactory();
+        var (fileId, ownerId) = await SeedWavFileAsync(factory);
+        var found = Assert.IsAssignableFrom<IEnumerable<AudioMarkerRecord>>(Assert.IsType<OkObjectResult>(
+            (await Build(factory, ownerId).Scan(fileId, EvpSensitivity.Medium, null, default)).Result).Value).First();
+
+        var result = await Build(factory, ownerId).Detection(fileId, found.Id, default);
+
+        var why = Assert.IsType<EvpCandidateDetailRecord>(Assert.IsType<OkObjectResult>(result.Result).Value);
+        Assert.Equal(3, why.Terms.Count);
+        Assert.Equal(found.DetectionScore!.Value, why.Terms.Sum(t => t.Points), 2);
+        Assert.Contains("dB above the room", why.Terms[0].Sentence);
+    }
+
+    [Fact]
+    public async Task Detection_OfAHandPlacedMarker_SaysThereIsNothingToExplain()
+    {
+        var factory = CreateFactory();
+        var (fileId, ownerId) = await SeedWavFileAsync(factory);
+        var markerId = await SeedMarkerAsync(factory, fileId);
+
+        var result = await Build(factory, ownerId).Detection(fileId, markerId, default);
+
+        Assert.Contains("nothing to explain", Assert.IsType<NotFoundObjectResult>(result.Result).Value?.ToString());
+    }
 }

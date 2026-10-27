@@ -27,7 +27,10 @@ public sealed record AudioToolbarState(
     bool CustomScan = false,    // the scan settings were adjusted away from Low, Medium and High
     bool Loop = false,          // phase 7: what is played loops instead of stopping at its end
     bool Minimap = false,
-    bool VolumeCurve = false);  // the volume curve is being drawn
+    bool VolumeCurve = false,   // the volume curve is being drawn
+    bool LevelLane = false,     // phase 8: the lanes under the waveform, and hearing the original
+    bool DetectorLane = false,
+    bool CompareOriginal = false);
 
 /// <summary>Everything the toolbar can ask the editor to do.</summary>
 public enum AudioToolbarAction
@@ -59,10 +62,13 @@ public enum AudioToolbarAction
     ToggleVoiceBand,
     ToggleDetectSilence,
     ToggleMinimap,
+    ToggleLevelLane,
+    ToggleDetectorLane,
     DisplaySettings,
 
     // Listen ▾ (the speeds come through OnSpeed)
     ListenSettings,
+    ToggleCompare,
 
     // Edit ▾
     MakeClip,

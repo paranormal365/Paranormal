@@ -26,6 +26,8 @@ public sealed class AudioWorkspaceTests
         Analysis      = new SpectrogramAnalysis("bark", 100, 4000, "blackman", 32, 60, 6, true),
         Minimap       = true,
         SpectrogramHeight = 300,
+        LevelLane     = true,
+        DetectorLane  = true,
     };
 
     [Fact]

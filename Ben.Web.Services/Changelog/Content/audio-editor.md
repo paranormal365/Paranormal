@@ -32,6 +32,12 @@ it is hidden from everybody else, but still takes its number. No other sub-headi
 
 ## Unreleased
 
+- Why? on each candidate: its score in three parts, each with a sentence, and what was measured.
+- The detector lane shows what the scan saw along the whole recording, and the level lane how loud
+  it is.
+- A strip above the waveform marks every candidate across the recording; click one to hear it.
+- A live meter shows what you're hearing, and B (or Listen ▸ Hear the original) switches the
+  listening tools off and on to compare.
 - Keyboard shortcuts: Space plays, the arrows move, N and P go through the candidates, K keeps, D
   dismisses, Z zooms, F fits, L loops, and ? lists them all.
 - Loop plays a candidate, a marker or the selection round and round.

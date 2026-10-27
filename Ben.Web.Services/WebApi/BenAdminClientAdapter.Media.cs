@@ -175,6 +175,13 @@ public sealed partial class BenAdminClientAdapter
     public Task<LoadResult<EvpScanPresetRecord>> GetEvpScanPresetsAsync(CancellationToken token = default)
         => _api.GetEvpScanPresetsAsync(token);
 
+    public Task<(EvpTraceRecord? Trace, string? Error)> GetScanTraceAsync(Guid fileId, CancellationToken token = default)
+        => _api.GetScanTraceAsync(fileId, token);
+
+    public Task<(EvpCandidateDetailRecord? Detail, string? Error)> GetCandidateDetailAsync(
+        Guid fileId, Guid markerId, CancellationToken token = default)
+        => _api.GetCandidateDetailAsync(fileId, markerId, token);
+
     public Task<(EvpScanJobRecord? Job, string? Error)> StartScanJobAsync(
         Guid fileId, StartScanJobRequest request, CancellationToken token = default)
         => _api.StartScanJobAsync(fileId, request, token);

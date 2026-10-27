@@ -117,6 +117,8 @@
                     <DropDownButtonItem OnClick="@(() => Act(AudioToolbarAction.ToggleVoiceBand))" Enabled="@State.Spectrogram">@Check(State.VoiceBand)Voice band</DropDownButtonItem>
                     <DropDownButtonItem OnClick="@(() => Act(AudioToolbarAction.ToggleDetectSilence))">@Check(State.DetectSilence)Detect silence</DropDownButtonItem>
                     <DropDownButtonItem OnClick="@(() => Act(AudioToolbarAction.ToggleMinimap))">@Check(State.Minimap)Overview strip</DropDownButtonItem>
+                    <DropDownButtonItem OnClick="@(() => Act(AudioToolbarAction.ToggleLevelLane))">@Check(State.LevelLane)Level lane</DropDownButtonItem>
+                    <DropDownButtonItem OnClick="@(() => Act(AudioToolbarAction.ToggleDetectorLane))">@Check(State.DetectorLane)Detector lane: why each candidate was found</DropDownButtonItem>
                     <DropDownButtonItem OnClick="@(() => Act(AudioToolbarAction.DisplaySettings))"><span class="audio-toolbar__check"></span>Display settings…</DropDownButtonItem>
                 </DropDownButtonItems>
             </TelerikDropDownButton>
@@ -132,6 +134,7 @@
                         var s = speed;
                         <DropDownButtonItem OnClick="@(() => OnSpeed.InvokeAsync(s))">@Check(Math.Abs(State.Speed - s) < 0.001)Play at @SpeedLabel(s)</DropDownButtonItem>
                     }
+                    <DropDownButtonItem OnClick="@(() => Act(AudioToolbarAction.ToggleCompare))">@Check(State.CompareOriginal)Hear the original, without the listening tools (B)</DropDownButtonItem>
                     <DropDownButtonItem OnClick="@(() => Act(AudioToolbarAction.ListenSettings))"><span class="audio-toolbar__check"></span>Listening tools: EQ, filters, gate…</DropDownButtonItem>
                 </DropDownButtonItems>
             </TelerikDropDownButton>
