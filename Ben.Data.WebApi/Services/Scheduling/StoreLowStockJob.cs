@@ -33,7 +33,7 @@ public sealed class StoreLowStockJob(
         if (!settings.Enabled) return;
 
         var today = now.Date;
-        if (await db.UserMessages.AnyAsync(m => m.MessageSubject.StartsWith(SubjectPrefix) && m.DateCreated >= today, ct)) return;
+        if (await db.UserMessages.AnyAsync(m => m.MessageSubject != null && m.MessageSubject.StartsWith(SubjectPrefix) && m.DateCreated >= today, ct)) return;
 
         var threshold = settings.LowStockThreshold;
         var low = await StoreCatalogue.LiveProducts(db).SelectMany(p => p.Variants)

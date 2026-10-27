@@ -193,7 +193,7 @@ public sealed class PublicFieldSessionController : ControllerBase
             .ToList();
 
         return Ok(new Ben.Service.Models.FieldSessions.PublicSessionSummary(
-            session.Id, session.PlaceId, session.PlaceName, session.LocationLabel,
+            session.Id, session.PlaceId, session.PlaceName ?? "this place", session.LocationLabel,
             session.StartedAt, session.EndedAt, session.DeviceModel, session.RecordedBy, files));
     }
 

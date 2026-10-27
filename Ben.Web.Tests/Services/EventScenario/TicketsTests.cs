@@ -184,7 +184,8 @@ public sealed class TicketsTests
             (await Door(w, letters, ScenarioWorld.Jim).Set(w.OrgId, w.EventId, new(true), default)).Result).Value);
         Assert.True(on.On);
         Assert.StartsWith("https://example.test/door-tickets/", on.Url);
-        var token = on.Url![(on.Url.LastIndexOf('/') + 1)..];
+        var url = on.Url!;
+        var token = url[(url.LastIndexOf('/') + 1)..];
 
         // What the scanner sees, signed out: the event and its price, and no place yet.
         var seen = Assert.IsType<PublicDoorTicketRecord>(Assert.IsType<OkObjectResult>((await Door(w, letters, null).Info(token, default)).Result).Value);

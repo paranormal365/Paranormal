@@ -12,7 +12,7 @@ namespace Ben.Data.WebApi.Services.Store;
 /// sentences those lines say.
 /// </summary>
 /// <remarks>
-/// <para><b>Added, not saved.</b> <see cref="Record"/> puts the line on the context, so it goes in
+/// <para><b>Added, not saved.</b> <see cref="Record(BenDataContext, Guid, StoreProductChangeArea, string, Guid?, StoreChangeActor, DateTime)"/> puts the line on the context, so it goes in
 /// the same <c>SaveChanges</c> as the edit — a refused edit leaves no line, and a saved one cannot
 /// lose its line. Stock is the exception that proves it: the stock helper saves as it goes, so
 /// <see cref="AdjustStockAsync"/> wraps the adjustment and its line in one transaction.</para>

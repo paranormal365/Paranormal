@@ -355,7 +355,7 @@ public sealed class ChangelogServiceTests
 
         var releases = ChangelogService.Parse(ChangelogStream.WebApp, md).ToList();
 
-        Assert.Equal(["1.1.0", "1.0.1"], releases.Select(r => r.Version).ToArray());
+        Assert.Equal(["1.1.0", "1.0.1"], releases.Select(r => r.Version!).ToArray());
         Assert.Equal(["Something for everybody."], releases[0].Entries.ToArray());
         Assert.Equal(["The place duplicates screen can merge three at once, not only two."], releases[0].AdminEntries.ToArray());
         Assert.True(releases[0].IsPublic);
@@ -447,8 +447,8 @@ public sealed class ChangelogServiceTests
 
     [Fact]
     public void The_CMS_carries_the_newest_released_version()
-        => Assert.Equal(_changelog.CurrentVersion(ChangelogStream.Cms),
-                        Ben.Web.Website.Library.Organization.Cms.CmsRelease.Version);
+        => Assert.Equal(Ben.Web.Website.Library.Organization.Cms.CmsRelease.Version,
+                        _changelog.CurrentVersion(ChangelogStream.Cms));
 
     [Fact]
     public void The_website_is_the_web_app_its_three_editors_and_the_CMS()

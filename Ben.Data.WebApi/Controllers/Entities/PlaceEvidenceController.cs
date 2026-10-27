@@ -177,7 +177,7 @@ public sealed class PlaceEvidenceController : BenControllerBase
         await db.SaveChangesAsync(ct);
 
         if (row.ReviewState != FeedMediaReviewState.Approved)
-            await TellTheVenueAsync(db, placeId, place.Name, userId, ct);
+            await TellTheVenueAsync(db, placeId, place.Name ?? "this place", userId, ct);
 
         return Ok(new PlaceEvidenceAdded(
             row.Id,

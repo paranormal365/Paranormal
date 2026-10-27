@@ -164,12 +164,12 @@ public sealed class AdminPlaceMergeController : BenControllerBase
     public sealed record MergeResult(
         Guid SurvivingPlaceId, int Investigations, int Cases, int CalendarEvents,
         int FieldSessions, int Rooms, int HostedEvents,
-        /// <summary>Posts about the place, moved with it (2026-09-17). Trailing and defaulted.</summary>
+        // <summary>Posts about the place, moved with it (2026-09-17). Trailing and defaulted.</summary>
         int Posts = 0,
-        /// <summary>
-        /// Evidence and pictures added straight to the place, moved with it (item 250). A file
-        /// already at the survivor is not counted here: it was not moved, it was already home.
-        /// </summary>
+        // <summary>
+        // Evidence and pictures added straight to the place, moved with it (item 250). A file
+        // already at the survivor is not counted here: it was not moved, it was already home.
+        // </summary>
         int Contributions = 0);
 
     /// <summary>Moves everything from one place onto another and deletes the empty one.</summary>

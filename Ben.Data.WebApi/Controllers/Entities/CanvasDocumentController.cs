@@ -144,12 +144,12 @@ public sealed class CanvasDocumentController : BenControllerBase
     /// <summary>Opens one board. The revision is in the body and in <c>ETag</c>.</summary>
     /// <response code="200">The board, with its document.</response>
     /// <response code="404">No such board, or not one the caller may read.</response>
-    [HttpGet("{id:guid}")]
-    [ProducesResponseType(typeof(CanvasDocumentRecord), 200)]
     /// <param name="published">
     /// Ask for the PUBLISHED copy even when the caller could edit the draft. Board links use this: a
     /// link opens what a reader would see, for the author too, so what they check is what is shared.
     /// </param>
+    [HttpGet("{id:guid}")]
+    [ProducesResponseType(typeof(CanvasDocumentRecord), 200)]
     public async Task<ActionResult<CanvasDocumentRecord>> GetById(
         Guid id, CancellationToken ct, [FromQuery] bool published = false)
     {

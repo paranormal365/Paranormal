@@ -54,7 +54,7 @@ public sealed class PlaceFileReviewController : BenControllerBase
         return Ok(await rows
             .OrderBy(e => e.DateCreated)
             .Select(e => new PlaceFileReviewRow(
-                e.Id, e.PlaceId, e.Place!.Name,
+                e.Id, e.PlaceId, e.Place!.Name ?? "An unnamed place",
                 e.AddedByAppUser!.DisplayName ?? e.AddedByAppUser.Email ?? "Unknown",
                 e.Caption, e.MediaKind,
                 e.UploadFile!.FileName, e.UploadFile.ContentType,
@@ -82,7 +82,7 @@ public sealed class PlaceFileReviewController : BenControllerBase
             .ToListAsync(ct);
 
         return Ok(counts
-            .Select(c => new PlaceFilesWaiting(c.PlaceId, c.Name, c.Count,
+            .Select(c => new PlaceFilesWaiting(c.PlaceId, c.Name ?? "An unnamed place", c.Count,
                 venues.FirstOrDefault(v => v.PlaceId == c.PlaceId)?.OrganizationId))
             .OrderBy(w => w.PlaceName)
             .ToList());

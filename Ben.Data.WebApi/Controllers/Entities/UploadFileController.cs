@@ -152,29 +152,6 @@ public sealed class UploadFileController : BenControllerBase
     }
 
     /// <summary>
-    /// A small copy of an image file, for anywhere a picture is shown rather than downloaded.
-    /// </summary>
-    /// <remarks>
-    /// <para><b>Why this exists.</b> Every <c>&lt;img&gt;</c> on the site pointed at
-    /// <c>/download</c>, which serves the original bytes. A group's logo rendered in a 40px avatar
-    /// on the browse page pulled the whole upload down the wire — however large it was — and the
-    /// browser then threw nearly all of it away. On a page listing twenty groups that is twenty
-    /// full-size images to draw twenty thumbnails.</para>
-    ///
-    /// <para><b>The access check is the same call as <see cref="Download"/>'s</b>, deliberately
-    /// not a looser one. A thumbnail is still the picture; making it easier to fetch than the file
-    /// it shrinks would be a way around the audience rules, and the two would drift. Same
-    /// reasoning as the equipment photo thumbnail route.</para>
-    ///
-    /// <para><b>Non-images fall through to the real file.</b> The sanitiser returns nothing for a
-    /// PDF or an audio file, and a caller asking for a thumbnail of one should get something
-    /// usable rather than a 404 — the same behaviour the equipment route settled on.</para>
-    ///
-    /// <para>Generated on first request when the sibling file is missing, so files uploaded before
-    /// the pipeline existed need no backfill.</para>
-    /// </remarks>
-    [Microsoft.AspNetCore.RateLimiting.DisableRateLimiting]
-    /// <summary>
     /// Hands a file back in the way its kind is meant to arrive: a recording or a picture plays or
     /// shows where it sits, everything else is saved under its own name. Either way the response
     /// answers byte-range requests.
@@ -207,6 +184,29 @@ public sealed class UploadFileController : BenControllerBase
             || contentType.StartsWith("audio/", StringComparison.OrdinalIgnoreCase)
             || contentType.StartsWith("image/", StringComparison.OrdinalIgnoreCase));
 
+    /// <summary>
+    /// A small copy of an image file, for anywhere a picture is shown rather than downloaded.
+    /// </summary>
+    /// <remarks>
+    /// <para><b>Why this exists.</b> Every <c>&lt;img&gt;</c> on the site pointed at
+    /// <c>/download</c>, which serves the original bytes. A group's logo rendered in a 40px avatar
+    /// on the browse page pulled the whole upload down the wire — however large it was — and the
+    /// browser then threw nearly all of it away. On a page listing twenty groups that is twenty
+    /// full-size images to draw twenty thumbnails.</para>
+    ///
+    /// <para><b>The access check is the same call as <see cref="Download"/>'s</b>, deliberately
+    /// not a looser one. A thumbnail is still the picture; making it easier to fetch than the file
+    /// it shrinks would be a way around the audience rules, and the two would drift. Same
+    /// reasoning as the equipment photo thumbnail route.</para>
+    ///
+    /// <para><b>Non-images fall through to the real file.</b> The sanitiser returns nothing for a
+    /// PDF or an audio file, and a caller asking for a thumbnail of one should get something
+    /// usable rather than a 404 — the same behaviour the equipment route settled on.</para>
+    ///
+    /// <para>Generated on first request when the sibling file is missing, so files uploaded before
+    /// the pipeline existed need no backfill.</para>
+    /// </remarks>
+    [Microsoft.AspNetCore.RateLimiting.DisableRateLimiting]
     [HttpGet("{id:guid}/thumbnail")]
     [AllowAnonymous]
     public async Task<IActionResult> Thumbnail(

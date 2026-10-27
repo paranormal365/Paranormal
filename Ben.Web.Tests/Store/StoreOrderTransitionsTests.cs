@@ -42,7 +42,7 @@ public sealed class StoreOrderTransitionsTests : IAsyncLifetime
         var alerts = new StoreAlerts(_sqlite.Factory, new PlatformMessageService(_sqlite.Factory), mailer, NullLogger<StoreAlerts>.Instance);
         var payments = new StoreOrderPayments(_sqlite.Factory, _stripe, _tax, mailer, alerts, NullLogger<StoreOrderPayments>.Instance);
         var refunds = new StoreRefundService(_sqlite.Factory, _stripe, _tax, mailer, alerts, NullLogger<StoreRefundService>.Instance);
-        return new StoreOrderTransitions(_sqlite.Factory, mailer, alerts, refunds, payments);
+        return new StoreOrderTransitions(_sqlite.Factory, mailer, refunds, payments);
     }
 
     private async Task<Guid> OrderAsync(StoreOrderStatus status = StoreOrderStatus.Paid, string? attention = null, string? carrier = null)
