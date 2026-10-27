@@ -16,6 +16,12 @@ namespace Ben.Data.Source.Entities
     public partial class AppUser : IdentityUser<Guid>, IIDStd
     {
         /// <summary>
+        /// Review EVP candidates without seeing the scan's readings until each is ruled on (audio phase 11,
+        /// item 253): a Keep or Dismiss made blind says what the person heard, not what the number said.
+        /// </summary>
+        public bool EvpBlindReview { get; set; }
+
+        /// <summary>
         /// When a confirmation link was last successfully HANDED TO THE MAIL SERVER. Null means no
         /// message has ever gone out for this account.
         /// </summary>

@@ -108,6 +108,9 @@ public record MyProfileRecord
     /// first-class answer, not a gap — it selects the generic default.
     /// </summary>
     public Ben.Data.Common.Enums.ClientGender Gender { get; init; }
+
+    /// <summary>Review EVP candidates with the scan's readings hidden until ruled on (audio phase 11).</summary>
+    public bool EvpBlindReview { get; init; }
 }
 
 /// <param name="DisplayName">
@@ -124,13 +127,15 @@ public record MyProfileRecord
 /// <param name="TimeZoneId">
 /// An IANA zone. Null leaves it unchanged; empty clears it, so the site uses the device's clock.
 /// </param>
+/// <param name="EvpBlindReview">Null leaves it unchanged.</param>
 public sealed record UpdateMyProfileRequest(
     string? DisplayName,
     bool? SharePrivatePhotoWithClients = null,
     string? FirstName = null,
     string? LastName = null,
     Ben.Data.Common.Enums.ClientGender? Gender = null,
-    string? TimeZoneId = null);
+    string? TimeZoneId = null,
+    bool? EvpBlindReview = null);
 
 /// <param name="UploadFileId">An already-uploaded file to attach as a photo.</param>
 /// <param name="IsPublic">Which slot to fill: true = public photo, false = private.</param>

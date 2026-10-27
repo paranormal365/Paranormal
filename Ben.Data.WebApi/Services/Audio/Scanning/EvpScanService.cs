@@ -55,7 +55,7 @@ public sealed class EvpScanService(
                 total, progress, ct);
         }
 
-        analysis = await TryMeasureVoiceAsync(file, analysis, ct);
+        analysis = await TryMeasureSecondStageAsync(file, analysis, settings, ct);
 
         // A copy of a field session's recording: each candidate heard during a question says which.
         var noteFor = file.SourceFieldSessionUploadId is not null && questions is not null
@@ -111,31 +111,65 @@ public sealed class EvpScanService(
     }
 
     /// <summary>
-    /// The scan's second stage (phase 9b): how voice-shaped each candidate is, from VoiceNet. It never
-    /// drops, reorders or rescores a candidate, and it never fails the scan: without the model, or if
-    /// it fails, the candidates are proposed unmeasured.
+    /// The scan's second stage: the candidates' audio read once more, for features 8 and 9 (phase 11) and
+    /// VoiceNet's voice-likeness (phase 9b). It never drops, reorders or rescores a candidate, and it never
+    /// fails the scan: whatever cannot be measured is left unmeasured.
     /// </summary>
-    private async Task<EvpAnalysis> TryMeasureVoiceAsync(UploadFile file, EvpAnalysis analysis, CancellationToken ct)
+    private async Task<EvpAnalysis> TryMeasureSecondStageAsync(
+        UploadFile file, EvpAnalysis analysis, EvpDetectionOptions settings, CancellationToken ct)
     {
-        if (voice is not { IsAvailable: true } || analysis.Candidates.Count == 0) return analysis;
+        if (analysis.Candidates.Count == 0) return analysis;
+        IReadOnlyList<Voice.CandidateAudio> clips;
         try
         {
-            float[] readings;
-            await using (var source = await OpenAsync(file, ct))
-            {
-                readings = await Voice.VoiceScoring.MeasureAsync(
-                    decoder.DecodeMono16kAsync(source, file.ContentType, file.FileName, ct),
-                    analysis.Candidates.Select(c => (c.StartSeconds, c.EndSeconds)).ToList(),
-                    analysis.RecordingSeconds, voice, ct);
-            }
-            var measured = analysis.Candidates.Select((c, i) => c with { VoiceLikelihood = readings[i] }).ToList();
-            return analysis with { Candidates = measured, VoiceModel = voice.ModelName };
+            await using var source = await OpenAsync(file, ct);
+            clips = await Voice.CandidateAudio.CollectAsync(
+                decoder.DecodeMono16kAsync(source, file.ContentType, file.FileName, ct),
+                analysis.Candidates.Select(c => (c.StartSeconds, c.EndSeconds)).ToList(),
+                analysis.RecordingSeconds, ct);
         }
         catch (Exception ex) when (ex is not OperationCanceledException)
         {
-            logger.LogWarning(ex, "Voice-likeness was not measured for file {FileId}; its candidates are proposed without it", file.Id);
+            logger.LogWarning(ex, "The candidates of file {FileId} could not be read again; they are proposed unmeasured", file.Id);
             return analysis;
         }
+
+        var measured = analysis.Candidates.Select((c, i) =>
+        {
+            var (start, end) = EventSpan(c, settings.ContextPadSeconds, analysis.RecordingSeconds);
+            var (flatness, voicedFraction) = EvpSpectralFeatures.Measure(clips[i].Between(start, end), settings.BandLowHz, settings.BandHighHz);
+            return c with { SpectralFlatness = flatness, VoicedFrameFraction = voicedFraction };
+        }).ToList();
+
+        string? model = null;
+        if (voice is { IsAvailable: true })
+        {
+            try
+            {
+                var readings = Voice.VoiceScoring.Score(clips, voice);
+                measured = measured.Select((c, i) => c with { VoiceLikelihood = readings[i] }).ToList();
+                model = voice.ModelName;
+            }
+            catch (Exception ex) when (ex is not OperationCanceledException)
+            {
+                logger.LogWarning(ex, "Voice-likeness was not measured for file {FileId}; its candidates are proposed without it", file.Id);
+            }
+        }
+        return analysis with { Candidates = measured, VoiceModel = model };
+    }
+
+    /// <summary>
+    /// The sound itself inside a candidate's padded span: features describe the sound, not its context
+    /// (<see cref="EvpFeatures"/>). The padding is clamped at the recording's ends, so the side that was
+    /// not clamped says where the sound is.
+    /// </summary>
+    internal static (double Start, double End) EventSpan(EvpCandidate c, double pad, double recordingSeconds)
+    {
+        var length = c.Features.EventSeconds > 0 ? c.Features.EventSeconds : c.DurationSeconds;
+        var start = c.StartSeconds > 0 || c.EndSeconds >= recordingSeconds
+            ? c.StartSeconds + (c.StartSeconds > 0 ? pad : 0)
+            : Math.Max(0, c.EndSeconds - pad - length);
+        return (start, Math.Min(c.EndSeconds, start + length));
     }
 
     private async Task<Stream> OpenAsync(UploadFile file, CancellationToken ct)

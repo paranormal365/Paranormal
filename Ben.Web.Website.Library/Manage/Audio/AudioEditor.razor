@@ -102,8 +102,8 @@
                 var width = Math.Max(0.5, ((mark.EndSeconds ?? mark.TimeSeconds) - mark.TimeSeconds) / _modalDuration * 100);
                 var pending = mark.ReviewStatus == EvpReviewStatus.Pending;
                 <button type="button" class="evp-strip__mark @(pending ? "is-candidate" : "is-kept") @(_focusedCandidateId == mark.Id ? "is-focused" : null)"
-                        style="left:@(left.ToString("0.###", System.Globalization.CultureInfo.InvariantCulture))%;width:@(width.ToString("0.###", System.Globalization.CultureInfo.InvariantCulture))%;--strength:@(((mark.DetectionScore ?? 100) / 100).ToString("0.##", System.Globalization.CultureInfo.InvariantCulture))"
-                        title="@(pending ? $"Candidate at {FormatTime(mark.TimeSeconds)}, score {mark.DetectionScore:0}" : $"{mark.Label} at {FormatTime(mark.TimeSeconds)}")"
+                        style="left:@(left.ToString("0.###", System.Globalization.CultureInfo.InvariantCulture))%;width:@(width.ToString("0.###", System.Globalization.CultureInfo.InvariantCulture))%;--strength:@((((pending && _blindReview ? null : mark.DetectionScore) ?? 100) / 100).ToString("0.##", System.Globalization.CultureInfo.InvariantCulture))"
+                        title="@(pending ? (_blindReview ? $"Candidate at {FormatTime(mark.TimeSeconds)}" : $"Candidate at {FormatTime(mark.TimeSeconds)}, score {mark.DetectionScore:0}") : $"{mark.Label} at {FormatTime(mark.TimeSeconds)}")"
                         aria-label="@(pending ? $"Candidate at {FormatTime(mark.TimeSeconds)}" : $"Marker at {FormatTime(mark.TimeSeconds)}")"
                         @onclick="@(() => GoToMarkAsync(mark))"></button>
             }
@@ -297,6 +297,13 @@
                                 <div class="evp-lab__review-head">
                                     <span class="evp-lab__chip evp-lab__chip--hot">@PendingCandidates.Count()</span>
                                     <strong>@(PendingCandidates.Count() == 1 ? "candidate" : "candidates") to review</strong>
+                                    @if (_blindReview)
+                                    {
+                                        <span class="ms-auto small text-muted" id="evp-blind-note"
+                                              title="Turned on in your profile. Readings show once you keep or dismiss a candidate.">Reviewing blind, in time order</span>
+                                    }
+                                    else
+                                    {
                                     <div class="evp-seg evp-seg--sm ms-auto" role="group" aria-label="Sort candidates" id="evp-sort">
                                         @foreach (var (order, label) in CandidateOrders)
                                         {
@@ -305,9 +312,12 @@
                                                     aria-pressed="@(_candidateOrder == o ? "true" : "false")" @onclick="@(() => _candidateOrder = o)">@label</button>
                                         }
                                     </div>
+                                    }
                                 </div>
                                 @* The person's own filter over the model's reading (phase 9b): applied here, never by the
                                    server, and at 0 it hides nothing. A candidate the model never measured is never hidden. *@
+                                @if (!_blindReview)
+                                {
                                 <div class="evp-lab__voice-filter">
                                     <label for="evp-voice-filter" class="evp-lab__voice-filter-label">
                                         Hide below voice-like <strong>@_hideBelowVoice</strong>
@@ -319,6 +329,7 @@
                                         <span class="evp-lab__voice-filter-note" id="evp-voice-hidden">@HiddenByVoiceCount hidden</span>
                                     }
                                 </div>
+                                }
 
                                 <div class="evp-lab__list evp-lab__list--scroll">
                                     @foreach (var candidate in VisibleCandidates)
@@ -329,6 +340,8 @@
                                         var heard = _heardCandidates.Contains(c.Id);
                                         <div class="evp-row evp-row--candidate @(isAdjusting ? "is-adjusting" : null) @(_focusedCandidateId == c.Id ? "is-focused" : null)"
                                              data-heard="@(heard ? "true" : "false")" aria-current="@(_focusedCandidateId == c.Id ? "true" : null)">
+                                            @if (!_blindReview)
+                                            {
                                             <span class="evp-score" title="Stood out: how much this rose above the background, not a likelihood of speech">
                                                 <span class="evp-score__label">Stood out</span>
                                                 <span class="evp-score__num">@score.ToString("0")</span>
@@ -350,6 +363,7 @@
                                                     <span class="evp-score__label">Voice-like</span>
                                                     <span class="evp-score__none">not measured</span>
                                                 </span>
+                                            }
                                             }
                                             @if (isAdjusting)
                                             {
@@ -381,8 +395,11 @@
                                             <span class="evp-row__actions">
                                                 <button type="button" class="btn btn-outline-secondary btn-sm ben-grid-action" @onclick="@(() => PlayCandidateAsync(c))" title="Play this stretch with its surrounding context"><BenIcon Name="play" /></button>
                                                 <button type="button" class="btn btn-outline-secondary btn-sm ben-grid-action" @onclick="@(() => ZoomToCandidateAsync(c))" title="Zoom in on this one"><BenIcon Name="maximize-2" /></button>
+                                                @if (!_blindReview)
+                                                {
                                                 <button type="button" class="btn btn-outline-secondary btn-sm ben-grid-action evp-row__why" @onclick="@(() => ToggleExplanationAsync(c))"
                                                         aria-expanded="@(_explainingId == c.Id ? "true" : "false")" title="Why the scan found this"><BenIcon Name="info" /></button>
+                                                }
                                                 @if (isAdjusting)
                                                 {
                                                     <button type="button" class="btn btn-primary btn-sm" @onclick="SaveAdjustedBoundsAsync">Save bounds</button>
@@ -843,7 +860,10 @@
         {
             <div class="mb-2 small text-secondary">
                 @FormatMarkerRange(cc)
-                · detector score @cc.DetectionScore?.ToString("0")
+                @if (!_blindReview)
+                {
+                    <text>· detector score @cc.DetectionScore?.ToString("0")</text>
+                }
             </div>
             <div class="mb-2">
                 <label class="form-label fw-semibold" for="audiofilepreview-what-did-you-hear-83cf">What did you hear?</label>
@@ -2405,6 +2425,7 @@
         var presets = await AdminClient.GetEvpScanPresetsAsync();
         if (!presets.Failed) _scanPresets = presets.Items;
         (_voiceStatus, _) = await AdminClient.GetVoiceModelStatusAsync();
+        _blindReview = (await AdminClient.GetMyProfileAsync())?.EvpBlindReview ?? false;
 
         if (ScanOptionsFrom(_savedConfig?.EvpScanOptionsJson) is { } lastUsed)
             await OnScanOptionsChanged(lastUsed);
@@ -2439,6 +2460,9 @@
 
     /// <summary>Hide pending candidates whose voice-like reading is below this (0–100); 0 hides nothing (phase 9b).</summary>
     private int                 _hideBelowVoice;
+
+    /// <summary>The person reviews blind (their profile, phase 11): pending candidates show no readings.</summary>
+    private bool                _blindReview;
 
     /// <summary>Whether this server measures voice-likeness, and why not when it doesn't.</summary>
     private VoiceModelStatusRecord? _voiceStatus;
@@ -2495,7 +2519,7 @@
     /// Score order first by default — the strongest signals are the best use of the first few
     /// minutes of review. Playback order is a click away for working straight through a recording.
     /// </summary>
-    private IEnumerable<AudioMarkerRecord> SortedCandidates => _candidateOrder switch
+    private IEnumerable<AudioMarkerRecord> SortedCandidates => _blindReview ? PendingCandidates : _candidateOrder switch
     {
         CandidateOrder.StoodOut  => PendingCandidates.OrderByDescending(c => c.DetectionScore ?? 0).ThenBy(c => c.TimeSeconds),
         // Unmeasured last: they have nothing to be ranked by.
@@ -2513,6 +2537,9 @@
         SortedCandidates.Where(c => !HiddenByVoice(c));
 
     private bool HiddenByVoice(AudioMarkerRecord c)
+        => !_blindReview && HiddenByVoiceSetting(c);
+
+    private bool HiddenByVoiceSetting(AudioMarkerRecord c)
         // Compared as shown: a reading displayed as 50 stays at "hide below 50".
         => _hideBelowVoice > 0 && c.VoiceLikelihood is { } v && Math.Round(Math.Clamp(v * 100, 0, 100), MidpointRounding.AwayFromZero) < _hideBelowVoice;
 
@@ -2558,12 +2585,12 @@
             _confirmLabel.Trim(),
             _confirmConfidence,
             string.IsNullOrWhiteSpace(_confirmNote) ? null : _confirmNote.Trim(),
-            PlayedFirst: _heardCandidates.Contains(candidate.Id)));
+            PlayedFirst: _heardCandidates.Contains(candidate.Id), Blind: _blindReview));
     }
 
     private Task DismissCandidateAsync(AudioMarkerRecord candidate) =>
         ReviewCandidateAsync(candidate, new ReviewAudioMarkerRequest(
-            EvpReviewStatus.Dismissed, PlayedFirst: _heardCandidates.Contains(candidate.Id)));
+            EvpReviewStatus.Dismissed, PlayedFirst: _heardCandidates.Contains(candidate.Id), Blind: _blindReview));
 
     // ── Adjusting a candidate's bounds ────────────────────────────────────────
 

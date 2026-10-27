@@ -265,6 +265,9 @@ public interface IWebApiClient
     /// <summary>The caller's unfinished scan of this recording; (null, null) when there is none.</summary>
     Task<(EvpScanJobRecord? Job, string? Error)> GetLiveScanJobAsync(Guid fileId, CancellationToken token = default);
 
+    /// <summary>The EVP learning tables read back (audio phase 11), or the server's reason. SuperAdmin.</summary>
+    Task<(Ben.Service.Models.Admin.AdminEvpSummary? Summary, string? Error)> GetAdminEvpSummaryAsync(int days = 30, CancellationToken token = default);
+
     /// <summary>Scans several recordings in one background job; each comes back accepted or with its reason.</summary>
     Task<(BatchScanResult? Result, string? Error)> StartBatchScanAsync(StartBatchScanRequest request, CancellationToken token = default);
 

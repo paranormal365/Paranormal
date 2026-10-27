@@ -1,0 +1,146 @@
+@page "/admin/evp"
+@namespace Ben.Web.Website.Library.SuperAdmin
+@using Ben.Service.Models.Admin
+@using Ben.Web.Services
+@using Ben.Web.Website.Library.Kit
+@using Ben.Web.Website.Library.Help
+@inject IBenAdminClient AdminClient
+@inject IBenUserState UserState
+
+<PageTitle>SuperAdmin — EVP Scans</PageTitle>
+
+@*
+    The EVP learning tables, read back (audio phase 11, item 253). What the scanner found, what people kept
+    and dismissed, what it missed, and how each measurement differs between kept and dismissed. Nothing
+    here changes the scanner: whether its weights should move is a judgment made from these charts.
+*@
+
+<div class="container-fluid px-3" id="admin-evp">
+    <div class="row mb-3 align-items-center">
+        <div class="col">
+            <h3 class="mb-0">EVP Scans <HelpLink Slug="using-the-audio-editor" /></h3>
+            <p class="text-secondary small mb-0">
+                What the scanner found and what people made of it. Where kept and dismissed candidates
+                separate on a measurement, it is worth something to the score; where they overlap, it isn't.
+            </p>
+        </div>
+        <div class="col-auto">
+            <select class="form-select form-select-sm" aria-label="Period" value="@_days" @onchange="@(e => ChangeDaysAsync(e.Value))" id="admin-evp-days">
+                @foreach (var d in new[] { 7, 30, 90, 365 })
+                {
+                    <option value="@d">Last @d days</option>
+                }
+            </select>
+        </div>
+    </div>
+
+    @if (_health is { } health)
+    {
+        <div class="alert @(health.Found ? "alert-secondary" : "alert-warning") py-2 small" id="admin-evp-decoder">
+            @if (health.Found)
+            {
+                <text>Phone recordings (.m4a) can be read: ffmpeg @health.Version.</text>
+            }
+            else
+            {
+                <text>Phone recordings (.m4a) cannot be scanned here. @(health.Problem ?? "ffmpeg is not configured.")</text>
+            }
+        </div>
+    }
+
+    @if (_error is not null)
+    {
+        <div class="alert alert-warning" role="alert">@_error <button class="btn btn-link btn-sm" @onclick="LoadAsync">Try again</button></div>
+    }
+    else if (_summary is null)
+    {
+        <p class="text-secondary">Loading…</p>
+    }
+    else
+    {
+        var s = _summary;
+        <div class="row g-2 mb-3" id="admin-evp-tiles">
+            <div class="col-sm-6 col-xl-3"><StatCard Label="Scans" Icon="activity" Value="@s.Scans.ToString("N0")"
+                Sparkline="@s.ScansPerDay.Select(d => (double)d.Scans).ToList()" /></div>
+            <div class="col-sm-6 col-xl-3"><StatCard Label="Candidates proposed" Icon="list" Value="@s.Proposed.ToString("N0")"
+                Caption="@($"{s.Candidates:N0} found · {s.Exploratory:N0} samples")" /></div>
+            <div class="col-sm-6 col-xl-3"><StatCard Label="Decisions" Icon="check-square" Value="@s.Rulings.ToString("N0")"
+                Caption="@($"{s.Kept:N0} kept · {s.Dismissed:N0} dismissed")" /></div>
+            <div class="col-sm-6 col-xl-3"><StatCard Label="Missed" Icon="alert-circle" Value="@s.Misses.ToString("N0")"
+                Caption="Marked by hand where the scan found nothing" /></div>
+            <div class="col-sm-6 col-xl-3"><StatCard Label="Listened first" Icon="headphones" Value="@Percent(s.PlayedFirstShare)"
+                Caption="Decisions made after hearing the candidate" /></div>
+            <div class="col-sm-6 col-xl-3"><StatCard Label="Made blind" Icon="eye-off" Value="@Percent(s.BlindShare)"
+                Caption="Decisions made with the readings hidden" /></div>
+            <div class="col-sm-6 col-xl-3"><StatCard Label="Kept, blind" Icon="eye-off" Value="@Percent(s.KeptShareBlind)" /></div>
+            <div class="col-sm-6 col-xl-3"><StatCard Label="Kept, readings shown" Icon="eye" Value="@Percent(s.KeptShareShown)"
+                Caption="Far apart from blind: the score sways people" /></div>
+        </div>
+
+        @if (s.Rulings == 0)
+        {
+            <p class="text-secondary" id="admin-evp-no-rulings">
+                Nobody has kept or dismissed a candidate in this period, so there is nothing to compare yet.
+            </p>
+        }
+        else
+        {
+            <div class="row g-3">
+                @foreach (var h in s.FeatureHistograms)
+                {
+                    <div class="col-xl-6">
+                        <div class="card h-100" data-testid="admin-evp-histogram"><div class="card-body">
+                            <div class="small text-secondary mb-2">
+                                @h.Feature <span class="text-muted">(@h.Unit, @h.Measured measured)</span>
+                            </div>
+                            <ApexChart Type="bar" Height="200"
+                                       Categories="@h.Bins.Select(b => BinLabel(b)).ToList()"
+                                       Series="@Series(h)"
+                                       NoDataText="Not measured on any decided candidate yet." />
+                        </div></div>
+                    </div>
+                }
+            </div>
+        }
+    }
+</div>
+
+@code {
+    private int _days = 30;
+    private AdminEvpSummary? _summary;
+    private MediaToolsHealth? _health;
+    private string? _error;
+
+    protected override async Task OnInitializedAsync()
+    {
+        // A hard navigation renders before sign-in is known; asking then reads as "no data".
+        if (!await UserState.WaitUntilAuthReadyAsync(RendererInfo.IsInteractive)) return;
+        await LoadAsync();
+        _health = await AdminClient.GetMediaToolsHealthAsync();
+    }
+
+    private async Task LoadAsync()
+    {
+        _error = null;
+        var (summary, error) = await AdminClient.GetAdminEvpSummaryAsync(_days);
+        _summary = summary;
+        if (summary is null) _error = error ?? "The EVP figures couldn't be read just now.";
+    }
+
+    private async Task ChangeDaysAsync(object? value)
+    {
+        if (int.TryParse(value?.ToString(), out var days)) _days = days;
+        _summary = null;
+        await LoadAsync();
+    }
+
+    private static List<ApexChart.ChartSeries> Series(AdminEvpHistogram h) =>
+    [
+        new("Kept", h.Bins.Select(b => (double)b.Kept).ToList()),
+        new("Dismissed", h.Bins.Select(b => (double)b.Dismissed).ToList()),
+    ];
+
+    private static string BinLabel(AdminEvpBin b) => $"{b.Lo:0.##}–{b.Hi:0.##}";
+
+    private static string Percent(double? share) => share is { } v ? $"{v:P0}" : "—";
+}

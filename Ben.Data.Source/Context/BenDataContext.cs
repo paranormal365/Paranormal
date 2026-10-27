@@ -212,6 +212,7 @@ namespace Ben.Data.Source.Context
         public virtual DbSet<UploadFileVote> UploadFileVotes { get; set; }
         public virtual DbSet<AudioMarker> AudioMarkers { get; set; }
         public virtual DbSet<EvpScan> EvpScans { get; set; }
+        public virtual DbSet<EvpMiss> EvpMisses { get; set; }
         public virtual DbSet<EvpScanCandidate> EvpScanCandidates { get; set; }
         public virtual DbSet<EvpScanPreset> EvpScanPresets { get; set; }
         public virtual DbSet<EvpScanJob> EvpScanJobs { get; set; }
@@ -2721,6 +2722,12 @@ namespace Ben.Data.Source.Context
                     + "OR ([Scope] = 1 AND [ScopeOrganizationId] IS NOT NULL AND [ScopeAppUserId] IS NULL)"));
             modelBuilder.Entity<FieldSessionAnalysisCopy>().Property(e => e.SourceSha256).HasMaxLength(64);
             modelBuilder.Entity<EvpScan>().Property(e => e.VoiceModel).HasMaxLength(64);
+            // Misses (phase 11): only the recording is a key; see EvpMiss.
+            modelBuilder.Entity<EvpMiss>()
+                .HasOne(e => e.UploadFile).WithMany()
+                .HasForeignKey(e => e.UploadFileId).OnDelete(DeleteBehavior.Cascade);
+            modelBuilder.Entity<EvpMiss>().HasIndex(e => e.UploadFileId);
+            modelBuilder.Entity<EvpMiss>().HasIndex(e => e.DateCreated);
             modelBuilder.Entity<FieldSessionAnalysisCopy>().Property(e => e.SourceRelativePath).HasMaxLength(500);
             modelBuilder.Entity<UploadFile>().Property(e => e.SourceClipPath).HasMaxLength(500);
             modelBuilder.Entity<UploadFile>()

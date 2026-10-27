@@ -119,6 +119,9 @@ public sealed class VoiceNetTests
         var scan = await db.EvpScans.Include(s => s.Candidates).SingleAsync(s => s.UploadFileId == fileId);
         Assert.Equal("test-model", scan.VoiceModel);
         Assert.All(scan.Candidates, c => Assert.NotNull(c.VoiceLikelihood));
+        // Features 8 and 9 come from the same second reading (phase 11); the fixture's utterances are voiced.
+        Assert.All(scan.Candidates, c => Assert.InRange(c.VoicedFrameFraction!.Value, 0.5f, 1f));
+        Assert.All(scan.Candidates, c => Assert.InRange(c.SpectralFlatness!.Value, 0f, 1f));
         Assert.Equal(markers.OrderBy(m => m.TimeSeconds).Select(m => m.VoiceLikelihood),
                      scan.Candidates.OrderBy(c => c.StartSeconds).Select(c => c.VoiceLikelihood));
     }
@@ -151,7 +154,10 @@ public sealed class VoiceNetTests
         Assert.NotEmpty(outcome!.Markers.Fresh);
         Assert.All(outcome.Markers.Fresh, m => Assert.Null(m.VoiceLikelihood));
         await using var db = await factory.CreateDbContextAsync();
-        Assert.Null((await db.EvpScans.SingleAsync()).VoiceModel);
+        var scan = await db.EvpScans.Include(s => s.Candidates).SingleAsync();
+        Assert.Null(scan.VoiceModel);
+        // Features 8 and 9 need no model.
+        Assert.All(scan.Candidates, c => Assert.NotNull(c.VoicedFrameFraction));
     }
 
     [Fact]

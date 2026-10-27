@@ -188,6 +188,16 @@ list while you work; at 0 it hides nothing, and it only changes what you see, ne
 found. A candidate shows "not measured" when it was found before voice-likeness was measured, or on
 a server without the model; scan again to measure it.
 
+### Reviewing blind
+
+If you'd rather not see the numbers while you decide, turn on **Review blind** on your profile.
+Pending candidates then show no readings and no Why?, and are listed in time order; everything
+comes back once you keep or dismiss one, or turn the setting off. Decisions made by ear alone are
+the most useful ones for teaching the scanner what a real find sounds like.
+
+When you place a marker by hand where the latest scan found nothing, it is noted as something the
+scan missed. Your marker is saved as usual.
+
 ### Why a candidate was found
 
 Every candidate has a **Why?** button (the ⓘ on its row). It opens its score in three parts:

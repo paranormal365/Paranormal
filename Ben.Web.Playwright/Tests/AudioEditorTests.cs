@@ -771,6 +771,111 @@ public class AudioEditorTests : BenTestBase
     }
 
     /// <summary>
+    /// Moving the listening range away from where the sounds are changes what a rescan scores them: the
+    /// dials reach the scan (phase 11). The test audio's sounds are at 500, 1,500 and 2,500 Hz, so a floor
+    /// of 3,000 Hz leaves only what leaks past the filter. They are still found (the room's noise is
+    /// filtered the same way, so they still stand out from it) but "in the listening range" falls.
+    /// </summary>
+    [Test]
+    public async Task Moving_the_listening_range_changes_how_a_rescan_scores()
+    {
+        if (!await ReadyInFullViewAsync(ScannableWav(), "wav", "audio/wav"))
+        {
+            Assert.Ignore("Could not open the editor; see the output for where it gave up.");
+            return;
+        }
+        var panel = await ScanForThreeAsync();
+        var scores = panel.Locator(".evp-row--candidate .evp-score:not(.evp-score--voice) .evp-score__num");
+        async Task<int> TopAsync()
+        {
+            var all = new List<int>();
+            foreach (var n in await scores.AllAsync()) all.Add(int.Parse(await n.InnerTextAsync()));
+            return all.Max();
+        }
+        var before = await TopAsync();
+
+        await panel.GetByRole(AriaRole.Button, new() { Name = "Fine-tune" }).ClickAsync();
+        await panel.Locator("#evp-band-low").FillAsync("3000");
+        await panel.Locator("#evp-rescan").ClickAsync();
+        var narrowed = await WaitForAsync(TopAsync, top => top < before - 10, 120_000);
+        TestContext.Out.WriteLine($"top score {before} at 300 Hz, {narrowed} from 3,000 Hz");
+        Assert.That(narrowed, Is.LessThan(before - 10), "Moving the listening range did not change the scores.");
+
+        await panel.Locator("#evp-band-low").FillAsync("300");
+        await panel.Locator("#evp-rescan").ClickAsync();
+        Assert.That(await WaitForAsync(TopAsync, top => top == before, 120_000), Is.EqualTo(before),
+            "Putting the range back did not bring the scores back.");
+    }
+
+    /// <summary>
+    /// Blind review, from the profile: pending candidates show no readings and list in time order, and
+    /// the readings come back when it is turned off (phase 11).
+    /// </summary>
+    [Test]
+    public async Task Blind_review_hides_the_readings_until_it_is_turned_off()
+    {
+        if (!await ReadyInFullViewAsync(ScannableWav(), "wav", "audio/wav", openEditor: false))
+        {
+            Assert.Ignore("Could not upload a recording; see the output for where it gave up.");
+            return;
+        }
+        var name = _lastUploadedName!;
+        await SetBlindReviewAsync(true);
+        try
+        {
+            await OpenOurRecordingAsync(name);
+            var panel = await ScanForThreeAsync();
+            await Expect(panel.Locator("#evp-blind-note")).ToBeVisibleAsync();
+            await Expect(panel.Locator(".evp-row--candidate .evp-score")).ToHaveCountAsync(0);
+            await Expect(panel.Locator("#evp-sort")).ToHaveCountAsync(0);
+            await Expect(panel.Locator(".evp-row__why")).ToHaveCountAsync(0);
+        }
+        finally
+        {
+            await SetBlindReviewAsync(false);
+        }
+        await OpenOurRecordingAsync(name);
+        await AudioEditorUi.OpenTabAsync(Modal, "EVP Markers");
+        var shown = Modal.Locator("#evp-markers-panel");
+        await Expect(shown.Locator(".evp-row--candidate .evp-score").First).ToBeVisibleAsync(new() { Timeout = 30_000 });
+        await Expect(shown.Locator("#evp-sort")).ToBeVisibleAsync();
+    }
+
+    private async Task SetBlindReviewAsync(bool on)
+    {
+        await Page.GotoAsync($"{BaseUrl}/profile");
+        var box = Page.Locator("#evp-blind-review");
+        await Expect(box).ToBeVisibleAsync(new() { Timeout = 30_000 });
+        if (await box.IsCheckedAsync() != on) await box.ClickAsync();
+        await Expect(box).ToBeCheckedAsync(new() { Checked = on, Timeout = 10_000 });
+        // Saved, not only ticked: a reload reads it back.
+        await Page.ReloadAsync();
+        await Expect(Page.Locator("#evp-blind-review")).ToBeCheckedAsync(new() { Checked = on, Timeout = 30_000 });
+    }
+
+    private async Task OpenOurRecordingAsync(string name)
+    {
+        await Page.GotoAsync($"{BaseUrl}/media-library");
+        var card = Page.Locator(".card").Filter(new() { HasTextString = name }).First;
+        await card.GetByTestId("show-waveform").First.ClickAsync(new() { Timeout = 60_000 });
+        await Expect(card.Locator("[id^='ws-']").First).ToBeVisibleAsync(new() { Timeout = 60_000 });
+        await OpenEditorFromPlayerAsync(card.Locator("[id^='afp-']").First);
+    }
+
+    /// <summary>The EVP admin page draws its figures and a chart per measurement (phase 11).</summary>
+    [Test]
+    public async Task The_evp_admin_page_shows_the_figures()
+    {
+        await LoginAsync(SuperAdminEmail, SuperAdminPassword);
+        await Page.GotoAsync($"{BaseUrl}/admin/evp");
+        await Expect(Page.Locator("#admin-evp-tiles")).ToBeVisibleAsync(new() { Timeout = 30_000 });
+        await Expect(Page.Locator("#admin-evp-tiles")).ToContainTextAsync("Missed");
+        await Expect(Page.Locator("#admin-evp-decoder")).ToBeVisibleAsync(new() { Timeout = 30_000 });
+        if (await Page.Locator("#admin-evp-no-rulings").CountAsync() == 0)
+            await Expect(Page.GetByTestId("admin-evp-histogram")).ToHaveCountAsync(9);
+    }
+
+    /// <summary>
     /// Several recordings chosen in the library are scanned as one batch, and the Scans page follows it
     /// to the end, each recording with what it found (phase 10).
     /// </summary>

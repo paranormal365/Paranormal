@@ -884,6 +884,10 @@ public sealed class WebApiClient : IWebApiClient
         return (list, error);
     }
 
+    /// <inheritdoc />
+    public Task<(Ben.Service.Models.Admin.AdminEvpSummary? Summary, string? Error)> GetAdminEvpSummaryAsync(int days = 30, CancellationToken token = default)
+        => GetWithReasonAsync<Ben.Service.Models.Admin.AdminEvpSummary>($"/api/admin/evp/summary?days={days}", token);
+
     // ── Scanning a session for EVPs (phase 9 of the audio plan) ──────────────
 
     /// <inheritdoc />

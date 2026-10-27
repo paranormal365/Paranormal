@@ -110,6 +110,7 @@ public sealed record ScanRefusalRecord(string Reason, string Message)
 /// Whether the reviewer heard the candidate before ruling on it; null when the caller can't tell.
 /// Kept with the ruling so the detector can learn more from a considered one (item 253).
 /// </param>
+/// <param name="Blind">Whether the reviewer ruled with the scan's readings hidden (phase 11); null when unknown.</param>
 public record ReviewAudioMarkerRequest(
     EvpReviewStatus     ReviewStatus,
     string?             Label            = null,
@@ -117,4 +118,5 @@ public record ReviewAudioMarkerRequest(
     string?             Note             = null,
     double?             StartSeconds     = null,
     double?             EndSeconds       = null,
-    bool?               PlayedFirst      = null);
+    bool?               PlayedFirst      = null,
+    bool?               Blind            = null);

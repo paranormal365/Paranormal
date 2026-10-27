@@ -24,9 +24,12 @@ namespace Ben.Data.WebApi.Services.Audio;
 /// How voice-shaped the sound is, 0–1, from VoiceNet after the scan (phase 9b); null when not measured.
 /// Never part of <see cref="Score"/>.
 /// </param>
+/// <param name="SpectralFlatness">Feature 8 (phase 11): how hiss-like the sound is; see <see cref="EvpSpectralFeatures"/>.</param>
+/// <param name="VoicedFrameFraction">Feature 9 (phase 11): how much of it has a speaking voice's pitch.</param>
 public readonly record struct EvpCandidate(
     double StartSeconds, double EndSeconds, float Score, EvpFeatures Features = default,
-    bool Exploratory = false, float? VoiceLikelihood = null)
+    bool Exploratory = false, float? VoiceLikelihood = null,
+    float? SpectralFlatness = null, float? VoicedFrameFraction = null)
 {
     public double DurationSeconds => EndSeconds - StartSeconds;
 }

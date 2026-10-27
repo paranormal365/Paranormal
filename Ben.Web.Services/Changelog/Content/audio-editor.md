@@ -32,6 +32,10 @@ it is hidden from everybody else, but still takes its number. No other sub-headi
 
 ## Unreleased
 
+- Review blind: a setting on your profile hides each candidate's readings until you keep or dismiss
+  it, so you decide by what you hear.
+- A marker you place where a scan found nothing is noted as something the scan missed, so it can
+  learn from that too.
 - Scan several recordings for EVPs at once from the Media Library. Any that can't be scanned are
   listed with the reason; the rest are scanned one after another.
 - EVP scans: a page listing your scans from the last week, each recording with its progress and
@@ -118,6 +122,11 @@ it is hidden from everybody else, but still takes its number. No other sub-headi
   parts, and **Silence selection** is the edit.
 - Buttons and menus use the site's icons in place of emoji, which looked different on every
   computer.
+
+### Administration
+
+- EVP Scans in the administration menu: what the scanner found, what people kept and dismissed, what it
+  missed, and how each measurement differs between kept and dismissed.
 
 ## 1.0.0 · 2026-10-02
 
