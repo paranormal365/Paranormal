@@ -56,7 +56,9 @@ video (item 181), and the automatic check of video posts (F5b).
 3. In MonsterASP's File Manager (or FTP, if the File Manager refuses a file that size), open the **API** site (api.ishaunted.com), go into
    `App_Data`, make a folder `Tools`, and upload `ffmpeg.exe` into it. `App_Data` is never served
    to visitors, and it is where `Keys` already lives.
-4. Open the API site's `web.config` (in the site's root folder, beside `Ben.Data.WebApi.dll`). Inside
+4. *(Optional since 10/27/2026: when no path is set, the API looks in `App_Data\Tools` by
+   itself. Do this only to put ffmpeg somewhere else.)* Open the API site's `web.config` (in the
+   site's root folder, beside `Ben.Data.WebApi.dll`). Inside
    `<aspNetCore ...><environmentVariables>`, where `Smtp__Password` and
    `ConnectionStrings__BenDbConnectionString` already are, add one line:
    `<environmentVariable name="MediaTools__FfmpegPath" value="App_Data\Tools\ffmpeg.exe" />`
