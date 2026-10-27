@@ -411,7 +411,7 @@ ADS = [
             ("door", "The night itself", "Check in by scan or name, menus and dietary sheets, a program and a photo room."),
         ],
         cta="Host your event at ishaunted.com", cta_small="Guests pay you directly — no ticket fees",
-        price="$99", price_small="per event, however many nights",
+        price="$99", price_small="one event, start to finish: a night, a weekend, or a run of up to a month",
         back_headline="Everything a <em>haunted weekend</em> needs.",
         strip=["d1-candlelit-dinner.jpg", "v6-ballroom.jpg", "t1-theatre-seats.jpg"],
         cards=[
@@ -429,7 +429,7 @@ ADS = [
                ("Publish", "One event credit per event. It's live in minutes."),
                ("Open the door", "Scan passes, even with no signal, from any phone.")],
         offer="<em>$99</em> an event.",
-        offer_small="$19.80 with a paid plan. However many nights; a show's run up to a month, and extra months half price. No ticket fees: guests pay you. Credits last a year.",
+        offer_small="$19.80 with a paid plan. One credit, start to finish: a night, a weekend, or a show's run of up to a month, with extra months half price. No ticket fees: guests pay you. Credits last a year.",
         url_small="Web · iPhone & iPad app", fine=FINE,
     ),
 ]
@@ -553,7 +553,7 @@ def brochure(mails):
   <div class="facts">
     <div class="fact"><b>Rooms or seats</b><span>Guests ask for a room or pick their seats on your plan.</span></div>
     <div class="fact"><b>No signal, no problem</b><span>Passes and the door keep working in the cellar.</span></div>
-    <div class="fact"><b>$99 an event</b><span>$19.80 with a paid plan. However many nights. Guests pay you directly.</span></div>
+    <div class="fact"><b>$99 an event</b><span>$19.80 with a paid plan. Start to finish, however many dates. Guests pay you directly.</span></div>
   </div>
 </section>""")
 
@@ -665,7 +665,7 @@ def brochure(mails):
   <div class="mails">{''.join(_mail(src, t, d) for src, t, d in mails)}</div>
   <div class="price"><div>
     <div class="big"><em>$99</em> an event</div>
-    <ul><li>However many nights: one credit, good for a year</li><li>The credit comes back if you call it off 48+ hours ahead</li>
+    <ul><li>Start to finish: a night, a weekend, or a run of up to a month, on one credit good for a year</li><li>The credit comes back if you call it off 48+ hours ahead</li>
     <li>$19.80 an event for a group with a paid plan</li><li>Guests pay you directly, with no ticket fees</li></ul></div>
     <div class="go"><b>ishaunted.com</b><span>Host your first event</span><span class="soon">iPhone &amp; iPad app on the App Store</span></div></div>
 </div>{folio(8)}</section>""")
