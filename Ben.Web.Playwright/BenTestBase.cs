@@ -398,6 +398,43 @@ public abstract class BenTestBase : PageTest
         return null;
     }
 
+    /// <summary>
+    /// An API context signed in as this seat, for a test that has to arrange its own data rather than
+    /// skip when the seed lacks it (site audit, 10/27/2026). The caller disposes it.
+    /// </summary>
+    protected async Task<IAPIRequestContext> ApiSignedInAsync(string email, string password)
+    {
+        await using var anon = await Playwright.APIRequest.NewContextAsync(new() { BaseURL = ApiUrl });
+        var login = await anon.PostAsync("/login", new() { DataObject = new { email, password } });
+        Assert.That(login.Ok, Is.True, $"{email} could not sign in to the API: {await login.TextAsync()}");
+        var token = (await login.JsonAsync())!.Value.GetProperty("accessToken").GetString();
+        return await Playwright.APIRequest.NewContextAsync(new()
+        {
+            BaseURL = ApiUrl,
+            ExtraHTTPHeaders = new Dictionary<string, string> { ["Authorization"] = $"Bearer {token}" },
+        });
+    }
+
+    /// <summary>
+    /// Sends the stage fixture as this seat's own field session, the way the phone sends it. Sending the
+    /// same bundle again finds the same session, so runs don't pile them up.
+    /// </summary>
+    protected async Task SendAFieldSessionAsync(string email, string password)
+    {
+        var bytes = await File.ReadAllBytesAsync(Path.Combine(AppContext.BaseDirectory, "Fixtures", "field-session-stage.ben"));
+        string deviceSessionId;
+        using (var zip = new System.IO.Compression.ZipArchive(new MemoryStream(bytes)))
+        using (var seal = zip.GetEntry("seal.json")!.Open())
+            deviceSessionId = System.Text.Json.JsonDocument.Parse(seal).RootElement.GetProperty("session_id").GetString()!;
+
+        await using var api = await ApiSignedInAsync(email, password);
+        var form = Context.APIRequest.CreateFormData();
+        form.Append("file", new FilePayload { Name = "field-session.ben", MimeType = "application/vnd.ishaunted.field-session", Buffer = bytes });
+        form.Append("deviceSessionId", deviceSessionId);
+        var sent = await api.PostAsync("/api/field-sessions/bundle", new() { Multipart = form });
+        Assert.That(sent.Ok, Is.True, $"{email}'s own session was not accepted: " + await sent.TextAsync());
+    }
+
     protected async Task<string> OrgIdBySlugAsync(string slug)
     {
         await _orgIdLock.WaitAsync();

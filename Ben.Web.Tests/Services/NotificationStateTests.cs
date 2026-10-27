@@ -230,4 +230,32 @@ public class NotificationStateTests
         state.Dispose();
         state.Dispose();
     }
+
+    // ── Disposal (site audit, 10/27/2026) ─────────────────────────────────────
+
+    /// <summary>
+    /// A refresh still waiting on the server when the circuit goes away must end quietly. Disposing the
+    /// fetch gate under it made its <c>Release</c> throw, which ended the visitor's whole session with
+    /// "Unhandled exception rendering component" (seen in the e2e web log, from BenNav, on every page).
+    /// </summary>
+    [Fact]
+    public async Task A_refresh_in_flight_when_the_circuit_goes_away_ends_quietly()
+    {
+        var pending = new TaskCompletionSource<NotificationSummaryResponse?>();
+        var client = new Mock<IBenAdminClient>(MockBehavior.Loose);
+        client.Setup(c => c.GetNotificationSummaryAsync(It.IsAny<CancellationToken>())).Returns(pending.Task);
+        var state = new NotificationState(client.Object, new FakeUserState(), new TestNavigationManager());
+
+        var refresh = state.RefreshAsync(force: true);
+        state.Dispose();
+        pending.SetCanceled();          // the HTTP call notices the cancellation
+
+        await refresh;                  // must not throw
+        var late = new TaskCompletionSource<NotificationSummaryResponse?>();
+        late.SetResult(SummaryWith(9));
+        client.Setup(c => c.GetNotificationSummaryAsync(It.IsAny<CancellationToken>())).Returns(late.Task);
+        await state.RefreshAsync(force: true);   // and nothing after disposal fetches or throws
+        Assert.Equal(0, state.Current.OrgMessages.Count);
+    }
 }
+

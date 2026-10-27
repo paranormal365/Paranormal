@@ -136,6 +136,8 @@ public sealed class NotificationState : IDisposable
 
     private void Publish(NotificationSummaryResponse summary)
     {
+        // A refresh that finishes after the circuit is gone has nobody to tell.
+        if (_disposed) return;
         Current = summary;
         Changed?.Invoke();
     }
@@ -173,8 +175,10 @@ public sealed class NotificationState : IDisposable
         _userState.StateChanged     -= OnAuthStateChanged;
         _navManager.LocationChanged -= OnLocationChanged;
 
+        // Cancelled, never disposed: a refresh can still be waiting on the server when the circuit
+        // goes away, and disposing the gate under it made its Release throw, which ended the visitor's
+        // whole session from the nav bar (site audit, 10/27/2026). Neither holds anything to free: the
+        // gate's wait handle is never asked for, and the token source has no timer.
         _disposalCts.Cancel();
-        _disposalCts.Dispose();
-        _fetchGate.Dispose();
     }
 }

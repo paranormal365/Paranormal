@@ -206,7 +206,7 @@ public abstract class Oct16TestBase : BenTestBase
         var entry = Page.Locator(".k-event", new() { HasTextString = title });
         var dialog = Page.Locator(".modal.show").First;
         await Expect(entry.First).ToBeVisibleAsync(new() { Timeout = 30_000 });
-        await entry.First.ScrollIntoViewIfNeededAsync();
+        await ScrollToAsync(entry.First);
         for (var attempt = 0; attempt < 4; attempt++)
         {
             await entry.First.DblClickAsync();
@@ -286,7 +286,7 @@ public abstract class Oct16TestBase : BenTestBase
             return problems;
         }
 
-        await subject.ScrollIntoViewIfNeededAsync();
+        await ScrollToAsync(subject);
         await Page.WaitForTimeoutAsync(250);   // let a smooth scroll and any reflow finish
 
         var drawn = await Page.EvaluateAsync<string?>("() => document.documentElement.getAttribute('data-bs-theme')");
@@ -373,6 +373,27 @@ public abstract class Oct16TestBase : BenTestBase
         if (await control.First.BoundingBoxAsync() is { } box && (box.Width < 43.5 || box.Height < 43.5))
             problems.Add($"{name} at {width}px ({theme}): {box.Width:0}×{box.Height:0}px, smaller than a 44px touch target.");
         return problems;
+    }
+
+    /// <summary>
+    /// Scrolls to a control, again if the page redrew it mid-scroll. Playwright does not retry a scroll
+    /// whose element was replaced, and the home page redraws once its circuit is live, which failed
+    /// the pricing test with "Element is not attached to the DOM" (site audit, 10/27/2026).
+    /// </summary>
+    protected static async Task ScrollToAsync(ILocator control)
+    {
+        for (var attempt = 1; ; attempt++)
+        {
+            try
+            {
+                await control.ScrollIntoViewIfNeededAsync();
+                return;
+            }
+            catch (PlaywrightException e) when (attempt < 5 && e.Message.Contains("not attached"))
+            {
+                await Task.Delay(200);
+            }
+        }
     }
 
     /// <summary>Fails with every problem found, one per line — never only the first.</summary>

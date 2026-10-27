@@ -304,8 +304,8 @@ public class CmsEditorUxTests : BenTestBase
         });
         foreach (var id in new[] { about, team })
         {
-            var page = await _api.GetFromJsonAsync<JsonElement>($"/api/organizations/{_orgId}/pages/{id}");
-            var put = await _api.PutAsJsonAsync($"/api/organizations/{_orgId}/pages/{id}", new
+            var page = await _api!.GetFromJsonAsync<JsonElement>($"/api/organizations/{_orgId}/pages/{id}");
+            var put = await _api!.PutAsJsonAsync($"/api/organizations/{_orgId}/pages/{id}", new
             {
                 pageTitle = page.GetProperty("pageTitle").GetString(), urlName = page.GetProperty("urlName").GetString(),
                 pageHtml = $"<p>Intro for {_stamp}</p>", isPublished = true, isPublic = true,
@@ -314,7 +314,7 @@ public class CmsEditorUxTests : BenTestBase
             Assert.That(put.IsSuccessStatusCode, Is.True, await put.Content.ReadAsStringAsync());
         }
 
-        var orgs = await _api.GetFromJsonAsync<JsonElement>("/api/organizations");
+        var orgs = await _api!.GetFromJsonAsync<JsonElement>("/api/organizations");
         var urlName = orgs.EnumerateArray().First(o => o.GetProperty("id").GetString() == _orgId).GetProperty("urlName").GetString();
 
         var visitor = await Page.Context.Browser!.NewContextAsync();
@@ -373,8 +373,8 @@ public class CmsEditorUxTests : BenTestBase
             sectionType = 5, title = $"Our members {_stamp}", contentJson = "{}", sortOrder = 1, isActive = true,
         });
         Assert.That(section.IsSuccessStatusCode, Is.True);
-        var page = await _api.GetFromJsonAsync<JsonElement>($"/api/organizations/{_orgId}/pages/{team}");
-        (await _api.PutAsJsonAsync($"/api/organizations/{_orgId}/pages/{team}", new
+        var page = await _api!.GetFromJsonAsync<JsonElement>($"/api/organizations/{_orgId}/pages/{team}");
+        (await _api!.PutAsJsonAsync($"/api/organizations/{_orgId}/pages/{team}", new
         {
             pageTitle = page.GetProperty("pageTitle").GetString(), urlName = page.GetProperty("urlName").GetString(),
             pageHtml = "", isPublished = true, isPublic = true, parentPageId = (string?)null, sortOrder = 1,

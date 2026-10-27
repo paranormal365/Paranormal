@@ -97,9 +97,7 @@
         Nav.NavigateTo(_destination);
     }
 
-    public void Dispose()
-    {
-        _cts.Cancel();
-        _cts.Dispose();
-    }
+    // Cancelled, never disposed: the wait above reads _cts.Token after an earlier await, which throws
+    // on a disposed source if the page is left first (site audit, 10/27/2026).
+    public void Dispose() => _cts.Cancel();
 }

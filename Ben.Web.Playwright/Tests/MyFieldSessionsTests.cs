@@ -15,6 +15,14 @@ namespace Ben.Web.Playwright.Tests;
 [Category("MyFieldSessions")]
 public class MyFieldSessionsTests : BenTestBase
 {
+    /// <summary>
+    /// A session of the seat's own, with positions, sent the way the phone sends it. Without one, a fresh
+    /// database has none, and three of these tests skipped themselves on every run (site audit,
+    /// 10/27/2026). Sending the same bundle again finds the same session, so runs don't pile them up.
+    /// </summary>
+    [SetUp]
+    public Task SendAPersonalSessionAsync() => SendAFieldSessionAsync(UserEmail, UserPassword);
+
     [Test]
     public async Task Someone_with_sessions_sees_them_and_can_play_one_back()
     {
@@ -91,8 +99,11 @@ public class MyFieldSessionsTests : BenTestBase
 
         await map.ScrollIntoViewIfNeededAsync();
         var box = (await map.BoundingBoxAsync())!;
-        var cx = box.X + box.Width / 2;
-        var cy = box.Y + box.Height / 2;
+        // Away from the middle: the map frames itself on its pins, so the middle is where a pin
+        // sits, and a drag that starts on a pin grabs the pin instead of moving the map. It made
+        // this test pass or fail by where the page happened to scroll (site audit, 10/27/2026).
+        var cx = box.X + box.Width * 0.2f;
+        var cy = box.Y + box.Height * 0.25f;
 
         // Three quick drags, back to back: each is a gesture the map reports; only the last should
         // be asked about. No pause between them is needed — the point is that they arrive together.

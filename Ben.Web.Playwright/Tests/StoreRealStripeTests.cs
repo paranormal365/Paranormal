@@ -82,7 +82,7 @@ public class StoreRealStripeTests : BenTestBase
         await Expect(Page.Locator("[data-testid=checkout-fake]")).ToHaveCountAsync(0);
 
         // Stripe's own card form, in its frame.
-        var card = Page.FrameLocator("#ben-payment-element iframe").First;
+        var card = Page.Locator("#ben-payment-element iframe").First.ContentFrame;
         await card.Locator("[name=number]").FillAsync("4242 4242 4242 4242", new() { Timeout = 30_000 });
         await card.Locator("[name=expiry]").FillAsync("12 / 34");
         await card.Locator("[name=cvc]").FillAsync("123");

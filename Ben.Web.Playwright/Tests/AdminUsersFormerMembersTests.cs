@@ -55,16 +55,30 @@ public class AdminUsersFormerMembersTests : BenTestBase
             Assert.Inconclusive("This database has no closed accounts, so there is nothing hidden "
                               + "to reveal. Seed one before trusting this test.");
 
-        var before = await Main.Locator("tbody tr").CountAsync();
+        var before = await ListedAsync();
 
         await Main.Locator("#users-include-former").CheckAsync();
         await WaitUntilLoadedAsync();
         await Page.WaitForTimeoutAsync(500);
 
-        Assert.That(await Main.Locator("tbody tr").CountAsync(), Is.GreaterThan(before),
+        Assert.That(await ListedAsync(), Is.GreaterThan(before),
             "Ticking the box did not add the rows the badge said were hidden.");
 
         // The badge is about what is hidden, so it goes when nothing is.
         Assert.That(await badge.CountAsync(), Is.Zero);
+    }
+
+    /// <summary>
+    /// How many accounts the list holds across all its pages. The grid shows 25 at a time, so counting
+    /// rows on the page said nothing once there were more than 25 (site audit, 10/27/2026).
+    /// </summary>
+    private async Task<int> ListedAsync()
+    {
+        var info = Main.Locator(".k-pager-info");
+        if (await info.CountAsync() == 0) return await Main.Locator("tbody tr").CountAsync();
+        var text = await info.First.InnerTextAsync();
+        var match = System.Text.RegularExpressions.Regex.Match(text, @"of\s+([\d,]+)");
+        Assert.That(match.Success, Is.True, $"The pager no longer says how many there are: \"{text}\"");
+        return int.Parse(match.Groups[1].Value.Replace(",", ""));
     }
 }

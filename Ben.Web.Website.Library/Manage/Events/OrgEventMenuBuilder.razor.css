@@ -35,6 +35,9 @@
     overflow: hidden;
     border-radius: .4rem;
     pointer-events: none;
+    /* The sample menu runs on below the frame: fade it out rather than slice a line in half. */
+    -webkit-mask-image: linear-gradient(to bottom, #000 72%, transparent);
+    mask-image: linear-gradient(to bottom, #000 72%, transparent);
 }
 
 .menu-gallery__name {
