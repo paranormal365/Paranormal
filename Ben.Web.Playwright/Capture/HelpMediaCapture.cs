@@ -1635,19 +1635,6 @@ public sealed class HelpMediaCapture : BenTestBase
         // and a full-viewport shot reduces both to a strip.
         await ShootAsync("using-the-audio-editor", "spectrogram.png", selector: "#modal-player-pane");
 
-        // ── A scan's candidates ───────────────────────────────────────────────
-        await modal.GetByRole(AriaRole.Button, new() { Name = "EVP Markers", Exact = false })
-                   .First.ClickAsync();
-        await Page.WaitForTimeoutAsync(500);
-
-        var scan = modal.GetByRole(AriaRole.Button, new() { Name = "Scan", Exact = false }).First;
-        if (await scan.CountAsync() > 0)
-        {
-            await scan.ClickAsync();
-            await Page.WaitForTimeoutAsync(12_000);   // the scan reads the whole recording
-        }
-        await ShootAsync("using-the-audio-editor", "evp-candidates.png", selector: "#evp-markers-panel");
-
         // Back to the case the editor was opened from, where the mixer's button is.
         await Page.GetByTestId("audio-editor-back").ClickAsync();
         await Page.WaitForURLAsync(u => !u.Contains("/audio/"), new() { Timeout = 30_000 });
@@ -1666,6 +1653,86 @@ public sealed class HelpMediaCapture : BenTestBase
         await Page.WaitForTimeoutAsync(600);
 
         await ShootAsync("using-the-audio-editor", "case-mixer.png", proves: "Audio Clips");
+
+        // ── A scan's candidates, and the detector lane (phases 8 and 9b) ──────
+        // A recording with something in it to find: room tone with three speech-shaped sounds, the
+        // same one the editor's tests scan. The seeded case's recording has nothing a scan proposes.
+        var name = $"Room 7 EVP session {Guid.NewGuid():N}".Substring(0, 28) + ".wav";
+        var editor = await OpenUploadedInEditorAsync(name, Ben.Web.Playwright.Tests.AudioEditorTests.ScannableWav());
+        await AudioEditorUi.OpenTabAsync(editor, "EVP Markers");
+        var panel = editor.Locator("#evp-markers-panel");
+        await panel.GetByRole(AriaRole.Button, new() { Name = "Scan for EVP" }).ClickAsync();
+        await Expect(panel.Locator(".evp-row--candidate")).ToHaveCountAsync(3, new() { Timeout = 120_000 });
+        await Expect(panel.Locator(".evp-score--voice").First).ToBeVisibleAsync(new() { Timeout = 15_000 });
+        // Tall enough for the whole list: at 900 the panel's crop ended inside the first row.
+        await Page.SetViewportSizeAsync(DesktopWidth, 1800);
+        await panel.ScrollIntoViewIfNeededAsync();
+        await Page.WaitForTimeoutAsync(800);
+        await ShootAsync("using-the-audio-editor", "evp-candidates.png", selector: "#evp-markers-panel", proves: "Stood out");
+        await Page.SetViewportSizeAsync(DesktopWidth, DesktopHeight);
+
+        await AudioEditorUi.ChooseAsync(Page, "view", "Detector lane");
+        await Expect(editor.Locator(".ws-lane--detector canvas")).ToBeVisibleAsync(new() { Timeout = 30_000 });
+        await Page.WaitForTimeoutAsync(1_500);   // the lane draws after its trace arrives
+        await ShootAsync("using-the-audio-editor", "detector-lane.png", selector: "#modal-player-pane");
+        await AudioEditorUi.ChooseAsync(Page, "view", "Detector lane");   // off again: the view is remembered
+
+        // ── Scanning a field session (phase 9) ────────────────────────────────
+        // The seat's own session, sent the way the phone sends it, so its owner may scan it.
+        var api = await ApiAsAsync(await ApiTokenAsync(UserEmail, UserPassword));
+        var bundle = await File.ReadAllBytesAsync(Path.Combine(AppContext.BaseDirectory, "Fixtures", "field-session-stage.ben"));
+        string deviceSessionId;
+        using (var zip = new System.IO.Compression.ZipArchive(new MemoryStream(bundle)))
+        using (var seal = zip.GetEntry("seal.json")!.Open())
+            deviceSessionId = System.Text.Json.JsonDocument.Parse(seal).RootElement.GetProperty("session_id").GetString()!;
+        var form = Context.APIRequest.CreateFormData();
+        form.Append("file", new FilePayload { Name = "field-session.ben", MimeType = "application/vnd.ishaunted.field-session", Buffer = bundle });
+        form.Append("deviceSessionId", deviceSessionId);
+        var sent = await api.PostAsync("/api/field-sessions/bundle", new() { Multipart = form });
+        Assert.That(sent.Ok, Is.True, "the seat's session was not accepted: " + await sent.TextAsync());
+        var sessionId = (await sent.JsonAsync())!.Value.GetProperty("id").GetString();
+
+        await Page.GotoAsync($"{BaseUrl}/field-sessions/{sessionId}");
+        var card = Page.Locator("#evp-scan");
+        await Expect(card).ToBeVisibleAsync(new() { Timeout = 60_000 });
+        await card.GetByTestId("session-scan").ClickAsync();
+        await Expect(card.GetByTestId("session-scan-status"))
+            .ToContainTextAsync(new System.Text.RegularExpressions.Regex("to review|Nothing stood out"), new() { Timeout = 120_000 });
+        await Page.WaitForTimeoutAsync(800);
+        await ShootAsync("using-the-audio-editor", "session-scan.png", selector: "#evp-scan", proves: "Scan for EVPs");
+    }
+
+    /// <summary>
+    /// Uploads a recording under a name of its own and opens it in the editor from the media library,
+    /// the way a person would.
+    /// </summary>
+    private async Task<ILocator> OpenUploadedInEditorAsync(string name, byte[] audio)
+    {
+        await Page.GotoAsync($"{BaseUrl}/upload-files");
+        await Page.GetByRole(AriaRole.Button, new() { Name = "Upload New File" }).ClickAsync(new() { Timeout = 30_000 });
+        await Page.Locator("select").First.SelectOptionAsync(new SelectOptionValue { Label = "Audio" });
+        await Page.Locator("#chunked-upload-input-7f31").SetInputFilesAsync(new FilePayload { Name = name, MimeType = "audio/wav", Buffer = audio });
+        var upload = Page.GetByRole(AriaRole.Button, new() { Name = "Upload", Exact = true });
+        await Expect(upload).ToBeEnabledAsync(new() { Timeout = 20_000 });
+        await upload.ClickAsync();
+        // The bytes go up from the page in pieces; leaving at once cuts them off. The unique name means
+        // the same-name question should never come, but it is answered if it does.
+        await Page.WaitForTimeoutAsync(800);
+        var keepBoth = Page.GetByRole(AriaRole.Button, new() { Name = "Keep Both" });
+        if (await keepBoth.CountAsync() > 0 && await keepBoth.IsVisibleAsync()) await keepBoth.ClickAsync();
+        await Page.WaitForTimeoutAsync(4_000);
+
+        await Page.GotoAsync($"{BaseUrl}/media-library");
+        var card = Page.Locator(".card").Filter(new() { HasTextString = name }).First;
+        await Expect(card).ToBeVisibleAsync(new() { Timeout = 180_000 });
+        await card.GetByTestId("show-waveform").First.ClickAsync();
+        await Expect(card.Locator("[id^='ws-']").First).ToBeVisibleAsync(new() { Timeout = 60_000 });
+        await card.Locator("[id^='afp-']").First.ClickAsync(new() { Button = MouseButton.Right });
+        await Page.GetByText("Open in editor", new() { Exact = true }).ClickAsync();
+        await Page.WaitForURLAsync("**/audio/**", new() { Timeout = 30_000 });
+        var editor = Page.Locator("#audio-editor");
+        await Expect(editor.GetByRole(AriaRole.Button, new() { Name = "Clear Regions" })).ToBeEnabledAsync(new() { Timeout = 90_000 });
+        return editor;
     }
 
     [Test]

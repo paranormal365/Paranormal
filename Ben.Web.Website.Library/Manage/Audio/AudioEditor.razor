@@ -54,7 +54,8 @@
             {
                 <span class="audio-hint__original" id="audio-original-chip" title="Playing the recording as it is, round every listening tool (B to switch back)">Original</span>
             }
-            <canvas class="audio-meter" id="audio-meter" @ref="_meterCanvas" aria-label="Level and frequencies of what is playing" role="img"></canvas>
+            <canvas class="audio-meter" id="audio-meter" @ref="_meterCanvas" aria-label="Level and frequencies of what is playing" role="img"
+                    title="What you're hearing: its frequencies and level, while it plays"></canvas>
         </span>
         @(_regionDrawMode
             ? "Click & drag to mark a region — right-click to play, save, or edit"
@@ -172,7 +173,7 @@
                             <span class="evp-lab__promo-mark" aria-hidden="true"><BenIcon Name="zap" /></span>
                             <div class="evp-lab__promo-text">
                                 <strong>Help build a smarter EVP detector.</strong>
-                                <span>Every Keep and Dismiss you make trains the next version.</span>
+                                <span>Every Keep and Dismiss you make is kept to teach the scanner which sounds are worth your time.</span>
                             </div>
                             <button type="button" class="btn btn-outline-primary btn-sm" @onclick="@(() => _showLearningInfo = true)">
                                 <BenIcon Name="info" Class="me-1" />How it works

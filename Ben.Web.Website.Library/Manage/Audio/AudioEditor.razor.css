@@ -700,7 +700,10 @@
     height: 36px;
     border: 1px solid var(--ben-line);
     border-radius: var(--ben-radius);
-    background: var(--ben-surface);
+    /* A flat baseline while nothing plays, so the idle meter reads as a meter at rest rather than an
+       empty box (seen in the 2.0.0 help pictures). The bars draw over it. */
+    background: linear-gradient(to top, transparent 5px, var(--ben-line-strong) 5px, var(--ben-line-strong) 6px, transparent 6px),
+                var(--ben-surface);
 }
 .audio-hint__original {
     padding: .1rem .5rem;

@@ -227,7 +227,7 @@ figcaption { color: var(--faint); font-size: 8.4pt; margin-top: .07in; }
     <h1>Everything <span class="accent-text">IsHaunted</span> does.</h1>
     <p class="lede">The complete product documentation — every screen, rule and safeguard, written for the people who use it.</p>
   </div>
-  <div class="facts"><div class="fact"><b>Documents</b><span>21</span></div><div class="fact"><b>Sections</b><span>6</span></div><div class="fact"><b>Updated</b><span>10/25/2026</span></div></div>
+  <div class="facts"><div class="fact"><b>Documents</b><span>21</span></div><div class="fact"><b>Sections</b><span>6</span></div><div class="fact"><b>Updated</b><span>10/27/2026</span></div></div>
   <div class="about"><b>About this document.</b> This is the in-product help, reproduced in full and unaltered — the same text the application serves to its users. It describes the software as built. It contains no business, market or financial information, and no usage figures.</div>
   <div class="foot"><span>ishaunted.com</span><span>Product documentation</span></div>
 </section>
@@ -4131,7 +4131,7 @@ videos you posted to the feed, evidence you attached to a case, equipment photos
 recordings and documents your Paranormal Platform sessions uploaded. A file is yours from the moment it
 arrives until you delete it.</p>
 <p>From each row you can download, share, replace or delete the file.</p>
-<p>Audio files also have a player. Right-click one and choose <strong>Open Full View</strong> to open the editor,
+<p>Audio files also have a player. Right-click one and choose <strong>Open in editor</strong> to open the editor,
 where you can mark regions, view a spectrogram, scan for EVPs, and save clips of what you find. See
 <a href="/help/using-the-audio-editor">Using the Audio Editor</a>.</p>
 <h2>Sharing</h2>
@@ -4183,60 +4183,169 @@ the session exists. The page tells you this. To remove the recording, delete the
   </div>
   <p>Every audio file on the site comes with a player. Click the waveform to play it — often that's all
 you need. When you want to listen closely — to find the three seconds that matter in a two-hour
-recording, and keep them — right-click the player and choose <strong>Open Full View</strong>.</p>
-<p><img alt="The audio editor in full view" src=".print-media/Ben.Web.Website/wwwroot/help/media/using-the-audio-editor/editor-overview.jpg" />
-<em>The full view: the waveform in the middle, the toolbar above it, and the panels you open from the
-toolbar stacked below.</em></p>
+recording, and keep them — right-click the player and choose <strong>Open in editor</strong>.</p>
+<p>The editor opens as a page of its own. Its address belongs to that recording, so you can bookmark it
+or send it to someone who can see the file. <strong>Back</strong> returns you to where you opened it from.
+To listen in a bigger player without leaving the list, choose <strong>Quick look</strong> instead.</p>
+<p><img alt="The audio editor" src=".print-media/Ben.Web.Website/wwwroot/help/media/using-the-audio-editor/editor-overview.jpg" />
+<em>The editor: the toolbar above, the waveform in the middle, and its panels in tabs underneath.</em></p>
+<h2>Finding your way around</h2>
+<p>The toolbar holds what you use most:</p>
+<ul>
+<li><strong>Select / Scrub:</strong> whether dragging across the waveform draws a region or moves the playhead.</li>
+<li><strong>Clear Regions:</strong> removes the regions you drew. Markers and saved clips stay.</li>
+<li><strong>Spectrogram:</strong> shows the recording's frequencies under the waveform.</li>
+<li><strong>Scan for EVP:</strong> scans with the settings you last chose. The arrow beside it picks Low, Medium
+  or High, or opens the fine-tuning, which is ticked when you've adjusted the settings yourself.</li>
+<li><strong>EVP Markers:</strong> the markers you kept and the candidates waiting for you.</li>
+<li><strong>Zoom out, fit, zoom in,</strong> and <strong>zoom to the selection</strong>, which makes the stretch you drew fill
+  the window.</li>
+<li><strong>Loop:</strong> plays a candidate, a marker or the selection round and round instead of stopping at its
+  end. Good for hearing a faint sound several times without reaching for the mouse.</li>
+<li><strong>?</strong> lists the keyboard shortcuts.</li>
+</ul>
+<p>Everything else is in three menus at the right of the toolbar:</p>
+<ul>
+<li><strong>View:</strong> what's drawn, such as the timeline, the spectrogram's labels, the mel scale, the voice
+  band, silence shading and the <strong>overview strip</strong>: the whole recording in a thin strip under the
+  waveform, with the part in view outlined, so you can drag around a long recording while zoomed in.</li>
+<li><strong>Listen:</strong> the playback speed, the listening tools, and <strong>Hear the original</strong>, which plays the
+  recording as it is, round every listening tool, so you can hear what the filters change (B on the
+  keyboard). An "Original" tag shows while it's on.</li>
+<li><strong>Edit:</strong> making a clip, exploring a stretch, and every change that makes a new file.</li>
+</ul>
+<p>Under the waveform, the panels sit in tabs: <strong>EVP Markers</strong>, <strong>Clips</strong>, <strong>Listen</strong>, <strong>Display</strong> and
+<strong>Edit</strong>. <strong>Hide panels</strong> folds them away when you want the room.</p>
 <h2>The two things to know first</h2>
 <p><strong>Nothing you do here changes the recording.</strong> Every edit creates a <em>new</em> file and leaves the
 original untouched. This is deliberate: a recording is evidence, and altered evidence is worth less
-than untouched evidence. Everything you create is listed under Saved Clips, and each one shows which
+than untouched evidence. Everything you create is listed in the <strong>Clips</strong> tab, and each one shows which
 part of the original it came from.</p>
 <p><strong>The listening tools change what you hear, not the file.</strong> The equalizer, the high-pass and
 low-pass filters, the compressor and the noise gate only affect the sound playing through your
 speakers right now. Turn them on to hear a whisper more clearly; the recording itself isn't changed.
-Edits are in a separate panel, and those are the ones that create a file.</p>
+Edits are in their own tab and menu, and those are the ones that create a file.</p>
 <p>Your listening-tool settings <em>are</em> remembered for each recording. If you find a filter that lifts a
 voice out of the hiss, it will still be on when you come back to that file. That also means that
-when you reopen a file, you aren't hearing the recording exactly as it was captured. The panel shows
-which tools are on.</p>
+when you reopen a file, you aren't hearing the recording exactly as it was captured. The <strong>Listen</strong>
+tab shows which tools are on.</p>
+<p><strong>There is one playback speed.</strong> Set it from <strong>Listen</strong> in the toolbar, the speed menu under the
+waveform, or the <strong>Listen</strong> tab. All three show the same speed, and so does the window you explore
+a region in. It only changes how the recording plays here. <strong>Edit ▸ Change speed</strong> makes a new file
+at a different speed.</p>
 <h2>Selecting a stretch</h2>
-<p>Drag across the waveform to draw a region. The edit panel shows its range, and Cut and Silence act
-on it.</p>
+<p>Drag across the waveform to draw a region. The <strong>Edit</strong> tab shows its range, and <strong>Cut</strong> and
+<strong>Silence selection</strong> act on it.</p>
 <p>You can have only one drawn region at a time, so drawing a second one replaces the first. Everything
 else on the waveform stays put: markers, clips you've already saved, and any silence the detector
 has shaded. None of those are selections, and an edit will never act on them.</p>
 <p>Right-click a region to open its menu: play just that part, explore it in its own window, save it
 as a file, rename it, or remove it.</p>
+<h2>Keyboard shortcuts</h2>
+<p>Once you're working through a list of candidates, the keyboard is quicker than the mouse. The keys
+work anywhere on the editor's page, except while you're typing in a box.</p>
+<table>
+<thead>
+<tr>
+<th>Key</th>
+<th>What it does</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Space</td>
+<td>Play or pause. With Loop on and a selection, play the selection round.</td>
+</tr>
+<tr>
+<td>← →</td>
+<td>Back or on a second; with Shift, five.</td>
+</tr>
+<tr>
+<td>[ then ]</td>
+<td>Start a selection at the playhead, then end it there.</td>
+</tr>
+<tr>
+<td>N, P</td>
+<td>Next or previous candidate: it's highlighted in the list and played.</td>
+</tr>
+<tr>
+<td>K</td>
+<td>Keep the highlighted candidate.</td>
+</tr>
+<tr>
+<td>D</td>
+<td>Dismiss the highlighted candidate, and move on to the next.</td>
+</tr>
+<tr>
+<td>Z</td>
+<td>Zoom to the selection, or to the highlighted candidate.</td>
+</tr>
+<tr>
+<td>F</td>
+<td>Fit the whole recording.</td>
+</tr>
+<tr>
+<td>L</td>
+<td>Loop on or off.</td>
+</tr>
+<tr>
+<td>B</td>
+<td>Hear the original, without the listening tools, and back again.</td>
+</tr>
+<tr>
+<td>Esc</td>
+<td>Clear the selection, or put the volume line away.</td>
+</tr>
+<tr>
+<td>?</td>
+<td>The list of shortcuts.</td>
+</tr>
+</tbody>
+</table>
 <h2>The spectrogram</h2>
-<p><strong>Show Spectrogram</strong> draws the recording's frequencies over time, above the waveform. It's the most
+<p>Beside the hint above the waveform, a small meter shows what you're hearing while it plays: the
+frequencies, and the level, with the loudest moment held for a second.</p>
+<p><strong>Spectrogram</strong> draws the recording's frequencies over time, under the waveform. It's the most
 useful tool for finding a voice: speech has a recognizable shape, and once you've seen a few, you'll
 spot them in the hiss much faster than you can hear them.</p>
 <p><img alt="The spectrogram, with the voice band marked" src=".print-media/Ben.Web.Website/wwwroot/help/media/using-the-audio-editor/spectrogram.jpg" />
 <em>The same recording shown as frequencies, using the mel scale and the Viridis colors. Most of this
 recording's energy is low; a voice shows up as brighter marks in the band from a few hundred hertz
 upward.</em></p>
-<p>Three controls sit next to it:</p>
+<p>The candidates and the markers you kept are marked on the spectrogram too, as tinted bands, so a
+sound in the list can be found in the picture.</p>
+<p>Its settings are in the <strong>Display</strong> tab, including its <strong>height</strong>: make it taller to see pitches
+further apart. The waveform keeps its own height, and the editor remembers your choice.</p>
 <ul>
 <li><strong>Resolution</strong> trades detail in time for detail in frequency. A low number gives a blurrier
   picture that shows exactly <em>when</em> something happened; a high number shows exactly <em>what pitch</em> it
   was, but blurs the timing. 512 or 1024 works well for most speech.</li>
 <li><strong>The color ramp</strong> only changes how easy the picture is to read. Try Viridis if Jet's blues and
   reds are hard on your eyes.</li>
-<li><strong>Mel</strong> compresses the high frequencies and spreads out the low ones, which is roughly how human
-  hearing works. With it on, speech fills much more of the picture.</li>
+<li><strong>Frequency scale</strong> spaces the frequencies out. <strong>Mel</strong> compresses the high frequencies and
+  spreads out the low ones, which is roughly how human hearing works; with it on, speech fills much
+  more of the picture. It is also in the <strong>View</strong> menu.</li>
+<li><strong>Frequency range</strong> shows only part of the range, for example 0 to 4000 Hz to look closely at a
+  voice. Leave the top at 0 to see everything.</li>
+<li><strong>Brightness</strong> and <strong>Contrast range</strong> help a quiet recording: raise the brightness, or narrow the
+  range to hide more of the background hiss.</li>
+<li><strong>Lift high frequencies</strong> makes the upper parts of a voice easier to see.</li>
+<li><strong>Window</strong> changes how each slice of sound is measured. Leave it on Hann unless you know you want
+  another.</li>
 </ul>
-<p>Right-click the spectrogram to show or hide the frequency labels.</p>
-<p>The site remembers all of this for each recording — the spectrogram, its resolution, its colors,
-the mel scale, the timeline, and all the listening tools. Open the file again next week and it looks
+<p><strong>View ▸ Voice band</strong> marks 300 to 3,400 Hz, the range the EVP scan listens in. <strong>View ▸
+Spectrogram labels</strong> shows or hides the frequency labels.</p>
+<p>The site remembers all of this for each recording: the spectrogram and its settings, the
+timeline, the voice band, the listening tools, the playback speed, how far you were zoomed in, and
+which tab was open. Open the file again next week and it looks
 and sounds the way you left it. Settings are only saved for your own recordings. On someone else's
 file you can set things up however you like, but the editor will tell you that it isn't saving them.</p>
 <h2>Silence detection</h2>
-<p><strong>Silence</strong> shades the parts of the recording that are close to silent, so you can see where
-nothing is happening and skip it. The shading isn't a selection, and no edit will act on it. Adjust
-the threshold if a room's background noise is being counted as sound.</p>
+<p><strong>View ▸ Detect silence</strong> shades the parts of the recording that are close to silent, so you can see where
+nothing is happening and skip it. The shading isn't a selection, and no edit will act on it. If a
+room's background noise is being counted as sound, change the threshold in the <strong>Display</strong> tab.</p>
 <h2>Scanning for EVP</h2>
-<p>The <strong>EVP Markers</strong> panel scans the recording for short bursts of speech-like sound and suggests
+<p>The <strong>EVP Markers</strong> tab scans the recording for short bursts of speech-like sound and suggests
 them as candidates. It looks for energy in the voice range that stands out from the sound around
 it, at three sensitivity levels:</p>
 <ul>
@@ -4246,28 +4355,144 @@ it, at three sensitivity levels:</p>
   sure something is there.</li>
 </ul>
 <p><img alt="The candidates a scan produced" src=".print-media/Ben.Web.Website/wwwroot/help/media/using-the-audio-editor/evp-candidates.jpg" />
-<em>Each candidate shows its score (with a bar for easy comparison), when it happens and how long it
-lasts. The four round buttons play it, adjust where it starts and ends, keep it, or dismiss it.</em></p>
+<em>Each candidate shows two readings, Stood out and Voice-like, when it happens and how long it lasts.
+The round buttons play it, zoom to it, explain it, adjust where it starts and ends, keep it, or
+dismiss it.</em></p>
 <p>A scan only makes suggestions; you make the decisions. Each candidate waits for you to <strong>keep</strong> it
 or <strong>dismiss</strong> it. Keeping one asks you for a label, because an unnamed marker isn't a finding
 anyone can use. Dismissed candidates are remembered, so a later scan won't suggest them again, and
 later scans never touch the markers you've kept.</p>
 <p>Press ▶ on a kept marker to play it. If the marker is a single moment rather than a stretch, you
 hear a couple of seconds on either side, which is usually what you need to tell a voice from a bump.</p>
+<h3>Stood out, and voice-like</h3>
+<p>Each candidate has two readings, each out of 100:</p>
+<ul>
+<li><strong>Stood out</strong>: how far the sound rose above the room around it. This is the scan's own score.</li>
+<li><strong>Voice-like</strong>: how much the sound is shaped like a human voice, measured by a second model after
+  the scan finds it. A knock or a hum reads low; a voice, or something shaped like one, reads high.</li>
+</ul>
+<p>Neither one says a sound <em>is</em> a voice or an EVP. They help you decide what to listen to first. Sort
+the list by <strong>Stood out</strong>, <strong>Voice-like</strong> or <strong>Time</strong>. Use <strong>Hide below voice-like</strong> to shorten the
+list while you work; at 0 it hides nothing, and it only changes what you see, never what the scan
+found. A candidate shows "not measured" when it was found before voice-likeness was measured, or on
+a server without the model; scan again to measure it.</p>
+<h3>Reviewing blind</h3>
+<p>If you'd rather not see the numbers while you decide, turn on <strong>Review blind</strong> on your profile.
+Pending candidates then show no readings and no Why?, and are listed in time order; everything
+comes back once you keep or dismiss one, or turn the setting off. Decisions made by ear alone are
+the most useful ones for teaching the scanner what a real find sounds like.</p>
+<p>When you place a marker by hand where the latest scan found nothing, it is noted as something the
+scan missed. Your marker is saved as usual.</p>
+<h3>Why a candidate was found</h3>
+<p>Every candidate has a <strong>Why?</strong> button (the ⓘ on its row). It opens its score in three parts:</p>
+<ul>
+<li><strong>Stood out</strong>, up to 50 points: how far it rose above the room around it. 20 dB or more counts in
+  full.</li>
+<li><strong>In the listening range</strong>, up to 30: how much of its sound was in the range the scan listens in.</li>
+<li><strong>Length</strong>, up to 20: speech-length sounds score highest; a click or a long stretch of talking
+  scores less.</li>
+</ul>
+<p>Under that are the measurements it was made from: how loud the room was, its loudest moment, how
+much its level moved (speech rises and falls, a hum holds steady), and how hiss-like it was. The
+score is how much a sound stood out, never how likely it is to be a voice.</p>
+<h3>Reading the lanes</h3>
+<p><img alt="The detector lane under the waveform" src=".print-media/Ben.Web.Website/wwwroot/help/media/using-the-audio-editor/detector-lane.jpg" />
+<em>The detector lane: the level in the listening range, the room's background below it, the dashed
+line a sound had to cross, and shading where the scan's gate opened.</em></p>
+<p><strong>View ▸ Detector lane</strong> shows what the scan saw along the whole recording, under the waveform: the
+level in the listening range, the room's background, the dashed line a sound had to cross, and
+shading wherever the scanner's gate opened. A shaded stretch with no candidate on it was too short
+to keep. <strong>View ▸ Level lane</strong> shows how loud the recording is at every moment, with the silence
+line when silence detection is on. Both are remembered for each recording.</p>
+<p>Above the waveform, a thin strip marks every candidate and kept marker across the whole recording;
+stronger candidates are bolder. Click one to go to it and hear it.</p>
+<h3>While a scan runs</h3>
+<p>A scan runs in the background, so you can keep listening and working while it goes. The button
+shows how far it has got, and the waveform is dimmed where the scan hasn't reached yet, turning
+solid as it goes. <strong>Stop</strong> ends it early; any candidates from an earlier scan stay where they were.</p>
+<p>You can leave the editor during a scan. It carries on, and when you come back the editor picks it
+up where it has got to. One recording is scanned at a time, and you can have up to three scans
+waiting or running.</p>
+<h3>Scanning several recordings at once</h3>
+<p>In the <strong>Media Library</strong>, press <strong>Scan several for EVP…</strong>, click the recordings you want (only
+recordings can be chosen), then <strong>Scan for EVP</strong>. Choose the settings, as in Fine-tune, and start.
+They are scanned one after another as one scan. Any recording that can't be scanned is listed with
+the reason, and the rest go ahead.</p>
+<p><strong>EVP scans</strong> (the link at the top of the Media Library) lists your scans from the last week: each
+recording, how far it has got, and what it found, with <strong>Open in editor</strong> on each and <strong>Stop</strong> while
+one runs. After changing a setting in Fine-tune, <strong>Rescan with these settings</strong> scans the recording
+again straight away.</p>
+<h3>Adjusting the scan</h3>
+<p><strong>Fine-tune</strong> opens every setting the scan uses, in four groups. Each box explains itself when you
+hold the pointer over it.</p>
+<ul>
+<li><strong>What counts as a sound:</strong> how far above the background a sound must rise, how far it must drop
+  before it counts as over, the shortest and longest sound, how close two sounds must be to join
+  into one, and how much audio to keep either side.</li>
+<li><strong>Where it listens:</strong> the range of pitches it pays attention to. 300 to 3,400 Hz is the
+  telephone range, where most speech sits. Lower the bottom for a deep voice, or lower the top to
+  shut out hiss. The voice band on the spectrogram follows this range. Moving the range mostly
+  changes how a sound is <em>scored</em> rather than whether it is found: the room's background is measured
+  in the same range, so a sound partly outside it can still stand out, but scores lower for "in the
+  listening range".</li>
+<li><strong>The room's background:</strong> how many seconds either side count as "the room", and how quiet a part
+  of that counts as its background. A shorter stretch keeps up with a room that changes, such as a
+  furnace starting; a longer one is steadier.</li>
+<li><strong>What reaches the list:</strong> the most candidates one scan may suggest, the lowest score worth
+  showing, how much of the list goes to lower-scoring sounds when a scan finds more than fit, and
+  how much a new sound must overlap one you've already kept or dismissed to count as the same.</li>
+</ul>
+<p>When a scan finds more than fit, a few places go to lower-scoring sounds spread through the
+recording, and each is marked <strong>sample</strong>. They're there on purpose: your rulings on sounds the
+scanner wasn't sure of teach it the most.</p>
+<p><strong>Save as preset…</strong> keeps the settings under a name of your own, such as "Basement". Your presets
+are yours alone. Pick one from the <strong>Preset</strong> list to use it again, or make it your default, so a
+recording you haven't scanned before starts from it. A recording you have scanned starts from the
+settings you last used on it.</p>
 <h3>A smarter EVP detector</h3>
 <p>Your choices also help the scanner improve, and <strong>How it works</strong> on the panel's banner explains how.
 Each scan saves a few measurements of every sound it finds, such as how far it rose above the
-background and how much of it was in the voice range. Each keep or dismiss is saved alongside those
-measurements, along with whether you played the candidate first. No audio is copied, and nothing
-records who made the choice. A future version will use this to rank candidates more the way
-investigators do. It will learn which sounds people tend to keep, not whether a sound is
+background, how much of it was in the voice range, how hiss-like it was, how much of it had a
+speaking voice's pitch, and how voice-like it read. Each keep or dismiss is saved alongside those
+measurements, along with whether you played the candidate first and whether you decided blind. A
+marker you place where the scan found nothing is saved as a miss. No audio is copied, and nothing
+records who made the choice.</p>
+<p>Nothing changes how the scan scores yet. A future version will use this to rank candidates more the
+way investigators do. It will learn which sounds people tend to keep, not whether a sound is
 paranormal. If you delete the recording, its measurements and choices are deleted with it.</p>
 <p><img alt="How the smarter detector works" src=".print-media/Ben.Web.Website/wwwroot/help/media/using-the-audio-editor/evp-smarter-detector.jpg" />
 <em>What a scan and a review save, and what they don't.</em></p>
+<h2>Scanning a field session</h2>
+<p>A session recorded with the phone app can be scanned for EVPs from its own page: <strong>Scan for EVPs</strong>
+sits under the recordings. Who can scan it:</p>
+<ul>
+<li><strong>The person who recorded it.</strong></li>
+<li><strong>The group it was sent to:</strong> the people on the investigation, and active members of the group.</li>
+<li><strong>An event's organizers and confirmed staff,</strong> when it was sent to their event or tour date.</li>
+<li><strong>The venue of a public place</strong> it was published to, once its recordings are approved for show.</li>
+</ul>
+<p>Anybody else, including visitors to the public archive and people with a shared link, can watch the
+session but not scan it.</p>
+<p><img alt="Scanning a field session" src=".print-media/Ben.Web.Website/wwwroot/help/media/using-the-audio-editor/session-scan.jpg" />
+<em>Scan for EVPs on a session's page: the copy you're working on, each recording with what it holds,
+and the EVPs pulled from the session.</em></p>
+<p><strong>The session itself never changes.</strong> Scanning works on a copy of each recording: your own, in your
+files, or your group's, in the group's files, where its members and the event's confirmed staff can
+open it. The card says which. Each copy has its own markers, so two people
+scanning the same session don't see each other's work. If you can work on more than one copy (your
+own and your group's, say), choose which at the top of the card.</p>
+<p><strong>Scan all</strong> scans every recording in the background. <strong>Open in editor</strong> opens one, with the
+session's date and the recording's name beside its title. A candidate heard after a question asked
+during the session (the app's EVP questions) is noted with that question, so you hear it as an
+answer to something.</p>
+<p>An EVP saved from a group's copy belongs to the group and says which session and recording it came
+from. <strong>EVPs pulled from this session</strong> lists those you can open. A group's list of sessions has a
+<strong>Scan for EVPs</strong> link on every session with sound.</p>
 <h2>Making a clip</h2>
 <p>Once you've found something, you'll want to share it. There are two ways to make a clip:</p>
 <ul>
-<li>Right-click a region and choose <strong>Create Audio File from Region</strong>.</li>
+<li>Draw a region and choose <strong>Edit ▸ Make a clip from the selection</strong>, or right-click the region
+  and choose <strong>Create Audio File from Region</strong>.</li>
 <li>From a marker, use the scissors on its row.</li>
 </ul>
 <p>Either way, you name the clip, pick a file type, and choose whether to boost the volume. <strong>Leave the
@@ -4277,7 +4502,9 @@ it, and a clip at the recording's original level can be almost impossible to hea
 clip, publish the original first. Otherwise, clipping would be a way around the recording's own
 privacy setting, so the site tells you instead of quietly doing it.</p>
 <h2>Editing</h2>
-<p>The <strong>Edit</strong> panel makes new files from the recording:</p>
+<p>The <strong>Edit</strong> menu and the <strong>Edit</strong> tab make new files from the recording. Cut, Silence selection,
+Normalize and Reverse run as soon as you choose them. The others open the <strong>Edit</strong> tab, where you
+choose how much:</p>
 <table>
 <thead>
 <tr>
@@ -4291,7 +4518,7 @@ privacy setting, so the site tells you instead of quietly doing it.</p>
 <td>Removes the selected region and joins the parts on either side</td>
 </tr>
 <tr>
-<td>Silence</td>
+<td>Silence selection</td>
 <td>Replaces the selected region with silence, keeping the length</td>
 </tr>
 <tr>
@@ -4320,14 +4547,30 @@ privacy setting, so the site tells you instead of quietly doing it.</p>
 </tr>
 </tbody>
 </table>
-<p>Cut and Silence use the region you drew. The other six apply to the whole file, whatever is
+<p>Cut and Silence selection use the region you drew. The other six apply to the whole file, whatever is
 selected.</p>
+<h3>Turning parts down</h3>
+<p><strong>Edit ▸ Turn parts down…</strong> puts a line across the waveform for the volume. Drag it down where
+something is too loud, such as a door slam right beside a faint sound. Double-click the line to add
+a point, and double-click a point to remove it. Playing follows the line as you draw it, so you hear
+the result before you keep it. <strong>Save as a new file</strong> keeps it; the original isn't changed. The line
+can only turn sound down; to bring a quiet stretch up, turn the rest down and then use Normalize.</p>
 <p>Edits work on recordings up to about half an hour long. For anything longer, you'll see a message
 instead, because the whole file has to be held in memory while it's edited. Cut out the part you
 want first — a clip saved from a region can be edited like any other file. The EVP scan has no
 such limit; long recordings are exactly what it's for.</p>
+<h2>How clips and edits are saved</h2>
+<p>Clips, edits and case mixes are saved as <strong>FLAC</strong>. FLAC keeps every sound exactly as it was, in a
+smaller file than WAV, and it plays in every current browser. After each save, the editor tells you
+the size and what it would have been as WAV, and the line stays at the top of the <strong>Clips</strong> tab.</p>
+<p>If you need a WAV for a program that can't open FLAC, tick <strong>Save as WAV instead of FLAC</strong> in the clip
+window or the <strong>Edit</strong> tab. It sounds the same; the file is just bigger. The site never saves a
+format such as MP3 that throws sound away, because the quiet sounds it drops are the ones an EVP
+search is listening for.</p>
+<p>Recordings from the phone app (.m4a) can be scanned, clipped and edited like any other.</p>
 <h2>Exploring a region</h2>
-<p><strong>Explore Region</strong> opens a single stretch on its own, loading only that audio. Everything inside is
+<p><strong>Edit ▸ Explore the selection</strong> (or <strong>Explore Region</strong> on a region's right-click menu) opens a
+single stretch on its own, loading only that audio. Everything inside is
 measured from the start of the region: the position readout, any note you add, and any smaller
 regions you draw. It's the best place to work on a few seconds without a two-hour waveform in the
 way.</p>
@@ -4351,6 +4594,8 @@ do this, and the Mixer button only appears if you have it.</p>
   see the recording sees them too.</li>
 <li><strong>Your editor setup</strong> belongs to the recording as well — the spectrogram, its settings, and all
   the listening tools — and is saved only if the recording is yours.</li>
+<li><strong>A copy of a field session's recording</strong> is a file in your files, or in your group's, and counts
+  where it is stored. Deleting the copy deletes its markers; the session is never touched.</li>
 </ul>
 </section>
 <section class="doc" id="your-equipment">
