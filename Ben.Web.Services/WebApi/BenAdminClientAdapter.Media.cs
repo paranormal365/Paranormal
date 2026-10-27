@@ -182,6 +182,9 @@ public sealed partial class BenAdminClientAdapter
         Guid fileId, Guid markerId, CancellationToken token = default)
         => _api.GetCandidateDetailAsync(fileId, markerId, token);
 
+    public Task<(VoiceModelStatusRecord? Status, string? Error)> GetVoiceModelStatusAsync(CancellationToken token = default)
+        => _api.GetVoiceModelStatusAsync(token);
+
     public Task<(EvpScanJobRecord? Job, string? Error)> StartScanJobAsync(
         Guid fileId, StartScanJobRequest request, CancellationToken token = default)
         => _api.StartScanJobAsync(fileId, request, token);

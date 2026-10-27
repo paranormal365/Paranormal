@@ -653,6 +653,10 @@ that sat under *Later, gated*; the gate now governs only the default sort (step 
    slider, **Hide below voice-like …**, default 0: the person's filter, applied client-side, never
    the model's. Nothing is hidden by default.
 5. **Wording.** Help and ad copy say it ranks how voice-shaped a sound is, never "likely EVP".
+**Ben, 10/27/2026: hold off on retraining.** VoiceNet is never trained on anything sent to the site;
+v1 is what runs. The stored readings and rulings are only a record until Ben says otherwise, and
+using anybody's recordings to train would need their permission first.
+
 6. **Gate before the default sort flips to voice-like first:** `tools/EvpLab score --voicenet` over
    Ben's real recordings (room tone, sessions with known talking) and the production Keep/Dismiss
    history must show kept-above-dismissed separation and under about one false alarm a minute on

@@ -194,7 +194,9 @@ public sealed class AudioMarkerController : BenControllerBase
         var userId = GetCurrentUserId();
         if (userId == Guid.Empty) return Unauthorized();
 
-        var candidates = request.Candidates ?? [];
+        // A voice reading is only ever this server's own measurement (phase 9b): one sent from outside
+        // is dropped rather than shown beside readings the model made.
+        var candidates = (request.Candidates ?? []).Select(c => c with { VoiceLikelihood = null }).ToList();
         if (EvpScanRecorder.CandidateProblem(candidates) is { } problem) return BadRequest(problem);
 
         await using var db = await _dbContextFactory.CreateDbContextAsync(ct);

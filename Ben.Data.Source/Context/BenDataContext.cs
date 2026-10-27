@@ -2720,6 +2720,7 @@ namespace Ben.Data.Source.Context
                     "([Scope] = 0 AND [ScopeAppUserId] IS NOT NULL AND [ScopeOrganizationId] IS NULL) "
                     + "OR ([Scope] = 1 AND [ScopeOrganizationId] IS NOT NULL AND [ScopeAppUserId] IS NULL)"));
             modelBuilder.Entity<FieldSessionAnalysisCopy>().Property(e => e.SourceSha256).HasMaxLength(64);
+            modelBuilder.Entity<EvpScan>().Property(e => e.VoiceModel).HasMaxLength(64);
             modelBuilder.Entity<FieldSessionAnalysisCopy>().Property(e => e.SourceRelativePath).HasMaxLength(500);
             modelBuilder.Entity<UploadFile>().Property(e => e.SourceClipPath).HasMaxLength(500);
             modelBuilder.Entity<UploadFile>()

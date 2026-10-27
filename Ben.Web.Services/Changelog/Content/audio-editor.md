@@ -32,6 +32,8 @@ it is hidden from everybody else, but still takes its number. No other sub-headi
 
 ## Unreleased
 
+- Each candidate now has a second reading, Voice-like: how much the sound is shaped like a human
+  voice. Sort by it, or hide lower readings while you review; nothing is hidden unless you ask.
 - Field sessions can be scanned for EVPs: by whoever recorded one, the group it was sent to, an
   event's organizers and confirmed staff, and the venue of a public place it was published to. Each
   works on their own copy of the recordings, or their group's, and the session itself never changes.

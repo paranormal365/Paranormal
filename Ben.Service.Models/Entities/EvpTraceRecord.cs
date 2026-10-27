@@ -39,3 +39,6 @@ public sealed record EvpCandidateDetailRecord(
 
 /// <summary>One part of a score: how many of its points it earned, and why, in a sentence.</summary>
 public sealed record EvpScoreTermRecord(string Name, double Points, double MaxPoints, string Sentence);
+
+/// <summary>Whether this server measures voice-likeness (phase 9b), with which model, or why not.</summary>
+public sealed record VoiceModelStatusRecord(bool Available, string? Model, string? Reason);

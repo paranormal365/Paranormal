@@ -248,6 +248,9 @@ public interface IWebApiClient
     /// <summary>Why the detector proposed a marker, or the server's reason it can't say.</summary>
     Task<(EvpCandidateDetailRecord? Detail, string? Error)> GetCandidateDetailAsync(Guid fileId, Guid markerId, CancellationToken token = default);
 
+    /// <summary>Whether scans here measure voice-likeness (phase 9b), or the server's reason it couldn't say.</summary>
+    Task<(VoiceModelStatusRecord? Status, string? Error)> GetVoiceModelStatusAsync(CancellationToken token = default);
+
     // ── Background scans (phase 6) ───────────────────────────────────────────
     /// <summary>Starts a background scan of one recording, or the server's reason it would not.</summary>
     Task<(EvpScanJobRecord? Job, string? Error)> StartScanJobAsync(

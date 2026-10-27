@@ -810,6 +810,10 @@ public sealed class WebApiClient : IWebApiClient
         Guid fileId, Guid markerId, CancellationToken token = default)
         => GetWithReasonAsync<EvpCandidateDetailRecord>($"/api/upload-files/{fileId}/audio-markers/{markerId}/detection", token);
 
+    /// <inheritdoc />
+    public Task<(VoiceModelStatusRecord? Status, string? Error)> GetVoiceModelStatusAsync(CancellationToken token = default)
+        => GetWithReasonAsync<VoiceModelStatusRecord>("/api/evp/voice-model", token);
+
     /// <summary>A GET whose refusal is a sentence worth showing; an unreadable answer is a failure.</summary>
     private async Task<(T? Result, string? Error)> GetWithReasonAsync<T>(string url, CancellationToken token) where T : class
     {

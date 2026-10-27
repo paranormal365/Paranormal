@@ -236,6 +236,15 @@ builder.Services.AddSingleton<Ben.Data.WebApi.Services.FieldSessions.FieldSessio
 // A scanner's own copy of a session recording (phase 9 of the audio plan); the session is only read.
 builder.Services.AddScoped<Ben.Data.WebApi.Services.FieldSessions.FieldSessionAnalysisCopies>();
 builder.Services.AddScoped<Ben.Data.WebApi.Services.Audio.Scanning.EvpQuestionContext>();
+// VoiceNet, the scan's second stage (phase 9b). Committed with the API; a publish that lost it still
+// scans, unmeasured, and says why (logged below and in the editor).
+var voiceModelPath = Path.Combine(builder.Environment.ContentRootPath,
+    Ben.Data.WebApi.Services.Audio.Voice.OnnxVoiceScorer.ModelRelativePath());
+var voiceModelPresent = File.Exists(voiceModelPath);
+builder.Services.AddSingleton<Ben.Data.WebApi.Services.Audio.Voice.IVoiceScorer>(_ => voiceModelPresent
+    ? new Ben.Data.WebApi.Services.Audio.Voice.OnnxVoiceScorer(voiceModelPath)
+    : new Ben.Data.WebApi.Services.Audio.Voice.NullVoiceScorer(
+        Ben.Data.WebApi.Services.Audio.Voice.NullVoiceScorer.MissingModelReason));
 // Author-written page markup is cleaned at the point it is stored, so what is in the database is
 // what will be rendered — see ICmsMarkupSanitizer for why provenance alone is not enough.
 builder.Services.AddSingleton<Ben.Data.WebApi.Services.ICmsMarkupSanitizer, Ben.Data.WebApi.Services.CmsMarkupSanitizer>();
@@ -801,6 +810,9 @@ builder.Services.AddAuthorization(options =>
 });
 
 var app = builder.Build();
+
+if (!voiceModelPresent)
+    app.Logger.LogWarning("EVP scans will not measure voice-likeness: no model at {Path}.", voiceModelPath);
 
 // Screening posture, said plainly in the log every start. A deploy that forgot the model file
 // finds out here and on /admin/feed-reports — not from a moderator asking why the queue grew.
