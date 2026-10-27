@@ -41,7 +41,12 @@ public class TestPostsTests : BenTestBase
     {
         await LoginAsync(MemberEmail, MemberPassword);
         await Page.GotoAsync($"{BaseUrl}/admin/test-posts");
-        await Page.WaitForLoadStateAsync(LoadState.NetworkIdle);
+
+        // The proof is being sent somewhere else. Waiting for the network to go quiet timed out on a
+        // busy run, because a live page's connection never does, and the checks below passed before
+        // the page had drawn anything (release e2e run, 10/27/2026).
+        await Page.WaitForURLAsync(url => !url.Contains("/admin/test-posts", StringComparison.OrdinalIgnoreCase),
+                                   new() { Timeout = 30_000 });
 
         await Expect(Page.Locator("[data-testid='hide-posts']")).ToHaveCountAsync(0);
         await Expect(Page.Locator("[data-testid='test-post-row']")).ToHaveCountAsync(0);
