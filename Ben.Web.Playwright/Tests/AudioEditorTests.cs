@@ -87,6 +87,9 @@ public class AudioEditorTests : BenTestBase
     /// <para>The library draws waveforms on demand instead, one tap at a time, and everything here
     /// belongs to the seat running the test.</para>
     /// </remarks>
+    /// <summary>The name the last recording was uploaded under, for a test that needs to find it again.</summary>
+    private string? _lastUploadedName;
+
     private async Task<bool> ReadyInFullViewAsync(byte[]? audio = null, string extension = "mp3", string mimeType = "audio/mpeg", bool openEditor = true)
     {
         await LoginAsync(UserEmail, UserPassword);
@@ -115,6 +118,7 @@ public class AudioEditorTests : BenTestBase
         // — and the editor will not save settings for a file that is not. A unique name also walks
         // past the same-name dialog rather than having to answer it.
         var uploadedName = $"editor-test-{Guid.NewGuid():N}.{extension}";
+        _lastUploadedName = uploadedName;
         await input.SetInputFilesAsync(new FilePayload
         {
             Name      = uploadedName,
@@ -764,6 +768,57 @@ public class AudioEditorTests : BenTestBase
         await filter.FillAsync("0");
         await Expect(rows).ToHaveCountAsync(3, new() { Timeout = 10_000 });
         await Expect(panel.Locator("#evp-voice-hidden")).ToHaveCountAsync(0);
+    }
+
+    /// <summary>
+    /// Several recordings chosen in the library are scanned as one batch, and the Scans page follows it
+    /// to the end, each recording with what it found (phase 10).
+    /// </summary>
+    [Test]
+    public async Task Several_recordings_scan_as_a_batch_and_the_scans_page_follows_it()
+    {
+        var names = new List<string>();
+        for (var i = 0; i < 2; i++)
+        {
+            if (!await ReadyInFullViewAsync(ScannableWav(), "wav", "audio/wav", openEditor: false))
+            {
+                Assert.Ignore("Could not upload a recording; see the output for where it gave up.");
+                return;
+            }
+            names.Add(_lastUploadedName!);
+        }
+
+        await Page.GotoAsync($"{BaseUrl}/media-library");
+        await Page.Locator("#library-scan-choose").ClickAsync(new() { Timeout = 30_000 });
+        await Expect(Page.Locator("#library-scan-start")).ToBeDisabledAsync();
+        foreach (var name in names)
+            await Page.GetByTestId("library-scan-pick").Filter(new() { HasTextString = name }).ClickAsync();
+        await Expect(Page.Locator("#library-scan-count")).ToHaveTextAsync("2 recordings chosen");
+        await Page.Locator("#library-scan-start").ClickAsync();
+
+        var dialog = Page.Locator("#batch-scan-dialog");
+        await Expect(dialog.Locator("#evp-scan-settings")).ToBeVisibleAsync(new() { Timeout = 15_000 });
+        await dialog.Locator("#batch-scan-start").ClickAsync();
+        await Expect(dialog.Locator("#batch-scan-outcome")).ToContainTextAsync("2 recordings are being scanned", new() { Timeout = 15_000 });
+        await dialog.Locator("#batch-scan-follow").ClickAsync();
+
+        await Page.WaitForURLAsync("**/audio/scans", new() { Timeout = 30_000 });
+        var scan = Page.GetByTestId("audio-scan").First;
+        await Expect(scan).ToContainTextAsync("2 recordings", new() { Timeout = 30_000 });
+        await Expect(scan.GetByTestId("audio-scan-status")).ToContainTextAsync("candidates to review", new() { Timeout = 120_000 });
+        var files = scan.GetByTestId("audio-scan-file");
+        await Expect(files).ToHaveCountAsync(2);
+        for (var i = 0; i < 2; i++)
+        {
+            await Expect(files.Nth(i)).ToContainTextAsync(names[i]);
+            await Expect(files.Nth(i)).ToContainTextAsync("3 candidates to review");
+        }
+
+        // Each one opens in the editor, and Back comes here.
+        await files.First.GetByTestId("audio-scan-open").ClickAsync();
+        await Page.WaitForURLAsync("**/audio/*?return=*", new() { Timeout = 30_000 });
+        await Expect(Page.Locator("#audio-editor")).ToBeVisibleAsync(new() { Timeout = 60_000 });
+        await Expect(Page.GetByTestId("audio-editor-back")).ToHaveAttributeAsync("href", "/audio/scans");
     }
 
     /// <summary>

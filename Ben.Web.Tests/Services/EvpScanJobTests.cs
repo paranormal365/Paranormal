@@ -490,4 +490,129 @@ public class EvpScanJobTests
         Assert.Contains(live, left);
         Assert.False(await db.EvpScanJobSegments.AnyAsync(s => s.EvpScanJobId == old));
     }
+
+    // ── Batches and the Scans page (phase 10) ─────────────────────────────────
+
+    private static async Task<Guid> SeedOwnedAsync(IDbContextFactory<BenDataContext> factory, Guid ownerId, string name,
+        string contentType = "audio/wav")
+    {
+        var id = Guid.NewGuid();
+        var bytes = AudioMarkerControllerTests.BuildScannableWav();
+        await using var db = await factory.CreateDbContextAsync();
+        db.UploadFiles.Add(new UploadFile
+        {
+            Id = id, UploadFileTypeId = Guid.NewGuid(), AppUserId = ownerId, FileName = name, StoredFileName = "s",
+            ContentType = contentType, FileSize = bytes.Length, FileData = bytes, DateCreated = DateTime.UtcNow, CreatedByAppUserId = ownerId,
+        });
+        await db.SaveChangesAsync();
+        return id;
+    }
+
+    [Fact]
+    public async Task A_batch_is_one_job_with_the_recordings_in_the_order_asked()
+    {
+        var factory = CreateFactory();
+        var me = Guid.NewGuid();
+        var ids = new[] { await SeedOwnedAsync(factory, me, "c.wav"), await SeedOwnedAsync(factory, me, "a.wav"), await SeedOwnedAsync(factory, me, "b.wav") };
+        var queue = new EvpScanQueue();
+
+        var answer = await Api(factory, me, queue).StartBatch(new StartBatchScanRequest(ids, EvpSensitivity.Medium), default);
+
+        var result = Assert.IsType<BatchScanResult>(Assert.IsType<AcceptedResult>(answer.Result).Value);
+        Assert.All(result.Items, i => Assert.True(i.Accepted, i.Refusal));
+        Assert.Equal(ids, result.Job!.Segments.Select(s => s.UploadFileId));
+        await using var db = await factory.CreateDbContextAsync();
+        var job = await db.EvpScanJobs.Include(j => j.Segments).SingleAsync();
+        Assert.Equal(ids, job.Segments.OrderBy(s => s.Order).Select(s => s.UploadFileId));
+
+        // And it runs: every recording scanned, in that order.
+        await Runner(factory).RunAsync(job.Id, default);
+        var done = await JobAsync(factory, job.Id);
+        Assert.Equal(EvpScanJobStatus.Done, done.Status);
+        Assert.All(done.Segments, s => Assert.Equal(EvpScanJobStatus.Done, s.Status));
+    }
+
+    [Fact]
+    public async Task A_batch_says_why_each_recording_it_could_not_take_was_left_out()
+    {
+        var factory = CreateFactory();
+        var me = Guid.NewGuid();
+        var good = await SeedOwnedAsync(factory, me, "good.wav");
+        var photo = await SeedOwnedAsync(factory, me, "photo.jpg", "image/jpeg");
+        var theirs = await SeedOwnedAsync(factory, Guid.NewGuid(), "theirs.wav");
+        var busy = await SeedOwnedAsync(factory, me, "busy.wav");
+        await SeedJobAsync(factory, busy, me);
+        var missing = Guid.NewGuid();
+
+        var answer = await Api(factory, me).StartBatch(
+            new StartBatchScanRequest([good, photo, theirs, busy, missing], EvpSensitivity.Medium), default);
+
+        var result = Assert.IsType<BatchScanResult>(Assert.IsType<AcceptedResult>(answer.Result).Value);
+        string? Why(Guid id) => result.Items.Single(i => i.FileId == id).Refusal;
+        Assert.Null(Why(good));
+        Assert.Equal("Not a recording.", Why(photo));
+        Assert.Equal("Not found, or not yours to scan.", Why(theirs));
+        Assert.Equal("Already being scanned.", Why(busy));
+        Assert.Equal("Not found, or not yours to scan.", Why(missing));
+        Assert.Equal([good], result.Job!.Segments.Select(s => s.UploadFileId));
+    }
+
+    [Fact]
+    public async Task A_batch_with_nothing_to_scan_starts_nothing_and_says_why()
+    {
+        var factory = CreateFactory();
+        var me = Guid.NewGuid();
+        var photo = await SeedOwnedAsync(factory, me, "photo.jpg", "image/jpeg");
+
+        var answer = await Api(factory, me).StartBatch(new StartBatchScanRequest([photo], EvpSensitivity.Medium), default);
+
+        var result = Assert.IsType<BatchScanResult>(Assert.IsType<OkObjectResult>(answer.Result).Value);
+        Assert.Null(result.Job);
+        Assert.False(Assert.Single(result.Items).Accepted);
+        await using var db = await factory.CreateDbContextAsync();
+        Assert.Empty(db.EvpScanJobs);
+    }
+
+    [Fact]
+    public async Task A_batch_is_held_to_the_same_limits_as_one_scan()
+    {
+        var factory = CreateFactory();
+        var me = Guid.NewGuid();
+        var file = await SeedOwnedAsync(factory, me, "a.wav");
+
+        var tooMany = Enumerable.Range(0, EvpScanJobController.MaxBatch + 1).Select(_ => Guid.NewGuid()).ToList();
+        Assert.IsType<BadRequestObjectResult>((await Api(factory, me).StartBatch(new StartBatchScanRequest(tooMany, EvpSensitivity.Medium), default)).Result);
+        Assert.IsType<BadRequestObjectResult>((await Api(factory, me).StartBatch(new StartBatchScanRequest([], EvpSensitivity.Medium), default)).Result);
+
+        for (var i = 0; i < EvpScanJobController.MaxLivePerPerson; i++)
+            await SeedJobAsync(factory, await SeedOwnedAsync(factory, me, $"{i}.wav"), me);
+        var full = await Api(factory, me).StartBatch(new StartBatchScanRequest([file], EvpSensitivity.Medium), default);
+        Assert.Equal(StatusCodes.Status429TooManyRequests, Assert.IsType<ObjectResult>(full.Result).StatusCode);
+    }
+
+    [Fact]
+    public async Task The_scans_list_shows_mine_by_name_with_their_settings()
+    {
+        var factory = CreateFactory();
+        var me = Guid.NewGuid();
+        var ids = new[] { await SeedOwnedAsync(factory, me, "kitchen.wav"), await SeedOwnedAsync(factory, me, "stairs.wav") };
+        var custom = EvpDetectionOptions.FromSensitivity(EvpSensitivity.Medium) with { ThresholdDb = 7.5 };   // between the presets
+        await Api(factory, me).StartBatch(new StartBatchScanRequest(ids, EvpSensitivity.Medium, custom), default);
+        var someoneElse = Guid.NewGuid();
+        await SeedJobAsync(factory, await SeedOwnedAsync(factory, someoneElse, "theirs.wav"), someoneElse);
+        var finished = await SeedJobAsync(factory, await SeedOwnedAsync(factory, me, "old.wav"), me,
+            EvpScanJobStatus.Done, finished: DateTime.UtcNow.AddHours(-1));
+
+        var all = Assert.IsAssignableFrom<IReadOnlyList<EvpScanSummaryRecord>>(Assert.IsType<OkObjectResult>(
+            (await Api(factory, me).Mine(null, default)).Result).Value);
+        var live = Assert.IsAssignableFrom<IReadOnlyList<EvpScanSummaryRecord>>(Assert.IsType<OkObjectResult>(
+            (await Api(factory, me).Mine("live", default)).Result).Value);
+
+        Assert.Equal(2, all.Count);
+        var batch = all.Single(s => s.Files.Count == 2);
+        Assert.Equal(["kitchen.wav", "stairs.wav"], batch.Files.Select(f => f.FileName));
+        Assert.Equal("Custom", batch.Settings);
+        Assert.Equal("Medium", all.Single(s => s.Job.Id == finished).Settings);
+        Assert.Equal(batch.Job.Id, Assert.Single(live).Job.Id);
+    }
 }

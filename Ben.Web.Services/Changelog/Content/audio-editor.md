@@ -32,6 +32,11 @@ it is hidden from everybody else, but still takes its number. No other sub-headi
 
 ## Unreleased
 
+- Scan several recordings for EVPs at once from the Media Library. Any that can't be scanned are
+  listed with the reason; the rest are scanned one after another.
+- EVP scans: a page listing your scans from the last week, each recording with its progress and
+  what it found, to open in the editor or stop.
+- Rescan with these settings, at the foot of Fine-tune.
 - Each candidate now has a second reading, Voice-like: how much the sound is shaped like a human
   voice. Sort by it, or hide lower readings while you review; nothing is hidden unless you ask.
 - Field sessions can be scanned for EVPs: by whoever recorded one, the group it was sent to, an

@@ -1,0 +1,184 @@
+@page "/audio/scans"
+@namespace Ben.Web.Website.Library.Manage.Audio
+@using Ben.Data.Common.Enums
+@using Ben.Service.Models.Entities
+@using Ben.Web.Services
+@using Ben.Web.Website.Library.Kit
+@using Ben.Web.Website.Library.Help
+@inject IBenAdminClient AdminClient
+@inject IBenUserState UserState
+@inject NavigationManager Nav
+@implements IDisposable
+
+@*
+    Your EVP scans (phase 10 of ProjectNotes/AudioEditor-EVP-Plan-2026-10-26.md): the ones waiting or
+    running, and those finished in the last week. Each recording in a scan has its own row, its own
+    progress and what it found, and opens in the editor. Watched every 3 seconds while anything runs.
+*@
+
+<PageTitle>EVP scans</PageTitle>
+
+<div class="container py-3" id="audio-scans">
+    <div class="d-flex align-items-baseline gap-3 mb-2">
+        <h3 class="mb-0">EVP scans</h3>
+        <HelpLink Slug="using-the-audio-editor" />
+        <a href="/media-library" class="small ms-auto">Media Library</a>
+    </div>
+    <p class="text-secondary small">
+        Scans run in the background, one recording after another, and you can leave this page while they do.
+        Finished scans are listed for a week; what they found stays on each recording.
+    </p>
+
+    @if (_needsSignIn)
+    {
+        <p class="text-muted">Sign in to see your scans.</p>
+        <a class="btn btn-primary btn-sm" href="@SignInLink.For(Nav)">Sign in</a>
+    }
+    else if (_scans is null && _error is null)
+    {
+        <BenLoaderOverlay Visible="true" Text="Reading your scans…" />
+    }
+    else if (_scans is null)
+    {
+        <div class="alert alert-warning">
+            @_error
+            <button type="button" class="btn btn-link btn-sm" @onclick="LoadAsync">Try again</button>
+        </div>
+    }
+    else if (_scans.Count == 0)
+    {
+        <p class="text-muted" id="audio-scans-empty">
+            No scans in the last week. Scan a recording from the editor, or several at once from the
+            <a href="/media-library">Media Library</a>.
+        </p>
+    }
+    else
+    {
+        @foreach (var scan in _scans)
+        {
+            var s = scan;
+            var job = s.Job;
+            <div class="card mb-3" data-testid="audio-scan" @key="job.Id">
+                <div class="card-header py-2 d-flex align-items-center gap-2 flex-wrap">
+                    <strong>@(s.Files.Count == 1 ? s.Files[0].FileName : $"{s.Files.Count} recordings")</strong>
+                    <span class="badge bg-body-secondary text-body-emphasis">@s.Settings</span>
+                    @if (s.FieldSessionUploadId is { } sessionId)
+                    {
+                        <a class="small" href="@($"/field-sessions/{sessionId}")">from a field session</a>
+                    }
+                    <span class="small text-muted">@job.CreatedUtc.ToViewerLocalTime(UserState).ToDisplayDateTime()</span>
+                    <span class="ms-auto small" data-testid="audio-scan-status">@StatusText(job)</span>
+                    @if (job.IsLive)
+                    {
+                        <button type="button" class="btn btn-outline-secondary btn-sm" data-testid="audio-scan-cancel"
+                                disabled="@_canceling.Contains(job.Id)" @onclick="@(() => CancelAsync(job.Id))">Stop</button>
+                    }
+                </div>
+                @if (job.IsLive)
+                {
+                    <div class="progress rounded-0" role="progressbar" aria-label="Scan progress"
+                         aria-valuenow="@job.Percent" aria-valuemin="0" aria-valuemax="100" style="height:4px">
+                        <div class="progress-bar" style="width:@(job.Percent)%"></div>
+                    </div>
+                }
+                <ul class="list-group list-group-flush">
+                    @for (var i = 0; i < job.Segments.Count && i < s.Files.Count; i++)
+                    {
+                        var segment = job.Segments[i];
+                        var file = s.Files[i];
+                        <li class="list-group-item d-flex align-items-center gap-3 flex-wrap" data-testid="audio-scan-file">
+                            <span class="small text-truncate" style="max-width:24rem" title="@file.FileName">@file.FileName</span>
+                            <span class="small text-muted">@SegmentText(segment)</span>
+                            <a class="btn btn-outline-secondary btn-sm ms-auto text-nowrap" data-testid="audio-scan-open"
+                               href="@($"/audio/{file.FileId}?return={Uri.EscapeDataString("/audio/scans")}")">Open in editor</a>
+                        </li>
+                    }
+                </ul>
+                @if (job.Error is { Length: > 0 } error && job.Status != EvpScanJobStatus.Done)
+                {
+                    <div class="card-footer small text-muted">@error</div>
+                }
+            </div>
+        }
+    }
+</div>
+
+@code {
+    private IReadOnlyList<EvpScanSummaryRecord>? _scans;
+    private string? _error;
+    private bool _needsSignIn;
+    private readonly HashSet<Guid> _canceling = [];
+    private CancellationTokenSource? _watching;
+
+    protected override async Task OnInitializedAsync()
+    {
+        if (!await UserState.WaitUntilAuthReadyAsync(RendererInfo.IsInteractive)) return;
+        if (!UserState.IsAuthenticated) { _needsSignIn = true; return; }
+        await LoadAsync();
+        Watch();
+    }
+
+    private async Task LoadAsync()
+    {
+        var (scans, error) = await AdminClient.GetMyScansAsync();
+        if (scans is not null) { _scans = scans; _error = null; }
+        else if (_scans is null) _error = error ?? "Your scans couldn't be read just now.";
+    }
+
+    /// <summary>Every 3 seconds while anything is waiting or running; quiet otherwise. Leaving the page stops it.</summary>
+    private void Watch()
+    {
+        var stop = _watching = new CancellationTokenSource();
+        _ = InvokeAsync(async () =>
+        {
+            using var timer = new PeriodicTimer(TimeSpan.FromSeconds(3));
+            try
+            {
+                while (await timer.WaitForNextTickAsync(stop.Token))
+                {
+                    if (_scans?.Any(s => s.Job.IsLive) != true) continue;
+                    await LoadAsync();
+                    StateHasChanged();
+                }
+            }
+            catch (OperationCanceledException) { }
+        });
+    }
+
+    private async Task CancelAsync(Guid jobId)
+    {
+        _canceling.Add(jobId);
+        var (_, error) = await AdminClient.CancelScanJobAsync(jobId);
+        if (error is not null) _error = error;
+        await LoadAsync();
+        _canceling.Remove(jobId);
+    }
+
+    private static string StatusText(EvpScanJobRecord job) => job.Status switch
+    {
+        EvpScanJobStatus.Queued   => "Waiting its turn",
+        EvpScanJobStatus.Running  => $"Scanning {job.Percent}%",
+        EvpScanJobStatus.Done     => Found(job.Segments.Sum(s => s.CandidateCount ?? 0)),
+        EvpScanJobStatus.Canceled => "Stopped",
+        _                         => "Stopped by a problem",
+    };
+
+    private static string SegmentText(EvpScanSegmentRecord segment) => segment.Status switch
+    {
+        EvpScanJobStatus.Queued   => "waiting",
+        EvpScanJobStatus.Running  => $"scanning {segment.Percent}%",
+        EvpScanJobStatus.Done     => Found(segment.CandidateCount ?? 0)
+                                     + (segment.TopScore is { } top ? $" · best {top:0}" : ""),
+        EvpScanJobStatus.Canceled => "stopped",
+        _                         => segment.Error ?? "couldn't be scanned",
+    };
+
+    private static string Found(int n) => n switch
+    {
+        0 => "Nothing stood out",
+        1 => "1 candidate to review",
+        _ => $"{n} candidates to review",
+    };
+
+    public void Dispose() => _watching?.Cancel();
+}

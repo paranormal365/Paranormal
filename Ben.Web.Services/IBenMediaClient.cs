@@ -206,6 +206,12 @@ public interface IBenMediaClient
     /// <summary>The caller's unfinished scan of this recording; (null, null) when there is none.</summary>
     Task<(EvpScanJobRecord? Job, string? Error)> GetLiveScanJobAsync(Guid fileId, CancellationToken token = default);
 
+    /// <summary>Scans several recordings in one background job; each comes back accepted or with its reason.</summary>
+    Task<(BatchScanResult? Result, string? Error)> StartBatchScanAsync(StartBatchScanRequest request, CancellationToken token = default);
+
+    /// <summary>The caller's scans, newest first; <paramref name="liveOnly"/> keeps the unfinished ones.</summary>
+    Task<(IReadOnlyList<EvpScanSummaryRecord>? Scans, string? Error)> GetMyScansAsync(bool liveOnly = false, CancellationToken token = default);
+
     /// <summary>Stops one of the caller's background scans.</summary>
     Task<(bool Deleted, string? Error)> CancelScanJobAsync(Guid jobId, CancellationToken token = default);
 

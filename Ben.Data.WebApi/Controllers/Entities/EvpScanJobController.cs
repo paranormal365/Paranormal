@@ -88,6 +88,122 @@ public sealed class EvpScanJobController(
         return Accepted($"/api/scan-jobs/{job.Id}", ToRecord(job));
     }
 
+    /// <summary>The most recordings one batch may ask for.</summary>
+    public const int MaxBatch = 100;
+
+    /// <summary>
+    /// Scans several recordings in one background job (phase 10): each is either in the job or
+    /// refused with its reason, never silently skipped.
+    /// </summary>
+    /// <remarks>
+    /// One job rather than one per recording: the three-at-once limit is per job, so a batch of ten
+    /// would otherwise be mostly refused. The worker takes the recordings in the order given.
+    /// </remarks>
+    [HttpPost("api/evp-scans")]
+    [Microsoft.AspNetCore.RateLimiting.EnableRateLimiting(Ben.Data.WebApi.Services.RateLimiting.AudioProcessingPolicy)]
+    public async Task<ActionResult<BatchScanResult>> StartBatch([FromBody] StartBatchScanRequest request, CancellationToken ct)
+    {
+        var userId = GetCurrentUserId();
+        if (userId == Guid.Empty) return Unauthorized();
+        if (!Enum.IsDefined(request.Sensitivity)) return BadRequest("Unknown sensitivity.");
+        var ids = (request.FileIds ?? []).Distinct().ToList();
+        if (ids.Count == 0) return BadRequest("Choose at least one recording to scan.");
+        if (ids.Count > MaxBatch) return BadRequest($"One batch can scan up to {MaxBatch} recordings. Choose fewer.");
+
+        var settings = request.Options ?? EvpDetectionOptions.FromSensitivity(request.Sensitivity);
+        if (settings.Validate() is { } problem) return BadRequest(problem);
+
+        await using var db = await dbContextFactory.CreateDbContextAsync(ct);
+        if (await db.EvpScanJobs.CountAsync(j => j.RequestedByAppUserId == userId && j.FinishedUtc == null, ct) >= MaxLivePerPerson)
+            return StatusCode(StatusCodes.Status429TooManyRequests,
+                $"You have {MaxLivePerPerson} scans waiting or running. Start another when one of them finishes.");
+
+        var files = await db.UploadFiles.AsNoTracking().Where(f => ids.Contains(f.Id))
+            .Select(f => new { f.Id, f.FileName, f.ContentType }).ToDictionaryAsync(f => f.Id, ct);
+        var running = (await db.EvpScanJobSegments.AsNoTracking()
+            .Where(s => ids.Contains(s.UploadFileId) && s.FinishedUtc == null)
+            .Select(s => s.UploadFileId).ToListAsync(ct)).ToHashSet();
+
+        var items = new List<BatchScanItem>();
+        var accepted = new List<Guid>();
+        foreach (var id in ids)
+        {
+            files.TryGetValue(id, out var file);
+            string? refusal =
+                file is null || !await FileAudienceAccess.CanViewFileAsync(db, id, userId, ct) ? "Not found, or not yours to scan."
+                : !(file.ContentType ?? "").StartsWith("audio", StringComparison.OrdinalIgnoreCase) ? "Not a recording."
+                : !decoder.CanDecode(file.ContentType, file.FileName) ? CompositeAudioDecoder.UnavailableFor(file.ContentType)
+                : running.Contains(id) ? "Already being scanned."
+                : null;
+            items.Add(new BatchScanItem(id, file?.FileName, refusal is null, refusal));
+            if (refusal is null) accepted.Add(id);
+        }
+        if (accepted.Count == 0) return Ok(new BatchScanResult(null, items));
+
+        var job = new EvpScanJob
+        {
+            Id = Guid.NewGuid(), RequestedByAppUserId = userId, Sensitivity = request.Sensitivity,
+            OptionsJson = JsonSerializer.Serialize(settings, EvpScanRecorder.OptionsJson),
+            Status = EvpScanJobStatus.Queued, CreatedUtc = DateTime.UtcNow,
+        };
+        for (var i = 0; i < accepted.Count; i++)
+            job.Segments.Add(new EvpScanJobSegment
+            {
+                Id = Guid.NewGuid(), UploadFileId = accepted[i], Order = i, Status = EvpScanJobStatus.Queued,
+            });
+        db.EvpScanJobs.Add(job);
+
+        try { await db.SaveChangesAsync(ct); }
+        catch (DbUpdateException)
+        {
+            // A scan of one of them started between the check and now; the whole batch is refused rather than half-made.
+            return Conflict("One of these recordings started being scanned just now. Try again.");
+        }
+
+        queue.Signal(job.Id);
+        return Accepted($"/api/scan-jobs/{job.Id}", new BatchScanResult(ToRecord(job), items));
+    }
+
+    /// <summary>
+    /// The person's scans for the Scans page, newest first: unfinished ones, and those finished in the
+    /// last week (older ones are swept). <paramref name="status"/> <c>live</c> keeps only unfinished.
+    /// </summary>
+    [HttpGet("api/evp-scans")]
+    public async Task<ActionResult<IReadOnlyList<EvpScanSummaryRecord>>> Mine([FromQuery] string? status, CancellationToken ct)
+    {
+        var userId = GetCurrentUserId();
+        if (userId == Guid.Empty) return Unauthorized();
+
+        await using var db = await dbContextFactory.CreateDbContextAsync(ct);
+        var jobs = db.EvpScanJobs.AsNoTracking().Include(j => j.Segments).Where(j => j.RequestedByAppUserId == userId);
+        if (string.Equals(status, "live", StringComparison.OrdinalIgnoreCase)) jobs = jobs.Where(j => j.FinishedUtc == null);
+        var list = await jobs.OrderByDescending(j => j.CreatedUtc).Take(50).ToListAsync(ct);
+
+        var fileIds = list.SelectMany(j => j.Segments).Select(s => s.UploadFileId).Distinct().ToList();
+        var names = await db.UploadFiles.AsNoTracking().Where(f => fileIds.Contains(f.Id))
+            .Select(f => new { f.Id, f.FileName, f.SourceFieldSessionUploadId })
+            .ToDictionaryAsync(f => f.Id, ct);
+
+        return Ok(list.Select(j => new EvpScanSummaryRecord(
+            ToRecord(j),
+            SettingsName(j),
+            j.FieldSessionUploadId,
+            j.Segments.OrderBy(s => s.Order).Select(s => names.TryGetValue(s.UploadFileId, out var f)
+                ? new EvpScanSummaryFile(f.Id, f.FileName, f.SourceFieldSessionUploadId)
+                : new EvpScanSummaryFile(s.UploadFileId, "A deleted recording", null)).ToList())).ToList());
+    }
+
+    private static string SettingsName(EvpScanJob job)
+    {
+        try
+        {
+            return JsonSerializer.Deserialize<EvpDetectionOptions>(job.OptionsJson, EvpScanRecorder.OptionsJson) is { } options
+                ? EvpDetectionOptions.PresetName(options) ?? "Custom"
+                : job.Sensitivity.ToString();
+        }
+        catch (JsonException) { return job.Sensitivity.ToString(); }
+    }
+
     [HttpGet("api/scan-jobs/{id:guid}")]
     public async Task<ActionResult<EvpScanJobRecord>> Get(Guid id, CancellationToken ct)
     {

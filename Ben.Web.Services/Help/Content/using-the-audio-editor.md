@@ -221,6 +221,18 @@ You can leave the editor during a scan. It carries on, and when you come back th
 up where it has got to. One recording is scanned at a time, and you can have up to three scans
 waiting or running.
 
+### Scanning several recordings at once
+
+In the **Media Library**, press **Scan several for EVP…**, click the recordings you want (only
+recordings can be chosen), then **Scan for EVP**. Choose the settings, as in Fine-tune, and start.
+They are scanned one after another as one scan. Any recording that can't be scanned is listed with
+the reason, and the rest go ahead.
+
+**EVP scans** (the link at the top of the Media Library) lists your scans from the last week: each
+recording, how far it has got, and what it found, with **Open in editor** on each and **Stop** while
+one runs. After changing a setting in Fine-tune, **Rescan with these settings** scans the recording
+again straight away.
+
 ### Adjusting the scan
 
 **Fine-tune** opens every setting the scan uses, in four groups. Each box explains itself when you

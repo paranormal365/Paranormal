@@ -37,3 +37,27 @@ public sealed record EvpScanSegmentRecord(
 /// <summary>Starts a background scan of one recording.</summary>
 /// <param name="Options">The settings to scan with; null means the sensitivity's preset.</param>
 public sealed record StartScanJobRequest(EvpSensitivity Sensitivity, EvpDetectionOptions? Options = null);
+
+/// <summary>Scan several recordings in one background job (phase 10).</summary>
+public sealed record StartBatchScanRequest(
+    IReadOnlyList<Guid> FileIds, EvpSensitivity Sensitivity, EvpDetectionOptions? Options = null);
+
+/// <summary>What happened to each recording asked for: in the job, or why not.</summary>
+/// <param name="Job">The job every accepted recording is in; null when none was.</param>
+public sealed record BatchScanResult(EvpScanJobRecord? Job, IReadOnlyList<BatchScanItem> Items);
+
+/// <param name="Accepted">True when the recording is in the job.</param>
+/// <param name="Refusal">Why it is not, in a sentence.</param>
+public sealed record BatchScanItem(Guid FileId, string? FileName, bool Accepted, string? Refusal);
+
+/// <summary>One of the person's scans for the Scans page: the job, which settings, and each recording by name.</summary>
+/// <param name="Settings">"Low", "Medium", "High", or "Custom".</param>
+/// <param name="FieldSessionUploadId">Set when the scan was of a field session's recordings.</param>
+public sealed record EvpScanSummaryRecord(
+    EvpScanJobRecord Job,
+    string Settings,
+    Guid? FieldSessionUploadId,
+    IReadOnlyList<EvpScanSummaryFile> Files);
+
+/// <param name="SessionId">For a copy of a session recording, the session it came from (the editor opens it there).</param>
+public sealed record EvpScanSummaryFile(Guid FileId, string FileName, Guid? SessionId);
