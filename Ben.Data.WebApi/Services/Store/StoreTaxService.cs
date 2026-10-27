@@ -140,7 +140,7 @@ public sealed class StripeTaxService(IOptions<StripeOptions> options, ILogger<St
     {
         // The line items are a separate list; the SDK's auto-pager walks every page of it.
         var lines = new Dictionary<string, long>();
-        await foreach (var line in new StripeTax.CalculationService(Stripe).ListLineItemsAutoPagingAsync(
+        await foreach (var line in new StripeTax.CalculationLineItemService(Stripe).ListAutoPagingAsync(
                            calculation.Id, new StripeTax.CalculationLineItemListOptions { Limit = 100 }, cancellationToken: ct))
         {
             if (line.Reference is { } reference) lines[reference] = line.AmountTax;

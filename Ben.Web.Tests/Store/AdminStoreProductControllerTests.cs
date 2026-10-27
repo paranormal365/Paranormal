@@ -245,7 +245,7 @@ public sealed class AdminStoreProductControllerTests : IAsyncLifetime
         Ok(await Controller().CreateVariant(p.Id, new SaveStoreVariantRequest("A1", 10m, 12m, true, false, 1, [black, small]), default));
         Assert.Equal("A variant with Black / Small already exists.",
             Refusal(await Controller().CreateVariant(p.Id, new SaveStoreVariantRequest("A2", 10m, null, true, false, 1, [small, black]), default)));
-        Assert.Equal(1, other.Variants.Count);
+        Assert.Single(other.Variants);
     }
 
     [Fact]

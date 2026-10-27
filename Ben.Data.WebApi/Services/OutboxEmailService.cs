@@ -1,4 +1,3 @@
-using Microsoft.Extensions.Options;
 using Ben.Data.Common;
 using Ben.Data.Common.Interfaces;
 using Ben.Data.Common.Mail;

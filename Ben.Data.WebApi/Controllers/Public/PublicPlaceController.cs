@@ -317,33 +317,33 @@ public sealed record PublicPlaceResponse(
     PlaceSummary Summary,
     IReadOnlyList<PublicPlaceSessionRow>? Sessions = null,
     IReadOnlyList<PlaceEvidenceRow>? EventEvidence = null,
-    /// <summary>Cases any group has published at this place (2026-09-17). Trailing and optional,
-    /// so an older client simply does not draw the section.</summary>
+    // <summary>Cases any group has published at this place (2026-09-17). Trailing and optional,
+    // so an older client simply does not draw the section.</summary>
     IReadOnlyList<PublicPlaceCaseRow>? Cases = null,
-    /// <summary>The latest posts about this place (2026-09-17), newest first.</summary>
+    // <summary>The latest posts about this place (2026-09-17), newest first.</summary>
     IReadOnlyList<FeedPostRecord>? Posts = null,
-    /// <summary>Whether this reader may add one. False for a visitor and at a private residence.</summary>
+    // <summary>Whether this reader may add one. False for a visitor and at a private residence.</summary>
     bool CanPost = false,
-    /// <summary>
-    /// Files people added straight to this place, with no investigation behind them (item 250).
-    /// </summary>
-    /// <remarks>
-    /// Trailing and optional, like every addition before it, so a client built before this simply
-    /// does not draw the section. Distinct from <c>EventEvidence</c>, which is what a guest
-    /// offered at an event — same place, different route, and the page says which.
-    /// </remarks>
+    // <summary>
+    // Files people added straight to this place, with no investigation behind them (item 250).
+    // </summary>
+    // <remarks>
+    // Trailing and optional, like every addition before it, so a client built before this simply
+    // does not draw the section. Distinct from <c>EventEvidence</c>, which is what a guest
+    // offered at an event — same place, different route, and the page says which.
+    // </remarks>
     IReadOnlyList<Ben.Service.Models.Entities.PlaceAddedEvidenceRow>? AddedEvidence = null,
-    /// <summary>Whether this reader may add a file here. False for a visitor and off a public location.</summary>
+    // <summary>Whether this reader may add a file here. False for a visitor and off a public location.</summary>
     bool CanAddEvidence = false,
-    /// <summary>
-    /// What the evidence here adds up to across every route (item 250). Trailing and optional.
-    /// </summary>
+    // <summary>
+    // What the evidence here adds up to across every route (item 250). Trailing and optional.
+    // </summary>
     Ben.Service.Models.Entities.PlaceEvidenceFigures? Figures = null,
-    /// <summary>
-    /// Pictures OF the building — the grounds, the rooms, the frontage (item 250). Never evidence,
-    /// never voted on, never counted. What makes the page worth reading for somebody who has never
-    /// been.
-    /// </summary>
+    // <summary>
+    // Pictures OF the building — the grounds, the rooms, the frontage (item 250). Never evidence,
+    // never voted on, never counted. What makes the page worth reading for somebody who has never
+    // been.
+    // </summary>
     IReadOnlyList<Ben.Service.Models.Entities.PlaceAddedEvidenceRow>? Pictures = null);
 
 /// <summary>

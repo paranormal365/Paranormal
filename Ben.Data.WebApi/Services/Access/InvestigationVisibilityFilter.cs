@@ -89,7 +89,7 @@ public static class InvestigationVisibilityFilter
     /// <remarks>
     /// <para>Ben, 2026-09-17: an account that pays nothing shares what it finds at a public place
     /// with everyone. So at a landmark the free lane starts at <see cref="InvestigationVisibility.Public"/>
-    /// rather than at fellow investigators, and <see cref="Reject"/> refuses to narrow it.</para>
+    /// rather than at fellow investigators, and <see cref="Reject(InvestigationVisibility, Place?)"/> refuses to narrow it.</para>
     ///
     /// <para><b>A private residence is untouched.</b> It stays with the group whatever the plan says.
     /// Publishing somebody's home is theirs to agree to, and a missing subscription is not their

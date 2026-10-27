@@ -463,7 +463,7 @@ public sealed class FieldSessionPublishController : BenControllerBase
             .Where(f => f.FieldSessionUploadId == session.Id && f.BundleEntryPath != null)
             .Select(f => new { f.BundleEntryPath, f.ContentType, f.RelativePath })
             .ToListAsync(ct);
-        var files = own.Select(f => (f.StoragePath, f.ContentType, Entry: (string?)null)).ToList();
+        var files = own.Select(f => (StoragePath: (string?)f.StoragePath, ContentType: (string?)f.ContentType, Entry: (string?)null)).ToList();
         string? bundlePath = null;
         if (inBundle.Count > 0)
         {

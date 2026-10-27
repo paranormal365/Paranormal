@@ -581,16 +581,7 @@ internal static class EvpDetector
     }
 
     /// <summary>
-    /// Blends three independent signals. None is decisive alone: prominence alone promotes any
-    /// loud bang, band ratio alone promotes steady tonal hum, and duration alone means nothing.
-    /// </summary>
-    /// <remarks>
-    /// The weights are hand-set. Item 253 is the plan for letting reviewers' rulings re-fit them;
-    /// until then this is <see cref="Version"/> 1, and it reads nothing but its argument so the
-    /// stored features always reproduce the stored score.
-    /// </remarks>
-    /// <summary>
-    /// <see cref="Score"/>'s three terms, in points, with what each measured in a plain sentence
+    /// <see cref="Score(EvpFeatures, EvpScoreWeights)"/>'s three terms, in points, with what each measured in a plain sentence
     /// (phase 8). The weights and the shape are the same; <c>Explain_terms_sum_to_the_score</c>
     /// holds them together.
     /// </summary>
@@ -630,6 +621,15 @@ internal static class EvpDetector
         _ => 0.2,
     };
 
+    /// <summary>
+    /// Blends three independent signals. None is decisive alone: prominence alone promotes any
+    /// loud bang, band ratio alone promotes steady tonal hum, and duration alone means nothing.
+    /// </summary>
+    /// <remarks>
+    /// The weights are hand-set. Item 253 is the plan for letting reviewers' rulings re-fit them;
+    /// until then this is <see cref="Version"/> 1, and it reads nothing but its argument so the
+    /// stored features always reproduce the stored score.
+    /// </remarks>
     internal static float Score(EvpFeatures features) => Score(features, EvpScoreWeights.BuiltIn);
 
     /// <summary>The score's three parts, each 0–1, before weighting (phase 13: what a refit weighs).</summary>

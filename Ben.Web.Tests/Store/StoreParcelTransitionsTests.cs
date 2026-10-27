@@ -76,7 +76,7 @@ public sealed class StoreParcelTransitionsTests : IAsyncLifetime
         var (mailer, alerts) = Parts();
         var payments = new StoreOrderPayments(_sqlite.Factory, _stripe, _tax, mailer, alerts, NullLogger<StoreOrderPayments>.Instance);
         var refunds = new StoreRefundService(_sqlite.Factory, _stripe, _tax, mailer, alerts, NullLogger<StoreRefundService>.Instance);
-        return new StoreOrderTransitions(_sqlite.Factory, mailer, alerts, refunds, payments);
+        return new StoreOrderTransitions(_sqlite.Factory, mailer, refunds, payments);
     }
 
     private static StoreShipmentInfo Usps(string number = "9400 1111") => new(StoreCarriers.Usps, number, null, null);

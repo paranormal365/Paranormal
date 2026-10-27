@@ -11,7 +11,7 @@ namespace Ben.Data.WebApi.Services.Canvas;
 /// server can refuse the save that a crafted request makes anyway — so the rule lives here.</para>
 ///
 /// <para><b>Added, not authored.</b> A piece belongs to whoever first saved it; that is recorded as the board is
-/// written and passed in as <paramref name="owned"/>. Somebody adding to a board may rework and remove their own
+/// written and passed in as <c>owned</c>. Somebody adding to a board may rework and remove their own
 /// pieces — a note they put up is theirs to take down — and must leave everybody else's exactly as they are, position
 /// and all. Moving another person's card is changing their board.</para>
 ///
