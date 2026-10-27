@@ -30,6 +30,12 @@
     color: var(--ben-ink);
 }
 
+/* A session recording says which session, which recording and whose copy, beside its name. */
+.audio-editor-page__from {
+    min-width: 0;
+    color: var(--ben-ink-muted);
+}
+
 .audio-editor-page__version {
     font-size: .75rem;
     color: var(--ben-ink-faint);

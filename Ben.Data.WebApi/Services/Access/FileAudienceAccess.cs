@@ -134,6 +134,13 @@ public static class FileAudienceAccess
                 .AnyAsync(m => m.OrganizationId == ownerOrg && m.AppUserId == userId && m.IsActive, ct))
             return true;
 
+        // A group's copy of a field session's recording, or a clip of one (phase 9): seen by whoever
+        // may scan that session for that group, which takes in an event's confirmed staff who are
+        // not members.
+        if (file.OwnerOrganizationId is { } copyGroup && file.SourceFieldSessionUploadId is { } fromSession
+            && await FieldSessionAnalysisAccess.MayViewGroupCopyAsync(db, fromSession, copyGroup, userId, ct))
+            return true;
+
         if (await db.UploadFileShares.AsNoTracking().AnyAsync(s =>
                 s.UploadFileId == uploadFileId && s.IsActive &&
                 (s.TargetType == ShareTargetType.Public

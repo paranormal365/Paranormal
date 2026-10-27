@@ -12,6 +12,7 @@ using Ben.Data.WebApi.Services.Audio;
 using Ben.Data.WebApi.Services;
 using Ben.Data.WebApi.Services.Billing;
 using Microsoft.AspNetCore.RateLimiting;
+using Microsoft.Extensions.DependencyInjection;
 
 namespace Ben.Data.WebApi.Controllers.Entities;
 
@@ -210,11 +211,21 @@ public sealed class UploadFileAudioClipController : BenControllerBase
         if (!string.IsNullOrWhiteSpace(request.Label))
             newName = $"{request.Label}{outExtension}";
 
+        // A clip of a group's copy of a field session's recording is the group's EVP, kept with the
+        // group's copy (phase 9): an organizer saving one for the event saves it for the group.
+        var forGroup = source.SourceFieldSessionUploadId is not null && source.OwnerOrganizationId is not null
+            ? source.OwnerOrganizationId
+            : null;
+
         var entity = new UploadFile
         {
             Id                 = Guid.NewGuid(),
             UploadFileTypeId   = request.UploadFileTypeId,
-            AppUserId          = userId,
+            AppUserId          = forGroup is null ? userId : null,
+            OwnerOrganizationId = forGroup,
+            // Where it came from, carried down: "from session 10/12/2026, audio-002 at 12:34".
+            SourceFieldSessionUploadId = source.SourceFieldSessionUploadId,
+            SourceClipPath     = source.SourceClipPath,
             FileName           = newName,
             StoredFileName     = $"{Guid.NewGuid()}{outExtension}",
             ContentType        = outContentType,
@@ -235,11 +246,20 @@ public sealed class UploadFileAudioClipController : BenControllerBase
         // A clip is stored under the person, so it is the person's own allowance that has to cover
         // it — asked BEFORE the bytes are written, and answered with the reason. Members of a paid
         // group are not capped (the guard says why).
-        if (await AccountStorageGuard.WhyCannotStoreAsync(db, userId, clippedBytes.Length, ct) is { } full)
+        // A group's clip answers to the group's plan instead: a lapsed one adds nothing new.
+        if (forGroup is { } group)
+        {
+            if (HttpContext?.RequestServices.GetService<SubscriptionLimitGuard>() is { } limits
+                && await limits.WhyReadOnlyAsync(group, ct) is { } readOnly)
+                return Conflict(readOnly);
+        }
+        else if (await AccountStorageGuard.WhyCannotStoreAsync(db, userId, clippedBytes.Length, ct) is { } full)
             return StatusCode(StatusCodes.Status413PayloadTooLarge, full);
 
         // Write clip to disk before committing the DB record
-        var relativePath = _fileStorage.UserFilePath(userId, entity.StoredFileName);
+        var relativePath = forGroup is { } owner
+            ? _fileStorage.OrgFilePath(owner, $"session-copies/{entity.StoredFileName}")
+            : _fileStorage.UserFilePath(userId, entity.StoredFileName);
         using (var ms = new MemoryStream(clippedBytes))
             await _fileStorage.WriteAsync(relativePath, ms, ct);
         entity.StoragePath = relativePath;

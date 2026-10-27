@@ -21,6 +21,12 @@ namespace Ben.Data.Source.Entities
         public Guid Id { get; set; }
         public Guid RequestedByAppUserId { get; set; }
 
+        /// <summary>
+        /// The field session whose recordings this job scans, so its page can find the scan that
+        /// is running (phase 9). No foreign key, the same as the copies.
+        /// </summary>
+        public Guid? FieldSessionUploadId { get; set; }
+
         /// <summary>The preset picked; <see cref="OptionsJson"/> is what actually runs.</summary>
         public EvpSensitivity Sensitivity { get; set; }
 

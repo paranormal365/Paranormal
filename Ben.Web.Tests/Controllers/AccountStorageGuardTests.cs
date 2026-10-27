@@ -413,6 +413,50 @@ public sealed class AccountStorageGuardTests
         Assert.Null(await AskAsync(f, user, Megabyte));      // contributed, so not charged
     }
 
+    /// <summary>
+    /// A session sent as one .ben is its own document: the recordings are inside it and have no rows
+    /// of their own. Published or sent to an event, it earned its disk like any other session.
+    /// </summary>
+    /// <remarks>Charged in full until 10/27/2026: the exemption only looked at per-recording rows.</remarks>
+    [Theory]
+    [InlineData(true, false)]
+    [InlineData(false, true)]
+    public async Task A_bundled_session_counts_only_while_it_is_kept_private(bool published, bool counted)
+    {
+        var f = CreateFactory();
+        var user = await AddUserAsync(f);
+        await StoreBundleAsync(f, user, AccountStorageGuard.DefaultFreeMegabytes * Megabyte, published);
+
+        var refusal = await AskAsync(f, user, Megabyte);
+        Assert.Equal(counted, refusal is not null);
+    }
+
+    private static async Task StoreBundleAsync(IDbContextFactory<BenDataContext> f, Guid userId, long bytes, bool published)
+    {
+        await using var db = await f.CreateDbContextAsync();
+        var now = DateTime.UtcNow;
+        var bundleId = Guid.NewGuid();
+        db.UploadFiles.Add(new UploadFile
+        {
+            Id = bundleId, FileName = "session.ben", ContentType = "application/zip",
+            StoragePath = $"users/{userId}/field-sessions/{bundleId}.ben", FileSize = bytes,
+            AppUserId = userId, DateCreated = now, CreatedByAppUserId = userId,
+        });
+        var sessionId = Guid.NewGuid();
+        db.FieldSessionUploads.Add(new FieldSessionUpload
+        {
+            Id = sessionId, SubmittedByAppUserId = userId, DocumentUploadFileId = bundleId, IsBundle = true,
+            PublishedAtUtc = published ? now : null, StartedAt = now, DeviceModel = "iPhone 17",
+            DateCreated = now, CreatedByAppUserId = userId,
+        });
+        db.FieldSessionUploadFiles.Add(new FieldSessionUploadFile
+        {
+            Id = Guid.NewGuid(), FieldSessionUploadId = sessionId, BundleEntryPath = "media/audio-001.m4a",
+            RelativePath = "media/audio-001.m4a", DateCreated = now, CreatedByAppUserId = userId,
+        });
+        await db.SaveChangesAsync();
+    }
+
     // ── the setting ──────────────────────────────────────────────────────────
 
     [Fact]

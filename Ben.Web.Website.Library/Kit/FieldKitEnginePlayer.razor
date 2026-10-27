@@ -356,6 +356,13 @@
                 }
             </div>
 
+            @* Scanning for EVPs (phase 9 of the audio plan): never through a share link. On the
+               public archive it shows only to somebody who may scan, which is the place's venue. *@
+            @if (!Shared)
+            {
+                <SessionEvpScanPanel SessionId="@SessionId" QuietWhenRefused="@Public" />
+            }
+
             @if (!Anonymous)
             {
                 <FieldSessionSharePanel SessionId="@SessionId" Files="@_session.Files" />

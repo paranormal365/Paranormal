@@ -52,6 +52,12 @@
         <a href="@BackHref" class="audio-editor-page__back" data-testid="audio-editor-back">← Back</a>
         <span class="vr"></span>
         <h1 class="audio-editor-page__title text-truncate" title="@_source.FileName">@_source.FileName</h1>
+        @if (_fromSession is not null)
+        {
+            <span class="audio-editor-page__from text-muted small text-truncate" data-testid="audio-editor-from-session">
+                @_fromSession
+            </span>
+        }
         <HelpLink Slug="using-the-audio-editor" />
         <span class="audio-editor-page__version ms-auto" title="Audio editor version">Editor @AudioEditorRelease.Version</span>
     </div>
@@ -64,8 +70,17 @@
 @code {
     [Parameter] public Guid FileId { get; set; }
 
-    /// <summary>Set on the field-session address. Session clips open here from phase 9 of the plan.</summary>
+    /// <summary>
+    /// Set on the field-session address: <see cref="FileId"/> is then a recording inside the session,
+    /// and the editor opens the caller's own copy of it (phase 9), made the first time.
+    /// </summary>
     [Parameter] public Guid? SessionId { get; set; }
+
+    /// <summary>On the session address, which group's copy to open; omitted, the caller's first.</summary>
+    [SupplyParameterFromQuery(Name = "group")] public Guid? GroupId { get; set; }
+
+    /// <summary>On the session address, true for the caller's own copy rather than a group's.</summary>
+    [SupplyParameterFromQuery(Name = "mine")] public bool Mine { get; set; }
 
     /// <summary>Where Back goes: the page the editor was opened from.</summary>
     [SupplyParameterFromQuery(Name = "return")] public string? ReturnPath { get; set; }
@@ -74,6 +89,9 @@
     private bool _loaded;
     private bool _needsSignIn;
     private string? _problem;
+
+    /// <summary>For a session recording: which session, which recording, and whose copy.</summary>
+    private string? _fromSession;
 
     /// <summary>
     /// The return address, if it is a path on this site. Anything else (another host, "//host",
@@ -93,9 +111,10 @@
         if (!await UserState.WaitUntilAuthReadyAsync(RendererInfo.IsInteractive)) return;
         if (!UserState.IsAuthenticated) { _needsSignIn = true; _loaded = true; return; }
 
-        if (SessionId is not null)
+        _fromSession = null;
+        if (SessionId is { } sessionId)
         {
-            _problem = "Recordings from a field session can't be opened in the editor yet.";
+            await OpenSessionCopyAsync(sessionId);
             _loaded = true;
             return;
         }
@@ -122,5 +141,33 @@
             _source = new UploadFileAudioSource(f.Id, MediaUrls.Download(f.Id), f.FileName, f.ContentType, f.FileSize);
         }
         _loaded = true;
+    }
+
+    /// <summary>
+    /// Opens the caller's copy of a session recording. The session itself is never changed: markers,
+    /// scans and saved EVPs all belong to the copy.
+    /// </summary>
+    private async Task OpenSessionCopyAsync(Guid sessionId)
+    {
+        var request = Mine
+            ? new Ben.Service.Models.FieldSessions.AnalysisCopyRequest(Ben.Data.Common.Enums.AnalysisScope.Person)
+            : GroupId is { } group
+                ? new Ben.Service.Models.FieldSessions.AnalysisCopyRequest(Ben.Data.Common.Enums.AnalysisScope.Organization, group)
+                : new Ben.Service.Models.FieldSessions.AnalysisCopyRequest();
+        var (copy, error) = await AdminClient.EnsureFieldSessionAnalysisCopyAsync(sessionId, FileId, request);
+        if (copy is null)
+        {
+            _problem = error ?? "This recording couldn't be opened.";
+            return;
+        }
+
+        var where = Path.GetFileName(copy.RelativePath);
+        _fromSession = $"From the session on {copy.SessionStartedAt.ToViewerLocalTime(UserState).ToDisplayDate()} · {where} · {copy.ScopeLabel}";
+        // Every capability but the destructive edits: they each make a new file, and a copy of a
+        // copy helps nobody. Markers, scans, clips and the saved view belong to the copy.
+        _source = new UploadFileAudioSource(copy.CopyUploadFileId, MediaUrls.Download(copy.CopyUploadFileId),
+            copy.FileName, copy.ContentType, copy.FileSize,
+            AudioEditorCapabilities.All & ~AudioEditorCapabilities.Edit,
+            BackHref: $"/field-sessions/{sessionId}");
     }
 }

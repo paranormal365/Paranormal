@@ -265,6 +265,30 @@ public interface IWebApiClient
     /// <summary>Stops one of the caller's background scans.</summary>
     Task<(bool Deleted, string? Error)> CancelScanJobAsync(Guid jobId, CancellationToken token = default);
 
+    // ── Scanning a session for EVPs (phase 9 of the audio plan) ──────────────
+
+    /// <summary>
+    /// Whether the caller may scan this session, whose copy they would work on, and its recordings;
+    /// or the server's reason it couldn't say.
+    /// </summary>
+    Task<(Ben.Service.Models.FieldSessions.FieldSessionAnalysisView? View, string? Error)> GetFieldSessionAnalysisAsync(
+        Guid sessionId, Ben.Data.Common.Enums.AnalysisScope? scope = null, Guid? organizationId = null,
+        CancellationToken token = default);
+
+    /// <summary>The caller's (or their group's) copy of one recording, made if needed, or the server's reason.</summary>
+    Task<(Ben.Service.Models.FieldSessions.AnalysisCopyRecord? Copy, string? Error)> EnsureFieldSessionAnalysisCopyAsync(
+        Guid sessionId, Guid fileId, Ben.Service.Models.FieldSessions.AnalysisCopyRequest request,
+        CancellationToken token = default);
+
+    /// <summary>Starts a background scan of the session's recordings, or the server's reason it would not.</summary>
+    Task<(EvpScanJobRecord? Job, string? Error)> StartFieldSessionScanAsync(
+        Guid sessionId, Ben.Service.Models.FieldSessions.StartSessionScanRequest request,
+        CancellationToken token = default);
+
+    /// <summary>EVPs saved from this session's recordings that the caller can open.</summary>
+    Task<LoadResult<Ben.Service.Models.FieldSessions.SessionEvpRecord>> GetFieldSessionEvpsAsync(
+        Guid sessionId, CancellationToken token = default);
+
     // ── EVP scan presets (phase 5) ───────────────────────────────────────────
     /// <summary>The caller's own saved scan settings. A refusal is a failed result, never an empty list.</summary>
     Task<LoadResult<EvpScanPresetRecord>> GetEvpScanPresetsAsync(CancellationToken token = default);

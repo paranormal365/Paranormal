@@ -123,7 +123,21 @@ public static class AccountStorageGuard
                       || f.FieldSessionUpload.PublishedAtUtc != null))
             .SumAsync(f => (long?)f.UploadFile!.FileSize, ct) ?? 0L;
 
-        return kept - earnedItsDisk;
+        // The session's own file, by the same rule. A session sent as one .ben IS its document:
+        // its recordings live inside it and have no file rows of their own, so the sum above never
+        // saw them, and a published or event-linked bundle was charged in full (found 10/27/2026,
+        // planning the session scans). An older session's document is its small JSON.
+        var documentsEarned = await db.FieldSessionUploads.AsNoTracking()
+            .Where(s => s.DocumentUploadFile.StoragePath != null
+                     && s.DocumentUploadFile.StoragePath.StartsWith(mine)
+                     && s.DocumentUploadFile.ArchivedFromUploadFileId == null
+                     && (s.InvestigationId != null
+                      || s.OrgCalendarEventId != null
+                      || s.HostedEventId != null
+                      || s.PublishedAtUtc != null))
+            .SumAsync(s => (long?)s.DocumentUploadFile.FileSize, ct) ?? 0L;
+
+        return kept - earnedItsDisk - documentsEarned;
     }
 
     /// <summary>The cap in bytes, from settings, falling back to the built-in default.</summary>

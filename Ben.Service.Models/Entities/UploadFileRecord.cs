@@ -46,6 +46,13 @@ public record UploadFileRecord
     /// <summary>Set when this row is an archived prior version kept by a replace (item #6 phase 3).</summary>
     public Guid? ArchivedFromUploadFileId { get; init; }
 
+    /// <summary>
+    /// The field session this recording was copied out of, or clipped from a copy of (phase 9 of the
+    /// audio plan, 10/27/2026), and where in the session: <c>media/audio-002.m4a</c>.
+    /// </summary>
+    public Guid? SourceFieldSessionUploadId { get; init; }
+    public string? SourceClipPath { get; init; }
+
     // ── Who and what this file belongs to (V-3, site evaluation 2026-09-06) ──
     // Filled by the media-library listing only, and null everywhere else. The video editor's
     // Server tab showed seven identical "test-audio.mp3" rows — other people's uploads, reachable
