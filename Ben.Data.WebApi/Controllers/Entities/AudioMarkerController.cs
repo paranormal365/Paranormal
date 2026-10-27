@@ -117,6 +117,8 @@ public sealed class AudioMarkerController : BenControllerBase
         db.AudioMarkers.Add(entity);
         await db.SaveChangesAsync(ct);
         _ = TryAuditAsync(_auditLog.LogCreateAsync(nameof(AudioMarker), entity.Id, entity, userId, AppSources.WebApi));
+        // Something a person found where the scan found nothing (phase 11); never fails the request.
+        await _scanRecorder.TryRecordMissAsync(fileId, entity, ct);
         return CreatedAtAction(nameof(GetById), new { fileId, markerId = entity.Id },
             _mapper.Map<AudioMarkerRecord>(entity));
     }
@@ -387,7 +389,7 @@ public sealed class AudioMarkerController : BenControllerBase
     /// (<see cref="EvpScanRecorder"/>), it never fails the review it follows.
     /// </summary>
     private async Task TryRecordRulingAsync(
-        AudioMarker before, AudioMarker after, bool? playedFirst, CancellationToken ct)
+        AudioMarker before, AudioMarker after, bool? playedFirst, bool? blind, CancellationToken ct)
     {
         if (!before.IsAutoDetected) return;   // a hand-placed marker is not a ruling on the detector
         try
@@ -411,6 +413,7 @@ public sealed class AudioMarkerController : BenControllerBase
                 AudioMarkerId  = after.Id,
                 Ruling         = after.ReviewStatus,
                 PlayedFirst    = playedFirst,
+                Blind          = blind,
                 BoundsAdjusted = boundsAdjusted,
                 DetectionScore = after.DetectionScore,
                 DateCreated    = DateTime.UtcNow,
@@ -482,7 +485,7 @@ public sealed class AudioMarkerController : BenControllerBase
 
         await db.SaveChangesAsync(ct);
         _ = TryAuditAsync(_auditLog.LogUpdateAsync(nameof(AudioMarker), markerId, before, entity, userId, AppSources.WebApi));
-        await TryRecordRulingAsync(before, entity, request.PlayedFirst, ct);
+        await TryRecordRulingAsync(before, entity, request.PlayedFirst, request.Blind, ct);
         return Ok(_mapper.Map<AudioMarkerRecord>(entity));
     }
 

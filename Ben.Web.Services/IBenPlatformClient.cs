@@ -185,6 +185,9 @@ public interface IBenPlatformClient
     /// <summary>Whether this server's ffmpeg is configured and runs, for reading .m4a. SuperAdmin.</summary>
     Task<MediaToolsHealth?> GetMediaToolsHealthAsync(CancellationToken token = default);
 
+    /// <summary>The EVP learning tables read back over a window of days (audio phase 11), or the server's reason. SuperAdmin.</summary>
+    Task<(AdminEvpSummary? Summary, string? Error)> GetAdminEvpSummaryAsync(int days = 30, CancellationToken token = default);
+
     /// <summary>
     /// Reports a published field session's media, hiding it until a moderator looks.
     /// </summary>

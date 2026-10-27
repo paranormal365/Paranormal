@@ -92,6 +92,7 @@ public sealed class MyProfileController : BenControllerBase
             BelongsToAnyOrganization        = belongsToAnyOrg,
             Gender                          = user.Gender ?? Ben.Data.Common.Enums.ClientGender.NotProvided,
             TimeZoneId                      = user.TimeZoneId,
+            EvpBlindReview                  = user.EvpBlindReview,
         });
     }
 
@@ -151,6 +152,9 @@ public sealed class MyProfileController : BenControllerBase
         // actually says so, never as a side effect of editing something else on the page.
         if (request.SharePrivatePhotoWithClients is { } share)
             user.SharePrivatePhotoWithClients = share;
+
+        if (request.EvpBlindReview is { } blind)
+            user.EvpBlindReview = blind;
 
         // The zone this person reads the site in (2026-09-28). Null leaves it alone; empty clears it,
         // which means "use my device's clock" — a real choice, not an error. An id the platform does

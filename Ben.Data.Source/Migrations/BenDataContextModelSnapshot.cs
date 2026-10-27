@@ -70,6 +70,9 @@ namespace Ben.Data.Source.Migrations
                     b.Property<int>("EmailKind")
                         .HasColumnType("int");
 
+                    b.Property<bool>("EvpBlindReview")
+                        .HasColumnType("bit");
+
                     b.Property<string>("FirstName")
                         .HasMaxLength(100)
                         .HasColumnType("nvarchar(100)");
@@ -3380,6 +3383,39 @@ namespace Ben.Data.Source.Migrations
                     b.ToTable("EvidenceVotes");
                 });
 
+            modelBuilder.Entity("Ben.Data.Source.Entities.EvpMiss", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<Guid>("AudioMarkerId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<DateTime>("DateCreated")
+                        .HasColumnType("datetime2");
+
+                    b.Property<double?>("EndSeconds")
+                        .HasColumnType("float");
+
+                    b.Property<Guid>("EvpScanId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<double>("StartSeconds")
+                        .HasColumnType("float");
+
+                    b.Property<Guid>("UploadFileId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("DateCreated");
+
+                    b.HasIndex("UploadFileId");
+
+                    b.ToTable("EvpMisses");
+                });
+
             modelBuilder.Entity("Ben.Data.Source.Entities.EvpRuling", b =>
                 {
                     b.Property<Guid>("Id")
@@ -3388,6 +3424,9 @@ namespace Ben.Data.Source.Migrations
 
                     b.Property<Guid>("AudioMarkerId")
                         .HasColumnType("uniqueidentifier");
+
+                    b.Property<bool?>("Blind")
+                        .HasColumnType("bit");
 
                     b.Property<bool>("BoundsAdjusted")
                         .HasColumnType("bit");
@@ -3526,10 +3565,16 @@ namespace Ben.Data.Source.Migrations
                     b.Property<float>("Score")
                         .HasColumnType("real");
 
+                    b.Property<float?>("SpectralFlatness")
+                        .HasColumnType("real");
+
                     b.Property<double>("StartSeconds")
                         .HasColumnType("float");
 
                     b.Property<float?>("VoiceLikelihood")
+                        .HasColumnType("real");
+
+                    b.Property<float?>("VoicedFrameFraction")
                         .HasColumnType("real");
 
                     b.Property<double>("ZeroCrossingRate")
@@ -17302,6 +17347,17 @@ namespace Ben.Data.Source.Migrations
                     b.Navigation("VoterAppUser");
 
                     b.Navigation("VoterOrganization");
+                });
+
+            modelBuilder.Entity("Ben.Data.Source.Entities.EvpMiss", b =>
+                {
+                    b.HasOne("Ben.Data.Source.Entities.UploadFile", "UploadFile")
+                        .WithMany()
+                        .HasForeignKey("UploadFileId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("UploadFile");
                 });
 
             modelBuilder.Entity("Ben.Data.Source.Entities.EvpRuling", b =>

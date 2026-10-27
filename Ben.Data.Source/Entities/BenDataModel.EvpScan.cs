@@ -129,6 +129,12 @@ namespace Ben.Data.Source.Entities
         /// <summary>How voice-shaped it was, 0–1: the eighth feature (VoiceNet, phase 9b). Null when not measured.</summary>
         public float? VoiceLikelihood { get; set; }
 
+        /// <summary>Feature 8 (phase 11): spectral flatness in the listening range, 0–1; hiss is near 1. Null when not measured.</summary>
+        public float? SpectralFlatness { get; set; }
+
+        /// <summary>Feature 9 (phase 11): the share of its frames with a speaking voice's pitch, 0–1. Null when not measured.</summary>
+        public float? VoicedFrameFraction { get; set; }
+
         public virtual EvpScan EvpScan { get; set; } = null!;
     }
 
@@ -187,6 +193,12 @@ namespace Ben.Data.Source.Entities
         public bool? PlayedFirst { get; set; }
 
         /// <summary>
+        /// Ruled with the scan's readings hidden (blind review, phase 11). Null when the caller did not say.
+        /// Comparing blind rulings with shown ones tells whether the score sways reviewers.
+        /// </summary>
+        public bool? Blind { get; set; }
+
+        /// <summary>
         /// The marker's span at the ruling differs from what the detector proposed: the reviewer
         /// moved the edges, so the detector's span was off.
         /// </summary>
@@ -195,6 +207,33 @@ namespace Ben.Data.Source.Entities
         /// <summary>The detector's score on the marker at the time, so the ruling reads on its own.</summary>
         public float? DetectionScore { get; set; }
 
+        public DateTime DateCreated { get; set; }
+
+        public virtual UploadFile UploadFile { get; set; } = null!;
+    }
+
+    /// <summary>
+    /// A sound the scan did not find and a person did (audio phase 11, item 253, 10/27/2026): a marker placed
+    /// by hand on a scanned recording where the latest scan had no candidate.
+    /// </summary>
+    /// <remarks>
+    /// The other half of what a ruling teaches. Keeps and dismisses only ever judge what the detector
+    /// proposed; these are what it should have proposed. Only the recording has a foreign key: the scan and
+    /// the marker are named, not held, so deleting either leaves the record of the miss.
+    /// </remarks>
+    public partial class EvpMiss
+    {
+        public Guid Id { get; set; }
+        public Guid UploadFileId { get; set; }
+
+        /// <summary>The scan that missed it. No foreign key.</summary>
+        public Guid EvpScanId { get; set; }
+
+        /// <summary>The hand-placed marker. No foreign key.</summary>
+        public Guid AudioMarkerId { get; set; }
+
+        public double StartSeconds { get; set; }
+        public double? EndSeconds { get; set; }
         public DateTime DateCreated { get; set; }
 
         public virtual UploadFile UploadFile { get; set; } = null!;

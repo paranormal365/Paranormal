@@ -116,6 +116,9 @@ public sealed partial class BenAdminClientAdapter
     public Task<MediaToolsHealth?> GetMediaToolsHealthAsync(CancellationToken token = default)
         => _api.GetAsync<MediaToolsHealth>("/api/admin/media-tools", token);
 
+    public Task<(AdminEvpSummary? Summary, string? Error)> GetAdminEvpSummaryAsync(int days = 30, CancellationToken token = default)
+        => _api.GetAdminEvpSummaryAsync(days, token);
+
     public async Task<(bool Ok, string? Error)> FlagFieldSessionAsync(
         Guid fieldSessionId, string? reason, CancellationToken token = default)
     {

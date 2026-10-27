@@ -297,6 +297,24 @@
                     </div>
 
                     <div class="col-lg-5">
+                        @* Blind review (audio phase 11): a ruling made without the number says what was heard. *@
+                        <div class="card mb-3" id="profile-evp-blind">
+                            <div class="card-body">
+                                <h6 class="card-title">Reviewing EVP candidates</h6>
+                                <div class="d-flex align-items-start gap-2">
+                                    <input type="checkbox" class="form-check-input mt-1" id="evp-blind-review"
+                                           checked="@_blindReview"
+                                           @onchange="@(e => ToggleBlindReviewAsync((bool)(e.Value ?? false)))" />
+                                    <label for="evp-blind-review" class="mb-0">
+                                        Review blind
+                                        <span class="d-block text-secondary small">
+                                            Hide each candidate's readings until you keep or dismiss it, so you decide
+                                            by what you hear. The candidates are listed in time order.
+                                        </span>
+                                    </label>
+                                </div>
+                            </div>
+                        </div>
                         <div class="card mb-3">
                             <div class="card-body">
                                 <h6 class="card-title">Private photo<HelpLink Slug="your-profile" Anchor="who-sees-your-private-photo" /></h6>
@@ -438,6 +456,7 @@
     private string? _timeZoneId;
     private string? _nameError;
     private bool   _shareWithClients;
+    private bool   _blindReview;
     private bool   _saving;
     private bool   _saved;
     private string? _error;
@@ -584,6 +603,7 @@
                 _gender           = _profile.Gender;
                 _timeZoneId       = _profile.TimeZoneId;
                 _shareWithClients = _profile.SharePrivatePhotoWithClients;
+                _blindReview      = _profile.EvpBlindReview;
                 await LoadPreviewsAsync();
                 await LoadMapAsync();
             }
@@ -673,6 +693,23 @@
         }
         catch { _error = "Couldn't save your name."; }
         finally { _saving = false; }
+    }
+
+    private async Task ToggleBlindReviewAsync(bool value)
+    {
+        _blindReview = value;
+        _error = null; _saved = false;
+        MyProfileRecord? updated = null;
+        try { updated = await AdminClient.UpdateMyProfileAsync(new UpdateMyProfileRequest(null, EvpBlindReview: value)); }
+        catch { /* said below */ }
+        if (updated is null)
+        {
+            _blindReview = !value;
+            _error = "Couldn't save that setting.";
+            return;
+        }
+        _profile = updated;
+        _blindReview = updated.EvpBlindReview;
     }
 
     private async Task ToggleShareAsync(bool value)

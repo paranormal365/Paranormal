@@ -1576,4 +1576,95 @@ public class AudioMarkerControllerTests
 
         Assert.Contains("nothing to explain", Assert.IsType<NotFoundObjectResult>(result.Result).Value?.ToString());
     }
+
+    // ── Misses, blind rulings and the admin figures (phase 11) ────────────────
+
+    private static async Task<(IDbContextFactory<BenDataContext> Factory, Guid FileId, Guid OwnerId)> ScannedAsync()
+    {
+        var factory = CreateFactory();
+        var (fileId, ownerId) = await SeedWavFileAsync(factory);
+        await Build(factory, ownerId).Scan(fileId, EvpSensitivity.Medium, null, default);
+        return (factory, fileId, ownerId);
+    }
+
+    private static Task<ActionResult<AudioMarkerRecord>> HandMarkAsync(
+        IDbContextFactory<BenDataContext> factory, Guid fileId, Guid ownerId, double at, double? end = null)
+        => Build(factory, ownerId).Create(fileId,
+            new CreateAudioMarkerRequest(at, "Whisper", EvpConfidenceLevel.Possible, null, end), default);
+
+    [Fact]
+    public async Task A_hand_marker_where_the_scan_found_nothing_is_a_miss()
+    {
+        var (factory, fileId, ownerId) = await ScannedAsync();
+        var created = Assert.IsType<AudioMarkerRecord>(Assert.IsType<CreatedAtActionResult>((await HandMarkAsync(factory, fileId, ownerId, 9.0, 9.6)).Result).Value);
+
+        await using var db = await factory.CreateDbContextAsync();
+        var miss = Assert.Single(db.EvpMisses);
+        Assert.Equal((fileId, created.Id, 9.0, (double?)9.6), (miss.UploadFileId, miss.AudioMarkerId, miss.StartSeconds, miss.EndSeconds));
+        Assert.Equal((await db.EvpScans.SingleAsync()).Id, miss.EvpScanId);
+    }
+
+    [Theory]
+    [InlineData(5.2, null)]     // a point inside the first candidate
+    [InlineData(4.8, 6.0)]      // a span over it
+    public async Task A_hand_marker_over_something_the_scan_found_is_not_a_miss(double at, double? end)
+    {
+        var (factory, fileId, ownerId) = await ScannedAsync();
+        await HandMarkAsync(factory, fileId, ownerId, at, end);
+
+        await using var db = await factory.CreateDbContextAsync();
+        Assert.Empty(db.EvpMisses);
+    }
+
+    [Fact]
+    public async Task A_hand_marker_on_a_recording_never_scanned_is_not_a_miss()
+    {
+        var factory = CreateFactory();
+        var (fileId, ownerId) = await SeedWavFileAsync(factory);
+        await HandMarkAsync(factory, fileId, ownerId, 9.0);
+
+        await using var db = await factory.CreateDbContextAsync();
+        Assert.Empty(db.EvpMisses);
+    }
+
+    [Fact]
+    public async Task A_blind_ruling_is_kept_as_blind_and_the_admin_figures_count_it_all()
+    {
+        var (factory, fileId, ownerId) = await ScannedAsync();
+        List<AudioMarker> pending;
+        await using (var db = await factory.CreateDbContextAsync())
+            pending = await db.AudioMarkers.Where(m => m.UploadFileId == fileId).OrderBy(m => m.TimeSeconds).ToListAsync();
+        await Build(factory, ownerId).Review(fileId, pending[0].Id,
+            new ReviewAudioMarkerRequest(EvpReviewStatus.Confirmed, "Hello", EvpConfidenceLevel.Possible, PlayedFirst: true, Blind: true), default);
+        await Build(factory, ownerId).Review(fileId, pending[1].Id,
+            new ReviewAudioMarkerRequest(EvpReviewStatus.Dismissed, PlayedFirst: false, Blind: false), default);
+        await HandMarkAsync(factory, fileId, ownerId, 9.0);
+
+        await using (var db = await factory.CreateDbContextAsync())
+            Assert.Equal([true, false], (await db.EvpRulings.OrderBy(r => r.DetectionScore == null).ThenBy(r => r.DateCreated).ToListAsync()).Select(r => r.Blind));
+
+        var summary = Assert.IsType<Ben.Service.Models.Admin.AdminEvpSummary>(Assert.IsType<OkObjectResult>(
+            (await new Ben.Data.WebApi.Controllers.Admin.AdminEvpController(factory).Summary(30, default)).Result).Value);
+
+        await using var check = await factory.CreateDbContextAsync();
+        Assert.Equal(await check.EvpScans.CountAsync(), summary.Scans);
+        Assert.Equal(await check.EvpScanCandidates.CountAsync(c => c.Proposed), summary.Proposed);
+        Assert.Equal((2, 1, 1, 1), (summary.Rulings, summary.Kept, summary.Dismissed, summary.Misses));
+        Assert.Equal((0.5, 0.5, 1.0, 0.0), (summary.PlayedFirstShare, summary.BlindShare, summary.KeptShareBlind, summary.KeptShareShown));
+        Assert.Equal(1, summary.ScansPerDay[^1].Scans);
+        var score = summary.FeatureHistograms.Single(h => h.Feature == "Score");
+        Assert.Equal(2, score.Measured);
+        Assert.All(summary.FeatureHistograms, h => Assert.Equal(h.Measured, h.Bins.Sum(b => b.Kept + b.Dismissed)));
+        Assert.Equal(1, score.Bins.Sum(b => b.Kept));
+    }
+
+    [Fact]
+    public void Histogram_bins_put_every_value_somewhere_and_skip_the_unmeasured()
+    {
+        var h = Ben.Data.WebApi.Controllers.Admin.AdminEvpController.Histogram("x", "u", 0, 10,
+            [(true, -5), (true, 0), (false, 9.99), (false, 10), (true, 50), (false, null), (true, double.NaN)]);
+        Assert.Equal(5, h.Measured);
+        Assert.Equal((2, 0), (h.Bins[0].Kept, h.Bins[0].Dismissed));
+        Assert.Equal((1, 2), (h.Bins[^1].Kept, h.Bins[^1].Dismissed));
+    }
 }

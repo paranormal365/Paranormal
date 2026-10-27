@@ -231,6 +231,8 @@ public sealed class EvpScanRecorder
                     ZeroCrossingRate  = c.Features.ZeroCrossingRate,
                     Exploratory       = c.Exploratory,
                     VoiceLikelihood   = c.VoiceLikelihood,
+                    SpectralFlatness  = c.SpectralFlatness,
+                    VoicedFrameFraction = c.VoicedFrameFraction,
                 });
             }
 
@@ -244,6 +246,58 @@ public sealed class EvpScanRecorder
             _logger.LogError(ex, "EVP learning record ({What}) not written for file {FileId}", "scan", fileId);
             return null;
         }
+    }
+
+    /// <summary>
+    /// Records a hand-placed marker as a miss when the recording's latest scan had no candidate over it
+    /// (phase 11, item 253). Allowed to fail, as the scan record is: the person asked for a marker.
+    /// </summary>
+    /// <remarks>
+    /// "Over it" is the scan's own overlap rule (<see cref="EvpDetectionOptions.ReviewedOverlapFraction"/>),
+    /// the same one that decides whether a rescan would propose it again. Every candidate the scan found
+    /// counts, proposed or not: a sound found but left out is not a miss.
+    /// </remarks>
+    /// <returns>True when a miss was recorded.</returns>
+    public async Task<bool> TryRecordMissAsync(Guid fileId, AudioMarker marker, CancellationToken ct)
+    {
+        try
+        {
+            await using var db = await _dbContextFactory.CreateDbContextAsync(ct);
+            var scan = await db.EvpScans.AsNoTracking()
+                .Where(s => s.UploadFileId == fileId)
+                .OrderByDescending(s => s.DateCreated)
+                .Select(s => new { s.Id, s.OptionsJson })
+                .FirstOrDefaultAsync(ct);
+            if (scan is null) return false;
+
+            var overlap = ReadOptions(scan.OptionsJson)?.ReviewedOverlapFraction ?? 0.5;
+            var found = await db.EvpScanCandidates.AsNoTracking()
+                .Where(c => c.EvpScanId == scan.Id)
+                .Select(c => new { c.StartSeconds, c.EndSeconds })
+                .ToListAsync(ct);
+            if (found.Any(c => OverlapsEnough(new EvpCandidate(c.StartSeconds, c.EndSeconds, 0), marker.TimeSeconds, marker.EndSeconds, overlap)))
+                return false;
+
+            db.EvpMisses.Add(new EvpMiss
+            {
+                Id = Guid.NewGuid(), UploadFileId = fileId, EvpScanId = scan.Id, AudioMarkerId = marker.Id,
+                StartSeconds = marker.TimeSeconds, EndSeconds = marker.EndSeconds, DateCreated = DateTime.UtcNow,
+            });
+            await db.SaveChangesAsync(ct);
+            return true;
+        }
+        catch (Exception ex) when (ex is not OperationCanceledException)
+        {
+            _logger.LogError(ex, "EVP learning record ({What}) not written for file {FileId}", "miss", fileId);
+            return false;
+        }
+    }
+
+    private static EvpDetectionOptions? ReadOptions(string? json)
+    {
+        if (string.IsNullOrEmpty(json)) return null;
+        try { return JsonSerializer.Deserialize<EvpDetectionOptions>(json, OptionsJson); }
+        catch (JsonException) { return null; }
     }
 
     /// <summary>
