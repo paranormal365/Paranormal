@@ -107,7 +107,7 @@
                 <tbody>
                     @foreach (var row in _rows)
                     {
-                        <tr data-testid="orphan-row">
+                        <tr data-testid="orphan-row" data-session-id="@row.Id">
                             <td>
                                 <input type="checkbox" class="form-check-input"
                                        data-testid="orphan-check"

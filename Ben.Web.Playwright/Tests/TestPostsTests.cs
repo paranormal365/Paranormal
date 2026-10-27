@@ -7,9 +7,9 @@ namespace Ben.Web.Playwright.Tests;
 /// The page that takes an e2e run's posts off the live feed.
 /// </summary>
 /// <remarks>
-/// The hide itself runs only when <c>BEN_TEST_POSTS_HIDE=1</c>: it changes what everybody sees on
-/// the feed of whatever database the suite is pointed at, and on the shared database that is the
-/// live site. The gates and the selection are proved unconditionally.
+/// The hide test writes its own post as a seeded member, hides and restores only that one, and so
+/// leaves every feed as it found it. Until 10/27/2026 it hid whichever seeded post came first and
+/// waited for <c>BEN_TEST_POSTS_HIDE=1</c>, so it skipped on every run.
 /// </remarks>
 [TestFixture]
 [Category("TestPosts")]
@@ -59,22 +59,30 @@ public class TestPostsTests : BenTestBase
     [Test]
     public async Task Hiding_a_post_takes_it_off_the_feed_and_unhiding_brings_it_back()
     {
-        if (Environment.GetEnvironmentVariable("BEN_TEST_POSTS_HIDE") != "1")
-            Assert.Ignore("Set BEN_TEST_POSTS_HIDE=1 — this changes the feed of the database it runs against.");
+        // A post of its own, by a seeded account, so it is on the list and nobody else's is touched.
+        var key = $"Hide-and-return check {Guid.NewGuid():N}"[..34];
+        await using (var member = await ApiSignedInAsync(MemberEmail, MemberPassword))
+        {
+            var form = Context.APIRequest.CreateFormData();
+            form.Set("body", key);
+            var made = await member.PostAsync("/api/feed/posts", new() { Multipart = form });
+            Assert.That(made.Ok, Is.True, $"the post to hide was refused: {made.Status} {await made.TextAsync()}");
+        }
 
         await LoginAsync(SuperAdminEmail, SuperAdminPassword);
         await Page.GotoAsync($"{BaseUrl}/admin/test-posts");
-        await Page.WaitForSelectorAsync("[data-testid='test-post-row'], [data-testid='no-test-posts']",
-                                        new() { Timeout = 30_000 });
+        var mine = Page.Locator("[data-testid='test-post-row']").Filter(new() { HasText = key });
+        await Expect(mine.Locator("[data-testid='state-visible']")).ToBeVisibleAsync(new() { Timeout = 30_000 });
+        await WaitForTheCircuitAsync();
 
-        var visible = Page.Locator("[data-testid='test-post-row']:has([data-testid='state-visible'])");
-        if (await visible.CountAsync() == 0) Assert.Ignore("no visible test post to hide");
+        // It is on the feed before it is hidden, or "gone" below would prove nothing.
+        var before = await Browser.NewContextAsync();
+        var feedBefore = await before.NewPageAsync();
+        await feedBefore.GotoAsync($"{BaseUrl}/feed");
+        await Expect(feedBefore.GetByText(key, new() { Exact = false }).First).ToBeVisibleAsync(new() { Timeout = 30_000 });
+        await before.CloseAsync();
 
-        var body = (await visible.First.Locator("[data-testid='test-post-body']").InnerTextAsync()).Trim();
-        var key  = body.Length > 40 ? body[..40] : body;
-        TestContext.Out.WriteLine("hiding: " + key);
-
-        await visible.First.Locator("[data-testid='test-post-check']").CheckAsync();
+        await mine.Locator("[data-testid='test-post-check']").CheckAsync();
         await Page.Locator("[data-testid='hide-posts']").ClickAsync();
         await Page.GetByRole(AriaRole.Button, new() { Name = "Hide them" }).ClickAsync();
         await Expect(Page.Locator("[data-testid='hide-result']")).ToContainTextAsync("Hid 1 post", new() { Timeout = 30_000 });
@@ -83,16 +91,15 @@ public class TestPostsTests : BenTestBase
         var visitor = await Browser.NewContextAsync();
         var feed = await visitor.NewPageAsync();
         await feed.GotoAsync($"{BaseUrl}/feed");
-        await feed.WaitForLoadStateAsync(LoadState.NetworkIdle);
-        await feed.WaitForTimeoutAsync(1500);
+        await Expect(feed.Locator(".bv-feed-post").First.Or(feed.GetByText("Nothing here yet")))
+            .ToBeVisibleAsync(new() { Timeout = 30_000 });
         Assert.That(await feed.GetByText(key, new() { Exact = false }).CountAsync(), Is.EqualTo(0),
             "the hidden post is still on the feed");
         await visitor.CloseAsync();
 
         // And back.
-        var hidden = Page.Locator("[data-testid='test-post-row']:has([data-testid='state-hidden'])")
-                         .Filter(new() { HasText = key });
-        await hidden.First.Locator("[data-testid='test-post-check']").CheckAsync();
+        await Expect(mine.Locator("[data-testid='state-hidden']")).ToBeVisibleAsync(new() { Timeout = 30_000 });
+        await mine.Locator("[data-testid='test-post-check']").CheckAsync();
         await Page.Locator("[data-testid='unhide-posts']").ClickAsync();
         await Expect(Page.Locator("[data-testid='hide-result']")).ToContainTextAsync("Put 1 post back", new() { Timeout = 30_000 });
     }
