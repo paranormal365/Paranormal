@@ -92,7 +92,7 @@ public class StoreCheckoutTests : BenTestBase
     {
         if (await Page.Locator("[data-testid=checkout-fake]").CountAsync() == 0)
         {
-            var card = Page.FrameLocator("#ben-payment-element iframe").First;
+            var card = Page.Locator("#ben-payment-element iframe").First.ContentFrame;
             await card.Locator("[name=number]").FillAsync("4242 4242 4242 4242");
             await card.Locator("[name=expiry]").FillAsync("12 / 34");
             await card.Locator("[name=cvc]").FillAsync("123");

@@ -2738,7 +2738,7 @@ public sealed class HelpMediaCapture : BenTestBase
         else
         {
             // Stripe's own card form, in its frame: shot once it has drawn its fields, not its spinner.
-            await Expect(Page.FrameLocator("#ben-payment-element iframe").First.Locator("[name=number]"))
+            await Expect(Page.Locator("#ben-payment-element iframe").First.ContentFrame.Locator("[name=number]"))
                 .ToBeVisibleAsync(new() { Timeout = 30_000 });
             // The payment card itself: at phone width the page would otherwise be photographed wherever
             // it happened to be scrolled, which on 09/24 was the middle of the form.

@@ -116,8 +116,16 @@ public class MyEvidenceArchiveTests : BenTestBase
         var retract = Main.Locator("button[id^='retract-']").First;
         if (await retract.CountAsync() == 0)
         {
-            Assert.Ignore("Nothing published to the archive for this account.");
-            return;
+            // Publish one first. This used to wait for Publishing_from_my_evidence_puts_it_on_the_places_page
+            // to have done it, which runs AFTER this one (tests run by name), so it skipped on every
+            // fresh database (site audit, 10/27/2026).
+            var publish = Main.Locator("button[id^='publish-']").First;
+            if (await publish.CountAsync() == 0)
+            {
+                Assert.Ignore("Nothing this account could publish — the seeded event is not at a public place.");
+                return;
+            }
+            await ClickUntilAsync(publish, retract);
         }
 
         await retract.ClickAsync();

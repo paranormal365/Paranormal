@@ -154,7 +154,9 @@ window.__benVisualAudit = function () {
       }
     }
 
-    if ((s.overflow === 'hidden' || s.overflowY === 'hidden') && !isGridPart) {
+    // A box hidden from assistive technology is decoration (a design preview, a thumbnail), not
+    // text anybody is meant to read in full, so cropping it is the point rather than a fault.
+    if ((s.overflow === 'hidden' || s.overflowY === 'hidden') && !isGridPart && !el.closest('[aria-hidden="true"]')) {
       // More than a couple of lines: a pixel or two is rounding, a hidden sentence is a fault.
       if (el.scrollHeight > el.clientHeight + 12 && el.clientHeight > 20 && el.textContent.trim().length > 12)
         add('content clipped', el, `${el.scrollHeight - el.clientHeight}px hidden`);

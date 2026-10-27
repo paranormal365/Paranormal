@@ -188,6 +188,21 @@
     --bs-btn-border-color: var(--ben-success-behind-white);
 }
 
+/* The danger button took its fill from Bootstrap's compiled variables, which still carry the
+   template's hot pink (#fd3995): white on it is 3.39:1, on every Delete and Remove button (site
+   audit, 10/27/2026). The site's own danger colour (signal-tokens.css) carries white at 4.79:1, so
+   the button uses it, with hover and press a shade darker. */
+.btn-danger {
+    --bs-btn-bg:                  var(--bs-danger);
+    --bs-btn-border-color:        var(--bs-danger);
+    --bs-btn-hover-bg:            color-mix(in srgb, var(--bs-danger) 88%, #000);
+    --bs-btn-hover-border-color:  color-mix(in srgb, var(--bs-danger) 88%, #000);
+    --bs-btn-active-bg:           color-mix(in srgb, var(--bs-danger) 80%, #000);
+    --bs-btn-active-border-color: color-mix(in srgb, var(--bs-danger) 80%, #000);
+    --bs-btn-disabled-bg:         var(--bs-danger);
+    --bs-btn-disabled-border-color: var(--bs-danger);
+}
+
 /* Kendo's success fill is remapped in theme/telerik-signal.css, which is where every Kendo colour
    is mapped onto this palette. Putting it here as well would mean two files deciding one colour. */
 

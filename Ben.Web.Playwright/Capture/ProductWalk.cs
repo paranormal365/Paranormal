@@ -235,16 +235,43 @@ public sealed class ProductWalk : BenTestBase
         await ClickUntilAsync(button, Main.Locator("[role=tab][aria-selected=true]", new() { HasTextString = tab }));
     }
 
-    /// <summary>For a seat that may not be offered a tab at all: a missing tab is noted, not failed.</summary>
-    private async Task OrgTabIfOfferedAsync(string tab)
+    // The group page's tabs are listed in the left rail where it shows (ContextRail, 2026-10-01); the
+    // tab strip itself steps aside there, so the walk opens a group tab the way a person would.
+    private ILocator GroupRail => Page.Locator("[data-testid=rail-context]");
+
+    private ILocator GroupRailLink(string tab)
+        => GroupRail.Locator(".app-rail__list a", new() { Has = Page.GetByText(tab, new() { Exact = true }) }).First;
+
+    private async Task GroupTabAsync(string tab)
     {
-        await Expect(Main.GetByRole(AriaRole.Tab).First).ToBeVisibleAsync(new() { Timeout = 20_000 });
-        if (await Main.GetByRole(AriaRole.Tab, new() { Name = tab, Exact = true }).CountAsync() == 0)
+        var link = GroupRailLink(tab);
+        await Expect(link).ToBeVisibleAsync(new() { Timeout = 20_000 });
+        await ClickUntilAsync(link, GroupRail.Locator("a[aria-current=page]", new() { HasTextString = tab }));
+    }
+
+    /// <summary>For a seat that may not be offered a tab at all: a missing tab is noted, not failed.</summary>
+    private async Task GroupTabIfOfferedAsync(string tab)
+    {
+        await Expect(GroupRail).ToBeVisibleAsync(new() { Timeout = 20_000 });
+        if (await GroupRailLink(tab).CountAsync() == 0)
         {
             _notes.Add($"no {tab} tab for this seat");
             return;
         }
-        await OrgTabAsync(tab);
+        await GroupTabAsync(tab);
+    }
+
+    private const string WalkPostBody = "Left by the product walk: anyone should be able to open this post.";
+
+    private async Task MakeSurePostExistsAsync()
+    {
+        await using var api = await ApiSignedInAsync(MemberEmail, MemberPassword);
+        var feed = await api.GetAsync("/api/feed?mode=all");
+        if (feed.Ok && (await feed.JsonAsync())!.Value.GetProperty("posts").EnumerateArray().Any()) return;
+        var form = Context.APIRequest.CreateFormData();
+        form.Set("body", WalkPostBody);
+        var made = await api.PostAsync("/api/feed/posts", new() { Multipart = form });
+        Assert.That(made.Ok, Is.True, $"the walk's post was refused: {made.Status} {await made.TextAsync()}");
     }
 
     private void Finish()
@@ -265,8 +292,8 @@ public sealed class ProductWalk : BenTestBase
             await Main.GetByPlaceholder("City, address or zip code").FillAsync("Nashville, TN");
             // The answer, not a card: every group is already listed as cards before anybody searches.
             await ClickUntilAsync(Main.GetByRole(AriaRole.Button, new() { Name = "Search" }),
-                Main.GetByText("Results near", new() { Exact = false }).Or(Main.Locator(".alert")));
-        }, Main.GetByText("Results near", new() { Exact = false }).Or(Main.GetByText("No organizations accepting cases", new() { Exact = false })));
+                Main.GetByText("found near", new() { Exact = false }).Or(Main.Locator(".alert")));
+        }, Main.GetByText("found near", new() { Exact = false }).Or(Main.GetByText("No organizations accepting cases", new() { Exact = false })));
         await StepAsync("a group's public page", () => GoAsync("/o/paranormal365"));
         await StepAsync("the group's cases", () => GoAsync("/o/paranormal365/cases"));
         await StepAsync("one published case", () => FollowAsync("/o/paranormal365/cases/"), Main.Locator(".case-vote-widget"));
@@ -277,7 +304,13 @@ public sealed class ProductWalk : BenTestBase
         await StepAsync("what's on", () => GoAsync("/events"));
         await StepAsync("an event's page", () => FollowAsync("/o/"));
         await StepAsync("the feed", () => GoAsync("/feed"));
-        await StepAsync("a post", () => FollowAsync("/feed/"));
+        await StepAsync("a post", async () =>
+        {
+            // A fresh database has no posts, so the walk brings one; without it this step never ran.
+            await MakeSurePostExistsAsync();
+            await GoAsync("/feed");
+            await FollowAsync("/feed/");
+        });
         // The arc's front door for a stranger: one location, everybody's work at it. A visitor must
         // see the published half and be offered no box (2026-09-17).
         await StepAsync("a public place, as a stranger",
@@ -351,9 +384,9 @@ public sealed class ProductWalk : BenTestBase
 
         await StepAsync("home, signed in", () => GoAsync("/"));
         await StepAsync("organizations", () => GoAsync("/organizations"));
-        await StepAsync("the group", () => GoAsync($"/organizations/{org}"), Main.GetByRole(AriaRole.Tab));
+        await StepAsync("the group", () => GoAsync($"/organizations/{org}"), GroupRail);
         foreach (var tab in new[] { "Members", "Cases", "Investigations", "Calendar", "Messages", "Files", "Equipment" })
-            await StepAsync($"group tab {tab}", () => OrgTabAsync(tab));
+            await StepAsync($"group tab {tab}", () => GroupTabAsync(tab));
         await StepAsync("a case", () => GoAsync($"/organizations/{org}/cases"));
         await StepAsync("the case itself", () => OpenFirstCaseAsync(org));
         await StepAsync("research on the Belmont case", async () =>
@@ -383,7 +416,13 @@ public sealed class ProductWalk : BenTestBase
         await StepAsync("my checkouts", () => GoAsync("/my-checkouts"));
         await StepAsync("media library", () => GoAsync("/media-library"));
         await StepAsync("my field sessions", () => GoAsync("/my-field-sessions"));
-        await StepAsync("a field session plays back", () => FollowAsync("/field-sessions/"));
+        await StepAsync("a field session plays back", async () =>
+        {
+            // The seat's own session, sent the way the phone sends it: a fresh database has none.
+            await SendAFieldSessionAsync(MemberEmail, MemberPassword);
+            await GoAsync("/my-field-sessions");
+            await FollowAsync("/field-sessions/");
+        });
         await StepAsync("my videos", () => GoAsync("/my-videos"));
         await StepAsync("the feed", () => GoAsync("/feed"));
         await StepAsync("what's on", () => GoAsync("/events"));
@@ -494,9 +533,9 @@ public sealed class ProductWalk : BenTestBase
             await Expect(Page.GetByText("Viewing as", new() { Exact = false })).ToBeVisibleAsync(new() { Timeout = 20_000 });
         });
 
-        await StepAsync("the group", () => GoAsync($"/organizations/{org}"), Main.GetByRole(AriaRole.Tab));
+        await StepAsync("the group", () => GoAsync($"/organizations/{org}"), GroupRail);
         foreach (var tab in new[] { "Cases", "Investigations", "Calendar", "Messages", "Files", "Equipment" })
-            await StepAsync($"group tab {tab}", () => OrgTabIfOfferedAsync(tab));
+            await StepAsync($"group tab {tab}", () => GroupTabIfOfferedAsync(tab));
         await StepAsync("the case list, typed into the address bar", () => GoAsync($"/organizations/{org}/cases"));
         await StepAsync("the group's events, to read", () => GoAsync($"/organizations/{org}/events"),
             Main.Locator("#events-read-only"));
@@ -524,10 +563,10 @@ public sealed class ProductWalk : BenTestBase
         await LoginAsync(UserEmail, UserPassword);
 
         await StepAsync("home, signed in", () => GoAsync("/"));
-        await StepAsync("the group", () => GoAsync($"/organizations/{org}"), Main.GetByRole(AriaRole.Tab));
+        await StepAsync("the group", () => GoAsync($"/organizations/{org}"), GroupRail);
         foreach (var tab in new[] { "Details", "Members", "Cases", "Investigations", "Calendar", "Messages", "Files",
                                     "Requests", "Clients", "CMS", "Equipment", "Roles", "Addresses", "Settings" })
-            await StepAsync($"group tab {tab}", () => OrgTabAsync(tab));
+            await StepAsync($"group tab {tab}", () => GroupTabAsync(tab));
         await StepAsync("cases", () => GoAsync($"/organizations/{org}/cases"));
         await StepAsync("a case", () => OpenFirstCaseAsync(org));
         await StepAsync("a new case", () => GoAsync($"/organizations/{org}/cases/new"));

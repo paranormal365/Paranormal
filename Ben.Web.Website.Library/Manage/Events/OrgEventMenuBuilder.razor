@@ -141,7 +141,10 @@
                                     var d = design;
                                     <button type="button" class="menu-gallery__card @(d.Key == _newDesign ? "is-chosen" : "")"
                                             aria-pressed="@(d.Key == _newDesign)" data-design="@d.Key" @onclick="() => _newDesign = d.Key">
-                                        <span class="menu-gallery__frame"><EventMenuDocument Menu="@MenuSamples.Dinner(d.Key)" Compact="true" /></span>
+                                        @* A preview of the look, not something to read: hidden from screen readers (which read the whole
+                                           sample dinner as the button's name) and faded at the foot so the crop reads as
+                                           "it continues" rather than text cut mid-line (site audit, 10/27/2026). *@
+                                        <span class="menu-gallery__frame" aria-hidden="true"><EventMenuDocument Menu="@MenuSamples.Dinner(d.Key)" Compact="true" /></span>
                                         <span class="menu-gallery__name">@d.Name</span>
                                         <span class="menu-gallery__what">@d.Description</span>
                                     </button>

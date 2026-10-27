@@ -37,8 +37,11 @@ public class MapViewportTests : BenTestBase
         await Page.WaitForTimeoutAsync(300);
 
         var box = (await map.BoundingBoxAsync())!;
-        var cx = box.X + box.Width / 2;
-        var cy = box.Y + box.Height / 2;
+        // Away from the middle: the map frames itself on its pins, so the middle is where a pin
+        // sits, and a drag that starts on a pin grabs the pin instead of moving the map. It made
+        // this test pass or fail by where the page happened to scroll (site audit, 10/27/2026).
+        var cx = box.X + box.Width * 0.2f;
+        var cy = box.Y + box.Height * 0.25f;
 
         for (var i = 0; i < 3; i++)
         {

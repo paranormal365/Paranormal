@@ -37,6 +37,9 @@ internal static class HostedEventDemoSeeder
 {
     /// <summary>Stable ids, so a re-run finds its own work rather than making a second copy.</summary>
     private static readonly Guid VenueId = new("40000002-0000-0000-0000-000000000001");
+
+    /// <summary>520 E Main St, Red Boiling Springs, TN.</summary>
+    private const decimal VenueLatitude = 36.5328m, VenueLongitude = -85.8476m;
     private static readonly Guid RoomsEventId = new("40000002-0000-0000-0000-000000000002");
     private static readonly Guid SeatsEventId = new("40000002-0000-0000-0000-000000000003");
     private static readonly Guid KitchenBookingId = new("40000002-0000-0000-0000-000000000004");
@@ -493,7 +496,19 @@ internal static class HostedEventDemoSeeder
     private static async Task SeedVenueAsync(
         BenDataContext db, Organization host, Guid ownerId, DateTime now)
     {
-        if (await db.Places.AnyAsync(p => p.Id == VenueId)) return;
+        // Where it is. Without a position the weekend can never appear on the events map, and the test
+        // that looks for its pin skipped itself on every fresh database (site audit, 10/27/2026). A
+        // place seeded before then is given one here.
+        if (await db.Places.FirstOrDefaultAsync(p => p.Id == VenueId) is { } existing)
+        {
+            if (existing.Latitude is null || existing.Longitude is null)
+            {
+                existing.Latitude = VenueLatitude;
+                existing.Longitude = VenueLongitude;
+                await db.SaveChangesAsync();
+            }
+            return;
+        }
 
         db.Places.Add(new Place
         {
@@ -504,6 +519,8 @@ internal static class HostedEventDemoSeeder
             State = "TN",
             ZipCode = "37150",
             Country = "US",
+            Latitude = VenueLatitude,
+            Longitude = VenueLongitude,
             // A venue is a venue: an event is published by definition, so a hosted event's place
             // is never a private residence.
             Kind = PlaceKind.PublicLocation,

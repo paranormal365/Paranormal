@@ -339,8 +339,15 @@
             {
                 <BenTab Title="Calendar" Id="calendar">
                     @* The review queue lives with the events that produce it. Renders nothing
-                       when empty. *@
-                    <EventEvidenceQueue OrgId="@OrgId" />
+                       when empty. The server asks for the Calendar area's Read grant to list it
+                       and Update to decide, while this tab is open to every member; without the
+                       check here, a member without the grant met a refusal that read as an empty
+                       queue (site audit, 10/27/2026). *@
+                    @if (UserState.IsSuperAdmin || _myPerms?.May(Ben.Data.Common.Enums.OrganizationPermissionArea.Calendar, Ben.Data.Common.Enums.OrganizationSecurityAction.Read) == true)
+                    {
+                        <EventEvidenceQueue OrgId="@OrgId"
+                                            CanDecide="@(UserState.IsSuperAdmin || _myPerms?.May(Ben.Data.Common.Enums.OrganizationPermissionArea.Calendar, Ben.Data.Common.Enums.OrganizationSecurityAction.Update) == true)" />
+                    }
                     <OrgScheduler OrgId="@OrgId" EmbeddedMode="true" />
                 </BenTab>
             }
@@ -597,7 +604,10 @@
 
         // Same group, different ?tab= (a banner or bell deep link while already on the page):
         // honor it once per distinct value, without clobbering tabs the person clicked since.
-        if (_loadedOrgId != Guid.Empty && InitialTab is not null && InitialTab != _appliedInitialTab)
+        // Also while the group is still loading: the rail's links change ?tab=, and one clicked in
+        // that window used to light the rail and change the address while the page kept showing
+        // Details (site audit, 10/27/2026).
+        if (InitialTab is not null && InitialTab != _appliedInitialTab)
         {
             _appliedInitialTab = InitialTab;
             _activeTabId = InitialTab.Trim().ToLowerInvariant();

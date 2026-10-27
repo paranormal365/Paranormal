@@ -511,8 +511,75 @@ internal static class DevelopmentDataSeeder
         // editor can be driven by hand from either.
         await SeedVideoEditorMediaAsync(db, sarah, now);
         await SeedVideoEditorMediaAsync(db, owner, now);
+        await SeedAClosedAccountAsync(db, now);
+        await SeedAProvingPlaceAsync(db, owner.Id, now);
 
         Console.WriteLine("[DevDataSeeder] Development seed data applied successfully.");
+    }
+
+    private static readonly Guid ProvingPlaceId = new("40000003-0000-0000-0000-000000000002");
+
+    /// <summary>
+    /// A public place whose public email address has been on record for over a week, so a venue
+    /// claim there can be proved by the code in its letter.
+    /// </summary>
+    /// <remarks>
+    /// A claim may only be proved through a detail at least a week old (VenueClaims.ContactMinimumAge),
+    /// so on a fresh database the end-to-end test of that letter could never run: it planted the
+    /// address and skipped (site audit, 10/27/2026). The names match what the test looks for.
+    /// </remarks>
+    private static async Task SeedAProvingPlaceAsync(BenDataContext db, Guid ownerId, DateTime now)
+    {
+        if (await db.Places.AnyAsync(p => p.Id == ProvingPlaceId)) return;
+
+        db.Places.Add(new Place
+        {
+            Id = ProvingPlaceId, Name = "Playwright Proving House", StreetAddress1 = "1 Proving Letter Lane",
+            City = "Franklin", State = "TN", ZipCode = "37064", Country = "US",
+            Latitude = 35.9260m, Longitude = -86.8700m, Kind = PlaceKind.PublicLocation,
+            DateCreated = now.AddDays(-8), CreatedByAppUserId = ownerId,
+        });
+        db.PlaceContacts.Add(new PlaceContact
+        {
+            Id = Guid.NewGuid(), PlaceId = ProvingPlaceId, Kind = PlaceContactKind.Email,
+            Value = "venue-proof-seeded@example.com", Label = "Playwright proving address", IsPublic = true,
+            DateCreated = now.AddDays(-8), CreatedByAppUserId = ownerId,
+        });
+        await db.SaveChangesAsync();
+        Console.WriteLine("[DevDataSeeder] Seeded a public place with a week-old proving address, for venue claims.");
+    }
+
+    /// <summary>The seeded closed account: fixed, so a reseed finds it rather than making another.</summary>
+    private static readonly Guid ClosedAccountId = new("40000003-0000-0000-0000-000000000001");
+
+    /// <summary>
+    /// One account somebody closed, as closing leaves it: renamed "A former member", its address
+    /// replaced, no password, locked for good.
+    /// </summary>
+    /// <remarks>
+    /// The admin users list hides closed accounts until asked, and the test of that skipped itself on
+    /// every fresh database for want of one (site audit, 10/27/2026). Built with the same constants the
+    /// closure uses, so it looks exactly like the real thing.
+    /// </remarks>
+    private static async Task SeedAClosedAccountAsync(BenDataContext db, DateTime now)
+    {
+        if (await db.Users.AnyAsync(u => u.Id == ClosedAccountId)) return;
+
+        var email = Ben.Data.Common.Constants.AccountClosure.ClosedEmailFor(ClosedAccountId);
+        db.Users.Add(new AppUser
+        {
+            Id = ClosedAccountId,
+            UserName = email, NormalizedUserName = email.ToUpperInvariant(),
+            Email = email, NormalizedEmail = email.ToUpperInvariant(), EmailConfirmed = false,
+            DisplayName = Ben.Data.Common.Constants.AccountClosure.FormerMemberName,
+            Handle = $"former-{ClosedAccountId:N}"[..Ben.Data.Common.Helpers.UserHandle.MaxLength],
+            SecurityStamp = Guid.NewGuid().ToString(), ConcurrencyStamp = Guid.NewGuid().ToString(),
+            LockoutEnabled = true, LockoutEnd = DateTimeOffset.MaxValue,
+            DateCreated = now.AddDays(-90),
+            DateClosed = now.AddDays(-10),
+        });
+        await db.SaveChangesAsync();
+        Console.WriteLine("[DevDataSeeder] Seeded one closed account, for the admin list's former-members box.");
     }
 
     /// <summary>

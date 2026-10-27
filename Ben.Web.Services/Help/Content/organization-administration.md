@@ -792,8 +792,8 @@ image links work the same way — a link copied from the page stops working at t
 ## Tours
 
 If you run ghost walks, a **tour** is what you sell. The walk down
-Printers Alley is one tour whether you run it twice a year or four nights a week; a walk down a
-different street is a second tour. You'll find them under **Administration → Tours**, and each one
+Printers Alley is one tour whether you run it twice a year or four nights a week, wherever the route
+goes; a different walk is a second tour. You'll find them under **Administration → Tours**, and each one
 has its own page.
 
 Two things tell your tours apart. The **meeting point** is required and must be one of your own
@@ -817,8 +817,8 @@ between tours if you run more than one.
 {{#if ghost-walk}}
 Running tours takes a **Ghost Walk Tour subscription**: {{price.ghost-walk-month}} a month per tour
 route, with unlimited walks and guests on each. A **tour route** is one tour on this page: the walk
-down Printers Alley is one route however often you run it, and a walk down a different street is a
-second. The subscription is separate from your group's plan, and any group can take it, on your
+down Printers Alley is one route wherever it goes and however often you run it, and a different walk
+is a second. The subscription is separate from your group's plan, and any group can take it, on your
 group's **Billing** page under **Ghost Walk Tour subscription**, or from the **Pricing** page. When
 you subscribe, it pays for every route you already run.
 
@@ -1132,8 +1132,8 @@ apps, and opens it for bookings. This is when any charge applies, and the page t
 will be before you press the button.
 
 Publishing uses one **event credit**. No plan includes events, the largest included: every event is
-bought on its own. One credit covers one event, however many days in a row it runs, or a show's run
-of performances within a month. A credit is
+bought on its own. One credit publishes one event, start to finish: a night, a weekend, or a show's
+run of performances within a month. However many dates it has, it's one credit. A credit is
 **{{price.event-credit}}**, and a group with a paid plan pays {{percent.event-credit-subscriber}} of that:
 **{{price.event-credit-subscriber}}**. Before you press the button, you can see how many credits you
 have and what the button will do.
