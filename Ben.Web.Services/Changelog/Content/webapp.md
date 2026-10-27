@@ -39,6 +39,7 @@ day-by-day account of building it would say nothing to anyone using it now.
   pulled from it. A group's list of sessions links to it.
 - Pricing says plainly that one event credit covers an event start to finish: a night, a weekend, or a
   show's run of up to a month. A tour route is one walk wherever it goes, not one street.
+- On My field sessions, flicking a sharing switch on and off quickly now always keeps your last choice.
 
 ### Administration
 
