@@ -111,7 +111,7 @@ public class PublicPlaceTests
 
         var response = await GetAsync(f);
 
-        var session = Assert.Single(response.Sessions);
+        var session = Assert.Single(response.Sessions!);
         var media = Assert.Single(session.Media!);
         Assert.Equal(rowId, media.UploadFileId);
         Assert.Equal("audio/mp4", media.ContentType);

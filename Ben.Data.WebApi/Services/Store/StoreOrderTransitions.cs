@@ -25,7 +25,7 @@ public sealed record StoreDeskResult(bool NotFound, string? Refusal)
 /// decides: two admins pressing the same button at once do it once, and the loser is told.</para>
 /// </remarks>
 public sealed class StoreOrderTransitions(
-    IDbContextFactory<BenDataContext> dbFactory, StoreOrderMailer mailer, StoreAlerts alerts,
+    IDbContextFactory<BenDataContext> dbFactory, StoreOrderMailer mailer,
     StoreRefundService refunds, StoreOrderPayments payments, TimeProvider? clock = null)
 {
     private DateTime Now => (clock ?? TimeProvider.System).GetUtcNow().UtcDateTime;

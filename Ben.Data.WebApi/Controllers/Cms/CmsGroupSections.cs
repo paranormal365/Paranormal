@@ -147,7 +147,7 @@ public static class CmsGroupSections
             .Where(f => ids.Contains(f.Id) && f.IsPublic)
             .Select(f => new GalleryFile(f.Id, f.FileName, f.ContentType))
             .ToListAsync(ct);
-        return [.. ids.Select(id => files.FirstOrDefault(f => f.Id == id)).Where(f => f is not null)!];
+        return [.. ids.Select(id => files.FirstOrDefault(f => f.Id == id)).OfType<GalleryFile>()];
     }
 
     // ── Our members ──────────────────────────────────────────────────────────

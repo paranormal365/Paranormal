@@ -184,19 +184,19 @@ public sealed record PublicCaseDetail(
     string OrgName,
     string OrgUrlName,
     Ben.Data.WebApi.Services.CasePublicReport.PublicReport? Report = null,
-    /// <summary>
-    /// The place this case is about, when it is somewhere anybody may read about.
-    /// </summary>
-    /// <remarks>
-    /// <para>The traversal a visitor would naturally make — read the Bell Witch Cave case, then
-    /// see every group's work at the cave — was missing in exactly the direction that serves the
-    /// stranger (2026-09-17 audit). Phase 2 put the place on the case and the internal case page
-    /// shows it; the public one had no link at all.</para>
-    ///
-    /// <para><b>Public locations only.</b> A case at somebody's home starts from the client, not
-    /// from a page anyone can read, which is the same rule the place page's own buttons follow.
-    /// Null for a residence, so no public page ever points at one.</para>
-    /// </remarks>
+    // <summary>
+    // The place this case is about, when it is somewhere anybody may read about.
+    // </summary>
+    // <remarks>
+    // <para>The traversal a visitor would naturally make — read the Bell Witch Cave case, then
+    // see every group's work at the cave — was missing in exactly the direction that serves the
+    // stranger (2026-09-17 audit). Phase 2 put the place on the case and the internal case page
+    // shows it; the public one had no link at all.</para>
+    //
+    // <para><b>Public locations only.</b> A case at somebody's home starts from the client, not
+    // from a page anyone can read, which is the same rule the place page's own buttons follow.
+    // Null for a residence, so no public page ever points at one.</para>
+    // </remarks>
     Guid? PlaceId = null,
     string? PlaceName = null);
 

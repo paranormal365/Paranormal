@@ -597,10 +597,10 @@ public sealed record PlaceRecord(
     decimal? Longitude,
     string? GeocodeNote,
     PlaceKind Kind,
-    /// <summary>
-    /// What this place is, for somebody who has never been (item 250). Null on a private
-    /// residence — somebody's home has no public page to describe.
-    /// </summary>
+    // <summary>
+    // What this place is, for somebody who has never been (item 250). Null on a private
+    // residence — somebody's home has no public page to describe.
+    // </summary>
     string? Description = null);
 
 /// <summary>

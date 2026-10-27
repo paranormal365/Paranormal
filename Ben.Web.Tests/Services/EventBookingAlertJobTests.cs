@@ -349,8 +349,8 @@ public sealed class EventBookingAlertJobTests
             .OrderBy(m => m.DateCreated)
             .ToListAsync();
 
-        var root = Assert.Single(thread.Where(m => m.ParentMessageId == null));
-        var reply = Assert.Single(thread.Where(m => m.ParentMessageId == root.Id));
+        var root = Assert.Single(thread, m => m.ParentMessageId == null);
+        var reply = Assert.Single(thread, m => m.ParentMessageId == root.Id);
 
         Assert.Equal(EventId, root.HostedEventId);
         Assert.Contains("Bookings —", root.Subject);
@@ -382,7 +382,7 @@ public sealed class EventBookingAlertJobTests
         var all = await db.OrgMessages
             .Where(m => m.ChannelType == OrgMessageChannel.EventStaffRoom).ToListAsync();
 
-        Assert.Single(all.Where(m => m.ParentMessageId == null));
+        Assert.Single(all, m => m.ParentMessageId == null);
         Assert.Equal(2, all.Count(m => m.ParentMessageId != null));
     }
 

@@ -282,6 +282,10 @@ public static class RateLimiting
     /// <summary>What the global ceiling is called when an alert has to name it.</summary>
     public const string GlobalPolicyName = "global";
 
+    /// <summary>The window a store request falls in, for <paramref name="policy"/>.</summary>
+    internal static RateLimitPartition<string> StorePartition(HttpContext context, string policy)
+        => FixedWindowByClient(context, StorePoliciesPerMinute[policy]);
+
     /// <summary>
     /// One fixed one-minute window per client, <paramref name="permitLimit"/> requests wide.
     /// </summary>
@@ -297,10 +301,6 @@ public static class RateLimiting
     /// land at some unpredictable later point. Including it means a new limit is simply a new
     /// partition, and the stale one is evicted once idle.</para>
     /// </remarks>
-    /// <summary>The window a store request falls in, for <paramref name="policy"/>.</summary>
-    internal static RateLimitPartition<string> StorePartition(HttpContext context, string policy)
-        => FixedWindowByClient(context, StorePoliciesPerMinute[policy]);
-
     private static RateLimitPartition<string> FixedWindowByClient(
         HttpContext context, int permitLimit, TimeSpan? window = null)
         => RateLimitPartition.GetFixedWindowLimiter(

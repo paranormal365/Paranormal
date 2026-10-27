@@ -56,7 +56,7 @@ public sealed class SeededBoardTests
         var document = Seeded();
 
         Assert.Equal(4, document.Nodes.Count(n => n.Type == CanvasNodeType.Card));
-        Assert.Single(document.Nodes.Where(n => n.Type == CanvasNodeType.Text));
+        Assert.Single(document.Nodes, n => n.Type == CanvasNodeType.Text);
         Assert.Equal(3, document.Edges.Count);
         Assert.All(document.Edges, e => Assert.Equal(EdgeArrow.End, e.Arrow));
     }

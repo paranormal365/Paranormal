@@ -1499,13 +1499,13 @@ public sealed record ClientCaseDetail(
     string    City,
     string    State,
     Ben.Data.Common.Enums.CaseStatus Status,
-    /// <param name="Description">
-    /// PLAIN TEXT, always. The iPhone app draws this with SwiftUI's Text, which renders a string
-    /// exactly as given — so when case descriptions became a formatting editor, every client on
-    /// the shipped app started reading "&lt;p&gt;Things going bump in the night&lt;/p&gt;". The app
-    /// cannot be changed until its next build, which is the same reason CaseMessage.Body stays
-    /// plain and CaseMessageBodies exists. Reported by Ben, 2026-09-20.
-    /// </param>
+    // <param name="Description">
+    // PLAIN TEXT, always. The iPhone app draws this with SwiftUI's Text, which renders a string
+    // exactly as given — so when case descriptions became a formatting editor, every client on
+    // the shipped app started reading "&lt;p&gt;Things going bump in the night&lt;/p&gt;". The app
+    // cannot be changed until its next build, which is the same reason CaseMessage.Body stays
+    // plain and CaseMessageBodies exists. Reported by Ben, 2026-09-20.
+    // </param>
     string?   Description,
     string?   CaseManagerDisplayName,
     DateTime  DateCaseOpened,
@@ -1523,10 +1523,10 @@ public sealed record ClientCaseDetail(
     // Item 158: who the client actually talks to. Explicit contacts when the group set them,
     // otherwise the case manager stands in — never empty while a manager exists.
     IReadOnlyList<Entities.CaseContactRecord>? Contacts = null,
-    /// <param name="DescriptionHtml">
-    /// The same words with their formatting, for the website. Trailing and optional so the shipped
-    /// app — which has never heard of it — decodes this response exactly as before.
-    /// </param>
+    // <param name="DescriptionHtml">
+    // The same words with their formatting, for the website. Trailing and optional so the shipped
+    // app — which has never heard of it — decodes this response exactly as before.
+    // </param>
     string?   DescriptionHtml = null,
     // The clock the case reads on — its own, else its group's (2026-09-28).
     string?   TimeZoneId = null);
@@ -1543,10 +1543,10 @@ public sealed record ClientCaseOccurrence(
     // Returned as well as accepted: a tag the client sets but can never see back would be a
     // write-only control, and they'd have no way to tell whether it took.
     IReadOnlyList<Guid> ExperienceTypeIds,
-    /// <param name="BodyHtml">
-    /// The same words with their formatting, for the website. Trailing and optional, so the
-    /// shipped app decodes this exactly as before.
-    /// </param>
+    // <param name="BodyHtml">
+    // The same words with their formatting, for the website. Trailing and optional, so the
+    // shipped app decodes this exactly as before.
+    // </param>
     string?   BodyHtml = null);
 
 public sealed record OccurrenceFileItem(

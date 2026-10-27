@@ -30,14 +30,14 @@ public sealed class StripeFulfillmentService
     private readonly Ben.Data.Common.SiteIdentity _site;
     private readonly ILogger<StripeFulfillmentService> _log;
 
+    private readonly Ben.Data.WebApi.Services.Store.StoreOrderPayments? _store;
+
     /// <param name="email">
     /// How the receipt is posted.
     /// <para>Optional and trailing, like every other dependency added to this area: the fixtures
     /// here are about money landing on the ledger correctly, not about mail, and none of them
     /// should have to learn what a mailer is to keep testing that.</para>
     /// </param>
-    private readonly Ben.Data.WebApi.Services.Store.StoreOrderPayments? _store;
-
     public StripeFulfillmentService(
         IDbContextFactory<BenDataContext> dbFactory,
         ILogger<StripeFulfillmentService> log,

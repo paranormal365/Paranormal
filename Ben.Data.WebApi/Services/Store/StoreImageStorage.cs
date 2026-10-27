@@ -41,7 +41,7 @@ public sealed class StoreImageStorage(
     /// </summary>
     /// <param name="folder">Under <c>store/</c>, e.g. <c>products/{id:N}</c>.</param>
     public async Task<(UploadFile? File, StoreImageRefusal Refusal)> SaveAsync(
-        BenDataContext db, byte[] original, string? contentType, string fileName, string folder, Guid adminId,
+        BenDataContext db, byte[] original, string? contentType, string? fileName, string folder, Guid adminId,
         CancellationToken ct)
     {
         if (original.Length == 0 || contentType is null
@@ -71,7 +71,10 @@ public sealed class StoreImageStorage(
             UploadFileTypeId = UploadFileTypeSeeder.StoreImageFileTypeId,
             AppUserId = null,
             OwnerOrganizationId = null,
-            FileName = Path.ChangeExtension(Path.GetFileName(fileName), ".jpg"),
+            // An upload can arrive with no name; Path.ChangeExtension(null) is null, and the row
+            // needs one (warning cleanup, 10/27/2026).
+            FileName = Path.ChangeExtension(
+                string.IsNullOrWhiteSpace(Path.GetFileName(fileName)) ? "picture" : Path.GetFileName(fileName), ".jpg"),
             StoredFileName = storedName,
             ContentType = "image/jpeg",
             FileSize = served.LongLength,

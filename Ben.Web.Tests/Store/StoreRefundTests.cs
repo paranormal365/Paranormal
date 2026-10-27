@@ -51,7 +51,7 @@ public sealed class StoreRefundTests : IAsyncLifetime
         var clock = new Clock(() => _now);
         var payments = new StoreOrderPayments(_sqlite.Factory, _stripe, _tax, mailer, alerts, NullLogger<StoreOrderPayments>.Instance);
         var refunds = new StoreRefundService(_sqlite.Factory, _stripe, _tax, mailer, alerts, NullLogger<StoreRefundService>.Instance, clock);
-        return (refunds, new StoreOrderTransitions(_sqlite.Factory, mailer, alerts, refunds, payments, clock), payments);
+        return (refunds, new StoreOrderTransitions(_sqlite.Factory, mailer, refunds, payments, clock), payments);
     }
 
     private StoreRefundService Refunds => Services().Refunds;

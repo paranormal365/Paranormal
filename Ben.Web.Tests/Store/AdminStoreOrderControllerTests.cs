@@ -42,7 +42,7 @@ public sealed class AdminStoreOrderControllerTests : IAsyncLifetime
         var alerts = new StoreAlerts(_sqlite.Factory, new PlatformMessageService(_sqlite.Factory), mailer, NullLogger<StoreAlerts>.Instance);
         var payments = new StoreOrderPayments(_sqlite.Factory, _stripe, _tax, mailer, alerts, NullLogger<StoreOrderPayments>.Instance);
         var refunds = new StoreRefundService(_sqlite.Factory, _stripe, _tax, mailer, alerts, NullLogger<StoreRefundService>.Instance);
-        var desk = new StoreOrderTransitions(_sqlite.Factory, mailer, alerts, refunds, payments);
+        var desk = new StoreOrderTransitions(_sqlite.Factory, mailer, refunds, payments);
         return new AdminStoreOrderController(_sqlite.Factory, desk, refunds, Options.Create(new StripeOptions { SecretKey = "sk_test_x" }),
             new StoreParcelTransitions(_sqlite.Factory, mailer, alerts))
         {
