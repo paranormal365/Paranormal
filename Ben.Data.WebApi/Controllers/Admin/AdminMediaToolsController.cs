@@ -37,7 +37,7 @@ public sealed class AdminMediaToolsController : ControllerBase
         var path = _options.FfmpegPath;
         if (string.IsNullOrWhiteSpace(path))
             return Ok(new MediaToolsHealth(false, null, false, null,
-                "Not configured: .m4a scans and clips are refused until MediaTools:FfmpegPath is set."));
+                "No ffmpeg: .m4a scans and clips are refused until ffmpeg.exe is in the API site's App_Data\\Tools folder (or MediaTools:FfmpegPath names it)."));
 
         if (!System.IO.File.Exists(path))
             return Ok(new MediaToolsHealth(true, path, false, null,

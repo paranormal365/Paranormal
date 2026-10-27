@@ -354,6 +354,45 @@ public class MediaToolOptionsTests
     }
 
     [Theory]
+    [InlineData("ffmpeg.exe")]
+    [InlineData("ffmpeg")]
+    public void With_no_path_set_the_tools_folder_is_used(string name)
+    {
+        var site = Path.Combine(Path.GetTempPath(), $"ben-site-{Guid.NewGuid():N}");
+        var tools = Path.Combine(site, "App_Data", "Tools");
+        Directory.CreateDirectory(tools);
+        File.WriteAllBytes(Path.Combine(tools, name), [0]);
+        try
+        {
+            var options = new Ben.Data.WebApi.Services.MediaToolOptions();
+
+            options.ResolveAgainst(site);
+
+            Assert.Equal(Path.Combine(tools, name), options.FfmpegPath);
+        }
+        finally { Directory.Delete(site, recursive: true); }
+    }
+
+    [Fact]
+    public void A_set_path_wins_over_the_tools_folder()
+    {
+        var site = Path.Combine(Path.GetTempPath(), $"ben-site-{Guid.NewGuid():N}");
+        var tools = Path.Combine(site, "App_Data", "Tools");
+        Directory.CreateDirectory(tools);
+        File.WriteAllBytes(Path.Combine(tools, "ffmpeg.exe"), [0]);
+        try
+        {
+            var elsewhere = Path.Combine(Path.GetTempPath(), "tools", "ffmpeg");
+            var options = new Ben.Data.WebApi.Services.MediaToolOptions { FfmpegPath = elsewhere };
+
+            options.ResolveAgainst(site);
+
+            Assert.Equal(elsewhere, options.FfmpegPath);
+        }
+        finally { Directory.Delete(site, recursive: true); }
+    }
+
+    [Theory]
     [InlineData(null)]
     [InlineData("")]
     [InlineData("  ")]

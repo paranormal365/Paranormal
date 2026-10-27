@@ -14,14 +14,38 @@ public sealed class MediaToolOptions
     /// <remarks>
     /// A relative path is taken from the API's own folder (<see cref="ResolveAgainst"/>), so on
     /// shared hosting it can be <c>App_Data\Tools\ffmpeg.exe</c> like the key files, with no
-    /// need to know where the host keeps the site on disk.
+    /// need to know where the host keeps the site on disk. Left blank, that is where the API looks.
     /// </remarks>
     public string? FfmpegPath { get; set; }
 
-    /// <summary>Makes a relative <see cref="FfmpegPath"/> absolute, from <paramref name="contentRoot"/>.</summary>
+    /// <summary>Where the API looks for ffmpeg when no path is set, from its own folder.</summary>
+    public static readonly string[] DefaultLocations =
+    [
+        Path.Combine("App_Data", "Tools", "ffmpeg.exe"),
+        Path.Combine("App_Data", "Tools", "ffmpeg"),
+    ];
+
+    /// <summary>
+    /// Makes a relative <see cref="FfmpegPath"/> absolute, from <paramref name="contentRoot"/>, or
+    /// finds ffmpeg in <see cref="DefaultLocations"/> when none is set.
+    /// </summary>
+    /// <remarks>
+    /// The default exists because production had ffmpeg's place agreed and the setting never made it
+    /// into the site's configuration, so phone recordings were refused (10/27/2026). A file in the
+    /// agreed folder is now enough; a set path still wins.
+    /// </remarks>
     public void ResolveAgainst(string contentRoot)
     {
-        if (!string.IsNullOrWhiteSpace(FfmpegPath) && !Path.IsPathRooted(FfmpegPath))
+        if (string.IsNullOrWhiteSpace(FfmpegPath))
+        {
+            var found = DefaultLocations
+                .Select(relative => Path.GetFullPath(Path.Combine(contentRoot, relative)))
+                .FirstOrDefault(File.Exists);
+            if (found is not null) FfmpegPath = found;
+            return;
+        }
+
+        if (!Path.IsPathRooted(FfmpegPath))
             FfmpegPath = Path.GetFullPath(Path.Combine(contentRoot, FfmpegPath));
     }
 
