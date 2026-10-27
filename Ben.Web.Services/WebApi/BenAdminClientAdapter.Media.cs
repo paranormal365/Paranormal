@@ -195,6 +195,12 @@ public sealed partial class BenAdminClientAdapter
     public Task<(EvpScanJobRecord? Job, string? Error)> GetLiveScanJobAsync(Guid fileId, CancellationToken token = default)
         => _api.GetLiveScanJobAsync(fileId, token);
 
+    public Task<(BatchScanResult? Result, string? Error)> StartBatchScanAsync(StartBatchScanRequest request, CancellationToken token = default)
+        => _api.StartBatchScanAsync(request, token);
+
+    public Task<(IReadOnlyList<EvpScanSummaryRecord>? Scans, string? Error)> GetMyScansAsync(bool liveOnly = false, CancellationToken token = default)
+        => _api.GetMyScansAsync(liveOnly, token);
+
     public Task<(bool Deleted, string? Error)> CancelScanJobAsync(Guid jobId, CancellationToken token = default)
         => _api.CancelScanJobAsync(jobId, token);
 

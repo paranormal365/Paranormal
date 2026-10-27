@@ -280,6 +280,13 @@
                                    in a room with a furnace. Every dial the detector has is here (phase 5). *@
                                 <EvpScanSettingsEditor Value="@_scanOptions" ValueChanged="@OnScanOptionsChanged"
                                                        @bind-Presets="@_scanPresets" />
+                                @* Phase 10: the natural next step after changing a setting, right where it was changed. *@
+                                <div class="d-flex justify-content-end mt-2">
+                                    <button type="button" class="btn btn-primary btn-sm" id="evp-rescan"
+                                            disabled="@_scanning" @onclick="RunScanAsync">
+                                        <BenIcon Name="refresh-cw" Class="me-1" />Rescan with these settings
+                                    </button>
+                                </div>
                             }
                         </div>
 

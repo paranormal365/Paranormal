@@ -43,6 +43,30 @@
                 Add @_selectedIds.Count selected
             </button>
         }
+        @* Several recordings scanned for EVPs at once (audio phase 10). Only recordings can be chosen. *@
+        @if (!PickerMode && _allFiles.Any(IsRecording))
+        {
+            <div class="d-flex align-items-center gap-2" id="library-scan-bar">
+                @if (_scanPicking)
+                {
+                    <span class="small text-muted" id="library-scan-count">
+                        @(_scanIds.Count == 0 ? "Choose the recordings to scan" : _scanIds.Count == 1 ? "1 recording chosen" : $"{_scanIds.Count} recordings chosen")
+                    </span>
+                    <button type="button" class="btn btn-outline-secondary btn-sm" @onclick="StopPicking">Cancel</button>
+                    <button type="button" class="btn btn-primary btn-sm" id="library-scan-start"
+                            disabled="@(_scanIds.Count == 0)" @onclick="@(() => _showBatchScan = true)">
+                        <BenIcon Name="search" Class="me-1" />Scan for EVP
+                    </button>
+                }
+                else
+                {
+                    <button type="button" class="btn btn-outline-secondary btn-sm" id="library-scan-choose"
+                            @onclick="@(() => _scanPicking = true)">
+                        <BenIcon Name="search" Class="me-1" />Scan several for EVP…
+                    </button>
+                }
+            </div>
+        }
     </div>
 
     @if (_loading)
@@ -69,14 +93,21 @@
             {
                 var file = f;
                 var isSelected = _selectedIds.Contains(file.Id);
+                var forScan = _scanPicking && IsRecording(file);
                 <div class="col-6 col-md-4 col-lg-3">
-                    <div class="card h-100 @(isSelected ? "border-primary" : "")"
-                         style="@(PickerMode ? "cursor:pointer;" : "")"
+                    <div class="card h-100 @(isSelected || (forScan && _scanIds.Contains(file.Id)) ? "border-primary" : "") @(_scanPicking && !forScan ? "opacity-50" : "")"
+                         style="@(PickerMode || forScan ? "cursor:pointer;" : "")"
+                         data-testid="@(forScan ? "library-scan-pick" : null)"
                          @onclick="@(() => ToggleSelect(file))">
                         <div class="card-body d-flex flex-column gap-2">
                             @if (PickerMode)
                             {
                                 <input type="checkbox" class="form-check-input" checked="@isSelected" disabled />
+                            }
+                            else if (forScan)
+                            {
+                                <input type="checkbox" class="form-check-input" checked="@_scanIds.Contains(file.Id)" disabled
+                                       aria-label="@($"Scan {file.FileName}")" />
                             }
                             @* A TILE, not a gap. Every card gets the same frame whatever it
                                holds, so "this file has no preview" and "this page is broken" stop
@@ -142,6 +173,19 @@
     {
         <TelerikGrid Data="@_pageItems" Pageable="false" Sortable="false">
             <GridColumns>
+                @if (_scanPicking)
+                {
+                    <GridColumn Width="50px" Title="">
+                        <Template>
+                            @{ var pick = (UploadFileRecord)context; }
+                            @if (IsRecording(pick))
+                            {
+                                <input type="checkbox" class="form-check-input" checked="@_scanIds.Contains(pick.Id)"
+                                       aria-label="@($"Scan {pick.FileName}")" @onchange="@(() => ToggleScan(pick))" />
+                            }
+                        </Template>
+                    </GridColumn>
+                }
                 @if (PickerMode)
                 {
                     <GridColumn Width="50px" Title="">
@@ -239,6 +283,7 @@
 @if (!PickerMode)
 {
     <BenFileDeleteFlow @ref="_deleteFlow" OnGone="@ForgetDeletedFile" />
+    <BatchScanDialog @bind-Visible="@_showBatchScan" FileIds="@_scanIds.ToList()" OnStarted="@StopPicking" />
 }
 
 @code {
@@ -307,8 +352,32 @@
         _page = Math.Clamp(page, 1, _totalPages);
     }
 
+    // ── Choosing recordings to scan (audio phase 10) ──
+    private bool _scanPicking;
+    private bool _showBatchScan;
+    private readonly HashSet<Guid> _scanIds = [];
+
+    private static bool IsRecording(UploadFileRecord file)
+        => file.ContentType.StartsWith("audio/", StringComparison.OrdinalIgnoreCase);
+
+    private void ToggleScan(UploadFileRecord file)
+    {
+        if (!_scanIds.Remove(file.Id)) _scanIds.Add(file.Id);
+    }
+
+    private void StopPicking()
+    {
+        _scanPicking = false;
+        _scanIds.Clear();
+    }
+
     private void ToggleSelect(UploadFileRecord file)
     {
+        if (_scanPicking)
+        {
+            if (IsRecording(file)) ToggleScan(file);
+            return;
+        }
         if (!PickerMode) return;
         if (_selectedIds.Contains(file.Id))
         {

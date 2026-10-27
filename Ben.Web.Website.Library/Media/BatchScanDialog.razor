@@ -1,0 +1,121 @@
+@namespace Ben.Web.Website.Library.Media
+@using Ben.Data.Common.Enums
+@using Ben.Service.Models.Entities
+@using Ben.Web.Services
+@using Ben.Web.Website.Library.Kit
+@using Ben.Web.Website.Library.Manage.Audio
+@inject IBenAdminClient AdminClient
+
+@*
+    Scanning several recordings for EVPs at once (phase 10 of ProjectNotes/AudioEditor-EVP-Plan-2026-10-26.md):
+    the same settings as the editor's Fine-tune, then one background job. Every recording comes back
+    either in the job or with the reason it isn't, never quietly left out.
+*@
+
+<BenModal Visible="@Visible" VisibleChanged="@CloseAsync" Title="@Title" Size="lg">
+    <div id="batch-scan-dialog">
+        @if (_result is null)
+        {
+            <p class="small text-muted">
+                The scan runs in the background, one recording after another. You can leave this page; follow it
+                on <a href="/audio/scans">Scans</a>.
+            </p>
+            <EvpScanSettingsEditor Value="@_options" ValueChanged="@(o => _options = o)" @bind-Presets="@_presets" />
+            @if (_error is not null)
+            {
+                <div class="alert alert-warning py-2 small mt-2" role="alert" id="batch-scan-error">@_error</div>
+            }
+            <div class="d-flex justify-content-end gap-2 mt-3">
+                <button type="button" class="btn btn-outline-secondary btn-sm" @onclick="CloseAsync">Cancel</button>
+                <button type="button" class="btn btn-primary btn-sm" id="batch-scan-start" disabled="@_starting" @onclick="StartAsync">
+                    @(_starting ? "Starting…" : FileIds.Count == 1 ? "Scan 1 recording" : $"Scan {FileIds.Count} recordings")
+                </button>
+            </div>
+        }
+        else
+        {
+            var accepted = _result.Items.Count(i => i.Accepted);
+            <p id="batch-scan-outcome">
+                @if (accepted > 0)
+                {
+                    <text>@(accepted == 1 ? "1 recording is" : $"{accepted} recordings are") being scanned. </text>
+                    <a href="/audio/scans" id="batch-scan-follow">Follow it on Scans</a>
+                }
+                else
+                {
+                    <text>None of these could be scanned.</text>
+                }
+            </p>
+            @if (_result.Items.Any(i => !i.Accepted))
+            {
+                <ul class="small mb-0" id="batch-scan-refused">
+                    @foreach (var item in _result.Items.Where(i => !i.Accepted))
+                    {
+                        <li><strong>@(item.FileName ?? "A recording")</strong>: @item.Refusal</li>
+                    }
+                </ul>
+            }
+            <div class="d-flex justify-content-end mt-3">
+                <button type="button" class="btn btn-secondary btn-sm" @onclick="CloseAsync">Close</button>
+            </div>
+        }
+    </div>
+</BenModal>
+
+@code {
+    [Parameter] public bool Visible { get; set; }
+    [Parameter] public EventCallback<bool> VisibleChanged { get; set; }
+    [Parameter] public IReadOnlyList<Guid> FileIds { get; set; } = [];
+
+    /// <summary>Raised when a job was started, so the page can leave picking.</summary>
+    [Parameter] public EventCallback OnStarted { get; set; }
+
+    private EvpDetectionOptions _options = EvpDetectionOptions.FromSensitivity(EvpSensitivity.Medium);
+    private IReadOnlyList<EvpScanPresetRecord> _presets = [];
+    private BatchScanResult? _result;
+    private string? _error;
+    private bool _starting;
+    private bool _wasVisible;
+
+    private string Title => FileIds.Count == 1 ? "Scan 1 recording for EVPs" : $"Scan {FileIds.Count} recordings for EVPs";
+
+    protected override async Task OnParametersSetAsync()
+    {
+        if (Visible && !_wasVisible)
+        {
+            _result = null;
+            _error = null;
+            // Starts from the person's default preset, as a new recording in the editor does.
+            var presets = await AdminClient.GetEvpScanPresetsAsync();
+            if (!presets.Failed) _presets = presets.Items;
+            _options = _presets.FirstOrDefault(p => p.IsDefault && p.Problem is null)?.Options
+                       ?? EvpDetectionOptions.FromSensitivity(EvpSensitivity.Medium);
+        }
+        _wasVisible = Visible;
+    }
+
+    private async Task StartAsync()
+    {
+        _starting = true;
+        _error = null;
+        try
+        {
+            var level = EvpDetectionOptions.PresetName(_options) is { } name && Enum.TryParse<EvpSensitivity>(name, out var s)
+                ? s : EvpSensitivity.Medium;
+            var (result, error) = await AdminClient.StartBatchScanAsync(new StartBatchScanRequest(FileIds, level, _options));
+            if (result is null)
+            {
+                _error = error ?? "The scans couldn't be started just now.";
+                return;
+            }
+            _result = result;
+            if (result.Job is not null) await OnStarted.InvokeAsync();
+        }
+        finally
+        {
+            _starting = false;
+        }
+    }
+
+    private async Task CloseAsync() => await VisibleChanged.InvokeAsync(false);
+}

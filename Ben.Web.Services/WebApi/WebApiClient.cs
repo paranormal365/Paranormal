@@ -871,6 +871,19 @@ public sealed class WebApiClient : IWebApiClient
     public Task<(bool Deleted, string? Error)> CancelScanJobAsync(Guid jobId, CancellationToken token = default)
         => DeleteExpectingReasonAsync($"/api/scan-jobs/{jobId}", token);
 
+    /// <inheritdoc />
+    public Task<(BatchScanResult? Result, string? Error)> StartBatchScanAsync(StartBatchScanRequest request, CancellationToken token = default)
+        => PostWithScanReasonAsync<StartBatchScanRequest, BatchScanResult>("/api/evp-scans", request,
+            "The scans couldn't be started just now.", token);
+
+    /// <inheritdoc />
+    public async Task<(IReadOnlyList<EvpScanSummaryRecord>? Scans, string? Error)> GetMyScansAsync(bool liveOnly = false, CancellationToken token = default)
+    {
+        var (list, error) = await GetWithReasonAsync<List<EvpScanSummaryRecord>>(
+            "/api/evp-scans" + (liveOnly ? "?status=live" : ""), token);
+        return (list, error);
+    }
+
     // ── Scanning a session for EVPs (phase 9 of the audio plan) ──────────────
 
     /// <inheritdoc />
