@@ -174,6 +174,20 @@ later scans never touch the markers you've kept.
 Press ▶ on a kept marker to play it. If the marker is a single moment rather than a stretch, you
 hear a couple of seconds on either side, which is usually what you need to tell a voice from a bump.
 
+### Stood out, and voice-like
+
+Each candidate has two readings, each out of 100:
+
+- **Stood out**: how far the sound rose above the room around it. This is the scan's own score.
+- **Voice-like**: how much the sound is shaped like a human voice, measured by a second model after
+  the scan finds it. A knock or a hum reads low; a voice, or something shaped like one, reads high.
+
+Neither one says a sound *is* a voice or an EVP. They help you decide what to listen to first. Sort
+the list by **Stood out**, **Voice-like** or **Time**. Use **Hide below voice-like** to shorten the
+list while you work; at 0 it hides nothing, and it only changes what you see, never what the scan
+found. A candidate shows "not measured" when it was found before voice-likeness was measured, or on
+a server without the model; scan again to measure it.
+
 ### Why a candidate was found
 
 Every candidate has a **Why?** button (the ⓘ on its row). It opens its score in three parts:

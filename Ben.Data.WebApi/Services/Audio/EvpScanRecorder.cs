@@ -104,6 +104,7 @@ public sealed class EvpScanRecorder
                 IsAutoDetected     = true,
                 DetectionScore     = c.Score,
                 IsExploratory      = exploratory?.Invoke(c) ?? false,
+                VoiceLikelihood    = c.VoiceLikelihood,
                 ReviewStatus       = EvpReviewStatus.Pending,
                 Note               = noteFor?.Invoke(c),
                 DateCreated        = now,
@@ -152,7 +153,7 @@ public sealed class EvpScanRecorder
             .Where(c => !reviewed.Any(r => OverlapsEnough(c, r.TimeSeconds, r.EndSeconds, settings.ReviewedOverlapFraction)))
             .ToList();
         var requests = proposed
-            .Select(c => new AudioCandidateRequest(c.StartSeconds, c.EndSeconds, c.Score))
+            .Select(c => new AudioCandidateRequest(c.StartSeconds, c.EndSeconds, c.Score, c.VoiceLikelihood))
             .ToList();
         var exploratorySpans = proposed.Where(c => c.Exploratory)
             .Select(c => (c.StartSeconds, c.EndSeconds)).ToHashSet();
@@ -205,6 +206,7 @@ public sealed class EvpScanRecorder
                 TraceBlob          = analysis.Trace is { } trace ? EvpTraceCodec.Encode(trace) : null,
                 TraceBucketMs      = analysis.Trace is { } t ? (int)Math.Round(t.BucketSeconds * 1000) : null,
                 RecordingSeconds   = analysis.RecordingSeconds,
+                VoiceModel         = analysis.VoiceModel,
                 FoundCount         = analysis.Candidates.Count,
                 ProposedCount      = proposed.Count,
             };
@@ -228,6 +230,7 @@ public sealed class EvpScanRecorder
                     BandLevelSpreadDb = c.Features.BandLevelSpreadDb,
                     ZeroCrossingRate  = c.Features.ZeroCrossingRate,
                     Exploratory       = c.Exploratory,
+                    VoiceLikelihood   = c.VoiceLikelihood,
                 });
             }
 

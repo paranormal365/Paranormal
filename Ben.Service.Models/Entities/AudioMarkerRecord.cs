@@ -25,6 +25,12 @@ public record AudioMarkerRecord
     /// <summary>Included as a lower-ranked sample from a full scan rather than for its score.</summary>
     public bool IsExploratory { get; init; }
 
+    /// <summary>
+    /// How voice-shaped the sound is, 0–1 (VoiceNet, phase 9b); null when it was not measured. A ranking,
+    /// never a likelihood that it is an EVP.
+    /// </summary>
+    public float? VoiceLikelihood { get; init; }
+
     /// <summary>Where this marker stands in review.</summary>
     public EvpReviewStatus ReviewStatus { get; init; }
 
@@ -63,7 +69,8 @@ public record UpdateAudioMarkerRequest(
 public record AudioCandidateRequest(
     double StartSeconds,
     double EndSeconds,
-    float  Score);
+    float  Score,
+    float? VoiceLikelihood = null);
 
 /// <summary>
 /// The full result of one scan, replacing whatever the previous scan proposed for this file.

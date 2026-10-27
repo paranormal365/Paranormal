@@ -20,9 +20,13 @@ namespace Ben.Data.WebApi.Services.Audio;
 /// Kept as one of the lower-ranked candidates a full scan sets aside places for
 /// (<see cref="EvpDetectionOptions.ExplorationShare"/>), not for its score.
 /// </param>
+/// <param name="VoiceLikelihood">
+/// How voice-shaped the sound is, 0–1, from VoiceNet after the scan (phase 9b); null when not measured.
+/// Never part of <see cref="Score"/>.
+/// </param>
 public readonly record struct EvpCandidate(
     double StartSeconds, double EndSeconds, float Score, EvpFeatures Features = default,
-    bool Exploratory = false)
+    bool Exploratory = false, float? VoiceLikelihood = null)
 {
     public double DurationSeconds => EndSeconds - StartSeconds;
 }
@@ -55,7 +59,9 @@ public readonly record struct EvpFeatures(
 
 /// <summary>One scan's result: the candidates, how long the recording was, and what the detector saw.</summary>
 /// <param name="Trace">The detector's view of the whole recording (phase 8); null for an empty one.</param>
-public sealed record EvpAnalysis(IReadOnlyList<EvpCandidate> Candidates, double RecordingSeconds, EvpTrace? Trace = null);
+/// <param name="VoiceModel">The model that measured the candidates' voice-likeness, or null when none did.</param>
+public sealed record EvpAnalysis(IReadOnlyList<EvpCandidate> Candidates, double RecordingSeconds, EvpTrace? Trace = null,
+    string? VoiceModel = null);
 
 /// <summary>
 /// What the detector saw across a recording, a tenth of a second at a time (phase 8): enough to draw

@@ -721,6 +721,52 @@ public class AudioEditorTests : BenTestBase
     }
 
     /// <summary>
+    /// Each candidate shows two readings, how much it stood out and how voice-like it is; the list sorts by
+    /// either, and the voice-like filter hides on the page only, with nothing hidden at 0 (phase 9b).
+    /// </summary>
+    [Test]
+    public async Task Candidates_show_both_readings_and_sort_and_filter_by_voice_like()
+    {
+        if (!await ReadyInFullViewAsync(ScannableWav(), "wav", "audio/wav"))
+        {
+            Assert.Ignore("Could not open the editor; see the output for where it gave up.");
+            return;
+        }
+        var panel = await ScanForThreeAsync();
+        var rows = panel.Locator(".evp-row--candidate");
+
+        await Expect(rows.First.Locator(".evp-score__label").First).ToHaveTextAsync("Stood out");
+        var voice = rows.Locator(".evp-score--voice[data-voice]");
+        await Expect(voice).ToHaveCountAsync(3, new() { Timeout = 15_000 });
+
+        await panel.Locator("#evp-sort").GetByRole(AriaRole.Button, new() { Name = "Voice-like" }).ClickAsync();
+        await Expect(panel.Locator("#evp-sort button[aria-pressed=true]")).ToHaveTextAsync("Voice-like");
+        var readings = new List<int>();
+        foreach (var reading in await voice.AllAsync())
+            readings.Add(int.Parse((await reading.GetAttributeAsync("data-voice"))!));
+        TestContext.Out.WriteLine($"voice-like readings: {string.Join(", ", readings)}");
+        Assert.That(readings, Is.Ordered.Descending, "Voice-like did not put the most voice-like first.");
+
+        // At the highest reading, everything below it is hidden and said so; at 0 all of it comes back.
+        var filter = panel.Locator("#evp-voice-filter");
+        var top = readings.Max();
+        await filter.FillAsync(top.ToString());
+        var below = readings.Count(r => r < top);
+        await Expect(rows).ToHaveCountAsync(readings.Count - below, new() { Timeout = 10_000 });
+        if (below > 0)
+            await Expect(panel.Locator("#evp-voice-hidden")).ToHaveTextAsync($"{below} hidden");
+        if (top < 100)
+        {
+            await filter.FillAsync("100");
+            await Expect(rows).ToHaveCountAsync(0, new() { Timeout = 10_000 });
+            await Expect(panel.Locator("#evp-voice-hidden")).ToHaveTextAsync("3 hidden");
+        }
+        await filter.FillAsync("0");
+        await Expect(rows).ToHaveCountAsync(3, new() { Timeout = 10_000 });
+        await Expect(panel.Locator("#evp-voice-hidden")).ToHaveCountAsync(0);
+    }
+
+    /// <summary>
     /// The strip above the waveform shows every candidate, and a click goes to one; B switches to the
     /// original and back; the meter moves while something plays (phase 8).
     /// </summary>
@@ -1069,7 +1115,8 @@ public class AudioEditorTests : BenTestBase
         var radius = await panel.EvaluateAsync<string>("el => getComputedStyle(el).borderTopLeftRadius");
         Assert.That(radius, Is.Not.EqualTo("0px"), "the EVP lab's stylesheet is not applied to the panel");
         TestContext.Out.WriteLine($"pictures in {shots}");
-        await Expect(candidates.First.Locator(".evp-score__meter > span")).ToBeAttachedAsync();
+        // The scan's own score bar; since phase 9b the row also has a voice-like one.
+        await Expect(candidates.First.Locator(".evp-score:not(.evp-score--voice) .evp-score__meter > span")).ToBeAttachedAsync();
         await ShootBothAsync(panel, "panel-after-scan");
 
         // Heard, then dismissed: the ruling the detector will learn from.

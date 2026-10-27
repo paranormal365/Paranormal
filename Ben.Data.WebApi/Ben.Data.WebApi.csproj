@@ -74,6 +74,9 @@
          scripts/get-screener-model.sh (.ps1 for the Windows host). When present it must reach
          BOTH build output and publish output, or the deployed API silently degrades to
          manual-only screening. Condition keeps a model-less checkout building clean. -->
+    <!-- VoiceNet (audio phase 9b): ours, 1.1 MB, committed. The file name is the model version;
+         a retrain ships beside it as voicenet-v2.onnx. -->
+    <Content Include="Models\voicenet-v1.onnx" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
     <Content Include="Models\nsfw\model_quantized.onnx" Condition="Exists('Models\nsfw\model_quantized.onnx')" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
   </ItemGroup>
 

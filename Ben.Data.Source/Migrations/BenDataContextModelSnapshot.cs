@@ -283,6 +283,9 @@ namespace Ben.Data.Source.Migrations
                     b.Property<Guid>("UploadFileId")
                         .HasColumnType("uniqueidentifier");
 
+                    b.Property<float?>("VoiceLikelihood")
+                        .HasColumnType("real");
+
                     b.HasKey("Id");
 
                     b.HasIndex("CreatedByAppUserId");
@@ -3470,6 +3473,10 @@ namespace Ben.Data.Source.Migrations
                     b.Property<Guid>("UploadFileId")
                         .HasColumnType("uniqueidentifier");
 
+                    b.Property<string>("VoiceModel")
+                        .HasMaxLength(64)
+                        .HasColumnType("nvarchar(64)");
+
                     b.HasKey("Id");
 
                     b.HasIndex("UploadFileId", "DateCreated");
@@ -3521,6 +3528,9 @@ namespace Ben.Data.Source.Migrations
 
                     b.Property<double>("StartSeconds")
                         .HasColumnType("float");
+
+                    b.Property<float?>("VoiceLikelihood")
+                        .HasColumnType("real");
 
                     b.Property<double>("ZeroCrossingRate")
                         .HasColumnType("float");

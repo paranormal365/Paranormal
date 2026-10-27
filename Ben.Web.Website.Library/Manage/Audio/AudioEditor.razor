@@ -290,14 +290,31 @@
                                 <div class="evp-lab__review-head">
                                     <span class="evp-lab__chip evp-lab__chip--hot">@PendingCandidates.Count()</span>
                                     <strong>@(PendingCandidates.Count() == 1 ? "candidate" : "candidates") to review</strong>
-                                    <div class="evp-seg evp-seg--sm ms-auto" role="group" aria-label="Sort candidates">
-                                        <button type="button" class="evp-seg__btn @(_candidatesByScore ? "is-active" : null)" aria-pressed="@(_candidatesByScore ? "true" : "false")" @onclick="@(() => _candidatesByScore = true)">Score</button>
-                                        <button type="button" class="evp-seg__btn @(!_candidatesByScore ? "is-active" : null)" aria-pressed="@(!_candidatesByScore ? "true" : "false")" @onclick="@(() => _candidatesByScore = false)">Time</button>
+                                    <div class="evp-seg evp-seg--sm ms-auto" role="group" aria-label="Sort candidates" id="evp-sort">
+                                        @foreach (var (order, label) in CandidateOrders)
+                                        {
+                                            var o = order;
+                                            <button type="button" class="evp-seg__btn @(_candidateOrder == o ? "is-active" : null)"
+                                                    aria-pressed="@(_candidateOrder == o ? "true" : "false")" @onclick="@(() => _candidateOrder = o)">@label</button>
+                                        }
                                     </div>
+                                </div>
+                                @* The person's own filter over the model's reading (phase 9b): applied here, never by the
+                                   server, and at 0 it hides nothing. A candidate the model never measured is never hidden. *@
+                                <div class="evp-lab__voice-filter">
+                                    <label for="evp-voice-filter" class="evp-lab__voice-filter-label">
+                                        Hide below voice-like <strong>@_hideBelowVoice</strong>
+                                    </label>
+                                    <input id="evp-voice-filter" type="range" class="form-range" min="0" max="100" step="1"
+                                           value="@_hideBelowVoice" @oninput="@(e => _hideBelowVoice = int.TryParse(e.Value?.ToString(), out var v) ? v : 0)" />
+                                    @if (HiddenByVoiceCount > 0)
+                                    {
+                                        <span class="evp-lab__voice-filter-note" id="evp-voice-hidden">@HiddenByVoiceCount hidden</span>
+                                    }
                                 </div>
 
                                 <div class="evp-lab__list evp-lab__list--scroll">
-                                    @foreach (var candidate in SortedCandidates)
+                                    @foreach (var candidate in VisibleCandidates)
                                     {
                                         var c = candidate;
                                         var isAdjusting = _adjustingCandidateId == c.Id;
@@ -305,10 +322,28 @@
                                         var heard = _heardCandidates.Contains(c.Id);
                                         <div class="evp-row evp-row--candidate @(isAdjusting ? "is-adjusting" : null) @(_focusedCandidateId == c.Id ? "is-focused" : null)"
                                              data-heard="@(heard ? "true" : "false")" aria-current="@(_focusedCandidateId == c.Id ? "true" : null)">
-                                            <span class="evp-score" title="How much this stood out from the background, not a likelihood of speech">
+                                            <span class="evp-score" title="Stood out: how much this rose above the background, not a likelihood of speech">
+                                                <span class="evp-score__label">Stood out</span>
                                                 <span class="evp-score__num">@score.ToString("0")</span>
                                                 <span class="evp-score__meter"><span style="width:@(score.ToString("0", System.Globalization.CultureInfo.InvariantCulture))%;"></span></span>
                                             </span>
+                                            @if (c.VoiceLikelihood is { } likeness)
+                                            {
+                                                var voiceLike = Math.Clamp(likeness * 100, 0, 100);
+                                                <span class="evp-score evp-score--voice" data-voice="@voiceLike.ToString("0")"
+                                                      title="Voice-like: how much this is shaped like a human voice. A ranking, never a likelihood that it is an EVP.">
+                                                    <span class="evp-score__label">Voice-like</span>
+                                                    <span class="evp-score__num">@voiceLike.ToString("0")</span>
+                                                    <span class="evp-score__meter"><span style="width:@(voiceLike.ToString("0", System.Globalization.CultureInfo.InvariantCulture))%;"></span></span>
+                                                </span>
+                                            }
+                                            else
+                                            {
+                                                <span class="evp-score evp-score--voice is-unmeasured" title="@VoiceUnmeasuredTitle">
+                                                    <span class="evp-score__label">Voice-like</span>
+                                                    <span class="evp-score__none">not measured</span>
+                                                </span>
+                                            }
                                             @if (isAdjusting)
                                             {
                                                 @* Live values, not the stored ones — the point is to see
@@ -2362,6 +2397,7 @@
     {
         var presets = await AdminClient.GetEvpScanPresetsAsync();
         if (!presets.Failed) _scanPresets = presets.Items;
+        (_voiceStatus, _) = await AdminClient.GetVoiceModelStatusAsync();
 
         if (ScanOptionsFrom(_savedConfig?.EvpScanOptionsJson) is { } lastUsed)
             await OnScanOptionsChanged(lastUsed);
@@ -2392,7 +2428,13 @@
 
     // ── Candidate review ──────────────────────────────────────────────────────
 
-    private bool                _candidatesByScore = true;
+    private CandidateOrder      _candidateOrder = CandidateOrder.StoodOut;
+
+    /// <summary>Hide pending candidates whose voice-like reading is below this (0–100); 0 hides nothing (phase 9b).</summary>
+    private int                 _hideBelowVoice;
+
+    /// <summary>Whether this server measures voice-likeness, and why not when it doesn't.</summary>
+    private VoiceModelStatusRecord? _voiceStatus;
     private Guid?               _reviewingCandidateId;
     private bool                _showConfirmCandidateDialog;
     private AudioMarkerRecord?  _confirmingCandidate;
@@ -2446,10 +2488,32 @@
     /// Score order first by default — the strongest signals are the best use of the first few
     /// minutes of review. Playback order is a click away for working straight through a recording.
     /// </summary>
-    private IEnumerable<AudioMarkerRecord> SortedCandidates =>
-        _candidatesByScore
-            ? PendingCandidates.OrderByDescending(c => c.DetectionScore ?? 0).ThenBy(c => c.TimeSeconds)
-            : PendingCandidates;
+    private IEnumerable<AudioMarkerRecord> SortedCandidates => _candidateOrder switch
+    {
+        CandidateOrder.StoodOut  => PendingCandidates.OrderByDescending(c => c.DetectionScore ?? 0).ThenBy(c => c.TimeSeconds),
+        // Unmeasured last: they have nothing to be ranked by.
+        CandidateOrder.VoiceLike => PendingCandidates.OrderByDescending(c => c.VoiceLikelihood ?? -1).ThenBy(c => c.TimeSeconds),
+        _                        => PendingCandidates,
+    };
+
+    private enum CandidateOrder { StoodOut, VoiceLike, Time }
+
+    private static readonly (CandidateOrder Order, string Label)[] CandidateOrders =
+        [(CandidateOrder.StoodOut, "Stood out"), (CandidateOrder.VoiceLike, "Voice-like"), (CandidateOrder.Time, "Time")];
+
+    /// <summary>The sorted list less what the voice-like filter hides. Unmeasured candidates are never hidden.</summary>
+    private IEnumerable<AudioMarkerRecord> VisibleCandidates =>
+        SortedCandidates.Where(c => !HiddenByVoice(c));
+
+    private bool HiddenByVoice(AudioMarkerRecord c)
+        // Compared as shown: a reading displayed as 50 stays at "hide below 50".
+        => _hideBelowVoice > 0 && c.VoiceLikelihood is { } v && Math.Round(Math.Clamp(v * 100, 0, 100), MidpointRounding.AwayFromZero) < _hideBelowVoice;
+
+    private int HiddenByVoiceCount => _hideBelowVoice == 0 ? 0 : PendingCandidates.Count(HiddenByVoice);
+
+    private string VoiceUnmeasuredTitle => _voiceStatus is { Available: false, Reason: { Length: > 0 } reason }
+        ? reason
+        : "Not measured: this candidate was found before voice-likeness was measured. Scan again to measure it.";
 
     /// <summary>
     /// Plays just this candidate. The stored span already includes the detector's context padding,

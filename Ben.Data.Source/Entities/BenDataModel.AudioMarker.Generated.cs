@@ -33,6 +33,9 @@ namespace Ben.Data.Source.Entities
         /// </summary>
         public bool IsExploratory { get; set; }
 
+        /// <summary>How voice-shaped the sound is, 0–1 (VoiceNet, phase 9b); null when not measured.</summary>
+        public float? VoiceLikelihood { get; set; }
+
         /// <summary>Where this marker stands in review. Defaults to Confirmed for hand-placed markers.</summary>
         public EvpReviewStatus ReviewStatus { get; set; }
 

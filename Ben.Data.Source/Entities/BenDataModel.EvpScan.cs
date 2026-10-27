@@ -60,6 +60,12 @@ namespace Ben.Data.Source.Entities
         /// <summary>The trace's bucket length in milliseconds; null with no trace.</summary>
         public int? TraceBucketMs { get; set; }
 
+        /// <summary>
+        /// The voice model that measured this scan's candidates (<c>voicenet-v1</c>), or null when none did.
+        /// A retrained model has a new name, so its readings are never mixed with an older one's.
+        /// </summary>
+        public string? VoiceModel { get; set; }
+
         /// <summary>Length of the recording that was scanned.</summary>
         public double RecordingSeconds { get; set; }
 
@@ -119,6 +125,9 @@ namespace Ben.Data.Source.Entities
 
         /// <summary>Kept as a lower-ranked sample, not for its score (phase 5, item 253).</summary>
         public bool Exploratory { get; set; }
+
+        /// <summary>How voice-shaped it was, 0–1: the eighth feature (VoiceNet, phase 9b). Null when not measured.</summary>
+        public float? VoiceLikelihood { get; set; }
 
         public virtual EvpScan EvpScan { get; set; } = null!;
     }

@@ -361,6 +361,29 @@
     background-image: var(--ben-accent-grad);
 }
 
+/* The model's reading beside the detector's (phase 9b): same shape, its own color. */
+.evp-score__label {
+    font-size: .65rem;
+    line-height: 1;
+    color: var(--ben-ink-faint);
+    white-space: nowrap;
+}
+.evp-score--voice .evp-score__meter > span { background-image: none; background: var(--ben-ink-muted); }
+.evp-score__none { font-size: .7rem; color: var(--ben-ink-faint); white-space: nowrap; }
+.evp-score.is-unmeasured { flex-basis: 4.2rem; }
+
+.evp-lab__voice-filter {
+    display: flex;
+    align-items: center;
+    gap: .75rem;
+    margin: .25rem 0 .5rem;
+    font-size: .8rem;
+    color: var(--ben-ink-muted);
+}
+.evp-lab__voice-filter .form-range { max-width: 12rem; }
+.evp-lab__voice-filter-label { white-space: nowrap; margin: 0; }
+.evp-lab__voice-filter-note { white-space: nowrap; }
+
 /* ── the How it works modal ────────────────────────────────────────────── */
 
 .evp-info { font-size: .92rem; }

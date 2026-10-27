@@ -29,7 +29,8 @@ public sealed class EvpScanService(
     IAudioDecoder decoder,
     EvpScanRecorder recorder,
     ILogger<EvpScanService> logger,
-    EvpQuestionContext? questions = null)
+    EvpQuestionContext? questions = null,
+    Voice.IVoiceScorer? voice = null)
 {
     /// <returns>
     /// The outcome, or null and the reason when the candidates could not be saved (too many, say).
@@ -53,6 +54,8 @@ public sealed class EvpScanService(
                 AudioSourceReader.DetectionSampleRate, settings, EvpScanRecorder.MaxCandidatesPerScan,
                 total, progress, ct);
         }
+
+        analysis = await TryMeasureVoiceAsync(file, analysis, ct);
 
         // A copy of a field session's recording: each candidate heard during a question says which.
         var noteFor = file.SourceFieldSessionUploadId is not null && questions is not null
@@ -104,6 +107,34 @@ public sealed class EvpScanService(
         catch (Exception ex) when (ex is DbUpdateException or InvalidOperationException)
         {
             logger.LogWarning(ex, "The scan settings for file {FileId} were not remembered", file.Id);
+        }
+    }
+
+    /// <summary>
+    /// The scan's second stage (phase 9b): how voice-shaped each candidate is, from VoiceNet. It never
+    /// drops, reorders or rescores a candidate, and it never fails the scan: without the model, or if
+    /// it fails, the candidates are proposed unmeasured.
+    /// </summary>
+    private async Task<EvpAnalysis> TryMeasureVoiceAsync(UploadFile file, EvpAnalysis analysis, CancellationToken ct)
+    {
+        if (voice is not { IsAvailable: true } || analysis.Candidates.Count == 0) return analysis;
+        try
+        {
+            float[] readings;
+            await using (var source = await OpenAsync(file, ct))
+            {
+                readings = await Voice.VoiceScoring.MeasureAsync(
+                    decoder.DecodeMono16kAsync(source, file.ContentType, file.FileName, ct),
+                    analysis.Candidates.Select(c => (c.StartSeconds, c.EndSeconds)).ToList(),
+                    analysis.RecordingSeconds, voice, ct);
+            }
+            var measured = analysis.Candidates.Select((c, i) => c with { VoiceLikelihood = readings[i] }).ToList();
+            return analysis with { Candidates = measured, VoiceModel = voice.ModelName };
+        }
+        catch (Exception ex) when (ex is not OperationCanceledException)
+        {
+            logger.LogWarning(ex, "Voice-likeness was not measured for file {FileId}; its candidates are proposed without it", file.Id);
+            return analysis;
         }
     }
 
