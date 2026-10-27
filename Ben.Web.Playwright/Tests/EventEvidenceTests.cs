@@ -50,19 +50,21 @@ public class EventEvidenceTests : BenTestBase
 
     private async Task<bool> OpenPastEventAsync()
     {
-        // The slug embeds the SEED date, not "today minus thirty": recomputing it here drifted
-        // one day per day after seeding and quietly skipped both tests from day one onward. Ask
-        // the anonymous events API for the real slug instead — the same source the page uses.
-        var api = await Page.APIRequest.GetAsync(
-            "http://localhost:5252/api/public/events?orgUrlName=tgh");
-        if (!api.Ok) return false;
+        // The slug embeds the SEED date, not "today minus thirty": recomputing it here drifted one day
+        // per day after seeding. It is read from the group's calendar as its admin, which lists past
+        // dates too. The public events list was asked before 10/27/2026, which only lists events still
+        // to come and asked for the group's old address ("tgh"), so both tests skipped on every run.
+        var orgId = await OrgIdBySlugAsync("paranormal365");
+        await using var api = await ApiSignedInAsync(SuperAdminEmail, SuperAdminPassword);
+        var calendar = await api.GetAsync($"/api/organizations/{orgId}/calendar");
+        if (!calendar.Ok) return false;
 
-        var events = await api.JsonAsync();
         string? slug = null;
-        foreach (var e in events!.Value.EnumerateArray())
+        foreach (var e in (await calendar.JsonAsync())!.Value.EnumerateArray())
         {
-            if (e.GetProperty("title").GetString()?.Contains(EventTitle) == true)
-            { slug = e.GetProperty("urlName").GetString(); break; }
+            if (e.GetProperty("title").GetString()?.Contains(EventTitle) == true
+                && e.TryGetProperty("urlName", out var url))
+            { slug = url.GetString(); break; }
         }
         if (slug is null) return false;
 
@@ -83,10 +85,6 @@ public class EventEvidenceTests : BenTestBase
             .ToBeVisibleAsync(new() { Timeout = 10_000 });
         await Expect(Main.Locator("#evidence-submit")).ToBeVisibleAsync(new() { Timeout = 10_000 });
 
-        // Counted BEFORE, so the assertion is "one more than there was" — the seed and earlier
-        // runs leave Daniel with pending submissions, and asserting mere visibility was satisfied
-        // by an old badge while the new submit silently failed. A test that cannot fail is worse
-        // than none.
         // Counted BEFORE, so the assertion is "one more than there was" — the seed and earlier
         // runs leave Daniel with pending submissions, and asserting mere visibility was satisfied
         // by an old badge while the new submit silently failed. A test that cannot fail is worse
@@ -133,14 +131,24 @@ public class EventEvidenceTests : BenTestBase
             Main.Locator("#evidence-submit"),
             Main.GetByText(Path.GetFileName(wav), new() { Exact = false }));
 
-        // The member's half: the queue card on the Calendar tab.
+        // A member without the Calendar grant: the tab is theirs, the queue is not, and the page
+        // says nothing rather than showing them a refusal. Until 10/27/2026 this seat did the
+        // reviewing, met a 403 the page drew as an empty queue, and the test never got further.
         await LoginAsync(MemberEmail, MemberPassword);
+        if (!await OpenOrganizationAsync("Paranormal365"))
+            Assert.Ignore("No Paranormal365 in this database.");
+        await OrgTab("Calendar").ClickAsync();
+        await Expect(Main.Locator(".k-scheduler")).ToBeVisibleAsync(new() { Timeout = 20_000 });
+        await Page.WaitForTimeoutAsync(1_500);   // the queue loads beside the calendar, not before it
+        await Expect(Main.Locator("[data-testid=evidence-queue-failed]")).ToHaveCountAsync(0);
+
+        // The reviewer's half: the group's owner, who holds the grant, on the Calendar tab.
+        await LoginAsync(UserEmail, UserPassword);
         if (!await OpenOrganizationAsync("Paranormal365"))
             Assert.Ignore("No Paranormal365 in this database.");
 
         await OrgTab("Calendar").ClickAsync();
 
-        var row = Main.Locator("div", new() { HasTextString = marker }).Last;
         try
         {
             await Expect(Main.GetByText(marker, new() { Exact = false }).First)
@@ -148,20 +156,33 @@ public class EventEvidenceTests : BenTestBase
         }
         catch (Exception)
         {
-            var errors = string.Join(" | ", await Main.Locator(".alert-danger").AllInnerTextsAsync());
-            var button = await Main.Locator("#evidence-submit").InnerTextAsync();
-            Assert.Fail($"Submission never appeared. Button: [{button}] On-page errors: [{errors}]");
+            // The submit button is on the event page, not this one; asking for it here timed out
+            // and hid the real reason (site audit, 10/27/2026).
+            var alerts = string.Join(" | ", await Main.Locator(".alert").AllInnerTextsAsync());
+            var queue = await Main.GetByText("Evidence from your public events").CountAsync() > 0 ? "shown" : "not shown";
+            Assert.Fail($"The member's queue never listed the submission. Queue card: {queue}. On-page alerts: [{alerts}]");
         }
 
-        await Main.GetByRole(AriaRole.Button, new() { Name = "Accept", Exact = true }).First.ClickAsync();
-        await Page.WaitForTimeoutAsync(1_000);
+        // This submission's own row: the seed leaves another pending one in the same queue, and
+        // the first Accept on the card was sometimes that one (site audit, 10/27/2026).
+        // Accepted, it leaves the queue, or stays with an "Accepted" badge while its clock runs.
+        var mine = Main.Locator("div.border-bottom", new() { HasTextString = marker });
+        var accept = mine.GetByRole(AriaRole.Button, new() { Name = "Accept", Exact = true });
+        await accept.Last.ClickAsync();
+        for (var waited = 0; await accept.CountAsync() > 0 && await Main.Locator(".alert-danger").CountAsync() == 0; waited += 250)
+        {
+            Assert.That(waited, Is.LessThan(15_000), "Accept was clicked and the submission is still waiting.");
+            await Page.WaitForTimeoutAsync(250);
+        }
+        Assert.That(await Main.Locator(".alert-danger").CountAsync(), Is.Zero,
+            "Accepting was refused: " + string.Join(" | ", await Main.Locator(".alert-danger").AllInnerTextsAsync()));
 
         // The public record, read the way the world reads it: signed out.
         await Page.Context.ClearCookiesAsync();
         await Page.GotoAsync($"{BaseUrl}/logout").ContinueWith(_ => Task.CompletedTask);
         if (!await OpenPastEventAsync()) Assert.Ignore("Event page unavailable anonymously.");
 
-        await Expect(Main.GetByText("Evidence from attendees", new() { Exact = false }))
+        await Expect(Main.Locator("[data-testid=event-evidence-list]"))
             .ToBeVisibleAsync(new() { Timeout = 10_000 });
     }
 }

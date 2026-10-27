@@ -248,7 +248,10 @@ public class LookAndTruthsTests : BenTestBase
         await Page.GotoAsync($"{BaseUrl}/organizations");
         await WaitUntilLoadedAsync();
 
-        var orgLink = Main.Locator("a[href^='/organizations/']").First;
+        // A group's own link, in the groups grid. The page-wide first match was the "work waiting"
+        // banner above it whenever the seed had requests pending, which opened the requests page and
+        // failed for want of a group heading (site audit, 10/27/2026).
+        var orgLink = Main.Locator(".k-grid a[href^='/organizations/']").First;
         if (await orgLink.CountAsync() == 0) Assert.Ignore("this account belongs to no group");
         await ClickUntilUrlAsync(orgLink, @"/organizations/[0-9a-f\-]+");
         await WaitUntilLoadedAsync();

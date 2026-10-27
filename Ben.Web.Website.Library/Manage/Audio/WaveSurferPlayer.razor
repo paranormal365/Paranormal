@@ -52,9 +52,14 @@
     @* ── Error banner ──────────────────────────────────────────────────────── *@
     @if (_errorMessage is not null)
     {
-        <div class="ws-player-error alert alert-danger alert-sm mb-0 py-1 px-2 small"
-             style="flex:0 0 auto;">
-            <BenIcon Name="alert-triangle" Class="me-1" />@_errorMessage
+        <div class="ws-player-error alert alert-danger alert-sm mb-0 py-1 px-2 small d-flex align-items-center gap-2"
+             style="flex:0 0 auto;" title="@_errorDetail" data-testid="ws-player-error">
+            <span><BenIcon Name="alert-triangle" Class="me-1" />@_errorMessage</span>
+            @if (_module is not null || _canRetryImport)
+            {
+                <button type="button" class="btn btn-outline-secondary btn-sm py-0 ms-auto" @onclick="RetryAsync"
+                        data-testid="ws-player-retry">Try again</button>
+            }
         </div>
     }
 
@@ -204,6 +209,12 @@
     private bool   _loading;
     private int    _loadingPercent;
     private string? _errorMessage;
+
+    /// <summary>What the browser actually said, kept for the tooltip rather than shown as the message.</summary>
+    private string? _errorDetail;
+
+    /// <summary>The player's script never loaded; Try again starts from the beginning.</summary>
+    private bool _canRetryImport;
     private double _duration;
     private double _currentTime;
     private double _volume    = 1.0;
@@ -216,21 +227,58 @@
     protected override async Task OnAfterRenderAsync(bool firstRender)
     {
         if (!firstRender) return;
+        await StartAsync(retryOnce: true);
+    }
+
+    /// <summary>
+    /// Loads the player's script and starts it. A download that fails on the network (the browser's
+    /// "Failed to fetch") is tried once more before anything is shown: on a busy or patchy connection
+    /// the second try usually works, and the visitor never sees the first (site audit, 10/27/2026: the
+    /// quick look showed "Player init failed: … TypeError … at Generator.throw" with no way out).
+    /// </summary>
+    private async Task StartAsync(bool retryOnce)
+    {
         try
         {
-            _module = await JS.InvokeAsync<IJSObjectReference>(
+            _module ??= await JS.InvokeAsync<IJSObjectReference>(
                 "import", "/_content/Ben.Web.Website.Library/Manage/Audio/WaveSurferPlayer.razor.js");
-
-            _dotnetRef = DotNetObjectReference.Create(this);
-
+            _dotnetRef ??= DotNetObjectReference.Create(this);
             await InitAsync();
+        }
+        catch (JSDisconnectedException) { /* the page was left */ }
+        catch (Exception ex) when (retryOnce && IsNetworkFailure(ex.Message))
+        {
+            await Task.Delay(1500);
+            await StartAsync(retryOnce: false);
         }
         catch (Exception ex)
         {
             _loading = false;
-            _errorMessage = $"Player init failed: {ex.Message}";
-            StateHasChanged();
+            _canRetryImport = _module is null;
+            ShowFailure(ex.Message);
         }
+    }
+
+    private Task RetryAsync()
+    {
+        _errorMessage = null;
+        _errorDetail = null;
+        return StartAsync(retryOnce: true);
+    }
+
+    private static bool IsNetworkFailure(string message)
+        => message.Contains("Failed to fetch", StringComparison.OrdinalIgnoreCase)
+        || message.Contains("NetworkError", StringComparison.OrdinalIgnoreCase)
+        || message.Contains("network error", StringComparison.OrdinalIgnoreCase);
+
+    /// <summary>A sentence a person can act on; the browser's own words go in the tooltip.</summary>
+    private void ShowFailure(string raw)
+    {
+        _errorDetail = raw;
+        _errorMessage = IsNetworkFailure(raw)
+            ? "The recording couldn't be downloaded just now. Check your connection and try again."
+            : "The recording couldn't be opened in the player.";
+        StateHasChanged();
     }
 
     protected override async Task OnParametersSetAsync()
@@ -246,10 +294,10 @@
             {
                 await _module.InvokeVoidAsync("load", _containerId, currentSource.ToLoadUrl());
             }
+            catch (JSDisconnectedException) { /* the page was left */ }
             catch (Exception ex)
             {
-                _errorMessage = $"Load failed: {ex.Message}";
-                StateHasChanged();
+                ShowFailure(ex.Message);
             }
         }
     }
@@ -554,7 +602,8 @@
 
     [JSInvokable] public async Task OnWsError(string message)
     {
-        _errorMessage = message; _loading = false; StateHasChanged();
+        _loading = false;
+        ShowFailure(message);
         await OnError.InvokeAsync(message);
     }
 

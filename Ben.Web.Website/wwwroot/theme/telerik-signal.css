@@ -368,8 +368,10 @@ body.k-body {
 .k-calendar { border-color: var(--ben-line); border-radius: var(--ben-radius); background: var(--ben-surface); }
 .k-calendar .k-calendar-header .k-title,
 .k-calendar .k-calendar-header .k-calendar-title { font-weight: 700; color: var(--ben-ink); }
+/* Muted, not faint: the weekday letters and the other month's dates are text people read, and the
+   faint ink is 3.06:1 on white (site audit, 10/27/2026). Muted is 5.81:1, and 7.47:1 in dark. */
 .k-calendar .k-calendar-th,
-.k-calendar .k-calendar-caption { color: var(--ben-ink-faint); }
+.k-calendar .k-calendar-caption { color: var(--ben-ink-muted); }
 .k-calendar .k-calendar-td .k-link { border-radius: var(--ben-radius-sm); }
 .k-calendar .k-calendar-td:hover .k-link,
 .k-calendar .k-calendar-td.k-hover .k-link { background-color: var(--ben-accent-soft); }
@@ -380,7 +382,7 @@ body.k-body {
     color: #fff;
     box-shadow: var(--ben-glow);
 }
-.k-calendar .k-calendar-td.k-other-month .k-link { color: var(--ben-ink-faint); }
+.k-calendar .k-calendar-td.k-other-month .k-link { color: var(--ben-ink-muted); }
 
 /* ── Scheduler (a group's calendar) ──────────────────────────────────────── */
 .k-scheduler { border-color: var(--ben-line); border-radius: var(--ben-radius); overflow: hidden; background: var(--ben-surface); }

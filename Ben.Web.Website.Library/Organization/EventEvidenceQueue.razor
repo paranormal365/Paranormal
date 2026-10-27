@@ -11,7 +11,15 @@
     looking at the one that matters.
 *@
 
-@if (_queue.Items.Count > 0)
+@* Empty renders nothing, but a queue that could not be loaded says so: otherwise a refusal reads as
+   "nothing to review" and the evidence waits unseen (site audit, 10/27/2026). *@
+@if (_queue.Failed)
+{
+    <div class="alert alert-warning small mb-3" data-testid="evidence-queue-failed">
+        Evidence waiting for your review couldn't be loaded just now.@(_queue.Reason is { } why ? $" {why}" : "")
+    </div>
+}
+else if (_queue.Items.Count > 0)
 {
     <div class="card border-primary mb-3">
         <div class="card-header"><strong>Evidence from your public events</strong> — waiting on a member's review<HelpLink Slug="working-a-case" Anchor="evidence-from-people-who-attended-a-public-event" /></div>
@@ -48,7 +56,11 @@
                     @* A verdict is offered once. A row that is here because its clock is running
                        has already been judged, and showing Accept again would invite somebody to
                        re-decide something they settled last week. *@
-                    @if (ev.Status == EvidenceSubmissionStatus.Pending)
+                    @if (ev.Status == EvidenceSubmissionStatus.Pending && !CanDecide)
+                    {
+                        <span class="badge text-bg-secondary">Waiting for someone who can publish it</span>
+                    }
+                    else if (ev.Status == EvidenceSubmissionStatus.Pending)
                     {
                         <input type="text" class="form-control form-control-sm" style="max-width:16rem"
                                placeholder="Reason if declining" @bind="_reasons[ev.Id]" @bind:event="oninput"
@@ -101,6 +113,13 @@
 
 @code {
     [Parameter] public Guid OrgId { get; set; }
+
+    /// <summary>
+    /// Whether this person may accept or decline: the Calendar area's Update grant, which the server
+    /// asks for. Without it the rows are shown and the verdict buttons are not, rather than offered
+    /// and then refused.
+    /// </summary>
+    [Parameter] public bool CanDecide { get; set; }
 
     private LoadResult<EventEvidenceRecord> _queue;
     private readonly Dictionary<Guid, string> _reasons = [];

@@ -213,9 +213,8 @@
         await CartState.RefreshAsync();
     }
 
-    public void Dispose()
-    {
-        _stop.Cancel();
-        _stop.Dispose();
-    }
+    // Cancelled, never disposed: the poll reads _stop.Token after each wait, and on a disposed source
+    // that read throws, ending the buyer's session if they leave mid-poll (site audit, 10/27/2026).
+    // A token source with no timer holds nothing to free.
+    public void Dispose() => _stop.Cancel();
 }

@@ -48,8 +48,8 @@ public class PublishedTemplateFillsInTests : BenTestBase
         var name = $"Holder {tag}";
 
         // The account the address belongs to, then a second sign-up with the same address.
-        await SignUpAsync($"holder{tag}", name, email);
-        await SignUpAsync($"prober{tag}", $"Prober {tag}", email);
+        await SignUpReaderAsync($"holder{tag}", name, email);
+        await SignUpReaderAsync($"prober{tag}", $"Prober {tag}", email);
 
         var letter = await TryLetterFromTheOutboxAsync(email, html => html.Contains(Marker));
         Assert.That(letter, Is.Not.Null,
@@ -66,7 +66,7 @@ public class PublishedTemplateFillsInTests : BenTestBase
         });
     }
 
-    private async Task SignUpAsync(string handle, string displayName, string email)
+    private async Task SignUpReaderAsync(string handle, string displayName, string email)
     {
         await Page.GotoAsync($"{BaseUrl}/signup");
         await Expect(Page.Locator("#signup-handle")).ToBeVisibleAsync(new() { Timeout = 15_000 });

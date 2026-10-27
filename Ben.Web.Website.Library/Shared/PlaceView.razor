@@ -1233,7 +1233,7 @@
         if (_pins.Count == 0)
         {
             _pins.Add(new InvestigationMapPin(
-                _place.Id, _place.Name, _place.Latitude, _place.Longitude, IsPast: true,
+                _place.Id, _place.Name ?? "", _place.Latitude, _place.Longitude, IsPast: true,
                 IsPublicPlace: _place.Kind == Ben.Data.Common.Enums.PlaceKind.PublicLocation));
         }
     }

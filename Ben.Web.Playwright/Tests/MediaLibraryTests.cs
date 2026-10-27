@@ -21,6 +21,30 @@ public class MediaLibraryTests : BenTestBase
     // page", and the earlier note here blamed an app-wide auth-timing bug on hard navigation —
     // it was a dropped click, and hard navigation to this page works (see the parity tests).
 
+    /// <summary>A phone photograph from the device bundle, uploaded as the seat the way the site's form does.</summary>
+    private async Task UploadAPhotoAsync()
+    {
+        byte[] photo;
+        var bundle = await File.ReadAllBytesAsync(Path.Combine(AppContext.BaseDirectory, "Fixtures", "field-session-stage.ben"));
+        using (var zip = new System.IO.Compression.ZipArchive(new MemoryStream(bundle)))
+        using (var entry = zip.GetEntry("media/photo-001.jpg")!.Open())
+        using (var copy = new MemoryStream())
+        {
+            await entry.CopyToAsync(copy);
+            photo = copy.ToArray();
+        }
+
+        await using var api = await ApiSignedInAsync(UserEmail, UserPassword);
+        var me = (await (await api.GetAsync("/api/me/profile")).JsonAsync())!.Value.GetProperty("appUserId").GetString()!;
+        var form = Context.APIRequest.CreateFormData();
+        form.Append("uploadFileTypeId", "20000000-0000-0000-0000-000000000001");
+        form.Append("appUserId", me);
+        form.Append("isPublic", "false");
+        form.Append("file", new FilePayload { Name = $"library-photo-{Guid.NewGuid():N}.jpg", MimeType = "image/jpeg", Buffer = photo });
+        var sent = await api.PostAsync("/api/upload-files", new() { Multipart = form });
+        Assert.That(sent.Ok, Is.True, "the photograph was not accepted: " + await sent.TextAsync());
+    }
+
     private async Task NavigateToMediaLibraryAsync()
     {
         await LoginAsync(UserEmail, UserPassword);
@@ -132,6 +156,9 @@ public class MediaLibraryTests : BenTestBase
     [Test]
     public async Task ThumbnailsActuallyLoad_NotJustTheirTiles()
     {
+        // A real photograph in the seat's own library first: a fresh database has none, and this
+        // test skipped itself on every run until it brought its own (site audit, 10/27/2026).
+        await UploadAPhotoAsync();
         await NavigateToMediaLibraryAsync();
         await Expect(Page.Locator(".card").First).ToBeVisibleAsync(new() { Timeout = 15_000 });
 

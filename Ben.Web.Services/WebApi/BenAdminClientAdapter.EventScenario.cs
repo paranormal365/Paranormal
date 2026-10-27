@@ -122,7 +122,7 @@ public sealed partial class BenAdminClientAdapter
                HttpMethod.Post, TourRoomUrl(dateId), new PostTourRoomMessageRequest(body), token);
 
     public Task<(TourRoomRecord? Result, string? Error)> RemoveTourRoomMessageAsync(Guid dateId, Guid messageId, CancellationToken token = default)
-        => _api.SendExpectingReasonAsync<object, TourRoomRecord>(
+        => _api.SendExpectingReasonAsync<object?, TourRoomRecord>(
                HttpMethod.Delete, $"{TourRoomUrl(dateId)}/messages/{messageId}", null, token);
 
     private static string GuestMessagesUrl(Guid orgId, Guid eventId)

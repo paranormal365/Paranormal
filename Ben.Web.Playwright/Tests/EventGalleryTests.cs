@@ -80,7 +80,15 @@ public class EventGalleryTests : BenTestBase
         await WaitForTheCircuitAsync();
 
         var ask = Page.Locator("#hosted-sticky-ask");
-        if (await ask.CountAsync() == 0) Assert.Ignore("The seeded weekend is not taking bookings on this database.");
+        if (await ask.CountAsync() == 0)
+        {
+            // Say why, in the server's words: the weekend is shared, and a test earlier in the run
+            // that books it and forgets to let go would show up here as a silent skip.
+            var ev = await Page.APIRequest.GetAsync($"{ApiUrl}/api/public/hosted-events/{RoomsEventId}");
+            var why = ev.Ok && (await ev.JsonAsync())!.Value.TryGetProperty("notTakingBookingsSentence", out var s)
+                ? s.GetString() : null;
+            Assert.Ignore($"The seeded weekend is not taking bookings on this database: {why ?? "the server didn't say why"}");
+        }
         await Expect(Page.Locator("#event-act")).ToBeAttachedAsync(new() { Timeout = 30_000 });
 
         // At the form: out of the way.
