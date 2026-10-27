@@ -888,6 +888,18 @@ public sealed class WebApiClient : IWebApiClient
     public Task<(Ben.Service.Models.Admin.AdminEvpSummary? Summary, string? Error)> GetAdminEvpSummaryAsync(int days = 30, CancellationToken token = default)
         => GetWithReasonAsync<Ben.Service.Models.Admin.AdminEvpSummary>($"/api/admin/evp/summary?days={days}", token);
 
+    /// <inheritdoc />
+    public Task<(Ben.Service.Models.Admin.AdminEvpScoring? Scoring, string? Error)> GetAdminEvpScoringAsync(CancellationToken token = default)
+        => GetWithReasonAsync<Ben.Service.Models.Admin.AdminEvpScoring>("/api/admin/evp/scoring", token);
+
+    /// <inheritdoc />
+    public async Task<string?> PostForReasonAsync(string url, CancellationToken token = default)
+    {
+        using var req = Auth(HttpMethod.Post, url);
+        using var response = await SendOrUnreachableAsync(req, token);
+        return response.IsSuccessStatusCode ? null : await ScanRefusalAsync(response, token) ?? "That didn't work just now.";
+    }
+
     // ── Scanning a session for EVPs (phase 9 of the audio plan) ──────────────
 
     /// <inheritdoc />

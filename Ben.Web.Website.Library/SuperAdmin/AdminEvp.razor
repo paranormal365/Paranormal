@@ -48,6 +48,70 @@
         </div>
     }
 
+    @* How candidates are scored (phase 13): the weights in use, how close the decisions are to enough to fit,
+       and every fit, with the switch for one that passed its gate. Nothing switches on by itself. *@
+    @if (_scoring is { } sc)
+    {
+        <div class="card mb-3" id="admin-evp-scoring"><div class="card-body">
+            <div class="d-flex align-items-baseline gap-2 flex-wrap mb-2">
+                <h5 class="mb-0">How candidates are scored</h5>
+                <span class="badge bg-body-secondary text-body-emphasis" id="admin-evp-scoring-active">
+                    @(sc.ActiveVersion == 1 ? "Built-in weights" : $"Fitted weights, version {sc.ActiveVersion}")
+                </span>
+                <span class="ms-auto d-flex gap-2">
+                    <button class="btn btn-outline-secondary btn-sm" id="admin-evp-fit" disabled="@_busy" @onclick="FitAsync">Fit now</button>
+                    @if (sc.ActiveVersion != 1)
+                    {
+                        <button class="btn btn-outline-secondary btn-sm" id="admin-evp-built-in" disabled="@_busy" @onclick="UseBuiltInAsync">Go back to the built-in weights</button>
+                    }
+                </span>
+            </div>
+            <p class="small mb-2">
+                Stood out <strong>@Points(sc.Active.StoodOut)</strong> · in the listening range <strong>@Points(sc.Active.InRange)</strong>
+                · length <strong>@Points(sc.Active.Length)</strong> points of 100.
+            </p>
+            <p class="small text-secondary mb-2" id="admin-evp-scoring-progress">
+                @sc.Decisions.ToString("N0") of the @sc.MinimumDecisions.ToString("N0") decisions, from
+                @sc.Recordings.ToString("N0") of the @sc.MinimumRecordings recordings, a fit needs before it can be switched on.
+                A fit is tested on every fifth recording, which it never learns from, and must rank kept above dismissed
+                better than the built-in weights there. Decisions made after listening count twice.
+            </p>
+            @if (_scoringMessage is not null)
+            {
+                <div class="alert alert-secondary py-2 small" role="status" id="admin-evp-scoring-message">@_scoringMessage</div>
+            }
+            @if (sc.Fits.Count > 0)
+            {
+                <div class="table-responsive">
+                    <table class="table table-sm small mb-0" id="admin-evp-fits">
+                        <thead><tr><th>Version</th><th>Stood out / range / length</th><th>Decisions</th><th>Held back</th><th>Ranks right</th><th>Built-in</th><th></th><th></th></tr></thead>
+                        <tbody>
+                            @foreach (var f in sc.Fits)
+                            {
+                                var fit = f;
+                                <tr>
+                                    <td>@fit.Version @(fit.IsActive ? "(in use)" : "")</td>
+                                    <td>@Points(fit.Weights.StoodOut) / @Points(fit.Weights.InRange) / @Points(fit.Weights.Length)</td>
+                                    <td>@fit.Decisions.ToString("N0") from @fit.Recordings</td>
+                                    <td>@fit.HeldOutDecisions</td>
+                                    <td>@fit.HeldOutAuc.ToString("P1")</td>
+                                    <td>@fit.BaselineHeldOutAuc.ToString("P1")</td>
+                                    <td class="text-secondary">@fit.GateNote</td>
+                                    <td class="text-nowrap">
+                                        @if (fit.PassedGate && !fit.IsActive)
+                                        {
+                                            <button class="btn btn-primary btn-sm" disabled="@_busy" @onclick="@(() => ActivateAsync(fit.Version))">Use these</button>
+                                        }
+                                    </td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                </div>
+            }
+        </div></div>
+    }
+
     @if (_error is not null)
     {
         <div class="alert alert-warning" role="alert">@_error <button class="btn btn-link btn-sm" @onclick="LoadAsync">Try again</button></div>
@@ -110,12 +174,16 @@
     private AdminEvpSummary? _summary;
     private MediaToolsHealth? _health;
     private string? _error;
+    private AdminEvpScoring? _scoring;
+    private string? _scoringMessage;
+    private bool _busy;
 
     protected override async Task OnInitializedAsync()
     {
         // A hard navigation renders before sign-in is known; asking then reads as "no data".
         if (!await UserState.WaitUntilAuthReadyAsync(RendererInfo.IsInteractive)) return;
         await LoadAsync();
+        await LoadScoringAsync();
         _health = await AdminClient.GetMediaToolsHealthAsync();
     }
 
@@ -141,6 +209,31 @@
     ];
 
     private static string BinLabel(AdminEvpBin b) => $"{b.Lo:0.##}–{b.Hi:0.##}";
+
+    private async Task LoadScoringAsync()
+    {
+        var (scoring, error) = await AdminClient.GetAdminEvpScoringAsync();
+        _scoring = scoring;
+        if (scoring is null) _scoringMessage = error ?? "How candidates are scored couldn't be read just now.";
+    }
+
+    private async Task RunAsync(Func<Task<string?>> action, string done)
+    {
+        _busy = true;
+        try
+        {
+            var problem = await action();
+            _scoringMessage = problem ?? done;
+            await LoadScoringAsync();
+        }
+        finally { _busy = false; }
+    }
+
+    private Task FitAsync() => RunAsync(() => AdminClient.FitEvpScoreAsync(), "Fitted. The new fit is at the top of the list; it is not in use until you choose it.");
+    private Task ActivateAsync(int version) => RunAsync(() => AdminClient.ActivateEvpScoringAsync(version), $"Version {version} now scores new scans. Earlier scans keep their scores.");
+    private Task UseBuiltInAsync() => RunAsync(() => AdminClient.UseBuiltInEvpScoringAsync(), "The built-in weights score new scans again.");
+
+    private static string Points(double weight) => (weight * 100).ToString("0");
 
     private static string Percent(double? share) => share is { } v ? $"{v:P0}" : "—";
 }

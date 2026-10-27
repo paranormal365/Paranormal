@@ -63,8 +63,9 @@ public readonly record struct EvpFeatures(
 /// <summary>One scan's result: the candidates, how long the recording was, and what the detector saw.</summary>
 /// <param name="Trace">The detector's view of the whole recording (phase 8); null for an empty one.</param>
 /// <param name="VoiceModel">The model that measured the candidates' voice-likeness, or null when none did.</param>
+/// <param name="ScoringVersion">Which weights scored it (phase 13): 1 for the built-in ones.</param>
 public sealed record EvpAnalysis(IReadOnlyList<EvpCandidate> Candidates, double RecordingSeconds, EvpTrace? Trace = null,
-    string? VoiceModel = null);
+    string? VoiceModel = null, int ScoringVersion = 1);
 
 /// <summary>
 /// What the detector saw across a recording, a tenth of a second at a time (phase 8): enough to draw
@@ -87,6 +88,24 @@ public sealed record EvpScoreExplanation(
     double DurationPoints, string Duration)
 {
     public double Total => ProminencePoints + BandPoints + DurationPoints;
+}
+
+/// <summary>
+/// How much each part of the score counts (audio phase 13, 10/27/2026): how far a sound stood out, how
+/// much of it was in the listening range, and its length. Each is at least 0 and they add up to 1, so a
+/// score is always 0–100 and always made of the same three parts.
+/// </summary>
+/// <param name="Version">1 for the built-in weights; 2 and up for weights fitted from Keep and Dismiss.</param>
+public sealed record EvpScoreWeights(int Version, double Prominence, double Band, double Duration)
+{
+    /// <summary>The hand-set weights the detector has always used.</summary>
+    public static readonly EvpScoreWeights BuiltIn = new(1, 0.5, 0.3, 0.2);
+
+    /// <summary>Null when usable, otherwise why not.</summary>
+    public string? Problem() =>
+        Prominence < 0 || Band < 0 || Duration < 0 ? "A weight is below zero."
+        : Math.Abs(Prominence + Band + Duration - 1) > 1e-6 ? "The weights do not add up to 1."
+        : null;
 }
 
 /// <summary>How far a streamed scan has got (phase 6).</summary>
@@ -209,8 +228,10 @@ internal static class EvpDetector
     /// </remarks>
     public static async Task<EvpAnalysis> AnalyzeAsync(
         IAsyncEnumerable<ReadOnlyMemory<float>> chunks, int sampleRate, EvpDetectionOptions options,
-        int maxResults, double? totalSeconds, IProgress<EvpScanProgress>? progress, CancellationToken ct)
+        int maxResults, double? totalSeconds, IProgress<EvpScanProgress>? progress, CancellationToken ct,
+        EvpScoreWeights? weights = null)
     {
+        weights ??= EvpScoreWeights.BuiltIn;
         var frames = new FrameAccumulator(sampleRate, options);
         await foreach (var chunk in chunks.WithCancellation(ct))
         {
@@ -224,14 +245,15 @@ internal static class EvpDetector
         var seconds = sampleRate > 0 ? data.SampleCount / (double)sampleRate : 0;
         var (found, trace) = data.SampleCount == 0 || sampleRate <= 0 || maxResults <= 0
             ? ([], null)
-            : Candidates(data, sampleRate, options, maxResults);
-        return new EvpAnalysis(found, seconds, trace);
+            : Candidates(data, sampleRate, options, maxResults, weights);
+        return new EvpAnalysis(found, seconds, trace, ScoringVersion: weights.Version);
     }
 
     /// <summary>From the per-frame measurements to the candidates: the part that needs all of them.</summary>
     private static (IReadOnlyList<EvpCandidate> Found, EvpTrace? Trace) Candidates(
-        Frames frames, int sampleRate, EvpDetectionOptions options, int maxResults)
+        Frames frames, int sampleRate, EvpDetectionOptions options, int maxResults, EvpScoreWeights? weights = null)
     {
+        weights ??= EvpScoreWeights.BuiltIn;
         var (bandDb, fullDb) = (frames.BandDb, frames.FullDb);
         if (bandDb.Length == 0) return ([], null);
 
@@ -252,7 +274,7 @@ internal static class EvpDetector
                 return new EvpCandidate(
                     Math.Max(0,            FrameToSeconds(e.Start, sampleRate) - options.ContextPadSeconds),
                     Math.Min(totalSeconds, FrameToSeconds(e.End,   sampleRate) + options.ContextPadSeconds),
-                    Score(features),
+                    Score(features, weights),
                     features);
             })
             .Where(c => c.Score >= options.MinScore)
@@ -572,7 +594,10 @@ internal static class EvpDetector
     /// (phase 8). The weights and the shape are the same; <c>Explain_terms_sum_to_the_score</c>
     /// holds them together.
     /// </summary>
-    public static EvpScoreExplanation Explain(EvpFeatures features)
+    public static EvpScoreExplanation Explain(EvpFeatures features) => Explain(features, EvpScoreWeights.BuiltIn);
+
+    /// <summary><see cref="Explain(EvpFeatures)"/> for the weights the scan used (phase 13).</summary>
+    public static EvpScoreExplanation Explain(EvpFeatures features, EvpScoreWeights weights)
     {
         var prominence = Math.Clamp(features.PeakProminenceDb / 20.0, 0, 1);
         var bandRatio  = Math.Clamp(1.0 + features.MeanBandGapDb / 20.0, 0, 1);
@@ -588,12 +613,12 @@ internal static class EvpDetector
         };
 
         return new EvpScoreExplanation(
-            100 * 0.5 * prominence,
+            100 * weights.Prominence * prominence,
             $"It rose {features.PeakProminenceDb:0} dB above the room around it"
                 + (prominence >= 1 ? " (20 dB or more counts in full)." : "."),
-            100 * 0.3 * bandRatio,
+            100 * weights.Band * bandRatio,
             $"About {share * 100:0}% of its sound was in the range the scan listens in.",
-            100 * 0.2 * duration,
+            100 * weights.Duration * duration,
             $"It lasted {features.EventSeconds:0.0} s: {length}.");
     }
 
@@ -605,8 +630,25 @@ internal static class EvpDetector
         _ => 0.2,
     };
 
-    internal static float Score(EvpFeatures features)
+    internal static float Score(EvpFeatures features) => Score(features, EvpScoreWeights.BuiltIn);
+
+    /// <summary>The score's three parts, each 0–1, before weighting (phase 13: what a refit weighs).</summary>
+    public static (double Prominence, double Band, double Duration) Parts(EvpFeatures features) =>
+        (Math.Clamp(features.PeakProminenceDb / 20.0, 0, 1),
+         Math.Clamp(1.0 + features.MeanBandGapDb / 20.0, 0, 1),
+         DurationShape(features.EventSeconds));
+
+    /// <summary>The score with these weights; with the built-in ones it is exactly the version-1 score.</summary>
+    public static float Score(EvpFeatures features, EvpScoreWeights weights)
     {
+        // Fitted weights take the general path; the built-in ones keep the original arithmetic below
+        // untouched, so version 1's pinned scores stay exact to the last bit.
+        if (weights != EvpScoreWeights.BuiltIn)
+        {
+            var (p, b, d) = Parts(features);
+            return (float)Math.Clamp(100.0 * (weights.Prominence * p + weights.Band * b + weights.Duration * d), 0, 100);
+        }
+
         // How far it stood out. 20 dB over the floor is emphatic; beyond that adds nothing.
         var prominence = Math.Clamp(features.PeakProminenceDb / 20.0, 0, 1);
 

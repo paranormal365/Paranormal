@@ -366,13 +366,17 @@ public sealed class AudioMarkerController : BenControllerBase
 
         var features = new EvpFeatures(found.PeakProminenceDb, found.MeanBandGapDb, found.EventSeconds,
             found.MeanFloorDb, found.PeakBandDb, found.BandLevelSpreadDb, found.ZeroCrossingRate);
-        var why = EvpDetector.Explain(features);
+        // Explained with the weights that scored it (phase 13), so the parts still add up to its score.
+        var scoringVersion = await db.EvpScans.AsNoTracking().Where(sc => sc.Id == found.EvpScanId)
+            .Select(sc => sc.ScoringVersion).FirstOrDefaultAsync(ct);
+        var weights = await Services.Audio.Learning.EvpScoring.ForVersionAsync(db, scoringVersion, ct);
+        var why = EvpDetector.Explain(features, weights);
         return Ok(new EvpCandidateDetailRecord(
             found.Score,
             [
-                new EvpScoreTermRecord("Stood out", why.ProminencePoints, 50, why.Prominence),
-                new EvpScoreTermRecord("In the listening range", why.BandPoints, 30, why.Band),
-                new EvpScoreTermRecord("Length", why.DurationPoints, 20, why.Duration),
+                new EvpScoreTermRecord("Stood out", why.ProminencePoints, 100 * weights.Prominence, why.Prominence),
+                new EvpScoreTermRecord("In the listening range", why.BandPoints, 100 * weights.Band, why.Band),
+                new EvpScoreTermRecord("Length", why.DurationPoints, 100 * weights.Duration, why.Duration),
             ],
             found.PeakProminenceDb, found.MeanFloorDb, found.PeakBandDb, found.EventSeconds,
             found.BandLevelSpreadDb, found.ZeroCrossingRate));

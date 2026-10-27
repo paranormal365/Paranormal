@@ -307,6 +307,10 @@
                                            @onchange="@(e => ToggleBlindReviewAsync((bool)(e.Value ?? false)))" />
                                     <label for="evp-blind-review" class="mb-0">
                                         Review blind
+                                        @if (_blindSaved)
+                                        {
+                                            <span class="small text-success ms-1" id="evp-blind-saved" role="status">Saved</span>
+                                        }
                                         <span class="d-block text-secondary small">
                                             Hide each candidate's readings until you keep or dismiss it, so you decide
                                             by what you hear. The candidates are listed in time order.
@@ -457,6 +461,8 @@
     private string? _nameError;
     private bool   _shareWithClients;
     private bool   _blindReview;
+    /// <summary>The server has the switch's value: shown after the save comes back, not when the box ticks.</summary>
+    private bool   _blindSaved;
     private bool   _saving;
     private bool   _saved;
     private string? _error;
@@ -698,6 +704,7 @@
     private async Task ToggleBlindReviewAsync(bool value)
     {
         _blindReview = value;
+        _blindSaved = false;
         _error = null; _saved = false;
         MyProfileRecord? updated = null;
         try { updated = await AdminClient.UpdateMyProfileAsync(new UpdateMyProfileRequest(null, EvpBlindReview: value)); }
@@ -710,6 +717,7 @@
         }
         _profile = updated;
         _blindReview = updated.EvpBlindReview;
+        _blindSaved = true;
     }
 
     private async Task ToggleShareAsync(bool value)

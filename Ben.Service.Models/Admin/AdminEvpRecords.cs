@@ -38,3 +38,27 @@ public sealed record AdminEvpDay(string Day, int Scans);
 public sealed record AdminEvpHistogram(string Feature, string Unit, int Measured, IReadOnlyList<AdminEvpBin> Bins);
 
 public sealed record AdminEvpBin(double Lo, double Hi, int Kept, int Dismissed);
+
+/// <summary>
+/// How EVP candidates are scored (audio phase 13): the weights in use, how far the decisions are from
+/// enough to fit, and every fit so far.
+/// </summary>
+/// <param name="ActiveVersion">1 for the built-in weights.</param>
+public sealed record AdminEvpScoring(
+    int ActiveVersion,
+    AdminEvpWeights Active,
+    int Decisions,
+    int Recordings,
+    int MinimumDecisions,
+    int MinimumRecordings,
+    IReadOnlyList<AdminEvpFit> Fits);
+
+/// <summary>How much each part of the score counts, 0–1, adding up to 1.</summary>
+public sealed record AdminEvpWeights(double StoodOut, double InRange, double Length);
+
+/// <param name="HeldOutAuc">How often a kept candidate outranks a dismissed one on recordings it did not learn from.</param>
+/// <param name="BaselineHeldOutAuc">The same for the built-in weights.</param>
+public sealed record AdminEvpFit(
+    int Version, AdminEvpWeights Weights, int Decisions, int Recordings, int HeldOutDecisions,
+    double HeldOutAuc, double BaselineHeldOutAuc, bool PassedGate, string GateNote, bool IsActive,
+    DateTime DateCreated, DateTime? ActivatedUtc);

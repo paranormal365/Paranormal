@@ -236,6 +236,10 @@ builder.Services.AddSingleton<Ben.Data.WebApi.Services.FieldSessions.FieldSessio
 // A scanner's own copy of a session recording (phase 9 of the audio plan); the session is only read.
 builder.Services.AddScoped<Ben.Data.WebApi.Services.FieldSessions.FieldSessionAnalysisCopies>();
 builder.Services.AddScoped<Ben.Data.WebApi.Services.Audio.Scanning.EvpQuestionContext>();
+// The score's weights, and fitting new ones from Keep and Dismiss (phase 13); fits wait for a SuperAdmin.
+builder.Services.AddScoped<Ben.Data.WebApi.Services.Audio.Learning.EvpScoring>();
+builder.Services.AddScoped<Ben.Data.WebApi.Services.Scheduling.IScheduledJob,
+                           Ben.Data.WebApi.Services.Scheduling.EvpWeightRefitJob>();
 // VoiceNet, the scan's second stage (phase 9b). Committed with the API; a publish that lost it still
 // scans, unmeasured, and says why (logged below and in the editor).
 var voiceModelPath = Path.Combine(builder.Environment.ContentRootPath,

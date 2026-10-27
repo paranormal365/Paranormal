@@ -3497,6 +3497,11 @@ namespace Ben.Data.Source.Migrations
                     b.Property<double>("RecordingSeconds")
                         .HasColumnType("float");
 
+                    b.Property<int>("ScoringVersion")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int")
+                        .HasDefaultValue(1);
+
                     b.Property<int>("Sensitivity")
                         .HasColumnType("int");
 
@@ -3741,6 +3746,75 @@ namespace Ben.Data.Source.Migrations
                         .IsUnique();
 
                     b.ToTable("EvpScanPresets");
+                });
+
+            modelBuilder.Entity("Ben.Data.Source.Entities.EvpScoringVersion", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<Guid?>("ActivatedByAppUserId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<DateTime?>("ActivatedUtc")
+                        .HasColumnType("datetime2");
+
+                    b.Property<double>("BaselineHeldOutAuc")
+                        .HasColumnType("float");
+
+                    b.Property<DateTime>("DateCreated")
+                        .HasColumnType("datetime2");
+
+                    b.Property<int>("Decisions")
+                        .HasColumnType("int");
+
+                    b.Property<string>("GateNote")
+                        .IsRequired()
+                        .HasMaxLength(500)
+                        .HasColumnType("nvarchar(500)");
+
+                    b.Property<double>("HeldOutAuc")
+                        .HasColumnType("float");
+
+                    b.Property<int>("HeldOutDecisions")
+                        .HasColumnType("int");
+
+                    b.Property<bool>("IsActive")
+                        .HasColumnType("bit");
+
+                    b.Property<bool>("PassedGate")
+                        .HasColumnType("bit");
+
+                    b.Property<int>("Recordings")
+                        .HasColumnType("int");
+
+                    b.Property<double>("TrainAuc")
+                        .HasColumnType("float");
+
+                    b.Property<int>("Version")
+                        .HasColumnType("int");
+
+                    b.Property<double>("WeightBand")
+                        .HasColumnType("float");
+
+                    b.Property<double>("WeightDuration")
+                        .HasColumnType("float");
+
+                    b.Property<double>("WeightProminence")
+                        .HasColumnType("float");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("IsActive")
+                        .IsUnique()
+                        .HasDatabaseName("IX_EvpScoringVersions_OneActive")
+                        .HasFilter("[IsActive] = 1");
+
+                    b.HasIndex("Version")
+                        .IsUnique();
+
+                    b.ToTable("EvpScoringVersions");
                 });
 
             modelBuilder.Entity("Ben.Data.Source.Entities.ExperienceCategory", b =>

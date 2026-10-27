@@ -30,7 +30,8 @@ public sealed class EvpScanService(
     EvpScanRecorder recorder,
     ILogger<EvpScanService> logger,
     EvpQuestionContext? questions = null,
-    Voice.IVoiceScorer? voice = null)
+    Voice.IVoiceScorer? voice = null,
+    Learning.EvpScoring? scoring = null)
 {
     /// <returns>
     /// The outcome, or null and the reason when the candidates could not be saved (too many, say).
@@ -46,13 +47,16 @@ public sealed class EvpScanService(
             catch (Exception ex) when (ex is FormatException or NotSupportedException or InvalidDataException) { }
         }
 
+        // The weights a SuperAdmin switched on (phase 13), else the built-in ones.
+        var weights = scoring is null ? EvpScoreWeights.BuiltIn : await scoring.ActiveAsync(ct);
+
         EvpAnalysis analysis;
         await using (var source = await OpenAsync(file, ct))
         {
             analysis = await EvpDetector.AnalyzeAsync(
                 decoder.DecodeMono16kAsync(source, file.ContentType, file.FileName, ct),
                 AudioSourceReader.DetectionSampleRate, settings, EvpScanRecorder.MaxCandidatesPerScan,
-                total, progress, ct);
+                total, progress, ct, weights);
         }
 
         analysis = await TryMeasureSecondStageAsync(file, analysis, settings, ct);

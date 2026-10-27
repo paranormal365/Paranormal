@@ -207,6 +207,7 @@ public sealed class EvpScanRecorder
                 TraceBucketMs      = analysis.Trace is { } t ? (int)Math.Round(t.BucketSeconds * 1000) : null,
                 RecordingSeconds   = analysis.RecordingSeconds,
                 VoiceModel         = analysis.VoiceModel,
+                ScoringVersion     = analysis.ScoringVersion,
                 FoundCount         = analysis.Candidates.Count,
                 ProposedCount      = proposed.Count,
             };

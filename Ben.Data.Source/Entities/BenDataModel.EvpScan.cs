@@ -66,6 +66,12 @@ namespace Ben.Data.Source.Entities
         /// </summary>
         public string? VoiceModel { get; set; }
 
+        /// <summary>
+        /// Which weights scored this scan's candidates (phase 13): 1 for the built-in ones, else an
+        /// <see cref="EvpScoringVersion"/>. Rulings are only ever compared within one version.
+        /// </summary>
+        public int ScoringVersion { get; set; } = 1;
+
         /// <summary>Length of the recording that was scanned.</summary>
         public double RecordingSeconds { get; set; }
 
@@ -238,4 +244,55 @@ namespace Ben.Data.Source.Entities
 
         public virtual UploadFile UploadFile { get; set; } = null!;
     }
+
+    /// <summary>
+    /// One fit of the score's weights from Keep and Dismiss (audio phase 13, 10/27/2026), kept whether or
+    /// not it is ever used.
+    /// </summary>
+    /// <remarks>
+    /// <para>Appended by <c>EvpWeightRefitJob</c>, never edited except to switch on or off. Version 1, the
+    /// built-in weights, is not a row: it is what runs when no row is active.</para>
+    /// <para><b>Nothing switches on by itself.</b> A fit records whether it passed the gate (enough decisions
+    /// from enough recordings, better than version 1 on recordings it did not learn from, and the expected
+    /// order of a speech-length sound above a click, a hum and long talking). A SuperAdmin switches a passing
+    /// one on, and can go back to the built-in weights at any time.</para>
+    /// </remarks>
+    public partial class EvpScoringVersion
+    {
+        public Guid Id { get; set; }
+
+        /// <summary>2, 3, …: the number scans record.</summary>
+        public int Version { get; set; }
+
+        public double WeightProminence { get; set; }
+        public double WeightBand { get; set; }
+        public double WeightDuration { get; set; }
+
+        /// <summary>Decisions and recordings it learned from and was tested on, together.</summary>
+        public int Decisions { get; set; }
+        public int Recordings { get; set; }
+
+        /// <summary>Decisions held back to test it: those on every fifth recording.</summary>
+        public int HeldOutDecisions { get; set; }
+
+        /// <summary>How often a kept candidate outranks a dismissed one (0.5 is chance, 1 is perfect).</summary>
+        public double TrainAuc { get; set; }
+        public double HeldOutAuc { get; set; }
+
+        /// <summary>The same measure for the built-in weights on the same held-back decisions.</summary>
+        public double BaselineHeldOutAuc { get; set; }
+
+        public bool PassedGate { get; set; }
+
+        /// <summary>What the gate said, in a sentence.</summary>
+        public string GateNote { get; set; } = string.Empty;
+
+        /// <summary>At most one is active, held by a filtered unique index.</summary>
+        public bool IsActive { get; set; }
+
+        public DateTime DateCreated { get; set; }
+        public DateTime? ActivatedUtc { get; set; }
+        public Guid? ActivatedByAppUserId { get; set; }
+    }
 }
+

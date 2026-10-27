@@ -30,6 +30,18 @@ it is hidden from everybody else, but still takes its number. No other sub-headi
 
 **Tracked from 10/14/2026.** 1.0.0 is the editor as it stood then, summarized.
 
+## Unreleased
+
+- Once enough candidates have been kept and dismissed, the site can learn how much each part of the
+  score should count, so the sounds investigators keep rise toward the top. Scans already made keep
+  their scores, and Why? always shows the points the scan used.
+
+### Administration
+
+- EVP Scans shows how candidates are scored: how close the decisions are to enough to learn from,
+  each fit with how well it ranks on recordings it never learned from, and the switch to use one or
+  go back to the built-in weights. Nothing switches on by itself.
+
 ## 2.0.0 · 2026-10-27
 
 - Review blind: a setting on your profile hides each candidate's readings until you keep or dismiss
