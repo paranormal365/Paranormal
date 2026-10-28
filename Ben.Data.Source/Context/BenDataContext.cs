@@ -25,6 +25,9 @@ namespace Ben.Data.Source.Context
         public virtual DbSet<SiteSetting> SiteSettings { get; set; }
         public virtual DbSet<RateLimitRefusal> RateLimitRefusals { get; set; }
         public virtual DbSet<PlaceRoom> PlaceRooms { get; set; }
+        public virtual DbSet<PlaceScan> PlaceScans { get; set; }
+        public virtual DbSet<PlaceScanHold> PlaceScanHolds { get; set; }
+        public virtual DbSet<PlaceScanCustody> PlaceScanCustodies { get; set; }
         public virtual DbSet<SignInEvent> SignInEvents { get; set; }
         public virtual DbSet<EventReminderSent> EventReminderSents { get; set; }
         public virtual DbSet<VideoAsset> VideoAssets { get; set; }
@@ -777,6 +780,66 @@ namespace Ben.Data.Source.Context
             // duplicate would make an attributed reading ambiguous rather than merely untidy.
             modelBuilder.Entity<PlaceRoom>()
                 .HasIndex(e => new { e.OrganizationId, e.PlaceId, e.Name }).IsUnique();
+
+            // ── Room scans kept by the place (LiDAR plan, phase 1) ─────────────────
+            // A scan belongs to the place, so it goes with it. Everybody else it names is NoAction:
+            // a scan outlives the account that made it, and the person purge counts it as a reason
+            // to keep the account's row rather than losing the place's scan.
+            modelBuilder.Entity<PlaceScan>()
+                .HasOne(s => s.Place).WithMany()
+                .HasForeignKey(s => s.PlaceId).OnDelete(DeleteBehavior.Cascade);
+            modelBuilder.Entity<PlaceScan>()
+                .HasOne(s => s.ScannedByAppUser).WithMany()
+                .HasForeignKey(s => s.ScannedByAppUserId).OnDelete(DeleteBehavior.NoAction);
+            modelBuilder.Entity<PlaceScan>()
+                .HasOne(s => s.DecidedByAppUser).WithMany()
+                .HasForeignKey(s => s.DecidedByAppUserId).IsRequired(false).OnDelete(DeleteBehavior.NoAction);
+            modelBuilder.Entity<PlaceScan>()
+                .HasOne(s => s.CreatedByAppUser).WithMany()
+                .HasForeignKey(s => s.CreatedByAppUserId).OnDelete(DeleteBehavior.NoAction);
+            modelBuilder.Entity<PlaceScan>()
+                .HasOne(s => s.UpdatedByAppUser).WithMany()
+                .HasForeignKey(s => s.UpdatedByAppUserId).IsRequired(false).OnDelete(DeleteBehavior.NoAction);
+            modelBuilder.Entity<PlaceScan>().Property(s => s.RoomKey).HasMaxLength(120).IsRequired();
+            modelBuilder.Entity<PlaceScan>().Property(s => s.RoomName).HasMaxLength(120).IsRequired();
+            modelBuilder.Entity<PlaceScan>().Property(s => s.StoragePath).HasMaxLength(400).IsRequired();
+            modelBuilder.Entity<PlaceScan>().Property(s => s.Sha256).HasMaxLength(64).IsFixedLength().IsRequired();
+            modelBuilder.Entity<PlaceScan>().Property(s => s.DeviceModel).HasMaxLength(60);
+            modelBuilder.Entity<PlaceScan>().Property(s => s.DecisionNote).HasMaxLength(2000);
+            // One current scan per room per place: the rule the whole feature rests on, so the
+            // database refuses a second rather than a screen explaining two.
+            modelBuilder.Entity<PlaceScan>()
+                .HasIndex(s => new { s.PlaceId, s.RoomKey }).IsUnique()
+                .HasDatabaseName("IX_PlaceScans_PlaceId_RoomKey_Current")
+                .HasFilter("[State] = 1");
+            // Version numbers are per room; two uploads racing for the same number is refused here
+            // and the loser takes the next one.
+            modelBuilder.Entity<PlaceScan>()
+                .HasIndex(s => new { s.PlaceId, s.RoomKey, s.Version }).IsUnique();
+
+            modelBuilder.Entity<PlaceScanHold>()
+                .HasOne(h => h.Place).WithMany()
+                .HasForeignKey(h => h.PlaceId).OnDelete(DeleteBehavior.Cascade);
+            // A hold is twenty minutes of courtesy; it goes with the account.
+            modelBuilder.Entity<PlaceScanHold>()
+                .HasOne(h => h.AppUser).WithMany()
+                .HasForeignKey(h => h.AppUserId).OnDelete(DeleteBehavior.Cascade);
+            modelBuilder.Entity<PlaceScanHold>().Property(h => h.RoomKey).HasMaxLength(120).IsRequired();
+            modelBuilder.Entity<PlaceScanHold>().Property(h => h.RoomName).HasMaxLength(120).IsRequired();
+            modelBuilder.Entity<PlaceScanHold>().HasIndex(h => new { h.PlaceId, h.RoomKey, h.ExpiresUtc });
+
+            modelBuilder.Entity<PlaceScanCustody>()
+                .HasOne(c => c.Place).WithMany()
+                .HasForeignKey(c => c.PlaceId).OnDelete(DeleteBehavior.Cascade);
+            modelBuilder.Entity<PlaceScanCustody>()
+                .HasOne(c => c.Organization).WithMany()
+                .HasForeignKey(c => c.OrganizationId).OnDelete(DeleteBehavior.NoAction);
+            modelBuilder.Entity<PlaceScanCustody>()
+                .HasOne(c => c.GrantedByAppUser).WithMany()
+                .HasForeignKey(c => c.GrantedByAppUserId).OnDelete(DeleteBehavior.NoAction);
+            modelBuilder.Entity<PlaceScanCustody>().Property(c => c.Note).HasMaxLength(2000);
+            modelBuilder.Entity<PlaceScanCustody>().Property(c => c.ClosedReason).HasMaxLength(20);
+            modelBuilder.Entity<PlaceScanCustody>().HasIndex(c => c.PlaceId).IsUnique();
 
             // ── RateLimitRefusal ─────────────────────────────────────────────
             // One row per policy, so the tally is an update rather than an insert per refusal.

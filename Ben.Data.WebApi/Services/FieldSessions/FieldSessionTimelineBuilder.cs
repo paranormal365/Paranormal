@@ -40,6 +40,7 @@ public static class FieldSessionTimelineBuilder
     private static readonly HashSet<string> AutomaticKinds = new(StringComparer.Ordinal)
     {
         "sentry_emf", "sentry_sound", "device_moved", "scene_motion", "app_backgrounded", "app_returned",
+        "scan_change", "figure_seen", "unexplained_shape",
     };
 
     private static readonly HashSet<string> CaptureKinds = new(StringComparer.Ordinal) { "photo", "video", "audio" };
@@ -330,6 +331,11 @@ public static class FieldSessionTimelineBuilder
         "evp_question" => "Question asked",
         "evp_wait_end" => "Stopped waiting",
         "manual_marker" => "Marked",
+        // LiDAR plan: a room scanned for the place, what a comparison found, and the person map.
+        "room_scan" => "Room scanned",
+        "scan_change" => "Something changed",
+        "figure_seen" => "Figure seen",
+        "unexplained_shape" => "Unexplained shape",
         _ => kind,
     };
 

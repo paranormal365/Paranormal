@@ -141,6 +141,10 @@ public static class VenueClaims
         profile.DateUpdated = now;
         profile.UpdatedByAppUserId = by;
 
+        // A venue speaks for its own building, room scans included: a SuperAdmin's grant of the
+        // place's scans to some other group ends here (LiDAR plan).
+        await Places.PlaceScans.CloseGrantForVenueAsync(db, claim.PlaceId, now, ct);
+
         claim.State = VenueClaimState.Approved;
         claim.DecidedUtc = now;
         claim.DecidedByAppUserId = actorId;

@@ -658,6 +658,29 @@ public actor FieldSessionEngine {
         return withMarker
     }
 
+    // MARK: - Room scans
+
+    /// A room scanned for the place (LiDAR plan, spec 1.2): a `room_scan` marker carrying the
+    /// room, which version of the place's scan it became, and how long the scanning took.
+    @discardableResult
+    public func noteRoomScan(room: String, placeId: UUID?, placeScanId: UUID, version: Int,
+                             outcome: String, durationSeconds: Double) async -> FieldReading {
+        var entry = reading(at: now(), triggeredBy: MarkerKind.roomScan.trigger, marker: .roomScan,
+                            note: "Scanned \(room)")
+        var details: [String: JSONValue] = [
+            "place_scan_id": .string(placeScanId.uuidString.lowercased()),
+            "version": .number(Double(version)),
+            "outcome": .string(outcome),
+            "duration_seconds": .number(durationSeconds.rounded()),
+        ]
+        if let placeId { details["place_id"] = .string(placeId.uuidString.lowercased()) }
+        var measurements = entry.measurements ?? [:]
+        measurements["room_scan"] = .label(room, details: details)
+        entry.measurements = measurements
+        await append(entry)
+        return entry
+    }
+
     // MARK: - EVP
 
     /// Marks a question being asked, and starts the wait.

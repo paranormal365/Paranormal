@@ -1,4 +1,4 @@
-# IsHaunted Device Data Format — v1.0.0
+# IsHaunted Device Data Format — v1.2.0
 
 *Status: draft specification. Written 2026-08-15. No importer exists yet — see [Implementation status](#implementation-status).*
 
@@ -146,6 +146,29 @@ Each measurement carries:
 | `baseline` | The ambient reference this was calibrated against, same unit. |
 | `out_of_range` | True when the sensor pegged and the real value is unknown. Do not report a clipped maximum as a measurement. |
 
+### Channels with fields beside their value (1.2)
+
+Some channels carry more than one fact. They are still measurements — each has a `value`, so a
+1.0 reader shows the value and skips the rest (rule 6) — and the other facts sit beside it, numbers
+carrying their unit in their name (`distance_cm`), the way `position` does. They come from room
+scans: a model of a room kept by its place, and the person map drawn over the camera.
+
+| Channel | `value` | Beside it |
+|---|---|---|
+| `room_scan` | the room's name | `place_scan_id`, `place_id`, `version`, `outcome` (`current`, `replaced`, `offered`), `duration_seconds` |
+| `scan` | the comparison's path in the bundle, `scans/compare-001.scan` | `room`, `place_scan_id`, `place_scan_version`, `changes` |
+| `scan_change` | `moved`, `missing` or `new` | `object` (`chair`, `table`…), `distance_cm`, `rotation_deg`, `size_cm` `[w, h, d]`, `where` `[x, y, z]` in metres, `picture` (`scans/compare-001.scan#changes/01.jpg`) |
+| `figure` | the joints file in the bundle, `figures/figure-001.json` | `from` and `to` (seconds into the video), `video`, `peak_confidence` (0–1) |
+| `shape` | the shape in words, `45 × 160 × 30 cm` | `size_cm`, `distance_m`, `where`, `from`, `to`, `video` |
+
+A reading carrying one of these also says what it is in `marker` — `room_scan`, `scan_change`,
+`figure_seen`, `unexplained_shape` — so a reader that knows the markers and nothing else still
+draws it on a timeline. `where` is in the frame of the room scan the reading refers to; a path
+after `#` names a member inside a `.scan` that is itself inside the bundle.
+
+A `shape` is never jointed. It is a depth cluster that is not in the room's scan, with its size,
+and that is all that is claimed about it.
+
 ### `position`, `motion`, `audio_ref`
 
 **`position`** — indoor GPS is usually poor, so `accuracy_meters` is what tells a consumer whether
@@ -183,7 +206,10 @@ print('VALID' if not errs else [ (list(e.path), e.message) for e in errs ])
 The schema was checked against 14 deliberately malformed documents — missing `format_version`, an
 `interval` trigger with no period, a numeric measurement with no unit, latitude 130, a `..` path in
 a filename, a malformed digest — and rejects all of them, while still accepting a document carrying
-unknown keys. A schema that accepts everything would validate nothing.
+unknown keys. A schema that accepts everything would validate nothing. The 1.2 channels added five
+more, kept as tests beside the phone's own (`DeviceDataSchemaTests`): a change that is neither moved,
+missing nor new, a comparison path that climbs out with `..`, a figure seen before its video began,
+a shape with two dimensions, and a room scan of version 0.
 
 ## Implementation status
 
@@ -208,3 +234,5 @@ Open questions deliberately left for the import work, not decided here:
 | Version | Date | Change |
 |---|---|---|
 | 1.0.0 | 2026-08-15 | First draft. |
+| 1.1.0 | — | What the Field Kit came to write after 1.0, recorded on 10/28/2026: `motion.course_degrees`, and the `room` and `marker` label channels. |
+| 1.2.0 | 2026-10-28 | Channels with fields beside their value: `room_scan`, `scan`, `scan_change`, `figure`, `shape`. Additive; a 1.0 reader skips the extra fields. |

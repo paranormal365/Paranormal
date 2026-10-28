@@ -106,6 +106,7 @@ public final class FieldSessionStore {
         let session = ActiveFieldSession(sessionId: id, startedAt: summary.startedAt,
                                          engine: engine, sensors: sensors, files: files,
                                          policy: policy, channels: channels, now: now)
+        session.placeChanged(placeId: summary.placeId, placeName: summary.placeName)
         active = session
         activeSessionId = id
         await session.begin()
@@ -732,6 +733,19 @@ public final class FieldSessionStore {
         session.locationLabel = locationLabel?
             .trimmingCharacters(in: .whitespacesAndNewlines).nilIfEmpty
         try context.save()
+        load()
+    }
+
+    /// Says which place the session is at (LiDAR plan). Its room scans belong to that place, so
+    /// the first scan asks for it and every later one uses it. Kept on the session, so a session
+    /// that outlives the app's process still knows where it is.
+    public func setPlace(_ id: UUID, placeId: UUID?, placeName: String?) throws {
+        guard let context else { throw FieldSessionError.unavailable }
+        guard let session = try fetch(id, in: context) else { return }
+        session.placeId = placeId
+        session.placeName = placeName?.trimmingCharacters(in: .whitespacesAndNewlines).nilIfEmpty
+        try context.save()
+        if active?.sessionId == id { active?.placeChanged(placeId: placeId, placeName: session.placeName) }
         load()
     }
 

@@ -411,6 +411,10 @@ struct FieldKitHomeView: View {
                 investigationId: investigation?.investigationId,
                 investigationTitle: investigation?.title,
                 channels: channels)
+            // The investigation's place is where this session's room scans belong (LiDAR plan).
+            if let placeId = investigation?.placeId {
+                try? store.setPlace(id, placeId: placeId, placeName: investigation?.placeName)
+            }
             starting = false
             router.push(.fieldSession(id))
         } catch {

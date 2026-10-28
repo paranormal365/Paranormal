@@ -127,7 +127,7 @@ struct DeviceDataFormatTests {
                                           debounceSeconds: 3)))
 
         let json = try encoded(envelope)
-        #expect(json["format_version"] as? String == "1.0.0")
+        #expect(json["format_version"] as? String == DeviceDataEnvelope.currentFormatVersion)
 
         let session = try #require(json["session"] as? [String: Any])
         #expect(session["battery_percent_at_start"] as? Double == 82)

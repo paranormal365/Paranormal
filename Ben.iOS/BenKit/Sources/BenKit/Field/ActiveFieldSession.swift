@@ -33,6 +33,11 @@ public final class ActiveFieldSession {
     /// single tap in the dark instead of typing a name again with cold hands.
     public private(set) var roomsVisited: [String] = []
 
+    /// The place this session is at, once known (LiDAR plan) — what its room scans belong to.
+    /// Set through `FieldSessionStore.setPlace`, which keeps it with the session.
+    public private(set) var placeId: UUID?
+    public private(set) var placeName: String?
+
     /// What has been captured into this session, newest first.
     public private(set) var captures: [CaptureRecord] = []
     /// The audio recording currently running, if any.
@@ -587,6 +592,24 @@ public final class ActiveFieldSession {
     ///
     /// The mark matters as much as the label: reviewing a night later, "they went into the
     /// cellar at 01:14" is exactly the sort of thing that explains a reading.
+    /// The store's word that the session's place changed. Not a way to set it: that is the
+    /// store's, which keeps it with the session.
+    public func placeChanged(placeId: UUID?, placeName: String?) {
+        self.placeId = placeId
+        self.placeName = placeName
+    }
+
+    /// Writes that a room was scanned for the place during this session, so the timeline shows
+    /// "Room scanned: Bedroom 1 (12 min)" (LiDAR plan). Nothing is written before Start, like
+    /// every other reading.
+    public func noteRoomScan(room: String, placeScanId: UUID, version: Int, outcome: String,
+                             durationSeconds: Double) async {
+        guard isRecording else { return }
+        await engine.noteRoomScan(room: room, placeId: placeId, placeScanId: placeScanId, version: version,
+                                  outcome: outcome, durationSeconds: durationSeconds)
+        readingCount = await engine.readingCount()
+    }
+
     public func setRoom(_ room: String?) async {
         let trimmed = room?.trimmingCharacters(in: .whitespacesAndNewlines)
         let value = (trimmed?.isEmpty ?? true) ? nil : trimmed

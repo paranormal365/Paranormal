@@ -34,6 +34,10 @@ public sealed class LocalFileStorageService : IFileStorageService
         => Path.Combine("cases", caseId.ToString(), storedFileName)
                .Replace('\\', '/');
 
+    public string PlaceFilePath(Guid placeId, string storedFileName)
+        => Path.Combine("places", placeId.ToString(), storedFileName)
+               .Replace('\\', '/');
+
     /// <summary>Writes a file, so that it is either all there or not there at all.</summary>
     /// <remarks>
     /// <para>The bytes go to a partial file beside the target, which is renamed onto it only once the copy has finished.

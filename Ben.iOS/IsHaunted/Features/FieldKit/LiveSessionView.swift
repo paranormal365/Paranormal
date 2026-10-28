@@ -48,6 +48,9 @@ struct LiveSessionView: View {
     @State private var notice = RailNotice()
     /// Typing the question while it is asked, where the phone can do it with no connection.
     @AppStorage("fieldkit.type-questions") private var typeQuestions = true
+    /// Scanning the room for its place, on a LiDAR phone (LiDAR plan). Made when the screen
+    /// comes up; nil until then.
+    @State private var scanFlow: ScanFlow?
 
     /// Room under the scrolling content for the pinned bar, so nothing ends up behind it.
     private static let barClearance: CGFloat = 96
@@ -94,6 +97,8 @@ struct LiveSessionView: View {
             .sheet(isPresented: $askingForNote) { noteComposer }
             .permissionRefusedAlert($refusedPermission)
             .sheet(isPresented: $choosingRoom) { roomSheet }
+            .modifier(ScanPresentations(flow: scanFlow, sessionId: sessionId, active: active,
+                                        scans: dependencies.scanStore))
             .onChange(of: store.active?.isRecording) { _, recording in
                 if recording != true { Task { await call.reset(dictation: dictation) } }
             }
@@ -170,6 +175,13 @@ struct LiveSessionView: View {
                 Task { await call.reset(dictation: dictation) }
             }
             .task { await bringUp() }
+            .task(id: active?.room) {
+                if scanFlow == nil, LidarSupport.isAvailable {
+                    scanFlow = ScanFlow(client: dependencies.placeScans, scans: dependencies.scanStore,
+                                        store: store, sessionId: sessionId)
+                }
+                await scanFlow?.refresh()
+            }
     }
 
     @ViewBuilder
@@ -590,7 +602,8 @@ struct LiveSessionView: View {
     @ViewBuilder
     private var roomSheet: some View {
         if let active {
-            RoomSheet(current: active.room, visited: active.roomsVisited) { room in
+            RoomSheet(current: active.room, visited: active.roomsVisited,
+                      placeRooms: scanFlow?.rooms?.rooms ?? []) { room in
                 Task { await active.setRoom(room) }
             }
         }
@@ -606,6 +619,12 @@ struct LiveSessionView: View {
                 .padding(.top, 8)
 
             RoomBar(room: active.room) { choosingRoom = true }
+
+            // Absent, not disabled, without LiDAR — and without an account, since a room's scan
+            // belongs to a place on the server.
+            if LidarSupport.isAvailable, dependencies.session.me != nil, let scanFlow {
+                ScanRoomButton(flow: scanFlow, room: active.room) { choosingRoom = true }
+            }
 
             if active.channels.contains(.video) {
                 viewfinder(active)

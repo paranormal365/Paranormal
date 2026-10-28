@@ -30,6 +30,9 @@ public struct FieldSessionSummary: Sendable, Identifiable, Equatable {
     public var hostedEventId: UUID?
     public var eventTitle: String?
     public var fieldLaunchId: UUID?
+    /// The place it is at, once known (LiDAR plan) — what its room scans belong to.
+    public var placeId: UUID?
+    public var placeName: String?
 
     public init(id: UUID, startedAt: Date, endedAt: Date?, outcome: FieldSessionOutcome,
                 locationLabel: String?, investigationId: UUID?, investigationTitle: String?,
@@ -39,7 +42,8 @@ public struct FieldSessionSummary: Sendable, Identifiable, Equatable {
                 importedAt: Date? = nil, sourceDeviceId: String? = nil,
                 recordedByAccountId: UUID? = nil, isPublicArchiveCopy: Bool = false,
                 orgCalendarEventId: UUID? = nil, hostedEventId: UUID? = nil,
-                eventTitle: String? = nil, fieldLaunchId: UUID? = nil) {
+                eventTitle: String? = nil, fieldLaunchId: UUID? = nil,
+                placeId: UUID? = nil, placeName: String? = nil) {
         self.id = id
         self.startedAt = startedAt
         self.endedAt = endedAt
@@ -61,6 +65,8 @@ public struct FieldSessionSummary: Sendable, Identifiable, Equatable {
         self.hostedEventId = hostedEventId
         self.eventTitle = eventTitle
         self.fieldLaunchId = fieldLaunchId
+        self.placeId = placeId
+        self.placeName = placeName
     }
 
     init(_ session: FieldSession) {
@@ -84,7 +90,9 @@ public struct FieldSessionSummary: Sendable, Identifiable, Equatable {
                   orgCalendarEventId: session.orgCalendarEventId,
                   hostedEventId: session.hostedEventId,
                   eventTitle: session.eventTitle,
-                  fieldLaunchId: session.fieldLaunchId)
+                  fieldLaunchId: session.fieldLaunchId,
+                  placeId: session.placeId,
+                  placeName: session.placeName)
     }
 
     /// Whether this session arrived as a `.ben` rather than being recorded on this device.

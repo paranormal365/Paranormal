@@ -1,3 +1,4 @@
+using Ben.Data.Common.Enums;
 using Ben.Data.Source.Context;
 using Microsoft.EntityFrameworkCore;
 
@@ -71,6 +72,11 @@ public static class AccountStorageGuard
     /// may not belong to"). So one rule covers every personal door, including doors added later,
     /// which is the property the per-kind list never had.</para>
     ///
+    /// <para><b>A place's files are the fourth builder</b> (<c>places/{id}/</c>, LiDAR plan): a
+    /// room's scan belongs to the building, so its path says nothing about who pays. The row does —
+    /// <c>PlaceScan.OwnerAppUserId</c> is set when no verified venue pays — and it is counted from
+    /// there. A declined or removed version has no file left to count.</para>
+    ///
     /// <para><b>What is exempt, and the principle behind it: a person is charged for what they can
     /// SEE and REMOVE.</b></para>
     ///
@@ -137,7 +143,14 @@ public static class AccountStorageGuard
                       || s.PublishedAtUtc != null))
             .SumAsync(s => (long?)s.DocumentUploadFile.FileSize, ct) ?? 0L;
 
-        return kept - earnedItsDisk - documentsEarned;
+        var scans = await db.PlaceScans.AsNoTracking()
+            .Where(s => s.OwnerAppUserId == appUserId
+                     && (s.State == PlaceScanState.Current
+                      || s.State == PlaceScanState.Previous
+                      || s.State == PlaceScanState.Offered))
+            .SumAsync(s => (long?)s.FileSize, ct) ?? 0L;
+
+        return kept - earnedItsDisk - documentsEarned + scans;
     }
 
     /// <summary>The cap in bytes, from settings, falling back to the built-in default.</summary>

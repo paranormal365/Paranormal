@@ -76,6 +76,9 @@ public sealed class AzureBlobFileStorageService : IFileStorageService
     public string CaseFilePath(Guid caseId, string storedFileName)
         => $"cases/{caseId}/{storedFileName}";
 
+    public string PlaceFilePath(Guid placeId, string storedFileName)
+        => $"places/{placeId}/{storedFileName}";
+
     // ── Reading and writing ──────────────────────────────────────────────────
 
     public async Task WriteAsync(string relativePath, Stream data, CancellationToken ct = default)

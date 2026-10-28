@@ -32,7 +32,13 @@ public static class FieldSessionFileGuard
         [".jpeg"] = ["image/jpeg"],
         [".png"] = ["image/png"],
         [".heic"] = ["image/heic", "image/heif"],
+        // A comparison scan carried inside a session (LiDAR plan): a stored ZIP of its own, read
+        // in place like the session around it.
+        [".scan"] = [PlaceScanContentType, "application/zip"],
     };
+
+    /// <summary>What a room's LiDAR scan is served as.</summary>
+    public const string PlaceScanContentType = "application/vnd.ishaunted.room-scan";
 
     public static string? Refusal(string relativePath, string? contentType, long length, ReadOnlySpan<byte> header, int filesAlready)
     {
@@ -90,6 +96,9 @@ public static class FieldSessionFileGuard
                                       && h[8] == (byte)'W' && h[9] == (byte)'A' && h[10] == (byte)'V' && h[11] == (byte)'E';
             case ".jpg": case ".jpeg":
                 return h.Length >= 3 && h[0] == 0xFF && h[1] == 0xD8 && h[2] == 0xFF;
+            case ".scan":
+                // A ZIP's first local file header.
+                return h.Length >= 4 && h[0] == (byte)'P' && h[1] == (byte)'K' && h[2] == 0x03 && h[3] == 0x04;
             case ".png":
                 return h.Length >= 8 && h[0] == 0x89 && h[1] == (byte)'P' && h[2] == (byte)'N' && h[3] == (byte)'G'
                                      && h[4] == 0x0D && h[5] == 0x0A && h[6] == 0x1A && h[7] == 0x0A;

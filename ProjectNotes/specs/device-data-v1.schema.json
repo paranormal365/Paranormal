@@ -145,6 +145,13 @@
         "measurements": {
           "description": "Device-specific channels, keyed by channel name. The extension point — new instruments add keys here, never new top-level fields.",
           "type": ["object", "null"],
+          "properties": {
+            "room_scan":   { "$ref": "#/$defs/room_scan" },
+            "scan":        { "$ref": "#/$defs/scan" },
+            "scan_change": { "$ref": "#/$defs/scan_change" },
+            "figure":      { "$ref": "#/$defs/figure" },
+            "shape":       { "$ref": "#/$defs/shape" }
+          },
           "additionalProperties": { "$ref": "#/$defs/measurement" }
         },
         "position": { "$ref": "#/$defs/position" },
@@ -189,6 +196,94 @@
 
       "if":   { "properties": { "value": { "type": "number" } }, "required": ["value"] },
       "then": { "required": ["unit"], "properties": { "unit": { "type": "string" } } }
+    },
+
+    "bundle_path": {
+      "description": "A file inside the delivered bundle, optionally a member of a .scan inside it after a '#'. Same rule as a file_ref's filename: relative, no backslashes, no '..'.",
+      "type": "string",
+      "pattern": "^[^/\\\\][^\\\\]*$",
+      "not": { "pattern": "\\.\\." }
+    },
+
+    "point3": {
+      "description": "x, y, z in metres, in the frame of the room scan the reading refers to.",
+      "type": ["array", "null"],
+      "items": { "type": "number" },
+      "minItems": 3,
+      "maxItems": 3
+    },
+
+    "size3": {
+      "description": "Width, height, depth.",
+      "type": ["array", "null"],
+      "items": { "type": "number", "minimum": 0 },
+      "minItems": 3,
+      "maxItems": 3
+    },
+
+    "room_scan": {
+      "description": "1.2: a room scanned for its place during the session. value is the room's name.",
+      "allOf": [{ "$ref": "#/$defs/measurement" }],
+      "properties": {
+        "value":            { "type": "string", "minLength": 1 },
+        "place_scan_id":    { "type": ["string", "null"] },
+        "place_id":         { "type": ["string", "null"] },
+        "version":          { "type": ["integer", "null"], "minimum": 1 },
+        "outcome":          { "enum": ["current", "replaced", "offered", null] },
+        "duration_seconds": { "type": ["number", "null"], "minimum": 0 }
+      }
+    },
+
+    "scan": {
+      "description": "1.2: a comparison scan taken against the place's scan of a room. value is the comparison's path inside the bundle.",
+      "allOf": [{ "$ref": "#/$defs/measurement" }],
+      "properties": {
+        "value":              { "$ref": "#/$defs/bundle_path" },
+        "room":               { "type": ["string", "null"] },
+        "place_scan_id":      { "type": ["string", "null"] },
+        "place_scan_version": { "type": ["integer", "null"], "minimum": 1 },
+        "changes":            { "type": ["integer", "null"], "minimum": 0 }
+      }
+    },
+
+    "scan_change": {
+      "description": "1.2: one thing a comparison found. value says what happened to it.",
+      "allOf": [{ "$ref": "#/$defs/measurement" }],
+      "properties": {
+        "value":        { "enum": ["moved", "missing", "new"] },
+        "object":       { "type": ["string", "null"] },
+        "distance_cm":  { "type": ["number", "null"], "minimum": 0 },
+        "rotation_deg": { "type": ["number", "null"] },
+        "size_cm":      { "$ref": "#/$defs/size3" },
+        "where":        { "$ref": "#/$defs/point3" },
+        "picture":      { "oneOf": [{ "$ref": "#/$defs/bundle_path" }, { "type": "null" }] }
+      }
+    },
+
+    "figure": {
+      "description": "1.2: one continuous sighting of a human figure by the person map. value is the joints file inside the bundle.",
+      "allOf": [{ "$ref": "#/$defs/measurement" }],
+      "properties": {
+        "value":           { "$ref": "#/$defs/bundle_path" },
+        "from":            { "type": "number", "minimum": 0 },
+        "to":              { "type": "number", "minimum": 0 },
+        "video":           { "oneOf": [{ "$ref": "#/$defs/bundle_path" }, { "type": "null" }] },
+        "peak_confidence": { "type": ["number", "null"], "minimum": 0, "maximum": 1 }
+      }
+    },
+
+    "shape": {
+      "description": "1.2: something person-sized that is not in the room's scan. value says it in words. Never jointed.",
+      "allOf": [{ "$ref": "#/$defs/measurement" }],
+      "properties": {
+        "value":      { "type": "string" },
+        "size_cm":    { "$ref": "#/$defs/size3" },
+        "distance_m": { "type": ["number", "null"], "minimum": 0 },
+        "where":      { "$ref": "#/$defs/point3" },
+        "from":       { "type": "number", "minimum": 0 },
+        "to":         { "type": "number", "minimum": 0 },
+        "video":      { "oneOf": [{ "$ref": "#/$defs/bundle_path" }, { "type": "null" }] }
+      }
     },
 
     "position": {
