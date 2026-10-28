@@ -33,6 +33,8 @@ it is hidden from everybody else, but still takes its number. No other sub-headi
   the one just passed. Before, Next skipped a mark less than three seconds away.
 - A session sent to the website carries the time zone it was recorded in, so the website shows the time
   where it happened rather than where the phone was when it was sent.
+- In a session's review, a recording that starts while another is still playing takes over when it begins.
+  Before, the one playing lost its last second and the next started a second early.
 
 ## 1.1.7 · 2026-10-24
 

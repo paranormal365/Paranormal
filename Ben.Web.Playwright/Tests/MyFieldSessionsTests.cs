@@ -94,7 +94,11 @@ public class MyFieldSessionsTests : BenTestBase
         // once the map exists; its own framing is not a gesture and is never counted.
         var module = await Page.EvaluateHandleAsync("path => import(path)", "/_content/Ben.Web.Website.Library/Kit/Maps/BenMap.razor.js");
         var mapId = (await map.GetAttributeAsync("id"))!;
-        await Page.WaitForFunctionAsync("([mod, id]) => !!mod.describe(id)", new object[] { module, mapId }, new() { Timeout = 30_000 });
+        // And it has finished framing itself on its pins: a gesture during that is not reported, by
+        // design, and WebKit frames slowly enough that all three drags landed inside it (10/28/2026,
+        // the same order-dependent failure MapViewportTests had).
+        await Page.WaitForFunctionAsync("([mod, id]) => { const d = mod.describe(id); return !!d && !d.framing; }",
+            new object[] { module, mapId }, new() { Timeout = 30_000 });
         Assert.That(await Page.EvaluateAsync<string>(readCounter), Is.EqualTo("0"), "nothing bounded before any gesture");
 
         await map.ScrollIntoViewIfNeededAsync();
@@ -104,6 +108,8 @@ public class MyFieldSessionsTests : BenTestBase
         // this test pass or fail by where the page happened to scroll (site audit, 10/27/2026).
         var cx = box.X + box.Width * 0.2f;
         var cy = box.Y + box.Height * 0.25f;
+
+        var before = await Page.EvaluateAsync<double[]>("([mod, id]) => mod.describe(id).center", new object[] { module, mapId });
 
         // Three quick drags, back to back: each is a gesture the map reports; only the last should
         // be asked about. No pause between them is needed — the point is that they arrive together.
@@ -123,6 +129,9 @@ public class MyFieldSessionsTests : BenTestBase
         // times over, after which a straggling gesture could not still be pending.
         await Page.WaitForTimeoutAsync(2_000);
 
+        // Where the map went, so a failure says whether the drags moved it at all.
+        var after = await Page.EvaluateAsync<double[]>("([mod, id]) => mod.describe(id).center", new object[] { module, mapId });
+        TestContext.Out.WriteLine($"center before {before[0]:0.0000},{before[1]:0.0000} after {after[0]:0.0000},{after[1]:0.0000}");
         // What the map actually reported, so a failure here says which corner was which.
         TestContext.Out.WriteLine("last bounds N,S,E,W = " + await Page.EvaluateAsync<string>(
             "() => document.querySelector(\"[data-testid='map-last-bounds']\")?.textContent?.trim() ?? 'missing'"));

@@ -78,6 +78,7 @@ export function state(root) {
     return {
         playhead: p.playhead, playing: p.playing, rate: p.rate, clock: p.clockFile,
         duration: p.tl.durationMs, frames: p.frames, waiting: p.waiting, dragging: p.dragging,
+        startLead: p.startLead, prerolling: p.prerolling?.dataset?.fkMedia ?? null,
     };
 }
 
@@ -146,6 +147,10 @@ class Player {
         this.frames = 0;
         this.lastSeekAt = new Map();
         this.seekLead = new Map();   // per recording: seconds its last seek took to sound again
+        // Seconds this browser takes from play() to sound: WebKit ~0.65 s, Chromium a frame or two.
+        // The next recording is started that far ahead, muted, so a hand-over has no gap (10/28/2026).
+        this.startLead = 0;
+        this.prerolling = null;
         this.pendingPlay = new WeakSet();
         this.attached = new WeakSet();
         this.media = new Map();
@@ -360,7 +365,22 @@ class Player {
     clockElement(frame) {
         if (!this.playing || this.rate > MEDIA_MAX_RATE || !frame.audio) return null;
         const element = this.media.get(frame.audio.clip.fileId);
-        if (!element || element.paused || element.readyState < 3 || element.seeking) return null;
+        if (!element || element.paused || element.readyState < 3 || element.seeking) {
+            if (element) element.__fkClockT = undefined;
+            return null;
+        }
+        // Only a recording whose time is moving keeps time (10/28/2026). One asked to play is "not
+        // paused" with data long before it sounds — WebKit ~0.65 s, longer on a slow connection — and
+        // following it then froze the playhead at its first moment, at Play and at every hand-over.
+        // A frame where it has not moved runs on the page's clock, which carries on from the last one.
+        const t = element.currentTime;
+        const moved = element.__fkClockT !== undefined && t !== element.__fkClockT;
+        element.__fkClockT = t;
+        if (!moved) return null;
+        if (element.__fkPlayAt) {
+            this.startLead = Math.min(MAX_LEAD_S, (performance.now() - element.__fkPlayAt) / 1000);
+            element.__fkPlayAt = 0;
+        }
         return { element, clip: frame.audio.clip };
     }
 
@@ -898,7 +918,7 @@ class Player {
         for (const [fileId, element] of this.media) {
             const covering = fileId === audioId ? frame.audio : fileId === videoId ? frame.video : null;
             if (!covering) {
-                if (!element.paused) this.quietly(element, () => element.pause());
+                if (!element.paused && element !== this.prerolling) this.quietly(element, () => element.pause());
                 continue;
             }
             const target = covering.offsetMs / 1000;
@@ -934,6 +954,7 @@ class Player {
                 }
                 if (element.paused && !element.ended && !this.pendingPlay.has(element)) {
                     element.__fkStarted = true;
+                    element.__fkPlayAt = performance.now();   // how long it takes to sound: startLead
                     this.pendingPlay.add(element);
                     const done = () => this.pendingPlay.delete(element);
                     try { element.play().then(done, done); } catch { done(); }
@@ -971,7 +992,25 @@ class Player {
             if (!next || clip.startMs < next.startMs) next = clip;
         }
         const element = next && this.media.get(next.fileId);
-        if (!element || !element.paused) return;
+        this.prerolling = null;
+        if (!element) return;
+        // Within this browser's start delay of the hand-over: start it now, muted and from its
+        // beginning, so it is sounding when the playhead arrives. It is unmuted when it covers (M7);
+        // any other frame, it is paused again like every recording that covers nothing.
+        const lead = this.startLead * 1000 * this.rate;
+        if (this.playing && lead > 0 && this.rate <= MEDIA_MAX_RATE && element.tagName === 'AUDIO'
+            && next.startMs - this.playhead <= lead && !element.seeking && element.currentTime <= 0.05 + lead / 1000) {
+            this.prerolling = element;
+            if (element.paused && !this.pendingPlay.has(element)) {
+                element.muted = true;
+                element.__fkStarted = true;
+                this.pendingPlay.add(element);
+                const done = () => this.pendingPlay.delete(element);
+                try { element.play().then(done, done); } catch { done(); }
+            }
+            return;
+        }
+        if (!element.paused) return;
         this.prime(element);
         if (element.currentTime > 0.05 && now - (this.lastSeekAt.get(next.fileId) ?? 0) > FAST_SEEK_MS)
             this.seekElement(element, 0, next.fileId, now);

@@ -326,9 +326,17 @@ public class FieldSessionTransportTests : BenTestBase
 
     /// <summary>
     /// Two recordings back to back — <c>audio-001.wav</c> 0:04–0:14, <c>audio-002.wav</c> from 0:14, the
-    /// way the phone splits a long night — play across the join: the clock never steps back, and
-    /// the second recording is sounding within half a second of the playhead reaching it.
+    /// way a long night can come in more than one file — play across the join: the clock never
+    /// steps back, and the second recording is sounding within a quarter of a second of the
+    /// playhead reaching it.
     /// </summary>
+    /// <remarks>
+    /// 10/28/2026, WebKit: a 683 ms gap, then 315 ms. Rule M6 let the second recording's lead second
+    /// beat the first, so it was started a second early and pulled back to its first moment until
+    /// the join; the playhead followed it standing still. Now: a clip that has begun keeps the moment,
+    /// the playhead follows only a recording whose time moves, and the next one is started muted by
+    /// the browser's own start delay. Both browsers measured 0–30 ms after that.
+    /// </remarks>
     [Test]
     public async Task Two_recordings_hand_over_without_a_gap()
     {
@@ -403,7 +411,8 @@ public class FieldSessionTransportTests : BenTestBase
                 const f = () => {{
                     const s = window.__fkState();
                     rows.push({{ wall: performance.now() - t0, playhead: s.playhead,
-                                 sounding: !el.paused && !el.muted && el.currentTime > 0.05 }});
+                                 sounding: !el.paused && !el.muted && el.currentTime > 0.05,
+                                 second: `paused=${{el.paused}} muted=${{el.muted}} t=${{el.currentTime.toFixed(2)}} ready=${{el.readyState}} lead=${{s.startLead.toFixed(2)}} preroll=${{s.prerolling === id}}` }});
                     performance.now() - t0 < 5000 ? requestAnimationFrame(f) : done();
                 }};
                 requestAnimationFrame(f);
@@ -412,6 +421,16 @@ public class FieldSessionTransportTests : BenTestBase
         }}");
         await Page.Locator("[data-testid=play-pause]").ClickAsync();
 
+        // The second recording's state around the join, so a gap says where its time went.
+        // Every frame where it changed (its time only while it is still under a second in).
+        string? was = null;
+        foreach (var r in rows.EnumerateArray())
+        {
+            var second = r.GetProperty("second").GetString()!;
+            if (second == was || r.GetProperty("playhead").GetDouble() > 15_000) continue;
+            was = second;
+            TestContext.Out.WriteLine($"{r.GetProperty("wall").GetDouble(),6:0} ms  playhead {r.GetProperty("playhead").GetDouble(),6:0}  {second}");
+        }
         var samples = rows.EnumerateArray()
             .Select(r => (Wall: r.GetProperty("wall").GetDouble(), Playhead: r.GetProperty("playhead").GetDouble(),
                           Sounding: r.GetProperty("sounding").GetBoolean()))
@@ -425,7 +444,7 @@ public class FieldSessionTransportTests : BenTestBase
         var sounding = samples.FirstOrDefault(r => r.Sounding && r.Wall >= reached.Wall);
         TestContext.Out.WriteLine($"join reached at {reached.Wall:0} ms; second recording sounding at {sounding.Wall:0} ms; ended at {samples[^1].Playhead:0}");
         Assert.That(sounding.Wall, Is.GreaterThan(0), "the second recording never sounded");
-        Assert.That(sounding.Wall - reached.Wall, Is.LessThan(500), "a gap in the sound at the hand-over");
+        Assert.That(sounding.Wall - reached.Wall, Is.LessThan(250), "a gap in the sound at the hand-over");
         Assert.That(samples[^1].Playhead, Is.GreaterThan(15_500), "it played on past the join");
     }
 }
