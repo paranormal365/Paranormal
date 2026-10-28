@@ -1,0 +1,148 @@
+@namespace Ben.Web.Website.Library.Kit
+@page "/files/{FileId:guid}/certificate"
+@page "/places/{PlaceId:guid}/sessions/{SessionId:guid}/certificates/{FileId:guid}"
+@using Ben.Service.Models.FieldSessions
+@using Ben.Web.Services
+@inject IBenAdminClient AdminClient
+@inject IBenUserState UserState
+@inject Microsoft.Extensions.Options.IOptions<Ben.Data.Common.SiteIdentity> SiteOptions
+
+@*
+    A clip's certificate of authenticity (10/28/2026). Ben: an enhanced recording "should retain
+    verification that it is from the original, but enhanced... not AI or edited externally." This says,
+    step by step, how the file was made from the phone's recording, and checks it on request: the
+    file's bytes now against the certificate, and the certificate against the site's seal.
+
+    Two doors: a signed-in person's, for any file they can open; and a public session's, for the clips
+    its page shows.
+*@
+
+<PageTitle>Certificate of authenticity — @SiteOptions.Value.Name</PageTitle>
+
+<div class="container py-4" style="max-width:820px;">
+    @if (_loading)
+    {
+        <BenLoaderOverlay Visible="true" Text="Reading the certificate…" />
+    }
+    else if (_certificate is null)
+    {
+        <div class="alert alert-secondary" data-testid="certificate-missing">
+            @(_problem ?? "This file has no certificate: it wasn't made from a field session's recording on this site, or you can't open it.")
+        </div>
+    }
+    else
+    {
+        var c = _certificate;
+        <div class="card" data-testid="certificate">
+            <div class="card-body">
+                <div class="text-uppercase small text-secondary fw-semibold mb-1">Certificate of authenticity</div>
+                <h3 class="mb-1">@c.FileName</h3>
+                <div class="mb-3">
+                    <span class="badge @(c.Enhanced ? "text-bg-info" : "text-bg-secondary")" data-testid="certificate-kind">
+                        @(c.Enhanced ? "Enhanced" : "Altered")
+                    </span>
+                    <span class="small text-secondary ms-2">
+                        @(c.Enhanced
+                            ? "Made only with steps that keep the sound and its timing."
+                            : "Includes a step that changes the sound's timing or content, so it isn't placed in the session's time.")
+                    </span>
+                </div>
+
+                <p class="mb-2">
+                    Made from <span class="font-monospace">@c.SourceClipPath</span> of the session
+                    <strong>@c.SessionLabel</strong>, recorded @c.SessionStartedUtc.ToViewerLocalTime(UserState).ToDisplayDateTime()
+                    by @c.RecordedBy@(c.RecordingOffsetMs is { } at ? $", starting {Clock(at)} into that recording" : "").
+                    The session's own file is never changed.
+                </p>
+
+                <ol class="mb-3" data-testid="certificate-steps">
+                    @foreach (var step in c.Steps)
+                    {
+                        <li class="mb-1">@step.Sentence</li>
+                    }
+                </ol>
+
+                <p class="small mb-3" data-testid="certificate-no-ai">@NoAi</p>
+
+                <dl class="row small mb-0 font-monospace">
+                    <dt class="col-sm-4 text-secondary">Phone's seal</dt>
+                    <dd class="col-sm-8 text-break">@(c.SealSha256 ?? "not available")</dd>
+                    <dt class="col-sm-4 text-secondary">Copy taken</dt>
+                    <dd class="col-sm-8 text-break">@c.CopySha256</dd>
+                    <dt class="col-sm-4 text-secondary">This file</dt>
+                    <dd class="col-sm-8 text-break" data-testid="certificate-result">@c.ResultSha256</dd>
+                    <dt class="col-sm-4 text-secondary">Issued</dt>
+                    <dd class="col-sm-8">@c.IssuedUtc.ToViewerLocalTime(UserState).ToDisplayDateTime() to @c.MadeBy@(c.Signed ? ", sealed by the site" : ", without the site's seal")</dd>
+                </dl>
+            </div>
+            <div class="card-footer d-flex flex-wrap align-items-center gap-3">
+                <button type="button" class="btn btn-primary btn-sm" data-testid="certificate-check" disabled="@_checking" @onclick="CheckAsync">
+                    <BenIcon Name="shield" Class="me-1" />@(_checking ? "Checking…" : "Check it now")
+                </button>
+                @if (_check is { } check)
+                {
+                    <span class="small @(check.Outcome == "verified" ? "text-success" : "text-warning")" data-testid="certificate-outcome"
+                          data-outcome="@check.Outcome">@check.Sentence</span>
+                }
+                else if (_checkProblem is not null)
+                {
+                    <span class="small text-warning">@_checkProblem</span>
+                }
+            </div>
+        </div>
+    }
+</div>
+
+@code {
+    [Parameter] public Guid FileId { get; set; }
+
+    /// <summary>Set on the public door: the place and session whose page shows the clip.</summary>
+    [Parameter] public Guid? PlaceId { get; set; }
+    [Parameter] public Guid? SessionId { get; set; }
+
+    private bool _loading = true, _checking;
+    private FileCertificateRecord? _certificate;
+    private FileCertificateCheck? _check;
+    private string? _problem, _checkProblem;
+
+    private bool Public => SessionId is not null;
+
+    private const string NoAi =
+        "Nothing was generated, and no AI changed the sound. A model may have helped find where to listen; it never touches the audio.";
+
+    protected override async Task OnParametersSetAsync()
+    {
+        _loading = true;
+        _certificate = null;
+        _check = null;
+        if (Public)
+        {
+            if (!RendererInfo.IsInteractive) return;
+            _certificate = await AdminClient.GetPublicFindingCertificateAsync(SessionId!.Value, FileId);
+        }
+        else
+        {
+            if (!await UserState.WaitUntilAuthReadyAsync(RendererInfo.IsInteractive)) return;
+            if (!UserState.IsAuthenticated) _problem = "Sign in to see this file's certificate.";
+            else _certificate = await AdminClient.GetFileCertificateAsync(FileId);
+        }
+        _loading = false;
+    }
+
+    private async Task CheckAsync()
+    {
+        _checking = true;
+        _checkProblem = null;
+        _check = Public
+            ? await AdminClient.CheckPublicFindingCertificateAsync(SessionId!.Value, FileId)
+            : await AdminClient.CheckFileCertificateAsync(FileId);
+        if (_check is null) _checkProblem = "The check couldn't be made just now. Try again in a minute.";
+        _checking = false;
+    }
+
+    private static string Clock(long ms)
+    {
+        var t = TimeSpan.FromMilliseconds(ms);
+        return t.TotalHours >= 1 ? $"{(int)t.TotalHours}:{t.Minutes:00}:{t.Seconds:00}" : $"{t.Minutes}:{t.Seconds:00}";
+    }
+}

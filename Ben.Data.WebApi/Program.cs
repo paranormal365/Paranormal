@@ -235,6 +235,10 @@ builder.Services.AddSingleton<Ben.Data.WebApi.Services.FieldSessions.IBenBundleS
 builder.Services.AddSingleton<Ben.Data.WebApi.Services.FieldSessions.FieldSessionTimelineService>();
 // A scanner's own copy of a session recording (phase 9 of the audio plan); the session is only read.
 builder.Services.AddScoped<Ben.Data.WebApi.Services.FieldSessions.FieldSessionAnalysisCopies>();
+// Certificates of authenticity for clips made from a session's recordings (10/28/2026): sealed with
+// the API's own data-protection keys, so there is nothing new to configure.
+builder.Services.AddSingleton<Ben.Data.WebApi.Services.Files.ProvenanceSigner>();
+builder.Services.AddSingleton<Ben.Data.WebApi.Services.Files.FileProvenanceService>();
 builder.Services.AddScoped<Ben.Data.WebApi.Services.Audio.Scanning.EvpQuestionContext>();
 // The score's weights, and fitting new ones from Keep and Dismiss (phase 13); fits wait for a SuperAdmin.
 builder.Services.AddScoped<Ben.Data.WebApi.Services.Audio.Learning.EvpScoring>();

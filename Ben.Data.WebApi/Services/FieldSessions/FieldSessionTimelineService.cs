@@ -29,7 +29,10 @@ public sealed record TimelineRequest(
     IReadOnlyList<TimelineSourceFile> Files,
     TimelinePositionPolicy Policy,
     Func<string, string?>? Redact,
-    string Variant);
+    string Variant,
+    // Every file the session brought, whoever may see it: what did NOT arrive is said on the page,
+    // and a recording this audience may not play is not one of those. Null: the same as Files.
+    IReadOnlyList<string>? Arrived = null);
 
 /// <summary>A built timeline, as the bytes that go on the wire, and a tag for them.</summary>
 public sealed record TimelinePayload(byte[] Json, string ETag);
@@ -128,7 +131,8 @@ public sealed class FieldSessionTimelineService
         var files = string.Join(",", r.Files
             .OrderBy(f => f.FileId)
             .Select(f => $"{f.FileId:N}:{f.Stamp.Ticks}"));
-        return $"{r.SessionId:N}|{r.DocumentUploadFileId:N}:{r.DocumentStamp.Ticks}|{files}|{r.Policy}|{r.Variant}";
+        var arrived = r.Arrived is null ? "" : string.Join(",", r.Arrived.Order(StringComparer.OrdinalIgnoreCase));
+        return $"{r.SessionId:N}|{r.DocumentUploadFileId:N}:{r.DocumentStamp.Ticks}|{files}|{r.Policy}|{r.Variant}|{arrived}";
     }
 
     private async Task<TimelinePayload?> BuildAsync(TimelineRequest request, CancellationToken ct)
@@ -158,7 +162,7 @@ public sealed class FieldSessionTimelineService
         SessionTimeline timeline;
         try
         {
-            timeline = FieldSessionTimelineBuilder.Build(document, files, request.Policy);
+            timeline = FieldSessionTimelineBuilder.Build(document, files, request.Policy, request.Arrived);
         }
         catch (JsonException ex)
         {

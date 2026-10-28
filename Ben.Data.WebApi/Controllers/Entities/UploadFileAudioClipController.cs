@@ -9,6 +9,7 @@ using Microsoft.EntityFrameworkCore;
 using NAudio.Wave;
 using Ben.Data.WebApi.Services.Access;
 using Ben.Data.WebApi.Services.Audio;
+using Ben.Data.WebApi.Services.Files;
 using Ben.Data.WebApi.Services;
 using Ben.Data.WebApi.Services.Billing;
 using Microsoft.AspNetCore.RateLimiting;
@@ -265,6 +266,17 @@ public sealed class UploadFileAudioClipController : BenControllerBase
         entity.StoragePath = relativePath;
 
         db.UploadFiles.Add(entity);
+
+        // Its certificate of authenticity, when it was cut from a session recording's copy or from a
+        // file already certified (10/28/2026). Saved with the file, or not at all.
+        if (HttpContext?.RequestServices?.GetService<FileProvenanceService>() is { } provenance)
+            await provenance.RecordAsync(db, entity, fileId, "clip",
+                new Dictionary<string, double>
+                {
+                    ["start"] = request.Start, ["end"] = request.Start + clippedSeconds,
+                    ["normalize"] = request.Normalize ? 1 : 0,
+                },
+                request.Start, clippedBytes, (long)Math.Round(clippedSeconds * 1000), userId, ct);
 
         // Ben's rule (2026-08-24): a clip keeps the recording's location. An encoder writes no
         // EXIF, so without carrying it forward the choice would be to lose where the audio was

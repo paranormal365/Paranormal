@@ -1684,7 +1684,17 @@ public sealed record FieldSessionSummaryRecord(
     /// <summary>When the organizers chose it for the place's page; it shows a week later (10/25/2026).</summary>
     DateTime? OnPlaceChosenUtc = null,
     /// <summary>When the sender said keep it off the place's page; null when they haven't.</summary>
-    DateTime? PlaceOptOutUtc = null)
+    DateTime? PlaceOptOutUtc = null,
+    /// <summary>The place it was recorded at or published to; the API always sent it, the record dropped it.</summary>
+    Guid? PlaceId = null,
+    /// <summary>Held as one .ben file.</summary>
+    bool IsBundle = false,
+    /// <summary>Where it belongs, by name (10/28/2026). Only the single-session read fills it.</summary>
+    Ben.Service.Models.FieldSessions.FieldSessionBelonging? BelongsTo = null,
+    /// <summary>The person reading it sent it: their delete and switches show on its page.</summary>
+    bool SentByViewer = false,
+    /// <summary>The person reading it runs the hosted event it was sent to.</summary>
+    bool ViewerRunsTheEvent = false)
 {
     /// <summary>Whether it belongs to a group's record rather than to the person alone.</summary>
     public bool IsGroupWork => InvestigationId is not null || OrgCalendarEventId is not null || HostedEventId is not null;

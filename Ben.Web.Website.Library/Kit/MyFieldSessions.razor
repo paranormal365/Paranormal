@@ -300,47 +300,17 @@
                value => AdminClient.SetSessionKeptOffPlaceAsync(row.Id, value),
                value => _rows = [.. (_rows ?? []).Select(r => r.Id == row.Id ? r with { PlaceOptOutUtc = value ? DateTime.UtcNow : null } : r)]);
 
-    // What the sender last asked for, per session and switch, and which of those are being saved.
-    private readonly Dictionary<(Guid Session, string Switch), bool> _wanted = [];
-    private readonly HashSet<(Guid Session, string Switch)> _saving = [];
+    // One request at a time per switch, ending on the sender's last choice (shared with a session's own page).
+    private readonly LatestChoiceSaver _saver = new();
 
-    /// <summary>
-    /// Saves a switch one request at a time, ending on the sender's last choice.
-    /// </summary>
-    /// <remarks>
-    /// On, then off, clicked quickly sent both requests at once. They could arrive in either order,
-    /// so the server sometimes kept "on" while the switch showed "off", which for these switches
-    /// means a session shown publicly that its sender had withdrawn (site audit e2e, 10/27/2026). A
-    /// click that lands mid-save now only records the choice, and the save already going sends it
-    /// once it has its answer.
-    /// </remarks>
     private async Task SaveLatestAsync(
         Guid sessionId, string which, bool value,
         Func<bool, Task<(bool Done, string? Error)>> send, Action<bool> applied)
     {
-        var key = (sessionId, which);
-        _wanted[key] = value;
-        if (!_saving.Add(key)) return;
-
         _consentBusy = true; _consentError = null;
-        try
-        {
-            bool sent;
-            do
-            {
-                sent = _wanted[key];
-                var (done, error) = await send(sent);
-                if (!done) { _consentError = error; return; }
-                applied(sent);
-            }
-            while (_wanted[key] != sent);
-        }
-        finally
-        {
-            _saving.Remove(key);
-            _wanted.Remove(key);
-            _consentBusy = _saving.Count > 0;
-        }
+        await _saver.SaveAsync(sessionId, which, value, send, applied);
+        _consentBusy = _saver.Busy;
+        _consentError = _saver.Error;
     }
     private List<InvestigationMapPin> _pins = [];
     private int     _withoutFix;

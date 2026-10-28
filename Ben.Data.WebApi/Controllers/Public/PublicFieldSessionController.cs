@@ -171,6 +171,7 @@ public sealed class PublicFieldSessionController : ControllerBase
                 s.Id, PlaceId = s.PlaceId!.Value, PlaceName = s.Place!.Name, s.LocationLabel,
                 s.StartedAt, s.EndedAt, s.DeviceModel,
                 RecordedBy = s.RecordedByName ?? s.SubmittedByAppUser.DisplayName ?? "A contributor",
+                EventTitle = (string?)null, EventOrg = (string?)null, EventUrlName = (string?)null, GroupName = (string?)null,
             })
             .FirstOrDefaultAsync(ct)
             // Or shown with a hosted event's results (event-scenario-gaps): the event's place stands in.
@@ -183,6 +184,12 @@ public sealed class PublicFieldSessionController : ControllerBase
                     PlaceName = db.HostedEvents.Where(h => h.Id == s.HostedEventId).Select(h => h.Place.Name).First(),
                     s.LocationLabel, s.StartedAt, s.EndedAt, s.DeviceModel,
                     RecordedBy = s.RecordedByName ?? s.SubmittedByAppUser.DisplayName ?? "A contributor",
+                    // Named and linked on the page (10/28/2026): it read "From the field archive" and
+                    // pointed back to the place, though a visitor came from the event's results.
+                    EventTitle = db.HostedEvents.Where(h => h.Id == s.HostedEventId).Select(h => (string?)h.Name).First(),
+                    EventOrg = db.HostedEvents.Where(h => h.Id == s.HostedEventId).Select(h => (string?)h.Organization.UrlName).First(),
+                    EventUrlName = db.HostedEvents.Where(h => h.Id == s.HostedEventId).Select(h => (string?)h.UrlName).First(),
+                    GroupName = db.HostedEvents.Where(h => h.Id == s.HostedEventId).Select(h => (string?)h.Organization.Name).First(),
                 })
                 .FirstOrDefaultAsync(ct);
         if (session is null) return NotFound();
@@ -195,7 +202,10 @@ public sealed class PublicFieldSessionController : ControllerBase
 
         return Ok(new Ben.Service.Models.FieldSessions.PublicSessionSummary(
             session.Id, session.PlaceId, session.PlaceName ?? "this place", session.LocationLabel,
-            session.StartedAt, session.EndedAt, session.DeviceModel, session.RecordedBy, files));
+            session.StartedAt, session.EndedAt, session.DeviceModel, session.RecordedBy, files,
+            EventTitle: session.EventTitle,
+            EventUrl: session.EventOrg is { } org && session.EventUrlName is { } slug ? $"/o/{org}/events/{slug}" : null,
+            GroupName: session.GroupName));
     }
 
     /// <summary>
@@ -261,7 +271,8 @@ public sealed class PublicFieldSessionController : ControllerBase
             session.Id, session.IsBundle, path, session.DocumentUploadFileId,
             session.DocumentUploadFile.DateUpdated ?? session.DocumentUploadFile.DateCreated,
             files, Ben.Service.Models.FieldSessions.TimelinePositionPolicy.PublicPoint, redact,
-            Variant: $"public:{shownAt.Ticks}:{(int)session.MediaReviewState}:{lat}:{lon}"), ct);
+            Variant: $"public:{shownAt.Ticks}:{(int)session.MediaReviewState}:{lat}:{lon}",
+            Arrived: session.Files.Select(f => f.RelativePath).ToList()), ct);
 
         return payload is null ? NotFound() : FieldSessionTimelineService.Respond(this, payload);
     }
@@ -289,6 +300,66 @@ public sealed class PublicFieldSessionController : ControllerBase
             .ToListAsync(ct);
         return Ok(rows);
     }
+
+    // ── What was found in it (10/28/2026) ─────────────────────────────────────
+
+    /// <summary>
+    /// The EVPs and certified clips a public session's page shows: the sender's own and those of
+    /// whoever shows it, once its media is approved (<see cref="SessionFindingsReader.ForPublicAsync"/>).
+    /// </summary>
+    [HttpGet("{sessionId:guid}/findings")]
+    public async Task<ActionResult<Ben.Service.Models.FieldSessions.SessionFindings>> Findings(Guid sessionId, CancellationToken ct = default)
+    {
+        await using var db = await _db.CreateDbContextAsync(ct);
+        return await PublicSessionAsync(db, sessionId, ct) is { } session
+            ? Ok(await SessionFindingsReader.ForPublicAsync(db, session, ct))
+            : NotFound();
+    }
+
+    /// <summary>A clip the page shows, by byte range like the session's own recordings.</summary>
+    [HttpGet("{sessionId:guid}/findings/{fileId:guid}/media")]
+    public async Task<IActionResult> FindingMedia(Guid sessionId, Guid fileId, CancellationToken ct = default)
+    {
+        await using var db = await _db.CreateDbContextAsync(ct);
+        if (await PublicSessionAsync(db, sessionId, ct) is not { } session
+            || !await SessionFindingsReader.IsPublicClipAsync(db, session, fileId, ct)) return NotFound();
+        var file = await db.UploadFiles.AsNoTracking().Where(f => f.Id == fileId)
+            .Select(f => new { f.StoragePath, f.ContentType, f.FileName }).FirstOrDefaultAsync(ct);
+        if (file?.StoragePath is not { Length: > 0 } path || !_fileStorage.Exists(path)) return NotFound();
+        Response.Headers.CacheControl = "public, max-age=3600";
+        return File(await _fileStorage.OpenReadAsync(path, ct), file.ContentType ?? "application/octet-stream",
+                    file.FileName, enableRangeProcessing: true);
+    }
+
+    /// <summary>The certificate of a clip the page shows.</summary>
+    [HttpGet("{sessionId:guid}/findings/{fileId:guid}/certificate")]
+    public async Task<ActionResult<Ben.Service.Models.FieldSessions.FileCertificateRecord>> FindingCertificate(
+        Guid sessionId, Guid fileId, CancellationToken ct = default)
+    {
+        await using var db = await _db.CreateDbContextAsync(ct);
+        if (await PublicSessionAsync(db, sessionId, ct) is not { } session
+            || !await SessionFindingsReader.IsPublicClipAsync(db, session, fileId, ct)) return NotFound();
+        return await Services.Files.FileProvenanceService.DescribeAsync(db, fileId, ct) is { } certificate
+            ? Ok(certificate) : NotFound();
+    }
+
+    /// <summary>Checks a shown clip's bytes now, and its certificate against the site's seal.</summary>
+    [HttpPost("{sessionId:guid}/findings/{fileId:guid}/certificate/check")]
+    [Microsoft.AspNetCore.RateLimiting.EnableRateLimiting(Services.RateLimiting.AudioProcessingPolicy)]
+    public async Task<ActionResult<Ben.Service.Models.FieldSessions.FileCertificateCheck>> FindingCertificateCheck(
+        Guid sessionId, Guid fileId, [FromServices] Services.Files.FileProvenanceService provenance, CancellationToken ct = default)
+    {
+        await using var db = await _db.CreateDbContextAsync(ct);
+        if (await PublicSessionAsync(db, sessionId, ct) is not { } session
+            || !await SessionFindingsReader.IsPublicClipAsync(db, session, fileId, ct)) return NotFound();
+        return await provenance.CheckAsync(db, fileId, ct) is { } check ? Ok(check) : NotFound();
+    }
+
+    /// <summary>A session a visitor may see: in a place's archive, or shown with an event's results.</summary>
+    private static async Task<Ben.Data.Source.Entities.FieldSessionUpload?> PublicSessionAsync(
+        BenDataContext db, Guid sessionId, CancellationToken ct)
+        => await Publishable(db).FirstOrDefaultAsync(s => s.Id == sessionId, ct)
+           ?? await EventSessionPublication.Shown(db).FirstOrDefaultAsync(s => s.Id == sessionId, ct);
 
     /// <summary>The archive's own gate, as a query.</summary>
     private static IQueryable<Ben.Data.Source.Entities.FieldSessionUpload> Publishable(BenDataContext db)

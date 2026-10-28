@@ -48,6 +48,29 @@ day-by-day account of building it would say nothing to anyone using it now.
 - A recording in the session player keeps playing past the hour, and one whose connection drops is
   tried again and carries on by itself. Before, it could stop partway through a long night and say it
   "won't play in this browser" until the page was reloaded.
+- A field session's page says where it was sent — the investigation, the event or tour date, the group
+  and the place — with links, and gives the time it started where it was recorded, with a switch to your
+  own time.
+- In a session's marks, a question asked during an EVP session shows the question and how long the room
+  was given to answer, and the chart shades that time. Details added after the session say when.
+- A session whose phone recorded sound it never sent now says so by name, instead of showing nothing.
+- You can delete your own session, and say whether it may be shown with an event's results, from the
+  session's own page. An event's organizers can show it from there too.
+- A session shown with an event's results names the event and links back to it.
+- A field session's page shows the EVPs kept from its recordings, with what was heard, among its
+  marks and on its chart. Clips made from a recording are listed under it, enhanced or altered.
+- An enhanced clip keeps its moment in the session: switch on **Play the enhanced clips in their place**
+  to hear it there instead of the original. The session's own file is never changed.
+- Every clip made from a session's recording on this site has a certificate of authenticity: how it was
+  made, step by step, from what the phone recorded, with **Check it now** to confirm the file and the
+  certificate are unchanged. Nothing is generated and no AI changes the sound.
+- A session's recordings, a copy made to scan one, and a certified clip can no longer have their file
+  replaced; save a new one instead.
+- An edit of a group's copy of a session recording now stays with the group, as a clip of it already did.
+- A field session's page has the site's look: its own section, the player in the theme's colors in light and
+  dark, the speeds as buttons you can see at a glance, and the map's path and pins in the same colors as the chart.
+- Pausing a session from your computer's media keys, Now Playing or headphones always holds. At just the wrong
+  moment the player used to start the sound again.
 
 ### Administration
 

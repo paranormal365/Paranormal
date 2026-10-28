@@ -189,6 +189,29 @@ public sealed partial class BenAdminClientAdapter
         CancellationToken token = default)
         => _api.StartFieldSessionScanAsync(sessionId, request, token);
 
+    public Task<Ben.Service.Models.FieldSessions.SessionFindings?> GetSessionFindingsAsync(Guid sessionId, CancellationToken token = default)
+        => _api.GetAsync<Ben.Service.Models.FieldSessions.SessionFindings>($"/api/field-sessions/{sessionId}/findings", token);
+
+    public Task<Ben.Service.Models.FieldSessions.SessionFindings?> GetPublicSessionFindingsAsync(Guid sessionId, CancellationToken token = default)
+        => _api.GetAnonymousAsync<Ben.Service.Models.FieldSessions.SessionFindings>($"/api/public/field-sessions/{sessionId}/findings", token);
+
+    public Task<Ben.Service.Models.FieldSessions.FileCertificateRecord?> GetFileCertificateAsync(Guid fileId, CancellationToken token = default)
+        => _api.GetAsync<Ben.Service.Models.FieldSessions.FileCertificateRecord>($"/api/upload-files/{fileId}/certificate", token);
+
+    public Task<Ben.Service.Models.FieldSessions.FileCertificateCheck?> CheckFileCertificateAsync(Guid fileId, CancellationToken token = default)
+        => _api.PostAsync<object, Ben.Service.Models.FieldSessions.FileCertificateCheck>($"/api/upload-files/{fileId}/certificate/check", new { }, token);
+
+    public Task<Ben.Service.Models.FieldSessions.FileCertificateRecord?> GetPublicFindingCertificateAsync(Guid sessionId, Guid fileId, CancellationToken token = default)
+        => _api.GetAnonymousAsync<Ben.Service.Models.FieldSessions.FileCertificateRecord>(
+            $"/api/public/field-sessions/{sessionId}/findings/{fileId}/certificate", token);
+
+    public Task<Ben.Service.Models.FieldSessions.FileCertificateCheck?> CheckPublicFindingCertificateAsync(Guid sessionId, Guid fileId, CancellationToken token = default)
+        => _api.PostAnonymousAsync<object, Ben.Service.Models.FieldSessions.FileCertificateCheck>(
+            $"/api/public/field-sessions/{sessionId}/findings/{fileId}/certificate/check", new { }, token);
+
+    public string GetPublicFindingMediaUrl(Guid sessionId, Guid fileId)
+        => $"{_webApiBaseUrl}/api/public/field-sessions/{sessionId}/findings/{fileId}/media";
+
     public Task<LoadResult<Ben.Service.Models.FieldSessions.SessionEvpRecord>> GetFieldSessionEvpsAsync(
         Guid sessionId, CancellationToken token = default)
         => _api.GetFieldSessionEvpsAsync(sessionId, token);

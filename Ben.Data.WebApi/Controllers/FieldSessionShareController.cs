@@ -359,7 +359,8 @@ public sealed class FieldSessionShareController : BenControllerBase
                 ? Ben.Service.Models.FieldSessions.TimelinePositionPolicy.Exact
                 : Ben.Service.Models.FieldSessions.TimelinePositionPolicy.Withheld,
             redact,
-            Variant: $"share:{(link.IncludePositions ? "with" : "without")}-positions:{link.FieldSessionUploadFileId:N}"), ct);
+            Variant: $"share:{(link.IncludePositions ? "with" : "without")}-positions:{link.FieldSessionUploadFileId:N}",
+            Arrived: session.Files.Select(f => f.RelativePath).ToList()), ct);
 
         return payload is null
             ? NotFound("This session's readings cannot be shown through a shared link.")

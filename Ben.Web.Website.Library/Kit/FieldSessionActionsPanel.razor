@@ -1,0 +1,157 @@
+@namespace Ben.Web.Website.Library.Kit
+@inject IBenAdminClient AdminClient
+@inject IBenUserState UserState
+@inject NavigationManager Nav
+
+@*
+    What can be done with a session from its own page (10/28/2026). Until then these lived only on
+    My field sessions and the event's list of sessions, so somebody watching their own night had to
+    leave it to delete it or to say whether the organizers may show it.
+
+    The sender: delete (not for the group's record of a night), "May be shown with the results"
+    and "Keep it off the place's page". Whoever runs the hosted event: show it with the results, or
+    stop. Every refusal is the server's own sentence.
+*@
+
+@if (Session.SentByViewer || ShowsOrganizer)
+{
+    <div class="card mt-3" data-testid="session-actions">
+        <div class="card-header py-2">This session</div>
+        <div class="card-body d-flex flex-wrap align-items-center gap-3">
+            @if (Session.SentByViewer)
+            {
+                @if (!Session.IsGroupWork)
+                {
+                    <button type="button" class="btn btn-outline-danger btn-sm" data-testid="delete-session"
+                            @onclick="() => _showDelete = true">
+                        <BenIcon Name="trash-2" Class="me-1" />Delete this session
+                    </button>
+                }
+                else
+                {
+                    <span class="text-secondary small" data-testid="belongs-to-group">
+                        @(Session.InvestigationId is not null
+                            ? "Recorded for an investigation, so it belongs to the group's record of that night and can't be deleted here."
+                            : "Sent to a group's tour or event, so it belongs to their record of that night and can't be deleted here.")
+                    </span>
+                }
+
+                @if (Session.HostedEventId is not null && Session.InvestigationId is null)
+                {
+                    <div class="form-check form-switch mb-0"
+                         title="If the organizers show it with the event's results, anybody can play it, credited to you. Your exact position is never shown.">
+                        <input class="form-check-input" type="checkbox" id="show-with-results"
+                               checked="@(_session.EventResultsConsentAtUtc is not null)" disabled="@_saver.Busy"
+                               @onchange="e => SaveConsentAsync(e.Value is true)" />
+                        <label class="form-check-label small" for="show-with-results">May be shown with the results</label>
+                    </div>
+                    @if (_session.EventResultsConsentAtUtc is not null)
+                    {
+                        <div class="form-check form-switch mb-0"
+                             title="@(_session.OnPlaceChosenUtc is { } chosen && _session.PlaceOptOutUtc is null
+                                      ? $"The organizers chose it for the place's page, from {chosen.AddDays(7).ToViewerLocalTime(UserState).ToDisplayDate()}."
+                                      : "If the organizers choose it, it's shown on the page of the place it was recorded at, a week after you're told.")">
+                            <input class="form-check-input" type="checkbox" id="keep-off-place"
+                                   checked="@(_session.PlaceOptOutUtc is not null)" disabled="@_saver.Busy"
+                                   @onchange="e => SaveKeepOffAsync(e.Value is true)" />
+                            <label class="form-check-label small" for="keep-off-place">Keep it off the place's page</label>
+                        </div>
+                    }
+                }
+            }
+
+            @if (ShowsOrganizer)
+            {
+                @if (_session.ShownWithEventResultsAtUtc is not null)
+                {
+                    <button type="button" class="btn btn-outline-secondary btn-sm" data-testid="group-session-hide"
+                            disabled="@_busy" @onclick="() => ShowAsync(false)">Stop showing with the results</button>
+                }
+                else if (_session.EventResultsConsentAtUtc is null)
+                {
+                    <span class="badge bg-body-secondary text-body-emphasis" data-testid="group-session-waiting">Waiting for the sender's OK to show it</span>
+                }
+                else
+                {
+                    <button type="button" class="btn btn-outline-primary btn-sm" data-testid="group-session-show"
+                            disabled="@_busy" @onclick="() => ShowAsync(true)">Show with the results</button>
+                }
+            }
+        </div>
+        @if ((_error ?? _saver.Error) is { } error)
+        {
+            <div class="alert alert-warning small py-2 mx-3 mb-3" role="alert" data-testid="session-actions-error">@error</div>
+        }
+        @if (_note is not null)
+        {
+            <div class="text-secondary small px-3 pb-3" role="status">@_note</div>
+        }
+    </div>
+}
+
+<BenConfirmDialog @bind-Visible="@_showDelete" Title="Delete this session" Width="440px"
+                  Busy="@_deleting" BusyText="Deleting…" ConfirmText="Delete"
+                  OnConfirm="DeleteAsync">
+    <p class="mb-2">
+        Delete the session recorded on
+        <strong>@_session.StartedAt.ToViewerLocalTime(UserState).ToDisplayDate()</strong>@(string.IsNullOrWhiteSpace(_session.LocationLabel) ? "" : $" at {_session.LocationLabel}")?
+    </p>
+    <p class="text-secondary small mb-0">
+        Its @_session.ReadingCount.ToString("N0") reading@(_session.ReadingCount == 1 ? "" : "s"),
+        @_session.Files.Count recording@(_session.Files.Count == 1 ? "" : "s") and any link you
+        shared of it go with it. <strong>There is no undo.</strong>
+    </p>
+    @if (_session.PublishedAtUtc is not null)
+    {
+        <div class="alert alert-warning py-2 small mt-2 mb-0" data-testid="published-warning">
+            This session is published to a place's archive. Deleting it takes it back out of
+            the archive, which is part of a paid plan.
+        </div>
+    }
+</BenConfirmDialog>
+
+@code {
+    [Parameter, EditorRequired] public FieldSessionSummaryRecord Session { get; set; } = default!;
+
+    private FieldSessionSummaryRecord _session = default!;
+    private readonly LatestChoiceSaver _saver = new();
+    private bool _showDelete, _deleting, _busy;
+    private string? _error, _note;
+
+    private bool ShowsOrganizer => Session.ViewerRunsTheEvent && Session.HostedEventId is not null;
+
+    protected override void OnParametersSet()
+    {
+        if (_session is null || _session.Id != Session.Id) _session = Session;
+    }
+
+    private Task SaveConsentAsync(bool agree)
+        => _saver.SaveAsync(_session.Id, "results", agree,
+               v => AdminClient.SetSessionResultsConsentAsync(_session.Id, v),
+               v => _session = _session with { EventResultsConsentAtUtc = v ? DateTime.UtcNow : null });
+
+    private Task SaveKeepOffAsync(bool keepOff)
+        => _saver.SaveAsync(_session.Id, "keep-off-place", keepOff,
+               v => AdminClient.SetSessionKeptOffPlaceAsync(_session.Id, v),
+               v => _session = _session with { PlaceOptOutUtc = v ? DateTime.UtcNow : null });
+
+    private async Task ShowAsync(bool show)
+    {
+        _busy = true; _note = null; _error = null;
+        var (done, error) = await AdminClient.SetSessionShownWithResultsAsync(_session.Id, show);
+        _busy = false;
+        if (!done) { _error = error; return; }
+        _session = _session with { ShownWithEventResultsAtUtc = show ? DateTime.UtcNow : null };
+        _note = show ? "Shown with the results. Anybody can play it from the event's page." : "No longer shown with the results.";
+    }
+
+    private async Task DeleteAsync()
+    {
+        _deleting = true;
+        var (deleted, error) = await AdminClient.DeleteMyFieldSessionAsync(_session.Id);
+        _deleting = false;
+        _showDelete = false;
+        if (!deleted) { _error = error ?? "That session couldn't be deleted."; return; }
+        Nav.NavigateTo("/my-field-sessions");
+    }
+}

@@ -18,7 +18,13 @@ public sealed record PublicSessionSummary(
     string DeviceModel,
     string RecordedBy,
     /// <summary>Empty while the session's media is held for review.</summary>
-    IReadOnlyList<PublicSessionFile> Files);
+    IReadOnlyList<PublicSessionFile> Files,
+    /// <summary>The hosted event whose results show it, when that is how it is public (10/28/2026).</summary>
+    string? EventTitle = null,
+    /// <summary>That event's public page.</summary>
+    string? EventUrl = null,
+    /// <summary>The group that ran the event.</summary>
+    string? GroupName = null);
 
 /// <summary>A file a visitor may be served, by the id the archive's media route takes.</summary>
 public sealed record PublicSessionFile(Guid Id, string RelativePath, string ContentType);

@@ -772,7 +772,9 @@
             }
         </div>
         <div class="mb-2">
-            <label class="form-label fw-semibold" for="audiofilepreview-label-2807">Label</label>
+            @* The same question the keep dialog asks: a mark says what was heard, and the session's
+               page shows it as that (10/28/2026). *@
+            <label class="form-label fw-semibold" for="audiofilepreview-label-2807">What did you hear?</label>
             <input id="audiofilepreview-label-2807" type="text" class="form-control" placeholder="e.g. Whispered name?" @bind="@_markerLabel" @bind:event="oninput" />
         </div>
         <div class="mb-2">
