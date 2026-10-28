@@ -90,6 +90,9 @@ and test. Phases ship one at a time on their own branches. The website is touche
    is none: for a public location, the person who made the current scan; for a private residence,
    the group whose member made it. Custodian = may replace at any time, may accept offers, may
    publish a scan to the place page, may remove it.
+   **Handing custody over** (Ben, 10/28/2026): a SuperAdmin may give a place's scan custody to a
+   group (`PlaceScanCustody`, §3); a verified venue claim coming through later takes over
+   automatically and closes the grant. Audited like every admin act.
 4. **Everyone else compares.** A comparison scan is *changes only*, kept in the person's own
    session, pointing at the place's scan version it was made against.
 5. **Replacing a current scan**, three doors, each a server decision with a reason:
@@ -172,6 +175,10 @@ comparison always **Changes only**.
 | audit fields | | |
 
 Unique filtered index `(PlaceId, RoomKey) WHERE State = 1`. Index `(PlaceId, RoomKey, Version)`.
+
+**`PlaceScanCustody`** (phase 1): `Id`, `PlaceId` (unique), `OrganizationId`, `GrantedUtc`,
+`GrantedByAppUserId`, `Note`, `ClosedUtc`, `ClosedReason` (`venue_verified` | `admin`). Read by
+`PlaceScans.CustodianAsync` after the verified-venue check and before the first-scanner fallback.
 
 **`PlaceScanHolds`** (phase 1): `Id`, `PlaceId`, `RoomKey`, `RoomName`, `AppUserId`, `TakenUtc`,
 `ExpiresUtc` (taken + 20 min). Unique filtered on `(PlaceId, RoomKey) WHERE ExpiresUtc > now` is
@@ -264,6 +271,7 @@ the rest of the field-session API. Every refusal carries a sentence the app show
 | `POST .../scans/{scanId}/accept` / `decline` `{ note }` | 1 | custodian | Offers. Accept → Current, the old → Previous; tells the scanner by the usual notification. |
 | `PUT .../scans/{scanId}/shown-on-place-page` `{ shown }` | 3 | custodian | Public walkthrough switch. |
 | `DELETE .../scans/{scanId}` | 1 | custodian | → Removed; file deleted; comparisons keep their rows. |
+| `PUT api/admin/places/{placeId}/scan-custody` `{ organizationId, note }` / `DELETE` | 1 | SuperAdmin | Hand custody to a group / take it back. Refused with the sentence when a verified venue exists ("The Cole Family is this place's confirmed venue, so it holds custody"). |
 | `GET api/field-sessions/{id}/scans/{entry}` | 2 | `MayReadAsync` | A comparison member from the session bundle (through the existing `files` route; this is an alias that resolves `#` paths). |
 | `GET api/public/places/{placeId}/scan` | 3 | anyone | The current scans with `ShownOnPlacePage`, `mesh.glb` + `preview.jpg` only, public locations only. |
 
@@ -457,6 +465,6 @@ changelogs; the product documentation PDF. Store copy says LiDAR phones only.
 1. ~~Keyframes upload or stay on the phone?~~ Answered 10/28/2026: they upload with the scan.
 2. ~~Figure overlay on non-LiDAR phones?~~ Answered 10/28/2026: Pro (LiDAR) only, end to end.
 3. ~~Website viewer timing?~~ Answered 10/28/2026: phase 3 waits for the audio/EVP plan.
-4. At a public location with **no** verified venue, the first scanner is the custodian. Should a
-   SuperAdmin be able to hand custody to a group later (when a venue claim comes through, the
-   verified venue takes over automatically — that part is in the plan)?
+4. ~~SuperAdmin handing custody?~~ Answered 10/28/2026: yes (`PlaceScanCustody`, §2 rule 3, §4).
+
+No open questions remain. Next step is phase 0 on Ben's phone.
