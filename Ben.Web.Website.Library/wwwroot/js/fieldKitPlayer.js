@@ -28,6 +28,8 @@ const MEDIA_MAX_RATE = 2;
 const DRIFT_S = 0.35;
 /** Above MEDIA_MAX_RATE a video still shows its frame, at most this often. */
 const FAST_SEEK_MS = 500;
+/** How long a recording may stand still while it should be playing before it is given its place again. */
+const STILL_KICK_MS = 150;
 /** While dragging, a recording is seeked at most this often; the last position always lands. */
 const DRAG_SEEK_MS = 100;
 /** Arrow keys move this far. */
@@ -378,6 +380,9 @@ class Player {
         element.__fkClockT = t;
         if (!moved) return null;
         if (element.__fkPlayAt) {
+            // Measured on every play the engine makes, the early starts included: one that sounded
+            // after the join took longer than the lead, so the next hand-over starts that much earlier.
+            // One that sounded in time is measured at the join, at about the lead, and leaves it be.
             this.startLead = Math.min(MAX_LEAD_S, (performance.now() - element.__fkPlayAt) / 1000);
             element.__fkPlayAt = 0;
         }
@@ -937,6 +942,13 @@ class Player {
                         // Already there (it was buffered there while paused): moving it again would
                         // throw the buffer away for nothing.
                         if (drift > 0.05) this.seekElement(element, target, fileId, now);
+                    } else if (this.standingStill(element, now) && since > STILL_KICK_MS) {
+                        // Playing and not moving: WebKit left a recording it had never played at 0:00
+                        // after play() until a seek moved it — 0.35 s into the hand-over, when the drift
+                        // rule below did (10/28/2026). Given its place now, aimed where the playhead will
+                        // be once the seek has settled, as the drift rule aims, so the clock never waits on it.
+                        const lead = (this.seekLead.get(fileId) ?? 0.25) * this.rate;
+                        this.seekElement(element, Math.min(target + lead, (element.duration || Infinity)), fileId, now);
                     } else if (drift > DRIFT_S && !element.seeking && since > FAST_SEEK_MS) {
                         // Out of step while playing: moved to where the playhead will be once it
                         // sounds again, not where it is now — and not again until that move settles.
@@ -994,16 +1006,18 @@ class Player {
         const element = next && this.media.get(next.fileId);
         this.prerolling = null;
         if (!element) return;
+        const ahead = next.startMs - this.playhead;
+        const audible = this.playing && this.rate <= MEDIA_MAX_RATE && element.tagName === 'AUDIO';
         // Within this browser's start delay of the hand-over: start it now, muted and from its
         // beginning, so it is sounding when the playhead arrives. It is unmuted when it covers (M7);
         // any other frame, it is paused again like every recording that covers nothing.
         const lead = this.startLead * 1000 * this.rate;
-        if (this.playing && lead > 0 && this.rate <= MEDIA_MAX_RATE && element.tagName === 'AUDIO'
-            && next.startMs - this.playhead <= lead && !element.seeking && element.currentTime <= 0.05 + lead / 1000) {
+        if (audible && lead > 0 && ahead <= lead && !element.seeking && element.currentTime <= 0.05 + lead / 1000) {
             this.prerolling = element;
             if (element.paused && !this.pendingPlay.has(element)) {
                 element.muted = true;
                 element.__fkStarted = true;
+                element.__fkPlayAt = performance.now();
                 this.pendingPlay.add(element);
                 const done = () => this.pendingPlay.delete(element);
                 try { element.play().then(done, done); } catch { done(); }
@@ -1014,6 +1028,17 @@ class Player {
         this.prime(element);
         if (element.currentTime > 0.05 && now - (this.lastSeekAt.get(next.fileId) ?? 0) > FAST_SEEK_MS)
             this.seekElement(element, 0, next.fileId, now);
+    }
+
+    /** True when an element that should be playing has shown the same time for STILL_KICK_MS. */
+    standingStill(element, now) {
+        if (element.paused || element.seeking || element.readyState < 3) { element.__fkStillSince = 0; return false; }
+        if (element.currentTime !== element.__fkStillAt) {
+            element.__fkStillAt = element.currentTime;
+            element.__fkStillSince = now;
+            return false;
+        }
+        return now - (element.__fkStillSince || now) > STILL_KICK_MS;
     }
 
     /** Pauses a playing element without that pause being read as the person pausing the session. */

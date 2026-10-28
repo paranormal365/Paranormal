@@ -72,13 +72,26 @@ public class FieldSessionTransportTests : BenTestBase
              + "\",\"location_label\":\"" + label + "\"},\"readings\":[" + readings + "]}";
     }
 
+    private static string? _memberToken;
+
+    /// <summary>
+    /// The member's API token, signed in for once per run of this class (it lasts an hour).
+    /// </summary>
+    /// <remarks>Sign-in allows 20 a minute from one address; with the page's own sign-in, every test
+    /// signing in here as well came to about 22 a minute, and the slower WebKit runs were refused
+    /// (10/28/2026).</remarks>
+    private async Task<string> MemberTokenAsync(IAPIRequestContext api)
+    {
+        if (_memberToken is not null) return _memberToken;
+        var login = await api.PostAsync("/login", new() { DataObject = new { email = MemberEmail, password = MemberPassword } });
+        Assert.That(login.Ok, Is.True, $"the member's sign-in was refused: {login.Status}");
+        return _memberToken = (await login.JsonAsync())!.Value.GetProperty("accessToken").GetString()!;
+    }
+
     private async Task<string> UploadAsync(string label, bool videoOnly)
     {
         var api = await Playwright.APIRequest.NewContextAsync(new() { BaseURL = ApiUrl });
-        var login = await api.PostAsync("/login", new() { DataObject = new { email = MemberEmail, password = MemberPassword } });
-        Assert.That(login.Ok, Is.True);
-        var token = (await login.JsonAsync())!.Value.GetProperty("accessToken").GetString();
-        var auth = new Dictionary<string, string> { ["Authorization"] = $"Bearer {token}" };
+        var auth = new Dictionary<string, string> { ["Authorization"] = $"Bearer {await MemberTokenAsync(api)}" };
 
         var form = Context.APIRequest.CreateFormData();
         form.Append("file", new FilePayload { Name = "data.json", MimeType = "application/json", Buffer = Encoding.UTF8.GetBytes(Document(label, videoOnly)) });
@@ -335,7 +348,7 @@ public class FieldSessionTransportTests : BenTestBase
     /// beat the first, so it was started a second early and pulled back to its first moment until
     /// the join; the playhead followed it standing still. Now: a clip that has begun keeps the moment,
     /// the playhead follows only a recording whose time moves, and the next one is started muted by
-    /// the browser's own start delay. Both browsers measured 0–30 ms after that.
+    /// the browser's own start delay, and a playing recording that stands still is given its place.
     /// </remarks>
     [Test]
     public async Task Two_recordings_hand_over_without_a_gap()
@@ -359,10 +372,7 @@ public class FieldSessionTransportTests : BenTestBase
             + "\",\"location_label\":\"" + label + "\"},\"readings\":[" + readings + "]}";
 
         var api = await Playwright.APIRequest.NewContextAsync(new() { BaseURL = ApiUrl });
-        var login = await api.PostAsync("/login", new() { DataObject = new { email = MemberEmail, password = MemberPassword } });
-        Assert.That(login.Ok, Is.True);
-        var token = (await login.JsonAsync())!.Value.GetProperty("accessToken").GetString();
-        var auth = new Dictionary<string, string> { ["Authorization"] = $"Bearer {token}" };
+        var auth = new Dictionary<string, string> { ["Authorization"] = $"Bearer {await MemberTokenAsync(api)}" };
         var form = Context.APIRequest.CreateFormData();
         form.Append("file", new FilePayload { Name = "data.json", MimeType = "application/json", Buffer = Encoding.UTF8.GetBytes(document) });
         form.Append("deviceSessionId", Guid.NewGuid().ToString());
@@ -444,7 +454,12 @@ public class FieldSessionTransportTests : BenTestBase
         var sounding = samples.FirstOrDefault(r => r.Sounding && r.Wall >= reached.Wall);
         TestContext.Out.WriteLine($"join reached at {reached.Wall:0} ms; second recording sounding at {sounding.Wall:0} ms; ended at {samples[^1].Playhead:0}");
         Assert.That(sounding.Wall, Is.GreaterThan(0), "the second recording never sounded");
-        Assert.That(sounding.Wall - reached.Wall, Is.LessThan(250), "a gap in the sound at the hand-over");
+        // WebKit leaves a recording it has never played at 0:00 after play() until a seek moves it
+        // (10/28/2026, file fully loaded); the engine gives a playing recording that stands still its
+        // place after 150 ms, which WebKit then needs a moment to act on. Measured: WebKit 150–165 ms,
+        // Chromium 0–120 ms. Before the fixes, WebKit's was 683 ms.
+        var limit = Page.Context.Browser!.BrowserType.Name == "webkit" ? 300 : 250;
+        Assert.That(sounding.Wall - reached.Wall, Is.LessThan(limit), "a gap in the sound at the hand-over");
         Assert.That(samples[^1].Playhead, Is.GreaterThan(15_500), "it played on past the join");
     }
 }

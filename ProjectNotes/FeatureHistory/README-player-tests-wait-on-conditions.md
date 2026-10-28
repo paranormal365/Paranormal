@@ -77,8 +77,23 @@ The first 5× Chromium + WebKit pass failed three times. Two of them were real f
      measured on its own plays) and starts the next recording that much early, muted (`prerolling`). It is
      unmuted when it covers (rule M7).
 
-   After both fixes the hand-over measured 0–30 ms in both browsers, and the limit was tightened from
-   500 ms to 250 ms.
+   - **WebKit doesn't start a never-played recording until it is seeked.** After `play()` it stands at
+     0:00, "playing" and fully loaded, until something sets its time; the drift rule did that only at
+     0.35 s. A playing recording that shows the same time for 150 ms (`standingStill`, `STILL_KICK_MS`)
+     is now given its place, aimed ahead like the drift rule so the clock never waits on it. Setting
+     `currentTime` before or right after `play()` made no difference. Neither did warming the recording
+     silently 2.5 s ahead, which also corrupted the seek lead (it jumped the recording 1.5 s too far);
+     the warm-up was removed.
+
+   After these fixes the hand-over measured 150–165 ms in WebKit and 0–120 ms in Chromium, and the
+   session keeps real time across it. The limit is 300 ms in WebKit and 250 ms in Chromium (it was
+   500 ms for both).
+4. **Sign-in refusals in WebKit.** The API allows 20 sign-ins a minute from one address. The transport
+   tests signed in to the API in every test as well as on the page, which came to about 22 a minute,
+   and the slower WebKit runs were refused. They now sign in to the API once per class.
+5. **`A_manager_can_cite…` skipped itself** as "case not in the seed data" when it ran first on a cold
+   host. `OpenOrganizationAsync` read the groups page at NetworkIdle, before the list arrived over the
+   circuit. It now waits for the group to appear.
 3. **`MyFieldSessionsTests.Panning_the_map…` in WebKit** dragged while the map was still framing its pins.
    Like `MapViewportTests`, it now waits for `describe().framing` to end, and logs the center before and
    after.

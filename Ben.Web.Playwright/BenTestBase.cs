@@ -1348,6 +1348,12 @@ public abstract class BenTestBase : PageTest
         var asLink = Page.GetByRole(AriaRole.Link, new() { Name = orgName, Exact = false });
         var row = Page.Locator("tr", new() { HasTextString = orgName }).First;
 
+        // NetworkIdle proves nothing on a Blazor Server page: the list arrives over the circuit
+        // afterwards. On a cold host the first test of a run read an empty page and skipped as
+        // "not in the seed data" (10/28/2026). Wait for the group itself; only then is absence real.
+        try { await asLink.First.Or(row).First.WaitForAsync(new() { Timeout = 20_000 }); }
+        catch (TimeoutException) { }
+
         ILocator opener;
         if (await asLink.CountAsync() > 0)
         {
