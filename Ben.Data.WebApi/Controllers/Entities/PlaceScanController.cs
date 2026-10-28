@@ -220,7 +220,7 @@ public sealed class PlaceScanController(
             await PlaceScans.PersonNameAsync(db, userId, ct), IsYou: true, hold.ExpiresUtc));
     }
 
-    /// <summary>Lets a room go before its twenty minutes are up — a scan cancelled, or finished elsewhere.</summary>
+    /// <summary>Lets a room go before its twenty minutes are up — a scan canceled, or finished elsewhere.</summary>
     [HttpDelete("holds/{holdId:guid}")]
     public async Task<IActionResult> ReleaseHold(Guid placeId, Guid holdId, CancellationToken ct)
     {

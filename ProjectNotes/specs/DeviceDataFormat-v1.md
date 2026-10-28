@@ -157,7 +157,7 @@ scans: a model of a room kept by its place, and the person map drawn over the ca
 |---|---|---|
 | `room_scan` | the room's name | `place_scan_id`, `place_id`, `version`, `outcome` (`current`, `replaced`, `offered`), `duration_seconds` |
 | `scan` | the comparison's path in the bundle, `scans/compare-001.scan` | `room`, `place_scan_id`, `place_scan_version`, `changes` |
-| `scan_change` | `moved`, `missing` or `new` | `object` (`chair`, `table`…), `distance_cm`, `rotation_deg`, `size_cm` `[w, h, d]`, `where` `[x, y, z]` in metres, `picture` (`scans/compare-001.scan#changes/01.jpg`) |
+| `scan_change` | `moved`, `missing` or `new` | `object` (`chair`, `table`…), `distance_cm`, `rotation_deg`, `size_cm` `[w, h, d]`, `where` `[x, y, z]` in meters, `picture` (`scans/compare-001.scan#changes/01.jpg`) |
 | `figure` | the joints file in the bundle, `figures/figure-001.json` | `from` and `to` (seconds into the video), `video`, `peak_confidence` (0–1) |
 | `shape` | the shape in words, `45 × 160 × 30 cm` | `size_cm`, `distance_m`, `where`, `from`, `to`, `video` |
 

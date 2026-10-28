@@ -229,7 +229,7 @@ private struct Joystick: View {
     @State private var mover: Task<Void, Never>?
 
     private let radius: CGFloat = 52
-    /// Metres a second at full tilt — a careful walk.
+    /// Meters a second at full tilt — a careful walk.
     private let speed: Float = 1.2
 
     var body: some View {

@@ -24,7 +24,7 @@ public struct ScanManifest: Codable, Sendable, Equatable {
         case modelOnly
     }
 
-    /// The coordinate frame the model is in: ARKit's world origin, y up, metres.
+    /// The coordinate frame the model is in: ARKit's world origin, y up, meters.
     public struct Frame: Codable, Sendable, Equatable {
         public var origin: [Double]
         public var up: [Double]

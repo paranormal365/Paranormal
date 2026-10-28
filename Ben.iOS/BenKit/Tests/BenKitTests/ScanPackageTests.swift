@@ -242,10 +242,10 @@ struct KeyframePolicyTests {
 struct DepthCodecTests {
 
     @Test func depthSurvivesAtHalfPrecision() throws {
-        let metres: [Float] = [0.25, 1.0, 2.3456, 4.999, 9.75]
-        let back = try DepthCodec.decode(DepthCodec.encode(metres))
-        for (a, b) in zip(metres, back) {
-            // Half precision keeps about three significant digits: a few millimetres at five metres.
+        let meters: [Float] = [0.25, 1.0, 2.3456, 4.999, 9.75]
+        let back = try DepthCodec.decode(DepthCodec.encode(meters))
+        for (a, b) in zip(meters, back) {
+            // Half precision keeps about three significant digits: a few millimeters at five meters.
             #expect(abs(a - b) <= a * 0.001)
         }
     }

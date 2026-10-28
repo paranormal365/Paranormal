@@ -237,7 +237,7 @@ public struct PlaceScanClient: Sendable {
         }
     }
 
-    /// Lets the room go early — the scan was cancelled.
+    /// Lets the room go early — the scan was canceled.
     public func releaseHold(placeId: UUID, holdId: UUID) async {
         _ = await api.send(Endpoint(.delete, Self.path(placeId, "/holds/\(holdId.uuidString.lowercased())")))
     }

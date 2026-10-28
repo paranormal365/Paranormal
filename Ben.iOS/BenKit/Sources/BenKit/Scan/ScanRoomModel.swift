@@ -9,7 +9,7 @@ import simd
 /// encoding, so the format is written down here, readable by anything, and testable on a Mac,
 /// where RoomPlan does not exist.
 ///
-/// Transforms are 4×4, column-major, in metres, in the scan's frame (ARKit's world: y up).
+/// Transforms are 4×4, column-major, in meters, in the scan's frame (ARKit's world: y up).
 public struct ScanRoomModel: Codable, Sendable, Equatable {
 
     public struct Surface: Codable, Sendable, Equatable, Identifiable {
@@ -17,7 +17,7 @@ public struct ScanRoomModel: Codable, Sendable, Equatable {
         /// `wall`, `floor`, `door`, `window` or `opening`.
         public var category: String
         public var transform: [Float]
-        /// Width, height and depth in metres; a wall's depth is zero.
+        /// Width, height and depth in meters; a wall's depth is zero.
         public var dimensions: [Float]
 
         public init(id: UUID = UUID(), category: String, transform: simd_float4x4, dimensions: SIMD3<Float>) {
@@ -57,7 +57,7 @@ public struct ScanRoomModel: Codable, Sendable, Equatable {
         self.objects = objects
     }
 
-    /// The floor's area in square metres, from the floor surfaces RoomPlan found — or nil when it
+    /// The floor's area in square meters, from the floor surfaces RoomPlan found — or nil when it
     /// found none, which is better said than guessed.
     public var floorAreaM2: Double? {
         let floors = surfaces.filter { $0.category == "floor" }

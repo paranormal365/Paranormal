@@ -1,7 +1,7 @@
 import Foundation
 import simd
 
-/// A triangle mesh in the scan's frame: metres, y up (LiDAR plan, phase 1).
+/// A triangle mesh in the scan's frame: meters, y up (LiDAR plan, phase 1).
 public struct ScanMesh: Sendable, Equatable {
     public var positions: [SIMD3<Float>] = []
     public var normals: [SIMD3<Float>] = []
@@ -41,7 +41,7 @@ public struct ScanMesh: Sendable, Equatable {
         indices.append(contentsOf: chunkIndices.map { $0 + base })
     }
 
-    /// Adds a box centred on `transform`'s origin — walls and furniture as RoomPlan sizes them.
+    /// Adds a box centerd on `transform`'s origin — walls and furniture as RoomPlan sizes them.
     public mutating func appendBox(transform: simd_float4x4, size: SIMD3<Float>) {
         let h = size / 2
         // Six faces, four corners each, so every face keeps its own flat normal.

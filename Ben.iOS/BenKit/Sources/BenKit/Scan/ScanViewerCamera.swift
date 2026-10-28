@@ -9,7 +9,7 @@ import simd
 /// walks.
 public struct ScanViewerCamera: Sendable, Equatable {
 
-    /// A standing person's eyes, in metres above the floor.
+    /// A standing person's eyes, in meters above the floor.
     public static let eyeHeight: Float = 1.6
 
     /// How far up or down a person can look before the room turns upside down.
@@ -29,8 +29,8 @@ public struct ScanViewerCamera: Sendable, Equatable {
 
     /// Stands in the middle of the room at eye height, facing the way the scan began.
     public init(roomMin: SIMD3<Float>, roomMax: SIMD3<Float>) {
-        let centre = (roomMin + roomMax) / 2
-        position = SIMD3(centre.x, roomMin.y + Self.eyeHeight, centre.z)
+        let center = (roomMin + roomMax) / 2
+        position = SIMD3(center.x, roomMin.y + Self.eyeHeight, center.z)
         yaw = 0
         pitch = 0
         floorMin = SIMD2(roomMin.x, roomMin.z)
@@ -50,7 +50,7 @@ public struct ScanViewerCamera: Sendable, Equatable {
         pitch = min(Self.mostPitch, max(-Self.mostPitch, newPitch))
     }
 
-    /// Steps `forward` metres the way the person faces and `right` metres to their right, on the
+    /// Steps `forward` meters the way the person faces and `right` meters to their right, on the
     /// floor — looking up does not make anybody walk into the ceiling — and never out of the room.
     public mutating func walk(forward: Float, right: Float) {
         let facing = SIMD2<Float>(-sin(yaw), -cos(yaw))

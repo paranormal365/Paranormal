@@ -7,7 +7,7 @@ import ARKit
 ///
 /// Ben, 10/28/2026: "Check if the phone being used has LiDAR. If it does, I would like to offer a
 /// new feature." Every scanning control is shown only when this says so — absent, not disabled,
-/// on a phone that cannot use it, because a greyed-out button teaches people the feature is
+/// on a phone that cannot use it, because a grayed-out button teaches people the feature is
 /// broken rather than that their phone lacks a sensor.
 @MainActor
 public enum LidarSupport {

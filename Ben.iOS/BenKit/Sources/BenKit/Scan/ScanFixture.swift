@@ -74,7 +74,7 @@ public enum ScanFixture {
         return capture
     }
 
-    /// A small grey JPEG — enough to be a JPEG by its bytes and a picture to look at.
+    /// A small gray JPEG — enough to be a JPEG by its bytes and a picture to look at.
     public static func jpeg(width: Int, height: Int, shade: Double) throws -> Data {
         let space = CGColorSpaceCreateDeviceRGB()
         guard let context = CGContext(data: nil, width: width, height: height, bitsPerComponent: 8, bytesPerRow: 0,

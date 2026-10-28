@@ -2,8 +2,8 @@ import Foundation
 
 /// A keyframe's depth map as the scan keeps it: 16-bit floats, then zlib (LiDAR plan, §3).
 ///
-/// ARKit hands over 256 × 192 32-bit metres. Half precision keeps a millimetre to beyond ten
-/// metres, which is past what the sensor sees, and halves the file before zlib takes the rest of
+/// ARKit hands over 256 × 192 32-bit meters. Half precision keeps a millimeter to beyond ten
+/// meters, which is past what the sensor sees, and halves the file before zlib takes the rest of
 /// the empty wall. A point ARKit was not confident of is written as zero — unknown — rather than
 /// kept as a guess the texturer would trust.
 ///
@@ -13,7 +13,7 @@ public enum DepthCodec {
 
     public enum DepthError: Error { case notADepthMap }
 
-    /// Encodes `width × height` metres, row by row.
+    /// Encodes `width × height` meters, row by row.
     public static func encode(_ meters: [Float]) throws -> Data {
         var raw = Data(capacity: meters.count * 2)
         for value in meters {
@@ -24,7 +24,7 @@ public enum DepthCodec {
         return try (raw as NSData).compressed(using: .zlib) as Data
     }
 
-    /// The metres back, zero where the depth was unknown.
+    /// The meters back, zero where the depth was unknown.
     public static func decode(_ data: Data) throws -> [Float] {
         let raw = try (data as NSData).decompressed(using: .zlib) as Data
         guard raw.count % 2 == 0 else { throw DepthError.notADepthMap }

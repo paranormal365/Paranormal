@@ -163,11 +163,11 @@ public final class RoomScanner {
         var depthName: String?
         var depthSize: (Int, Int)?
         if let depth = frame.sceneDepth ?? frame.smoothedSceneDepth,
-           let metres = Self.metres(depth.depthMap, confidence: depth.confidenceMap),
-           let encoded = try? DepthCodec.encode(metres.values),
+           let meters = Self.meters(depth.depthMap, confidence: depth.confidenceMap),
+           let encoded = try? DepthCodec.encode(meters.values),
            (try? encoded.write(to: keyframesFolder.appendingPathComponent("\(name).depth"))) != nil {
             depthName = "\(name).depth"
-            depthSize = (metres.width, metres.height)
+            depthSize = (meters.width, meters.height)
         }
 
         let k = frame.camera.intrinsics
@@ -310,8 +310,8 @@ public final class RoomScanner {
                     indices: indices, transform: anchor.transform)
     }
 
-    /// The depth map in metres, with the points ARKit was not confident of written as unknown.
-    private static func metres(_ depth: CVPixelBuffer, confidence: CVPixelBuffer?) -> (values: [Float], width: Int, height: Int)? {
+    /// The depth map in meters, with the points ARKit was not confident of written as unknown.
+    private static func meters(_ depth: CVPixelBuffer, confidence: CVPixelBuffer?) -> (values: [Float], width: Int, height: Int)? {
         CVPixelBufferLockBaseAddress(depth, .readOnly)
         defer { CVPixelBufferUnlockBaseAddress(depth, .readOnly) }
         if let confidence { CVPixelBufferLockBaseAddress(confidence, .readOnly) }
