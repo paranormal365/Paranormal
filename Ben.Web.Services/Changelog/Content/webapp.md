@@ -45,6 +45,7 @@ day-by-day account of building it would say nothing to anyone using it now.
 
 - Making an event's findings public or private, and choosing what shows on the place's page, is recorded in the audit log.
 - The dashboard shows whether the site can read recordings made on the phone, and what is missing when it can't.
+- The site finds its recording tool in its own tools folder without a setting, and the dashboard says which folder when it is missing.
 
 ## 2.22.0 · 2026-10-25
 
