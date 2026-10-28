@@ -52,7 +52,11 @@ public sealed record SessionTimeline(
     /// 1.2). Empty for a session with none.</summary>
     IReadOnlyList<TimelineRoomScan>? RoomScans = null,
     /// <summary>What those comparisons found, one per thing (LiDAR plan, spec 1.2).</summary>
-    IReadOnlyList<TimelineScanChange>? ScanChanges = null)
+    IReadOnlyList<TimelineScanChange>? ScanChanges = null,
+    /// <summary>Figures the person map saw, one per sighting (LiDAR plan, phase 4).</summary>
+    IReadOnlyList<TimelineFigure>? Figures = null,
+    /// <summary>Person-sized shapes the room's scan does not have (LiDAR plan, phase 4).</summary>
+    IReadOnlyList<TimelineShape>? Shapes = null)
 {
     public const int CurrentVersion = 1;
 }
@@ -120,6 +124,27 @@ public sealed record TimelineScanChange(
     long T, string What, string Object, string? Note,
     double? DistanceCm, double? RotationDeg, double[]? SizeCm, double[]? Where,
     string? Picture, Guid? PlaceScanId);
+
+/// <summary>
+/// A figure the person map saw (LiDAR plan, phase 4): one continuous sighting, with the joints file
+/// a player draws it from and the picture of the moment it was clearest. Each file is a member of
+/// the session's bundle, served by its id.
+/// </summary>
+/// <param name="T">When it was first in view, ms from the session's start.</param>
+/// <param name="Joints">The joints file: <c>figures/figure-001.json</c>.</param>
+/// <param name="From">Seconds into <paramref name="Video"/>.</param>
+public sealed record TimelineFigure(
+    long T, string Joints, Guid? JointsFileId, string? Video, Guid? VideoFileId,
+    double? From, double? To, double? PeakConfidence, string? Picture, Guid? PictureFileId, string? Note);
+
+/// <summary>
+/// Something person-sized that is not in the room's scan (LiDAR plan, phase 4). Never jointed: its
+/// size, how far away, where in the scan's frame, and when in which video.
+/// </summary>
+/// <param name="Words">Its size in words: <c>45 × 160 × 30 cm</c>.</param>
+public sealed record TimelineShape(
+    long T, string Words, double[]? SizeCm, double? DistanceM, double[]? Where,
+    string? Video, Guid? VideoFileId, double? From, double? To, string? Picture, Guid? PictureFileId, string? Note);
 
 /// <summary>A photograph and the moment it was taken.</summary>
 public sealed record TimelinePhoto(long T, Guid FileId, string Path);

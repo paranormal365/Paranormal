@@ -172,7 +172,7 @@ namespace Ben.Data.Source.Entities
         public double? SizeYCm { get; set; }
         public double? SizeZCm { get; set; }
 
-        /// <summary>Where, in metres, in the room scan's frame.</summary>
+        /// <summary>Where, in meters, in the room scan's frame.</summary>
         public double WhereX { get; set; }
         public double WhereY { get; set; }
         public double WhereZ { get; set; }

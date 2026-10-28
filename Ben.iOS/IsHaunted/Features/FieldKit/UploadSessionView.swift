@@ -631,6 +631,7 @@ struct UploadSessionView: View {
             // replace its own record rather than make a second — so retrying is pressing Send
             // again, not untangling which half arrived.
             var substitutes: [String: URL] = [:]
+            var cut: Set<String> = []
 
             for capture in captures where chosen.contains(capture.id) {
                 guard store.hasLocalFile(capture.relativePath, in: sessionId) else { continue }
@@ -654,7 +655,10 @@ struct UploadSessionView: View {
                 if case .cut(let from, let duration) = decision?.outcome {
                     let result = await SessionMediaTrimmer().cut(
                         original, from: from, duration: duration, into: scratch)
-                    if case .cut(let trimmed) = result { url = trimmed }
+                    if case .cut(let trimmed) = result {
+                        url = trimmed
+                        cut.insert(capture.relativePath)
+                    }
                 }
 
                 // Then, and only if somebody chose it, the smaller copy. AFTER the cut, so the
@@ -688,7 +692,7 @@ struct UploadSessionView: View {
             // site receives is the same shape as what "Export a bundle" hands to the Files app —
             // and the same shape another phone can be given and open.
             let bundle = try await DeviceDataExporter(files: store.files).export(
-                exportRequest(window: window, substitutes: substitutes),
+                exportRequest(window: window, substitutes: substitutes, cut: cut),
                 log: ReadingLog(fileURL: store.files.readingLogURL(for: sessionId)),
                 to: scratch,
                 document: document)
@@ -748,7 +752,7 @@ struct UploadSessionView: View {
     /// Shared by the document build and the bundle build so a `.ben` and the `data.json` inside it
     /// can never disagree about the window, the label or which recordings are going.
     private func exportRequest(
-        window: SessionWindow?, substitutes: [String: URL] = [:]
+        window: SessionWindow?, substitutes: [String: URL] = [:], cut: Set<String> = []
     ) throws -> DeviceDataExporter.Request {
         guard let summary else { throw FieldSessionError.unavailable }
         // A clip is named for what it is — "back bedroom (20:00–30:00)" — on the server's list,
@@ -758,7 +762,7 @@ struct UploadSessionView: View {
                                       sessionStart: summary.startedAt, isWholeSession: false)
         } ?? summary.locationLabel
 
-        return DeviceDataExporter.Request(
+        var request = DeviceDataExporter.Request(
             sessionId: sessionId,
             startedAt: summary.startedAt,
             endedAt: summary.endedAt,
@@ -775,6 +779,8 @@ struct UploadSessionView: View {
             recordedByAccountId: dependencies.session.me?.userId,
             deviceId: DeviceModel.vendorIdentifier(),
             window: window)
+        request.cutMedia = cut
+        return request
     }
 
     private func buildDocument(window: SessionWindow? = nil) async throws -> Data {

@@ -5,7 +5,7 @@ import simd
 ///
 /// A keyframe is a JPEG, a depth map and the camera's pose at that moment — what phase 2 paints
 /// the mesh from, and what a walkthrough shows close up. Kept whenever the camera has moved at
-/// least half a metre or turned at least fifteen degrees since the last one, and only while
+/// least half a meter or turned at least fifteen degrees since the last one, and only while
 /// tracking is good: a frame taken while ARKit is unsure where the phone is would paint the wall
 /// with the picture of a different wall. An ordinary room comes to about 150.
 public struct KeyframePolicy: Sendable {

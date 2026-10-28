@@ -82,11 +82,16 @@ enum FieldCameraError: LocalizedError {
 final class FieldCameraSession {
 
     let session = AVCaptureSession()
-    private(set) var isRunning = false
-    private(set) var problem: String?
+    /// Whether the camera is running: this session's own capture, or the person map's while it
+    /// has the camera (LiDAR plan, phase 4).
+    var isRunning: Bool { personMap?.isRunning ?? captureRunning }
+    var problem: String? { personMap.map(\.problem) ?? captureProblem }
+    private var captureRunning = false
+    private var captureProblem: String?
 
     /// The clip being recorded now, and when it started, so the screen can count it up.
-    private(set) var clipStartedAt: Date?
+    var clipStartedAt: Date? { personMap.map(\.clipStartedAt) ?? captureClipStartedAt }
+    private var captureClipStartedAt: Date?
     var isRecordingClip: Bool { clipStartedAt != nil }
     /// A clip that has the microphone. The whole-session video has none — the session's own
     /// recording keeps the sound — so only this one stands the audio controls down.
@@ -124,7 +129,11 @@ final class FieldCameraSession {
     }
 
     func start() {
-        guard !isRunning else { return }
+        if let personMap {
+            if !personMap.isRunning { personMap.start(motion: motionSink) }
+            return
+        }
+        guard !captureRunning else { return }
 
         switch AVCaptureDevice.authorizationStatus(for: .video) {
         case .authorized:
@@ -133,19 +142,22 @@ final class FieldCameraSession {
             AVCaptureDevice.requestAccess(for: .video) { [weak self] granted in
                 Task { @MainActor in
                     if granted { self?.configureAndRun() }
-                    else { self?.problem = "Camera access was declined." }
+                    else { self?.captureProblem = "Camera access was declined." }
                 }
             }
         default:
-            problem = "Camera access is off for this app. Turn it on in Settings to use video."
+            captureProblem = "Camera access is off for this app. Turn it on in Settings to use video."
         }
     }
 
+    /// Stops the camera. A person map that had it stays chosen, and comes back on `start`.
     func stop() {
-        guard isRunning else { return }
+        personMapStart = nil
+        personMap?.stop()
+        guard captureRunning else { return }
         let session = session
         queue.async { session.stopRunning() }
-        isRunning = false
+        captureRunning = false
     }
 
     // MARK: - Taking something
@@ -163,7 +175,8 @@ final class FieldCameraSession {
     /// Silent wherever iOS allows it. Where the local rules require the shutter sound, a photo
     /// somebody takes by hand makes it, as the system decides.
     func capturePhoto() async throws -> URL {
-        guard isRunning else { throw FieldCameraError.notRunning }
+        if let personMap { return try await personMap.still() }
+        guard captureRunning else { throw FieldCameraError.notRunning }
 
         let capture = PhotoCapture()
         photoCaptures.append(capture)
@@ -189,7 +202,8 @@ final class FieldCameraSession {
     /// frame of that video is not a separate shutter press. Smaller than a photo (the size the
     /// video records at), and it makes no sound.
     func captureMotionPhoto() async throws -> URL {
-        guard isRunning else { throw FieldCameraError.notRunning }
+        if let personMap { return try await personMap.still() }
+        guard captureRunning else { throw FieldCameraError.notRunning }
         if canTakeSilentPhotos { return try await capturePhoto() }
         let angle = rotation?.videoRotationAngleForHorizonLevelCapture ?? 0
         return try await delegate.nextStill(rotationAngle: angle)
@@ -200,7 +214,9 @@ final class FieldCameraSession {
     /// The microphone must already have been lent to this by the session — see the type's
     /// remarks. `withSound: false` exists for a session recording no audio at all.
     func startClip(withSound: Bool = true) throws {
-        guard isRunning else { throw FieldCameraError.notRunning }
+        // The person map's clips are picture only, like the session's video always is.
+        if let personMap { try personMap.startClip(); return }
+        guard captureRunning else { throw FieldCameraError.notRunning }
         guard clipCapture == nil else { return }
 
         // Up from the watching preset for the length of the clip only: a 480p feed is fine to
@@ -228,7 +244,7 @@ final class FieldCameraSession {
             } else {
                 // Worth saying rather than quietly filming a silent clip: the session's own
                 // recording has already stepped aside for this.
-                problem = "The microphone wasn't available, so this clip has no sound."
+                captureProblem = "The microphone wasn't available, so this clip has no sound."
             }
         }
         if session.outputs.contains(movieOutput) == false {
@@ -260,16 +276,17 @@ final class FieldCameraSession {
             .appendingPathComponent("field-\(UUID().uuidString).mov")
         let capture = ClipCapture()
         clipCapture = capture
-        clipStartedAt = Date()
+        captureClipStartedAt = Date()
         movieOutput.startRecording(to: url, recordingDelegate: capture)
     }
 
     /// Ends the clip and hands back the file it wrote.
     func finishClip() async throws -> URL {
+        if let personMap { return try await personMap.finishClip() }
         guard let capture = clipCapture else { throw FieldCameraError.noClipRunning }
         defer {
             clipCapture = nil
-            clipStartedAt = nil
+            captureClipStartedAt = nil
             session.beginConfiguration()
             if session.outputs.contains(movieOutput) { session.removeOutput(movieOutput) }
             // The microphone goes back before the session reclaims it: an input still attached
@@ -285,8 +302,62 @@ final class FieldCameraSession {
         return try await capture.fileWhenFinished()
     }
 
+    // MARK: - The person map (LiDAR plan, phase 4)
+
+    /// The person map, while it has the camera. ARKit and this session cannot both hold the camera,
+    /// so while this is set the session's own capture is stopped, and the clips, photos and motion
+    /// above come from the person map's frames: the session's video carries on, with the figure's
+    /// joints kept beside it.
+    private(set) var personMap: PersonMapCamera?
+    var isPersonMapOn: Bool { personMap != nil }
+    /// A person map waiting for this session to let the camera go; cleared by `stop`.
+    @ObservationIgnored private var personMapStart: UUID?
+
+    /// Hands the camera to the person map. The caller closes any clip first, as it does before
+    /// the camera stops.
+    @discardableResult
+    func turnOnPersonMap() -> PersonMapCamera {
+        if let personMap { return personMap }
+        delegate.forgetLastFrame()
+        let map = PersonMapCamera()
+        personMap = map
+        let sink = motionSink
+        if captureRunning {
+            // ARKit starts once this session has let the camera go, not while it still holds it.
+            captureRunning = false
+            let session = session, token = UUID()
+            personMapStart = token
+            queue.async {
+                session.stopRunning()
+                Task { @MainActor [weak self] in
+                    guard let self, self.personMapStart == token else { return }
+                    self.personMapStart = nil
+                    if self.personMap === map, !map.isRunning { map.start(motion: sink) }
+                }
+            }
+        } else {
+            map.start(motion: sink)
+        }
+        return map
+    }
+
+    /// Takes the camera back from the person map. The caller closes any clip first.
+    func turnOffPersonMap() {
+        guard let personMap else { return }
+        personMap.stop()
+        self.personMap = nil
+        delegate.forgetLastFrame()
+        configureAndRun()
+    }
+
+    /// The person map's brightness grids, into the motion feed this session's own frames go to.
+    private var motionSink: @Sendable ([UInt8]) -> Void {
+        let delegate = delegate
+        return { grid in delegate.note(grid: grid, at: Date()) }
+    }
+
     private func configureAndRun() {
-        guard !isRunning else { return }
+        guard !captureRunning else { return }
         session.beginConfiguration()
         // Low, on purpose: this feed is for aiming and for spotting movement, not for the
         // recording. High resolution here would cost battery all night for nothing — a clip
@@ -308,7 +379,7 @@ final class FieldCameraSession {
                   session.canAddInput(input)
             else {
                 session.commitConfiguration()
-                problem = "No camera is available on this device."
+                captureProblem = "No camera is available on this device."
                 return
             }
             session.addInput(input)
@@ -337,8 +408,8 @@ final class FieldCameraSession {
 
         let session = session
         queue.async { session.startRunning() }
-        isRunning = true
-        problem = nil
+        captureRunning = true
+        captureProblem = nil
     }
 
     /// A phone call, another app taking the camera, or the system reclaiming it leaves a preview
@@ -359,8 +430,8 @@ final class FieldCameraSession {
                 .flatMap(AVCaptureSession.InterruptionReason.init(rawValue:))
             Task { @MainActor in
                 guard let self else { return }
-                self.isRunning = false
-                self.problem = reason == .videoDeviceNotAvailableInBackground
+                self.captureRunning = false
+                self.captureProblem = reason == .videoDeviceNotAvailableInBackground
                     ? "The camera pauses while the app is put away, and comes back when you do."
                     : "Something else is using the camera."
             }
@@ -371,11 +442,12 @@ final class FieldCameraSession {
             object: session, queue: .main
         ) { [weak self] _ in
             Task { @MainActor in
-                guard let self else { return }
-                self.problem = nil
+                // Not while the person map has the camera: ARKit took it, and ARKit gives it back.
+                guard let self, self.personMap == nil else { return }
+                self.captureProblem = nil
                 let session = self.session
                 self.queue.async { session.startRunning() }
-                self.isRunning = true
+                self.captureRunning = true
             }
         })
 
@@ -393,12 +465,13 @@ final class FieldCameraSession {
             Task { @MainActor in
                 guard let self else { return }
                 if recoverable {
+                    guard self.personMap == nil else { return }
                     let session = self.session
                     self.queue.async { session.startRunning() }
-                    self.isRunning = true
+                    self.captureRunning = true
                 } else {
-                    self.isRunning = false
-                    self.problem = error?.localizedDescription
+                    self.captureRunning = false
+                    self.captureProblem = error?.localizedDescription
                         ?? "The camera stopped. Close this and open it again."
                 }
             }
@@ -533,6 +606,12 @@ private final class FrameDelegate: NSObject, AVCaptureVideoDataOutputSampleBuffe
     /// in a dark room, which is most of what a night looks like.
     private let cellChangeThreshold = 18
 
+    /// Forgets the last frame, so the first from the other camera is not compared with it: the
+    /// change of hands would read as the whole room moving.
+    func forgetLastFrame() {
+        lock.lock(); previous = nil; lock.unlock()
+    }
+
     func stream() -> AsyncStream<SceneMotionSample> {
         AsyncStream { continuation in
             let id = UUID()
@@ -614,11 +693,20 @@ private final class FrameDelegate: NSObject, AVCaptureVideoDataOutputSampleBuffe
         // Four times a second is plenty to catch somebody walking through, and leaves the CPU
         // to the magnetometer.
         let now = Date()
-        guard now.timeIntervalSince(lastEmitted) >= 0.25 else { return }
+        lock.lock(); let last = lastEmitted; lock.unlock()
+        guard now.timeIntervalSince(last) >= 0.25 else { return }
         guard let grid = Self.brightnessGrid(sampleBuffer, columns: columns, rows: rows) else { return }
-        lastEmitted = now
+        note(grid: grid, at: now)
+    }
 
-        defer { previous = grid }
+    /// One frame's brightness compared with the last: from this session's frames, or from the
+    /// person map's while it has the camera.
+    func note(grid: [UInt8], at now: Date) {
+        lock.lock()
+        let previous = self.previous
+        self.previous = grid
+        lastEmitted = now
+        lock.unlock()
         guard let previous, previous.count == grid.count else { return }
 
         var changed = 0

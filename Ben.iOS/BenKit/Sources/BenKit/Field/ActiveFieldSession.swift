@@ -610,6 +610,25 @@ public final class ActiveFieldSession {
         readingCount = await engine.readingCount()
     }
 
+    /// Files what the person map saw while a video ran (LiDAR plan, phase 4): each figure's joints
+    /// file and picture, and each shape's picture, moved into the session's `figures/` folder; and
+    /// a reading for each, dated to when it was first in view.
+    public func notePersonMap(_ clip: PersonMapPipeline.Clip, video: String) async {
+        let filed = PersonMapFiling.move(clip, into: files.directory(for: sessionId))
+        for figure in filed.figures {
+            await engine.noteFigure(file: figure.file, video: video, from: figure.from, to: figure.to,
+                                    peakConfidence: figure.peakConfidence, picture: figure.picture,
+                                    at: figure.startedAt)
+        }
+        for shape in filed.shapes {
+            let seen = shape.sighting
+            await engine.noteShape(words: seen.words, sizeCm: seen.sizeCm, distanceM: Double(seen.distanceM),
+                                   center: seen.center, video: video, from: seen.from, to: seen.to,
+                                   picture: shape.picture, at: seen.startedAt)
+        }
+        readingCount = await engine.readingCount()
+    }
+
     /// Writes a comparison with the place's scan into the session (LiDAR plan, phase 2).
     public func noteComparison(room: String, comparisonPath: String, placeScanId: UUID, version: Int,
                                changes: [ScanChange]) async {

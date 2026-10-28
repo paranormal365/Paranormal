@@ -268,7 +268,8 @@
         "from":            { "type": "number", "minimum": 0 },
         "to":              { "type": "number", "minimum": 0 },
         "video":           { "oneOf": [{ "$ref": "#/$defs/bundle_path" }, { "type": "null" }] },
-        "peak_confidence": { "type": ["number", "null"], "minimum": 0, "maximum": 1 }
+        "peak_confidence": { "type": ["number", "null"], "minimum": 0, "maximum": 1 },
+        "picture":         { "$ref": "#/$defs/bundle_path" }
       }
     },
 
@@ -282,7 +283,8 @@
         "where":      { "$ref": "#/$defs/point3" },
         "from":       { "type": "number", "minimum": 0 },
         "to":         { "type": "number", "minimum": 0 },
-        "video":      { "oneOf": [{ "$ref": "#/$defs/bundle_path" }, { "type": "null" }] }
+        "video":      { "oneOf": [{ "$ref": "#/$defs/bundle_path" }, { "type": "null" }] },
+        "picture":    { "$ref": "#/$defs/bundle_path" }
       }
     },
 

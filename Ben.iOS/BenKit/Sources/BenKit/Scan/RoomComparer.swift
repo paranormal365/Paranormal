@@ -73,7 +73,7 @@ public struct ScanChange: Codable, Sendable, Equatable {
 /// where the other scan looked — it found floor or wall in the same spot seen from above — so a
 /// corner the second visit never pointed at is not "missing".
 ///
-/// iPhone LiDAR is about a centimetre up close and a few across a room, so these thresholds say
+/// iPhone LiDAR is about a centimeter up close and a few across a room, so these thresholds say
 /// "moved" only where something did. A petal that turned is not a finding.
 public enum RoomComparer {
 
@@ -241,7 +241,7 @@ struct Voxels {
     /// Where this scan found anything, seen from above.
     let columns: Set<SIMD2<Int32>>
 
-    /// Whether this scan saw the spot a cell is in — anything at all within ten centimetres of it,
+    /// Whether this scan saw the spot a cell is in — anything at all within ten centimeters of it,
     /// seen from above: the floor under a box, the wall behind a picture.
     func looked(above cell: SIMD3<Int32>) -> Bool {
         for dx: Int32 in -2...2 {

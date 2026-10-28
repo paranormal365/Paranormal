@@ -12,7 +12,7 @@ import simd
 /// iOS 17), which configures and runs it; this reads the same session's frames for keyframes and
 /// its mesh anchors at the end. RoomPlan sets the session up itself, so nothing here replaces its
 /// delegate: frames are read by polling `currentFrame`, ten times a second, which is plenty for a
-/// keyframe every half metre.
+/// keyframe every half meter.
 ///
 /// **What phase 0 still has to measure** on a real phone: whether RoomPlan's own configuration
 /// carries scene depth and mesh anchors. When it does not, the keyframes keep their pictures

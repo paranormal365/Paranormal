@@ -68,7 +68,7 @@ public enum ComparisonPackage {
             changes[index].picture = "\(relativePath)#\(name)"
         }
 
-        // The changed parts of the mesh: every triangle of this visit within half a metre of a change.
+        // The changed parts of the mesh: every triangle of this visit within half a meter of a change.
         var patches = ScanMesh()
         let centers = changes.compactMap { c -> SIMD3<Float>? in
             c.where_.count == 3 ? SIMD3(Float(c.where_[0]), Float(c.where_[1]), Float(c.where_[2])) : nil

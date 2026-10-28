@@ -48,7 +48,7 @@ public sealed record PlaceScanManifest(
     public const string KeyframeIndexEntry = "keyframes/index.json";
 
     /// <summary>
-    /// More keyframes than a careful scan of a large room takes — one every half metre or fifteen
+    /// More keyframes than a careful scan of a large room takes — one every half meter or fifteen
     /// degrees comes to about 150 in an ordinary room.
     /// </summary>
     public const int MaxKeyframes = 500;

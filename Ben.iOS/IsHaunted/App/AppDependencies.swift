@@ -87,6 +87,9 @@ final class AppDependencies {
         // can be reached and tested at all.
         let arguments = ProcessInfo.processInfo.arguments
         LidarSupport.simulated = arguments.contains("-scanFakeRoom") || arguments.contains("-figureFake")
+        // The person map's switch is remembered; a run on the stand-in starts with it off, so a
+        // test turns it on at a moment it knows.
+        if arguments.contains("-figureFake") { UserDefaults.standard.removeObject(forKey: "fieldkit.person-map") }
         #endif
         self.appleSignIn = AppleSignInClient(api: api, tokens: tokens)
         // Saved event passes, and a door's guest lists and kept arrivals, belong to the person who signed in, not to

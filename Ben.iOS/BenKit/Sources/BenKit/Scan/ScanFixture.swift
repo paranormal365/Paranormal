@@ -6,7 +6,7 @@ import simd
 /// A room the simulator can "scan" (LiDAR plan, phase 1).
 ///
 /// The simulator has no LiDAR, so `-scanFakeRoom` hands the scanning screens this instead of the
-/// sensor: a four-by-five-metre room with a table and a chair, as a mesh, a room model, a preview
+/// sensor: a four-by-five-meter room with a table and a chair, as a mesh, a room model, a preview
 /// and three keyframes. Everything after the scanner — the retention choice, the package, the
 /// upload, the viewer — then runs exactly as it would on a phone. The package tests use the same
 /// room, so what the UI test sends is what the unit tests read.

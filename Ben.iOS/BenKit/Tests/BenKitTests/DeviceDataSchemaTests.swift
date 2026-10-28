@@ -181,10 +181,10 @@ struct DeviceDataSchemaTests {
                 "picture": .string("scans/compare-001.scan#changes/01.jpg")]),
             "figure": .label("figures/figure-001.json", details: [
                 "from": .number(12.5), "to": .number(15), "video": .string("media/video-001.mp4"),
-                "peak_confidence": .number(0.8)]),
+                "peak_confidence": .number(0.8), "picture": .string("figures/figure-001.jpg")]),
             "shape": .label("45 × 160 × 30 cm", details: [
                 "size_cm": .array([.number(45), .number(160), .number(30)]), "distance_m": .number(2.4),
-                "from": .number(30), "to": .number(32.5)]),
+                "from": .number(30), "to": .number(32.5), "picture": .string("figures/shape-001.jpg")]),
         ]
         change?(&channels)
         let reading = FieldReading(at: start, precision: .millisecond, sequence: 1, triggeredBy: .manual,
@@ -201,12 +201,13 @@ struct DeviceDataSchemaTests {
         #expect(problems.isEmpty, "schema rejected the 1.2 channels:\n\(problems.joined(separator: "\n"))")
     }
 
-    /// The five malformed documents the spec names for 1.2 — each must be refused, or the schema
+    /// The six malformed documents the spec names for 1.2 — each must be refused, or the schema
     /// describes the channels without checking them.
     @Test(arguments: [
         ("a change that is neither moved, missing nor new", "scan_change", FieldReading.Measurement.label("teleported")),
         ("a comparison path that climbs out", "scan", .label("../scans/compare-001.scan")),
         ("a figure seen before its video began", "figure", .label("figures/figure-001.json", details: ["from": .number(-1), "to": .number(2)])),
+        ("a figure's picture that climbs out", "figure", .label("figures/figure-001.json", details: ["picture": .string("../figure-001.jpg")])),
         ("a shape with two dimensions", "shape", .label("tall", details: ["size_cm": .array([.number(45), .number(160)])])),
         ("a room scan of version 0", "room_scan", .label("Bedroom 1", details: ["version": .number(0)])),
     ])

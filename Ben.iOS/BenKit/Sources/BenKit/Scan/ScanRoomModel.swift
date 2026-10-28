@@ -71,7 +71,7 @@ public struct ScanRoomModel: Codable, Sendable, Equatable {
         var mesh = ScanMesh()
         for surface in surfaces {
             let d = surface.dimensions
-            // A surface has no thickness; give it a centimetre so it has two sides to see.
+            // A surface has no thickness; give it a centimeter so it has two sides to see.
             mesh.appendBox(transform: simd_float4x4(columnMajor: surface.transform),
                            size: SIMD3(max(d[0], 0.01), max(d[1], 0.01), max(d[2], 0.01)))
         }

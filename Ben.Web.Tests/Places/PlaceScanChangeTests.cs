@@ -225,7 +225,7 @@ public sealed class PlaceScanChangeTests : IDisposable
         Assert.Equal("moved", change.What);
         Assert.Equal("chair", change.Object);
         Assert.Equal(42, change.DistanceCm);
-        Assert.Equal([1.5, 0.45, -2.25], change.Where);
+        Assert.Equal([1.5, 0.45, -2.25], Assert.IsType<double[]>(change.Where));
         Assert.Equal(600_000, change.T);
         Assert.Equal("The chair moved.", change.Note);
     }

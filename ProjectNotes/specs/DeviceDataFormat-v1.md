@@ -158,8 +158,8 @@ scans: a model of a room kept by its place, and the person map drawn over the ca
 | `room_scan` | the room's name | `place_scan_id`, `place_id`, `version`, `outcome` (`current`, `replaced`, `offered`), `duration_seconds` |
 | `scan` | the comparison's path in the bundle, `scans/compare-001.scan` | `room`, `place_scan_id`, `place_scan_version`, `changes` |
 | `scan_change` | `moved`, `missing` or `new` | `object` (`chair`, `table`…), `distance_cm`, `rotation_deg`, `size_cm` `[w, h, d]`, `where` `[x, y, z]` in meters, `picture` (`scans/compare-001.scan#changes/01.jpg`) |
-| `figure` | the joints file in the bundle, `figures/figure-001.json` | `from` and `to` (seconds into the video), `video`, `peak_confidence` (0–1) |
-| `shape` | the shape in words, `45 × 160 × 30 cm` | `size_cm`, `distance_m`, `where`, `from`, `to`, `video` |
+| `figure` | the joints file in the bundle, `figures/figure-001.json` | `from` and `to` (seconds into the video), `video`, `peak_confidence` (0–1), `picture` (`figures/figure-001.jpg`) |
+| `shape` | the shape in words, `45 × 160 × 30 cm` | `size_cm`, `distance_m`, `where`, `from`, `to`, `video`, `picture` (`figures/shape-001.jpg`) |
 
 A reading carrying one of these also says what it is in `marker` — `room_scan`, `scan_change`,
 `figure_seen`, `unexplained_shape` — so a reader that knows the markers and nothing else still
@@ -167,7 +167,22 @@ draws it on a timeline. `where` is in the frame of the room scan the reading ref
 after `#` names a member inside a `.scan` that is itself inside the bundle.
 
 A `shape` is never jointed. It is a depth cluster that is not in the room's scan, with its size,
-and that is all that is claimed about it.
+and that is all that is claimed about it. The sensor sees one side of it, so its size is the size of
+what was seen.
+
+**The person map's joints file.** One file for each sighting of a figure, written only while the
+figure is in view, at most fifteen entries a second:
+
+```json
+[{ "t": 12.4, "joints": [[0.512, 0.301, 2.41, 0.96], null, …] }, …]
+```
+
+`t` is seconds into the video the `figure` reading names. Each of the seventeen joints is
+`[x, y, z, c]`: `x` and `y` where it is in the video as it plays, 0–1 from its top left; `z` meters
+from the camera, or null where the sensor did not trust the depth; `c` how much of the depth around
+the joint the sensor trusted, 0–1. A joint not found is `null`. The order is head, neck, right
+shoulder, right elbow, right hand, left shoulder, left elbow, left hand, right hip, right knee, right
+foot, left hip, left knee, left foot, right eye, left eye, root (between the hips).
 
 ### `position`, `motion`, `audio_ref`
 
@@ -206,10 +221,11 @@ print('VALID' if not errs else [ (list(e.path), e.message) for e in errs ])
 The schema was checked against 14 deliberately malformed documents — missing `format_version`, an
 `interval` trigger with no period, a numeric measurement with no unit, latitude 130, a `..` path in
 a filename, a malformed digest — and rejects all of them, while still accepting a document carrying
-unknown keys. A schema that accepts everything would validate nothing. The 1.2 channels added five
+unknown keys. A schema that accepts everything would validate nothing. The 1.2 channels added six
 more, kept as tests beside the phone's own (`DeviceDataSchemaTests`): a change that is neither moved,
 missing nor new, a comparison path that climbs out with `..`, a figure seen before its video began,
-a shape with two dimensions, and a room scan of version 0.
+a figure's picture that climbs out with `..`, a shape with two dimensions, and a room scan of
+version 0.
 
 ## Implementation status
 

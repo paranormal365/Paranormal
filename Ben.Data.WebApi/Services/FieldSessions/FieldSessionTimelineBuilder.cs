@@ -248,6 +248,10 @@ public static class FieldSessionTimelineBuilder
                                        && root.TryGetProperty("readings", out var scanReadings)
             ? ScanReadings(scanReadings, Ms)
             : ([], []);
+        var (figures, shapes) = root.ValueKind == JsonValueKind.Object
+                                && root.TryGetProperty("readings", out var mapReadings)
+            ? PersonMapReadings(mapReadings, Ms, files)
+            : ([], []);
 
         return new SessionTimeline(
             Version: SessionTimeline.CurrentVersion,
@@ -266,8 +270,63 @@ public static class FieldSessionTimelineBuilder
             SkippedReadings: skipped,
             FallbackEmfBase: lastBase,
             RoomScans: roomScans,
-            ScanChanges: scanChanges);
+            ScanChanges: scanChanges,
+            Figures: figures,
+            Shapes: shapes);
     }
+
+    /// <summary>
+    /// The person map's figures and shapes a document records (LiDAR plan, phase 4, spec 1.2): a
+    /// <c>figure</c> measurement is a sighting whose value is its joints file, a <c>shape</c> one
+    /// says its size in words. Each names the video it was in and its picture, and those are found
+    /// among the session's files, so a player can fetch them by id.
+    /// </summary>
+    private static (List<TimelineFigure> Figures, List<TimelineShape> Shapes) PersonMapReadings(
+        JsonElement readings, Func<DateTime, long> ms, IReadOnlyList<TimelineFile> files)
+    {
+        var figures = new List<TimelineFigure>();
+        var shapes = new List<TimelineShape>();
+        if (readings.ValueKind != JsonValueKind.Array) return (figures, shapes);
+
+        var byPath = new Dictionary<string, Guid>(StringComparer.OrdinalIgnoreCase);
+        foreach (var file in files) byPath.TryAdd(Normalise(file.RelativePath), file.FileId);
+        Guid? Id(string? path) => path is { Length: > 0 } && byPath.TryGetValue(Normalise(path), out var id) ? id : null;
+
+        foreach (var element in readings.EnumerateArray())
+        {
+            if (Moment(element, "at") is not { } at
+                || !element.TryGetProperty("measurements", out var m) || m.ValueKind != JsonValueKind.Object)
+                continue;
+            var t = ms(at);
+            var note = element.TryGetProperty("note", out var n) && n.ValueKind == JsonValueKind.String ? n.GetString() : null;
+
+            if (m.TryGetProperty("figure", out var figure) && figure.ValueKind == JsonValueKind.Object
+                && Text(figure, "value") is { Length: > 0 } joints)
+            {
+                var video = Text(figure, "video");
+                var picture = Text(figure, "picture");
+                figures.Add(new TimelineFigure(t, joints, Id(joints), video, Id(video),
+                    Number(figure, "from"), Number(figure, "to"), Number(figure, "peak_confidence"),
+                    picture, Id(picture), note));
+            }
+            if (m.TryGetProperty("shape", out var shape) && shape.ValueKind == JsonValueKind.Object
+                && Text(shape, "value") is { Length: > 0 } words)
+            {
+                var video = Text(shape, "video");
+                var picture = Text(shape, "picture");
+                shapes.Add(new TimelineShape(t, words, Triple(shape, "size_cm"), Number(shape, "distance_m"),
+                    Triple(shape, "where"), video, Id(video), Number(shape, "from"), Number(shape, "to"),
+                    picture, Id(picture), note));
+            }
+        }
+        return (figures.OrderBy(f => f.T).ToList(), shapes.OrderBy(s => s.T).ToList());
+    }
+
+    private static double[]? Triple(JsonElement e, string name)
+        => e.TryGetProperty(name, out var v) && v.ValueKind == JsonValueKind.Array && v.GetArrayLength() == 3
+           && v.EnumerateArray().All(x => x.ValueKind == JsonValueKind.Number)
+            ? v.EnumerateArray().Select(x => x.GetDouble()).ToArray()
+            : null;
 
     /// <summary>
     /// The room scans and comparisons a document records, and what the comparisons found (LiDAR
@@ -313,12 +372,6 @@ public static class FieldSessionTimelineBuilder
         return (scans, changes);
 
         static Guid? Id(JsonElement e, string name) => Guid.TryParse(Text(e, name), out var id) ? id : null;
-
-        static double[]? Triple(JsonElement e, string name)
-            => e.TryGetProperty(name, out var v) && v.ValueKind == JsonValueKind.Array && v.GetArrayLength() == 3
-               && v.EnumerateArray().All(x => x.ValueKind == JsonValueKind.Number)
-                ? v.EnumerateArray().Select(x => x.GetDouble()).ToArray()
-                : null;
     }
 
     // ── One reading ───────────────────────────────────────────────────────────
