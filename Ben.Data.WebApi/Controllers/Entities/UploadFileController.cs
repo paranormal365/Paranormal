@@ -690,6 +690,15 @@ public sealed class UploadFileController : BenControllerBase
         => await db.FieldSessionUploadFiles.AsNoTracking().AnyAsync(f => f.UploadFileId == fileId, ct)
         || await db.FieldSessionUploads.AsNoTracking().AnyAsync(s => s.DocumentUploadFileId == fileId, ct);
 
+    private static async Task<bool> IsEvidenceAsync(BenDataContext db, Guid fileId, CancellationToken ct)
+        => await IsHeldByAFieldSessionAsync(db, fileId, ct)
+        || await db.FieldSessionAnalysisCopies.AsNoTracking().AnyAsync(c => c.CopyUploadFileId == fileId, ct)
+        || await db.FileProvenances.AsNoTracking().AnyAsync(p => p.UploadFileId == fileId, ct);
+
+    private const string EvidenceMessage =
+        "This file is evidence from a field session, so it can't be replaced: links, marks and its "
+        + "certificate all point at these bytes. Save a new file instead.";
+
     private const string HeldBySessionMessage =
         "This recording is part of a field session, which holds it. It can be handed to a group, "
         + "but it cannot be destroyed while the session exists.";
@@ -952,6 +961,12 @@ public sealed class UploadFileController : BenControllerBase
         if (before is null) return NotFound();
         if (!await FileAudienceAccess.CanManageFileAsync(db, before, userId, User.IsInRole(RoleNames.SuperAdmin), cancellationToken))
             return Forbid();
+
+        // Evidence keeps its bytes (10/28/2026). A session's own recordings and its .ben, a copy made
+        // to scan one, and a clip certified as made from one: replacing any of them under the same
+        // row would leave every link, marker and certificate pointing at bytes nobody recorded.
+        if (await IsEvidenceAsync(db, id, cancellationToken))
+            return Conflict(EvidenceMessage);
 
         // Same extension only — "replace" means a new version of the same thing, and it's what
         // makes overwriting each case copy at its existing StoragePath unambiguously safe (no

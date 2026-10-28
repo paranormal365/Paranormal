@@ -90,7 +90,18 @@ public sealed class FieldSessionAnalysisCopies(
         // Compared only with a digest the recording itself matched on arrival: one that arrived
         // damaged would never match, and refusing to copy it would refuse it forever. A cleaned
         // copy (an older upload whose metadata was stripped for serving) differs by design.
-        if (verbatim && recording.DigestMatched && recording.Sha256 is { Length: > 0 } expected
+        // A recording inside a .ben has no digest of its own row; the phone's seal, inside the
+        // same unchanged file, says what it was (10/28/2026).
+        var expected = recording.DigestMatched ? recording.Sha256 : null;
+        if (expected is null && verbatim && recording.BundleEntryPath is { Length: > 0 } entryPath)
+        {
+            var bundlePath = await db.UploadFiles.AsNoTracking()
+                .Where(f => f.Id == session.DocumentUploadFileId).Select(f => f.StoragePath).FirstOrDefaultAsync(ct);
+            if (bundlePath is { Length: > 0 }
+                && (await SessionSeal.ReadAsync(bundles, bundlePath, ct)).TryGetValue(entryPath, out var sealedEntry))
+                expected = sealedEntry.Sha256;
+        }
+        if (verbatim && expected is { Length: > 0 }
             && !string.Equals(expected.Trim(), digest, StringComparison.OrdinalIgnoreCase))
         {
             logger.LogWarning("Copy of session {SessionId} file {FileId} did not match its digest", session.Id, recording.Id);

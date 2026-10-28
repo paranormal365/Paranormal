@@ -308,7 +308,18 @@
                 @if (_session.Files.Count > 0 || Missing.Count > 0)
                 {
                     <div class="card mt-3">
-                        <div class="card-header py-2">Recordings</div>
+                        <div class="card-header py-2 d-flex flex-wrap align-items-center gap-2">
+                            <span>Recordings</span>
+                            @if (_timeline.Clips.Any(c => c.Kind == EnhancedKind))
+                            {
+                                @* An enhanced clip plays in the original's place, at its own moment (10/28/2026). *@
+                                <div class="form-check form-switch mb-0 ms-auto small">
+                                    <input class="form-check-input" type="checkbox" id="prefer-enhanced" data-fk-prefer-enhanced
+                                           data-testid="prefer-enhanced" />
+                                    <label class="form-check-label" for="prefer-enhanced">Play the enhanced clips in their place</label>
+                                </div>
+                            }
+                        </div>
                         <ul class="list-group list-group-flush">
                             @foreach (var gone in Missing)
                             {
@@ -368,6 +379,41 @@
                                         </a>
                                     }
                                 </li>
+                                @foreach (var made in DerivedFrom(file.RelativePath))
+                                {
+                                    @* A clip made from this recording, outside the session: the .ben is never edited (10/28/2026). *@
+                                    var placed = _timeline.Clips.FirstOrDefault(c => c.FileId == made.FileId && c.Kind == EnhancedKind);
+                                    <li class="list-group-item d-flex align-items-center gap-3 flex-wrap ps-4 fk-derived" @key="made.FileId"
+                                        data-testid="derived-row">
+                                        <BenIcon Name="corner-down-right" Class="text-muted" />
+                                        <span class="badge @(made.Enhanced ? "text-bg-info" : "text-bg-secondary")" data-testid="derived-kind">@(made.Enhanced ? "Enhanced" : "Altered")</span>
+                                        <span class="small">@made.Summary</span>
+                                        @if (placed?.StartMs is { } at)
+                                        {
+                                            <span class="text-muted small">at @Elapsed(at)</span>
+                                        }
+                                        <span class="text-muted small">by @made.MadeBy</span>
+                                        @if (made.Certified)
+                                        {
+                                            <a class="small" data-testid="certificate-link" href="@CertificateHref(made.FileId)">
+                                                <BenIcon Name="award" Class="me-1" />Certificate
+                                            </a>
+                                        }
+                                        else
+                                        {
+                                            <span class="text-muted small" title="Made before certificates, or not from this session's recording on this site.">no certificate</span>
+                                        }
+                                        @if (placed is not null)
+                                        {
+                                            <audio controls preload="metadata" class="ms-auto" src="@DerivedUrl(made.FileId)"
+                                                   data-fk-media="@made.FileId"></audio>
+                                        }
+                                        else
+                                        {
+                                            <audio controls preload="none" class="ms-auto" src="@DerivedUrl(made.FileId)"></audio>
+                                        }
+                                    </li>
+                                }
                             }
                         </ul>
                     </div>
@@ -381,10 +427,11 @@
                             @foreach (var marker in _timeline.Markers)
                             {
                                 var asked = marker.Kind == "evp_question";
-                                <li class="list-group-item d-flex align-items-center gap-3 fk-marker" data-fk-marker="@marker.T"
-                                    data-testid="@(asked ? "question-row" : "marker-row")">
-                                    <BenIcon Name="@(asked ? "help-circle" : marker.Automatic ? "zap" : "flag")"
-                                             Class="@(marker.Automatic ? "fk-marker-icon text-warning" : "fk-marker-icon text-info")" />
+                                var evp = marker.Kind == EvpKind;
+                                <li class="list-group-item d-flex align-items-center gap-3 fk-marker @(evp ? "fk-marker--evp" : "")" data-fk-marker="@marker.T"
+                                    data-testid="@(asked ? "question-row" : evp ? "evp-row" : "marker-row")">
+                                    <BenIcon Name="@(asked ? "help-circle" : evp ? "mic" : marker.Automatic ? "zap" : "flag")"
+                                             Class="@(evp ? "fk-marker-icon text-success" : marker.Automatic ? "fk-marker-icon text-warning" : "fk-marker-icon text-info")" />
                                     <button class="btn btn-sm btn-outline-secondary text-nowrap" data-fk-jump="@marker.T"
                                             title="Go to a moment before this">
                                         @Elapsed(marker.T)
@@ -398,11 +445,22 @@
                                             <span class="text-muted small" data-testid="question-listened">listened @Listened(until - marker.T)</span>
                                         }
                                     }
+                                    else if (evp && EvpAt(marker) is { } kept)
+                                    {
+                                        @* An EVP somebody kept on their copy of the recording, and what they heard (10/28/2026). *@
+                                        <span><strong>EVP</strong> “@kept.Heard”</span>
+                                        <span class="badge text-bg-secondary">@kept.Confidence</span>
+                                        <span class="text-muted small">by @kept.MadeBy</span>
+                                        @if (kept.ClipFileId is { } clipId && _findings!.Clips.Any(c => c.FileId == clipId && c.Certified))
+                                        {
+                                            <a class="small" href="@CertificateHref(clipId)" data-testid="evp-certificate"><BenIcon Name="award" Class="me-1" />Certificate</a>
+                                        }
+                                    }
                                     else
                                     {
                                         <span>@marker.Title</span>
                                     }
-                                    @if (MarkerFieldText(marker) is { } reading)
+                                    @if (!evp && MarkerFieldText(marker) is { } reading)
                                     {
                                         <span class="font-monospace small" data-testid="marker-field">@reading</span>
                                     }
@@ -410,7 +468,7 @@
                                     {
                                         <span class="badge text-bg-secondary" data-testid="marker-room">@marker.Room</span>
                                     }
-                                    @if (!asked && !string.IsNullOrWhiteSpace(marker.Note))
+                                    @if (!asked && !evp && !string.IsNullOrWhiteSpace(marker.Note))
                                     {
                                         <span class="text-muted small">@marker.Note</span>
                                     }
@@ -474,6 +532,9 @@
     private string? _refusal;
     private FieldSessionSummaryRecord? _session;
     private SessionTimeline? _timeline;
+
+    /// <summary>What was found in the recordings: EVPs kept and clips made (10/28/2026). Never on a share link.</summary>
+    private SessionFindings? _findings;
     private SessionInsightsRecord? _insights;
     private DateTime? _shareExpires;
     private bool _positionsWithheld;
@@ -535,6 +596,7 @@
         _signedOut = false;
         _session = null;
         _timeline = null;
+        _findings = null;
         _mediaNotice = null;
         _undecodable.Clear();
         _unreachable.Clear();
@@ -557,6 +619,7 @@
 
         var summary = AdminClient.GetFieldSessionSummaryAsync(SessionId);
         var timeline = AdminClient.GetFieldSessionTimelineAsync(SessionId);
+        var findings = AdminClient.GetSessionFindingsAsync(SessionId);
         var insights = AdminClient.GetSessionInsightsAsync(SessionId);
         var detail = await summary;
         _timeline = await timeline;
@@ -572,6 +635,7 @@
         }
         _session = detail.Session;
         if (_timeline is null) _refusal = "This session's document couldn't be read.";
+        else _timeline = WithFindings(_timeline, _findings = await findings);
     }
 
     private async Task LoadSharedAsync()
@@ -613,6 +677,7 @@
 
         var summary = AdminClient.GetPublicFieldSessionSummaryAsync(SessionId);
         var timeline = AdminClient.GetPublicFieldSessionTimelineAsync(SessionId);
+        var findings = AdminClient.GetPublicSessionFindingsAsync(SessionId);
         _public = await summary;
         _timeline = await timeline;
         _loading = false;
@@ -635,6 +700,7 @@
                                                          DigestMatched: true, DateCreated: _public.StartedAt))
                 .ToList());
         if (_timeline is null) _refusal = "This session's readings couldn't be read.";
+        else _timeline = WithFindings(_timeline, _findings = await findings);
     }
 
     // ── The engine ────────────────────────────────────────────────────────────
@@ -844,6 +910,58 @@
         "video" => $"A video ending at {Elapsed(gone.T)} was noted, but the file wasn't in what was sent.",
         _ => $"A photo taken at {Elapsed(gone.T)} wasn't in what was sent.",
     };
+
+    private const string EnhancedKind = "enhanced";
+    private const string EvpKind = "evp";
+
+    /// <summary>
+    /// The timeline with what was found laid on it: each EVP as a mark at its moment, each enhanced
+    /// clip as a recording of its own at its moment, so the engine can play it in the original's
+    /// place. Only where the recording's own start is known; the rest are listed, not placed.
+    /// </summary>
+    private static SessionTimeline WithFindings(SessionTimeline timeline, SessionFindings? findings)
+    {
+        if (findings is null || (findings.Clips.Count == 0 && findings.Evps.Count == 0)) return timeline;
+        long? StartOf(string path) => timeline.Clips
+            .FirstOrDefault(c => c.Kind is "audio" or "video" && string.Equals(c.Path, path, StringComparison.OrdinalIgnoreCase))?.StartMs;
+
+        var marks = findings.Evps
+            .Where(e => StartOf(e.SourceClipPath) is not null)
+            .Select(e => new TimelineMarker(StartOf(e.SourceClipPath)!.Value + e.RecordingOffsetMs, EvpKind, "EVP",
+                Automatic: false, Note: e.Heard, Room: null, FieldMilligauss: null));
+        var enhanced = findings.Clips
+            .Where(c => c.Enhanced && c.RecordingOffsetMs is not null && c.DurationMs is > 0 && StartOf(c.SourceClipPath) is not null)
+            .Select(c => new TimelineClip(c.FileId, $"Enhanced · {c.FileName}", EnhancedKind,
+                StartOf(c.SourceClipPath)!.Value + c.RecordingOffsetMs!.Value, c.DurationMs, null));
+        return timeline with
+        {
+            Markers = timeline.Markers.Concat(marks).OrderBy(m => m.T).ToList(),
+            Clips = timeline.Clips.Concat(enhanced).ToList(),
+        };
+    }
+
+    /// <summary>The kept EVP behind an EVP mark.</summary>
+    private SessionFindingEvp? EvpAt(TimelineMarker marker)
+        => _findings?.Evps.FirstOrDefault(e => e.Heard == marker.Note
+            && _timeline!.Clips.FirstOrDefault(c => c.Kind is "audio" or "video"
+                   && string.Equals(c.Path, e.SourceClipPath, StringComparison.OrdinalIgnoreCase))?.StartMs + e.RecordingOffsetMs == marker.T);
+
+    private IEnumerable<SessionFindingClip> DerivedFrom(string recordingPath)
+        => _findings?.Clips.Where(c => string.Equals(c.SourceClipPath, recordingPath, StringComparison.OrdinalIgnoreCase)) ?? [];
+
+    /// <summary>A clip made from a recording: its own file, not the session's.</summary>
+    private string DerivedUrl(Guid fileId)
+    {
+        var url = Public ? AdminClient.GetPublicFindingMediaUrl(SessionId, fileId) : MediaUrls.Download(fileId);
+        return _linkGeneration.TryGetValue(fileId, out var generation)
+            ? $"{url}{(url.Contains('?') ? '&' : '?')}r={generation}"
+            : url;
+    }
+
+    private string CertificateHref(Guid fileId)
+        => Public && _public is { } published
+            ? $"/places/{published.PlaceId}/sessions/{SessionId}/certificates/{fileId}"
+            : $"/files/{fileId}/certificate";
 
     private static string PhotoTitle(TimelinePhoto photo)
         => $"Photo at {Elapsed(photo.T)}{(photo.Room is { } room ? $" in the {room}" : "")} — goes to that moment and shows it full size";

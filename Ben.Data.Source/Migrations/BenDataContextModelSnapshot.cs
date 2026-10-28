@@ -4595,6 +4595,82 @@ namespace Ben.Data.Source.Migrations
                     b.ToTable("FieldSessionUploadFiles");
                 });
 
+            modelBuilder.Entity("Ben.Data.Source.Entities.FileProvenance", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<Guid>("AnalysisCopyUploadFileId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<string>("ChainJson")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<string>("CopySha256")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("nvarchar(64)");
+
+                    b.Property<long?>("DurationMs")
+                        .HasColumnType("bigint");
+
+                    b.Property<bool>("Enhanced")
+                        .HasColumnType("bit");
+
+                    b.Property<Guid>("FieldSessionUploadId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<DateTime>("IssuedUtc")
+                        .HasColumnType("datetime2");
+
+                    b.Property<Guid>("MadeByAppUserId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<long?>("RecordingOffsetMs")
+                        .HasColumnType("bigint");
+
+                    b.Property<string>("ResultSha256")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("nvarchar(64)");
+
+                    b.Property<int>("Scope")
+                        .HasColumnType("int");
+
+                    b.Property<Guid?>("ScopeAppUserId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<Guid?>("ScopeOrganizationId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<string>("SealSha256")
+                        .HasMaxLength(64)
+                        .HasColumnType("nvarchar(64)");
+
+                    b.Property<string>("Signature")
+                        .HasMaxLength(512)
+                        .HasColumnType("nvarchar(512)");
+
+                    b.Property<string>("SourceClipPath")
+                        .IsRequired()
+                        .HasMaxLength(500)
+                        .HasColumnType("nvarchar(500)");
+
+                    b.Property<Guid>("UploadFileId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("FieldSessionUploadId");
+
+                    b.HasIndex("UploadFileId")
+                        .IsUnique();
+
+                    b.ToTable("FileProvenances");
+                });
+
             modelBuilder.Entity("Ben.Data.Source.Entities.GhostWalkRouteChange", b =>
                 {
                     b.Property<Guid>("Id")
@@ -17822,6 +17898,17 @@ namespace Ben.Data.Source.Migrations
                     b.Navigation("FieldSessionUpload");
 
                     b.Navigation("UpdatedByAppUser");
+
+                    b.Navigation("UploadFile");
+                });
+
+            modelBuilder.Entity("Ben.Data.Source.Entities.FileProvenance", b =>
+                {
+                    b.HasOne("Ben.Data.Source.Entities.UploadFile", "UploadFile")
+                        .WithMany()
+                        .HasForeignKey("UploadFileId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
 
                     b.Navigation("UploadFile");
                 });

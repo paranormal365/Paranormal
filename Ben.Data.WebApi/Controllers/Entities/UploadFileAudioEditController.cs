@@ -8,9 +8,11 @@ using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using Ben.Data.WebApi.Services.Access;
 using Ben.Data.WebApi.Services.Audio;
+using Ben.Data.WebApi.Services.Files;
 using Ben.Data.WebApi.Services;
 using Ben.Data.WebApi.Services.Billing;
 using Microsoft.AspNetCore.RateLimiting;
+using Microsoft.Extensions.DependencyInjection;
 
 namespace Ben.Data.WebApi.Controllers.Entities;
 
@@ -148,11 +150,22 @@ public sealed class UploadFileAudioEditController : BenControllerBase
 
         var isRegionEdit = request.Operation is AudioEditOperation.Cut or AudioEditOperation.Silence;
 
+        // An edit of a group's copy of a session recording is the group's, as a clip of it already
+        // was (phase 9). Edits went to the person who made them, so an organizer's enhanced EVP left
+        // the group's files the moment it was made louder (10/28/2026).
+        var forGroup = source.SourceFieldSessionUploadId is not null && source.OwnerOrganizationId is not null
+            ? source.OwnerOrganizationId
+            : null;
+
         var entity = new UploadFile
         {
             Id                 = Guid.NewGuid(),
             UploadFileTypeId   = request.UploadFileTypeId,
-            AppUserId          = userId,
+            AppUserId          = forGroup is null ? userId : null,
+            OwnerOrganizationId = forGroup,
+            // Where it came from, carried down like a clip's, so an edit stays with its session.
+            SourceFieldSessionUploadId = source.SourceFieldSessionUploadId,
+            SourceClipPath     = source.SourceClipPath,
             FileName           = newName,
             StoredFileName     = $"{Guid.NewGuid()}{outExtension}",
             ContentType        = outContentType,
@@ -177,15 +190,39 @@ public sealed class UploadFileAudioEditController : BenControllerBase
 
         // An edit is saved as WAV, so it is several times the size of an MP3 or .m4a it was made
         // from: a new file under the person, asked for like a clip is, before the bytes are written.
-        if (await AccountStorageGuard.WhyCannotStoreAsync(db, userId, editedBytes.Length, ct) is { } full)
+        // A group's edit answers to the group's plan instead, as a group's clip does.
+        if (forGroup is { } group)
+        {
+            if (HttpContext?.RequestServices.GetService<SubscriptionLimitGuard>() is { } limits
+                && await limits.WhyReadOnlyAsync(group, ct) is { } readOnly)
+                return Conflict(readOnly);
+        }
+        else if (await AccountStorageGuard.WhyCannotStoreAsync(db, userId, editedBytes.Length, ct) is { } full)
             return StatusCode(StatusCodes.Status413PayloadTooLarge, full);
 
-        var relativePath = _fileStorage.UserFilePath(userId, entity.StoredFileName);
+        var relativePath = forGroup is { } owner
+            ? _fileStorage.OrgFilePath(owner, $"session-copies/{entity.StoredFileName}")
+            : _fileStorage.UserFilePath(userId, entity.StoredFileName);
         using (var ms = new MemoryStream(editedBytes))
             await _fileStorage.WriteAsync(relativePath, ms, ct);
         entity.StoragePath = relativePath;
 
         db.UploadFiles.Add(entity);
+
+        // Its certificate of authenticity when it was made from a session recording's copy or from a
+        // certified file (10/28/2026), with the settings used — which nothing kept before.
+        if (HttpContext?.RequestServices?.GetService<FileProvenanceService>() is { } provenance)
+        {
+            long? durationMs = null;
+            try
+            {
+                using var measured = new NAudio.Wave.WaveFileReader(new MemoryStream(wavBytes));
+                durationMs = (long)Math.Round(measured.TotalTime.TotalMilliseconds);
+            }
+            catch (Exception) { /* the certificate says nothing of a length it could not read */ }
+            await provenance.RecordAsync(db, entity, fileId, request.Operation.ToString().ToLowerInvariant(),
+                EditSettings(request), 0, editedBytes, durationMs, userId, ct);
+        }
 
         // An edited copy was recorded in the same place as its source (Ben's rule, 2026-08-24), and
         // now also carries how long it is and what shape it is — measured off the bytes just
@@ -228,5 +265,20 @@ public sealed class UploadFileAudioEditController : BenControllerBase
         if (file.FileData is not null)
             return new MemoryStream(file.FileData);
         throw new InvalidOperationException($"File {file.Id} has no StoragePath and no FileData.");
+    }
+
+    /// <summary>What an edit was asked to do, as its certificate records it.</summary>
+    private static Dictionary<string, double> EditSettings(AudioEditRequest r)
+    {
+        var settings = new Dictionary<string, double>();
+        if (r.Start is { } start) settings["start"] = start;
+        if (r.End is { } end) settings["end"] = end;
+        if (r.GainDb is { } gain) settings["gainDb"] = gain;
+        if (r.FadeInSeconds is { } fadeIn) settings["fadeIn"] = fadeIn;
+        if (r.FadeOutSeconds is { } fadeOut) settings["fadeOut"] = fadeOut;
+        if (r.SpeedRatio is { } ratio) settings["ratio"] = ratio;
+        if (r.PitchSemitones is { } semitones) settings["semitones"] = semitones;
+        if (r.Volume is { Count: > 0 } curve) settings["points"] = curve.Count;
+        return settings;
     }
 }

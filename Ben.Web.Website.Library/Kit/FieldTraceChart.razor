@@ -36,7 +36,7 @@
             }
             @foreach (var marker in Markers)
             {
-                <line class="@(marker.Automatic ? "fk-mark fk-mark--auto" : "fk-mark fk-mark--manual")"
+                <line class="@(marker.Kind == "evp" ? "fk-mark fk-mark--evp" : marker.Automatic ? "fk-mark fk-mark--auto" : "fk-mark fk-mark--manual")"
                       x1="@X(marker.T)" x2="@X(marker.T)" y1="0" y2="@Height" vector-effect="non-scaling-stroke" />
             }
             @if (_path.Length > 0)
