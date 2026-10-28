@@ -374,6 +374,25 @@ public class MediaToolOptionsTests
     }
 
     [Fact]
+    public void An_ffmpeg_uploaded_after_startup_is_found_without_a_restart()
+    {
+        var site = Path.Combine(Path.GetTempPath(), $"ben-site-{Guid.NewGuid():N}");
+        var tools = Path.Combine(site, "App_Data", "Tools");
+        Directory.CreateDirectory(tools);
+        try
+        {
+            var options = new Ben.Data.WebApi.Services.MediaToolOptions();
+            options.ResolveAgainst(site);
+            Assert.Null(options.FfmpegPath);
+
+            File.WriteAllBytes(Path.Combine(tools, "ffmpeg.exe"), [0]);
+
+            Assert.Equal(Path.Combine(tools, "ffmpeg.exe"), options.FfmpegPath);
+        }
+        finally { Directory.Delete(site, recursive: true); }
+    }
+
+    [Fact]
     public void A_set_path_wins_over_the_tools_folder()
     {
         var site = Path.Combine(Path.GetTempPath(), $"ben-site-{Guid.NewGuid():N}");
