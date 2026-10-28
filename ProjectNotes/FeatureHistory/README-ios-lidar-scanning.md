@@ -55,7 +55,7 @@ replaces these with numbers from Ben's own phone.
 | What is kept | Size per room | Fits the 2 GB cap? |
 |---|---|---|
 | **Everything raw** — every depth frame (196 KB) + confidence (49 KB) at 60 fps, plus 1080p video | ~4.4 GB depth + ~300 MB video | No. Never kept. |
-| **Keyframes** — a JPEG + depth + pose every ~0.5 m or 15° (≈150 of them) | ~70 MB (JPEG ≈ 400 KB, depth zlib ≈ 80 KB each) | A house of 8 rooms ≈ 560 MB. Too heavy to upload by default; kept on the phone, uploaded on request. |
+| **Keyframes** — a JPEG + depth + pose every ~0.5 m or 15° (≈150 of them) | ~70 MB (JPEG ≈ 400 KB, depth zlib ≈ 80 KB each) | A house of 8 rooms ≈ 560 MB. Uploaded with the scan (Ben, 10/28/2026); the retention screen shows the size first. |
 | **ARWorldMap** — what relocalization needs | 10–30 MB | Yes. Needed for comparison scans; one per room. |
 | **Textured mesh** — glTF with Draco + a 4K JPEG atlas | 5–15 MB | Yes. This is the walkthrough. |
 | **Untextured mesh** — Draco | 1–4 MB | Yes. Enough for "what moved". |
@@ -65,9 +65,11 @@ replaces these with numbers from Ben's own phone.
 | **Comparison scan, changes only** — object deltas (JSON), changed mesh patches, a JPEG crop per change | 0.5–3 MB | Yes. Plus a second world map only if the person asks to keep it. |
 | **Person map** — video the phone already records (1080p30 ≈ 60 MB/min) + a joints sidecar | Sidecar ≈ 6 KB/s **only while a figure is in frame**; an hour of continuous figure ≈ 22 MB, a typical night under 2 MB | Yes. The video is the cost, and it is the same video as today. |
 
-Three retention choices the person sees, in product words: **Model only** (standard), **Model and
-pictures** (adds the keyframes, phone-only until sent), **Changes only** (for a comparison scan).
-Default is Model only.
+Three retention choices the person sees, in product words: **Model and pictures** (the default:
+model, world map and keyframes, all sent with the session — Ben, 10/28/2026: "Upload the keyframe
+pictures with the scan"), **Model only** (for a phone or account short on room), **Changes only**
+(for a comparison scan). The size is shown before the choice is made, and a scan that would put
+the account over its 2 GB is refused with the number, like any other session file.
 
 The 500-file guard: keyframes are not 150 bundle members. Each scan is **one** stored zip inside the
 bundle, `scans/room-001.scan`, holding its own `manifest.json`, `room.usdz`, `mesh.glb`,
@@ -96,8 +98,10 @@ byte-range reading as `BenBundle`), so a viewer can fetch `mesh.glb` alone.
   Publishing a session to a public place (the archive) would publish the room — so **scans are
   never published to a place**; the publish step strips them. "Hand my phone to a coworker" is the
   on-phone viewer, no account needed. A share link (phase 4) can show a scan to one person.
-- **Storage cap:** scans count like every other session file. Model only keeps a house under
-  300 MB; the retention choice screen shows the size before it is kept.
+- **Storage cap:** scans count like every other session file. With pictures, a room is ~100 MB and
+  an 8-room house ~850 MB, which is most of a free account's 2 GB — the retention screen shows the
+  size before it is kept, and a group on a paid plan has no cap. Phase 3's close-up detail and the
+  phase 4 web walkthrough both read the uploaded keyframes, which is what uploading them buys.
 - **Android / web viewers:** phase 4 puts a three.js viewer in the website (look-around with the
   browser's device orientation, a joystick for walking). It reads `mesh.glb` by range from the
   bundle. No LiDAR needed to look.
@@ -197,8 +201,7 @@ feature.
 
 ## Open questions for Ben
 
-1. Should a scan ever be uploaded with keyframes (70 MB a room), or do pictures stay on the phone
-   until someone asks for a walkthrough on the web? (Plan assumes phone-only by default.)
+1. ~~Keyframes upload or stay on the phone?~~ Answered 10/28/2026: they upload with the scan.
 2. Is the figure overlay allowed on non-LiDAR phones as a 2D-only mode, or is this a Pro feature
    end to end?
 3. The walkthrough viewer on the website: Phase 4 is the biggest website piece. Fine to leave it
