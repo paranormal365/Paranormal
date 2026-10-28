@@ -73,9 +73,10 @@
     }
     else
     {
-        <div class="mb-3" data-testid="session-heading">
+        <div class="mb-3 fk-heading" data-testid="session-heading">
+            <div class="fk-kicker"><BenIcon Name="activity" />Field session</div>
             <div class="d-flex flex-wrap align-items-center gap-2">
-                <h3 class="mb-0 me-1">@(_session.LocationLabel ?? "Field session")</h3>
+                <h3 class="mb-0 me-1 fk-title">@(_session.LocationLabel ?? "Field session")</h3>
                 <span class="text-muted" data-testid="session-started">@Moment(_timeline.StartUtc)</span>
                 @if (_timeline.TimeZoneId is { } recordedIn)
                 {
@@ -167,7 +168,7 @@
         else
         {
             <div class="fk-player" @ref="_root" tabindex="-1" data-testid="field-player">
-                <div class="card mb-3">
+                <div class="card mb-3 fk-deck">
                     <div class="card-body">
                         <div data-fk="transport"></div>
 

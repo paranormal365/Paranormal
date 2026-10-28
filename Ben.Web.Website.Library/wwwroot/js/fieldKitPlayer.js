@@ -81,6 +81,12 @@ export function state(root) {
     };
 }
 
+/** Runs one frame now, as the next animation frame would — for a test, never for the page. */
+export function frameNow(root) {
+    const p = players.get(root);
+    if (p) p.step(performance.now());
+}
+
 /** The timeline the engine was given, as the host sent it — for a test, never for the page. */
 export function timelineJson(root) {
     return players.get(root)?.timelineJson ?? null;
@@ -469,6 +475,7 @@ class Player {
         this.clockFile = null;
         for (const element of this.media.values()) {
             element.__fkSeekAt = 0;   // a move made now settles while paused: it says nothing about the network
+            element.__fkStarted = false;
             if (!element.paused) element.pause();
         }
         this.drawTransport();
@@ -662,7 +669,7 @@ class Player {
         if (!this.mapReady) {
             if (!benMap.isMap(this.mapId)) return;   // the map component has not made it yet
             this.mapReady = true;
-            benMap.playerInit(this.mapId, { track: this.tl.track, pins: this.pins() });
+            benMap.playerInit(this.mapId, { track: this.tl.track, pins: this.pins(), color: this.themeColor('--ben-accent', '#7c5cff') });
             snap = true;
         }
         const position = frame.position;
@@ -672,9 +679,19 @@ class Player {
             position?.accuracy ?? null, snap, this.rate > 8);
     }
 
+    /** A colour from the theme in force (signal-tokens.css), with what it was before as the fallback. */
+    themeColor(token, fallback) {
+        return getComputedStyle(this.root).getPropertyValue(token).trim() || fallback;
+    }
+
     /** Pins for photos and marks that carry a position — only where positions are exact. */
     pins() {
         if (this.tl.positions !== 0) return [];
+        // From the theme, so the pins match the marks on the chart in light and dark (10/28/2026).
+        const link = this.themeColor('--ben-link', '#22d3ee');
+        const warning = getComputedStyle(this.root).getPropertyValue('--bs-warning').trim() || '#f2b037';
+        const confirmed = this.themeColor('--ben-audio-confirmed-rgb', '');
+        const evp = confirmed ? `rgb(${confirmed})` : link;
         const r = this.tl.readings, out = [];
         const at = ms => {
             let i = -1, low = 0, high = r.t.length - 1;
@@ -683,11 +700,15 @@ class Player {
         };
         for (const photo of this.tl.photos) {
             const p = at(photo.t);
-            if (p) out.push({ lat: p[0], lon: p[1], title: `Photo at ${hms(photo.t)}`, color: '#22d3ee', glyph: '◉' });
+            if (p) out.push({ lat: p[0], lon: p[1], title: `Photo at ${hms(photo.t)}`, color: link, glyph: '◉' });
         }
         for (const marker of this.tl.markers) {
             const p = at(marker.t);
-            if (p) out.push({ lat: p[0], lon: p[1], title: `${marker.title} at ${hms(marker.t)}`, color: marker.automatic ? '#f2b037' : '#22d3ee', glyph: marker.automatic ? '!' : '⚑' });
+            if (p) out.push({
+                lat: p[0], lon: p[1], title: `${marker.kind === 'evp' ? `EVP “${marker.note}”` : marker.title} at ${hms(marker.t)}`,
+                color: marker.kind === 'evp' ? evp : marker.automatic ? warning : link,
+                glyph: marker.kind === 'evp' ? '♪' : marker.automatic ? '!' : '⚑',
+            });
         }
         return out;
     }
@@ -743,7 +764,8 @@ class Player {
         // moment Blazor renders the element — and the event has been and gone.
         if (element.error) queueMicrotask(() => this.failed(fileId, element));
         // A new source starts paused without a pause event: nothing the engine counted is coming.
-        this.on(element, 'emptied', () => { element.__fkEnginePauses = 0; });
+        this.on(element, 'emptied', () => { element.__fkEnginePauses = 0; element.__fkStarted = false; });
+        this.on(element, 'ended', () => { element.__fkStarted = false; });
         // The browser's own controls on a recording in the list drive the session too.
         this.on(element, 'play', () => {
             if (this.playing || this.pendingPlay.has(element)) return;
@@ -763,7 +785,10 @@ class Player {
             // keys, Now Playing, AirPods — while it is what is being heard or watched: the session
             // pauses with it. A video counts when no recording covers the moment; on a video-only
             // session the video was ignored and played straight back (10/28/2026).
-            if (!this.playing || this.pendingPlay.has(element) || element.ended) return;
+            // A play the engine asked for and has not heard back about is no reason to ignore this:
+            // the next frame may have asked again for a recording somebody had just paused, and the
+            // pause then went unheard and the recording played on (10/28/2026).
+            if (!this.playing || element.ended) return;
             if (this.isCoveringMedia(fileId)) this.pause();
         });
     }
@@ -899,7 +924,16 @@ class Player {
                         this.seekElement(element, Math.min(target + lead, (element.duration || Infinity)), fileId, now);
                     }
                 }
+                // Started by the engine, paused by nobody the engine knows of: somebody else paused it
+                // (Now Playing, a media key, its own controls), and their 'pause' event has not arrived
+                // yet. Playing it again here is what made a pause from outside lose the race.
+                if (element.paused && !element.ended && element.__fkStarted && !(element.__fkEnginePauses > 0)
+                    && this.isCoveringMedia(fileId, frame)) {
+                    this.pause();
+                    return;
+                }
                 if (element.paused && !element.ended && !this.pendingPlay.has(element)) {
+                    element.__fkStarted = true;
                     this.pendingPlay.add(element);
                     const done = () => this.pendingPlay.delete(element);
                     try { element.play().then(done, done); } catch { done(); }
@@ -947,6 +981,7 @@ class Player {
     quietly(element, act) {
         if (element.paused) return;   // no pause event would come to be counted
         element.__fkEnginePauses = (element.__fkEnginePauses ?? 0) + 1;
+        element.__fkStarted = false;
         act();
     }
 

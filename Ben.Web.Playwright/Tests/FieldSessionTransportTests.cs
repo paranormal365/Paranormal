@@ -184,6 +184,28 @@ public class FieldSessionTransportTests : BenTestBase
     }
 
     /// <summary>
+    /// A pause from outside that lands just before the player's next frame. The frame saw a paused
+    /// recording it had started and started it again, then ignored the pause when it arrived: the
+    /// recording played on and the button stayed on Pause. Intermittent in a full run (Chromium,
+    /// 10/28/2026); forced here by running the frame between the pause and its event.
+    /// </summary>
+    [Test]
+    public async Task A_pause_from_outside_wins_the_race_with_the_next_frame()
+    {
+        await OpenAsync(videoOnly: false);
+        await Page.Locator("[data-testid=play-pause]").ClickAsync();
+        await PlayheadPastAsync(1_500);
+
+        await Page.EvaluateAsync($@"async () => {{
+            const m = await import('{Module}');
+            const root = document.querySelector('[data-testid=field-player]');
+            document.querySelector('audio[data-fk-media]').pause();
+            m.frameNow(root);   // before the browser has said 'pause'
+        }}");
+        await AssertHeldAsync("a pause that met the next frame");
+    }
+
+    /// <summary>
     /// The host starting the engine a second time on the same page used to leave the buttons on
     /// the first engine: Pause paused that one and the live one carried on.
     /// </summary>
