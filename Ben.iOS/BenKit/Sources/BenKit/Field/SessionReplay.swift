@@ -398,6 +398,7 @@ public final class SessionReplay {
 
     public func seek(to moment: Date) {
         seekCount += 1
+        parkedOn = nil
         moveTo(moment)
         // A person dragging the scrubber mid-playback restarts the measurement; without this the
         // next tick would drag the playhead straight back to where the anchor says it should be.
@@ -420,20 +421,39 @@ public final class SessionReplay {
         // A moment BEFORE the marker, so whatever led up to it can be heard rather than
         // starting at the bang.
         seek(to: marker.at.addingTimeInterval(-Self.markerLeadIn))
+        parkedOn = marker.at
     }
 
     /// The lead-in `seek(to: marker)` gives, so stepping can tell "parked before marker A" from
     /// "somewhere between A and B".
     private static let markerLeadIn: TimeInterval = 3
 
+    /// The marker the last jump or step parked the playhead before. Marks in the first three
+    /// seconds all park at the start, and only this can tell which of them we are on.
+    private var parkedOn: Date?
+
     public func stepMarker(forward: Bool) {
-        // Seeking to a marker parks the playhead `markerLeadIn` seconds BEFORE it, so the marker
-        // we are currently on sits at playhead + leadIn. Stepping forward must skip past it, or
-        // it selects the same marker again and nothing moves.
-        let current = playhead.addingTimeInterval(Self.markerLeadIn)
+        // Rule T4, the same as the website's stepMarkerTarget (fieldKitTimeline.js). Parked before a
+        // mark, the step counts from that mark, so Next does not choose it again. Anywhere else it
+        // counts from the playhead: Next is the first mark still ahead, Previous the last one
+        // passed. Until 10/28/2026 every playhead was treated as parked, so while playing Next
+        // skipped a mark under three seconds ahead and Previous could pick one still to come.
+        let tolerance: TimeInterval = 0.01
+        let start = timeline.startedAt
+        func jumpPoint(_ at: Date) -> Date { max(start, at.addingTimeInterval(-Self.markerLeadIn)) }
+        func near(_ a: Date, _ b: Date) -> Bool { abs(a.timeIntervalSince(b)) <= tolerance }
+
+        var current = playhead
+        if let parkedOn, near(jumpPoint(parkedOn), playhead) {
+            current = parkedOn
+        } else if let parked = timeline.markers.first(where: {
+            $0.at.timeIntervalSince(start) >= Self.markerLeadIn && near(jumpPoint($0.at), playhead)
+        }) {
+            current = parked.at
+        }
         let next = forward
-            ? timeline.markers.first { $0.at > current.addingTimeInterval(0.01) }
-            : timeline.markers.last { $0.at < current.addingTimeInterval(-0.01) }
+            ? timeline.markers.first { $0.at > current.addingTimeInterval(tolerance) }
+            : timeline.markers.last { $0.at < current.addingTimeInterval(-tolerance) }
         guard let next else { return }
         seek(to: next)
     }

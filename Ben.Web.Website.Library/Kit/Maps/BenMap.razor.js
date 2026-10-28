@@ -693,7 +693,7 @@ export function playerInit(containerId, opts) {
         }
     }
     if (entry.map) apply()
-    else _mapkitReady?.then(() => setTimeout(apply, 0))
+    else _mapkitReady?.then(() => setTimeout(apply, 0)).catch(err => console.warn('Session map unavailable:', err))
 }
 
 function playerClear(entry) {
@@ -738,6 +738,8 @@ export function playerMove(containerId, lat, lon, bearing, accuracy, snap, fast)
     const arrow = element?.querySelector?.('.ben-map-arrow')
     const dot = arrow?.nextElementSibling
     if (bearing === null || bearing === undefined) {
+        // Forgotten, so the next bearing is shown as it is rather than turned to from a stale one.
+        p.displayed = null
         p.target = null
         if (arrow) arrow.style.display = 'none'
         if (dot) dot.style.display = ''
@@ -831,9 +833,13 @@ function showRecenter(entry, show) {
     p.recenter = button
 }
 
-/** Whether a map has been made in this container yet — the player waits for it. */
+/**
+ * Whether a map has been made in this container yet — the player waits for it. Asked of the map
+ * itself, not of the entry: the entry exists from the moment the script starts loading, and on a
+ * page where Apple's script never arrives there is no map to wait for (10/28/2026).
+ */
 export function isMap(containerId) {
-    return _maps.has(containerId)
+    return !!_maps.get(containerId)?.map
 }
 
 /** Back to following the marker. */

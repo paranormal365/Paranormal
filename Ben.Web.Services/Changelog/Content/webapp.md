@@ -40,6 +40,11 @@ day-by-day account of building it would say nothing to anyone using it now.
 - Pricing says plainly that one event credit covers an event start to finish: a night, a weekend, or a
   show's run of up to a month. A tour route is one walk wherever it goes, not one street.
 - On My field sessions, flicking a sharing switch on and off quickly now always keeps your last choice.
+- Pause in the session player always holds: on a session with video and no sound, after pausing
+  from your computer's media keys or Now Playing, and at 4× and faster.
+- Next and Previous mark, pressed while a session plays, go to the mark just ahead and the one just
+  passed. Before, Next skipped a mark less than three seconds away.
+- After clicking anywhere on the session player, Space plays and pauses and the arrow keys move.
 
 ### Administration
 

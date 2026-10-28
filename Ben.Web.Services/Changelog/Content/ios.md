@@ -27,6 +27,11 @@ and ideas behind running the site, goes under a `### Administration` sub-heading
 after the lines everybody reads. Only SuperAdmins see those lines. A version with nothing else in
 it is hidden from everybody else, but still takes its number. No other sub-heading is read.
 
+## Unreleased
+
+- In a session's review, Next and Previous mark pressed while it plays go to the mark just ahead and
+  the one just passed. Before, Next skipped a mark less than three seconds away.
+
 ## 1.1.7 · 2026-10-24
 
 - Before an event starts, you can write a question to its organizers from the event, even without a booking.

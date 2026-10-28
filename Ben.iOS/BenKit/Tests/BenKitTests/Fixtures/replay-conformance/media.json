@@ -479,6 +479,18 @@
    "from_ms": 9000,
    "forward": false,
    "lands_ms": 2000
+  },
+  {
+   "from_ms": 3500,
+   "forward": true,
+   "lands_ms": 2000,
+   "about": "Playing 1.5 s before a mark: Next takes that mark, not the one after it."
+  },
+  {
+   "from_ms": 10500,
+   "forward": false,
+   "lands_ms": 2000,
+   "about": "Playing between two marks: Previous takes the one passed, never the one still ahead."
   }
  ]
 }

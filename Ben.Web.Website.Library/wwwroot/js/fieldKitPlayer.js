@@ -18,7 +18,7 @@
 //     (data-testid, hidden), or a child this file creates and removes itself.
 //   - This file never removes a node Blazor made. After any Blazor render the host calls rebind().
 
-import { frameAt, stepMarker, markerJump, SIGN_MS } from './fieldKitTimeline.js';
+import { frameAt, stepMarkerTarget, markerJump, SIGN_MS } from './fieldKitTimeline.js';
 import * as benMap from '../Kit/Maps/BenMap.razor.js';
 
 const SPEEDS = [1, 2, 4, 8, 16, 32];
@@ -32,8 +32,9 @@ const FAST_SEEK_MS = 500;
 const DRAG_SEEK_MS = 100;
 /** Arrow keys move this far. */
 const SKIP_MS = 5000;
-/** The longest a buffering recording holds the clock. */
-const WAIT_MS = 3000;   // kept for the state() readout; the clock no longer holds for buffering (10/14/2026)
+/** "Following the recording" shows once the recording has kept time this long, and stays this long after. */
+const FOLLOW_SHOW_MS = 400;
+const FOLLOW_HOLD_MS = 1000;
 /** How far ahead a recording still to come is buffered, so the hand-over to it does not stall. */
 const PRIME_AHEAD_MS = 20000;
 /** The most a recording is moved ahead of the playhead to allow for how long its seek takes. */
@@ -48,6 +49,7 @@ const players = new WeakMap();
 export function init(root, dotnet, timelineJson, options) {
     dispose(root);
     const player = new Player(root, dotnet, JSON.parse(timelineJson), options ?? {});
+    player.timelineJson = timelineJson;
     players.set(root, player);
     player.start();
 }
@@ -75,8 +77,13 @@ export function state(root) {
     if (!p) return null;
     return {
         playhead: p.playhead, playing: p.playing, rate: p.rate, clock: p.clockFile,
-        duration: p.tl.durationMs, frames: p.frames, waiting: p.waiting,
+        duration: p.tl.durationMs, frames: p.frames, waiting: p.waiting, dragging: p.dragging,
     };
+}
+
+/** The timeline the engine was given, as the host sent it — for a test, never for the page. */
+export function timelineJson(root) {
+    return players.get(root)?.timelineJson ?? null;
 }
 
 // ── Formatting, said the way the rest of the site says it ────────────────────
@@ -129,7 +136,6 @@ class Player {
         this.anchorAt = 0;
         this.clockFile = null;
         this.waiting = false;
-        this.waitingSince = 0;
         this.dragging = false;
         this.frames = 0;
         this.lastSeekAt = new Map();
@@ -142,6 +148,20 @@ class Player {
         this.expanded = null;
         this.raf = 0;
         this.timer = 0;
+        this.parkedOn = null;        // the mark a step or a jump parked the playhead before (T4)
+        this.unlocked = new WeakSet();
+        this.followSince = null;
+        this.followLast = 0;
+        // Every listener this engine adds goes when it stops. A second engine on the same page —
+        // the host starting it twice — used to leave the first one's listeners on the recordings,
+        // and the visible buttons wired to the stopped one: Pause paused the engine nobody was
+        // using, and the live one played the video straight back (10/28/2026).
+        this.abort = new AbortController();
+    }
+
+    /** addEventListener, taken back when this engine stops. */
+    on(target, type, handler, options) {
+        target.addEventListener(type, handler, { ...(options ?? {}), signal: this.abort.signal });
     }
 
     start() {
@@ -170,9 +190,14 @@ class Player {
     stop() {
         cancelAnimationFrame(this.raf);
         clearInterval(this.timer);
+        this.playing = false;
         for (const element of this.media.values()) { try { element.pause(); } catch { } }
         this.closePhoto(false);
-        this.playing = false;
+        this.abort.abort();
+        // What this engine drew goes with it, so the next one starts from what Blazor rendered.
+        this.root.querySelector('[data-testid="motion-detected"]')?.remove();
+        const transport = this.root.querySelector('[data-fk="transport"]');
+        if (transport) { transport.removeAttribute('data-fk-built'); transport.replaceChildren(); }
     }
 
     // ── Finding the page's elements (and again after every Blazor render) ────
@@ -205,14 +230,16 @@ class Player {
         for (const button of this.root.querySelectorAll('[data-fk-photo]')) {
             if (this.attached.has(button)) continue;
             this.attached.add(button);
-            button.addEventListener('click', () => this.openPhoto(button.getAttribute('data-fk-photo')));
+            this.on(button, 'click', () => this.openPhoto(button.getAttribute('data-fk-photo')));
         }
         for (const button of this.root.querySelectorAll('[data-fk-jump]')) {
             if (this.attached.has(button)) continue;
             this.attached.add(button);
-            button.addEventListener('click', () => {
+            this.on(button, 'click', () => {
                 this.pause();
-                this.seek(markerJump(Number(button.getAttribute('data-fk-jump'))));
+                const t = Number(button.getAttribute('data-fk-jump'));
+                this.seek(markerJump(t));
+                this.parkedOn = t;
             });
         }
         for (const chart of this.root.querySelectorAll('[data-fk-chart] svg')) {
@@ -222,7 +249,15 @@ class Player {
         }
         if (!this.attached.has(this.root)) {
             this.attached.add(this.root);
-            this.root.addEventListener('keydown', e => this.onKey(e));
+            this.on(this.root, 'keydown', e => this.onKey(e));
+            // A click on the stage, the chart or a reading gives the player the keyboard, so Space
+            // and the arrows work without first tabbing to a button. Controls keep their own focus.
+            this.on(this.root, 'pointerdown', e => {
+                const t = e.target;
+                if (!(t instanceof Element)) return;
+                if (t.closest('button, input, select, textarea, a, audio, video[controls], [contenteditable="true"], .ben-map')) return;
+                if (document.activeElement !== this.root) this.root.focus({ preventScroll: true });
+            });
         }
     }
 
@@ -231,13 +266,18 @@ class Player {
         host.setAttribute('data-fk-built', '1');
         host.replaceChildren();
 
-        this.playButton = el('button', { type: 'button', class: 'btn btn-primary' });
-        this.playButton.addEventListener('click', () => this.toggle());
+        // The icon and the word are changed in place, never replaced: a press that lands while the
+        // button's children are being swapped can lose its click.
+        this.playIcon = icon('play', 'me-1');
+        this.playLabel = document.createTextNode('Play');
+        this.playButton = el('button', { type: 'button', class: 'btn btn-primary', 'data-testid': 'play-pause' },
+            this.playIcon, this.playLabel);
+        this.on(this.playButton, 'click', () => this.toggle());
 
         const speeds = el('div', { class: 'btn-group btn-group-sm fk-speeds', role: 'group', 'aria-label': 'Speed' });
         this.speedButtons = SPEEDS.map(speed => {
             const button = el('button', { type: 'button', class: 'btn btn-outline-secondary' }, `${speed}×`);
-            button.addEventListener('click', () => this.setRate(speed));
+            this.on(button, 'click', () => this.setRate(speed));
             speeds.append(button);
             return button;
         });
@@ -245,8 +285,8 @@ class Player {
         const marks = el('div', { class: 'btn-group btn-group-sm', role: 'group', 'aria-label': 'Marks' });
         const previous = el('button', { type: 'button', class: 'btn btn-outline-secondary', 'aria-label': 'Previous mark', title: 'Previous mark' }, icon('skip-back'));
         const next = el('button', { type: 'button', class: 'btn btn-outline-secondary', 'aria-label': 'Next mark', title: 'Next mark' }, icon('skip-forward'));
-        previous.addEventListener('click', () => this.step_marker(false));
-        next.addEventListener('click', () => this.step_marker(true));
+        this.on(previous, 'click', () => this.step_marker(false));
+        this.on(next, 'click', () => this.step_marker(true));
         marks.append(previous, next);
         if (this.tl.markers.length === 0) { previous.disabled = true; next.disabled = true; }
 
@@ -262,12 +302,15 @@ class Player {
             'aria-label': 'Position in the session', 'data-testid': 'scrubber',
         });
         this.scrubber.value = '0';
-        this.scrubber.addEventListener('pointerdown', () => { this.dragging = true; });
+        this.on(this.scrubber, 'pointerdown', () => { this.dragging = true; });
         const release = () => { if (this.dragging) { this.dragging = false; this.render(true); } };
-        this.scrubber.addEventListener('pointerup', release);
-        this.scrubber.addEventListener('pointercancel', release);
-        this.scrubber.addEventListener('change', release);
-        this.scrubber.addEventListener('input', () => {
+        // Let go anywhere: a release off the slider with no change of value used to leave it
+        // "being dragged", and the slider stopped following the playhead until the next drag.
+        this.on(window, 'pointerup', release);
+        this.on(window, 'pointercancel', release);
+        this.on(window, 'blur', release);
+        this.on(this.scrubber, 'change', release);
+        this.on(this.scrubber, 'input', () => {
             this.seek(Number(this.scrubber.value) / 1000 * this.tl.durationMs, { keepScrubber: true });
         });
 
@@ -277,7 +320,11 @@ class Player {
 
     drawTransport() {
         if (!this.playButton) return;
-        this.playButton.replaceChildren(icon(this.playing ? 'pause' : 'play', 'me-1'), this.playing ? 'Pause' : 'Play');
+        const word = this.playing ? 'Pause' : 'Play';
+        if (this.playLabel.data !== word) {
+            this.playLabel.data = word;
+            this.playIcon.querySelector('use')?.setAttribute('href', ICONS + (this.playing ? 'pause' : 'play'));
+        }
         this.speedButtons.forEach((button, i) => {
             const on = SPEEDS[i] === this.rate;
             button.className = `btn ${on ? 'btn-secondary' : 'btn-outline-secondary'}`;
@@ -300,9 +347,14 @@ class Player {
         return { element, clip: frame.audio.clip };
     }
 
+    /** What is true at a moment, with recordings this browser cannot play left out (M6). */
+    frame(ms) {
+        return frameAt(this.tl, ms, this.broken ? { broken: this.broken } : undefined);
+    }
+
     step(now) {
         if (this.playing) {
-            const frame = frameAt(this.tl, this.playhead);
+            const frame = this.frame(this.playhead);
             const clock = this.clockElement(frame);
             // The page's own clock always runs (10/14/2026). It used to stop for up to three seconds
             // whenever the recording was buffering — at every Play on a recording not yet loaded —
@@ -340,7 +392,7 @@ class Player {
         // Play where nothing was recorded, with a recording still to come: start at that recording
         // (rule T6, Ben 09/16/2026) — pressing Play at 0:00 on a session whose sound begins at
         // 0:04 means "play the sound".
-        const here = frameAt(this.tl, this.playhead);
+        const here = this.frame(this.playhead);
         if (!here.audio && !here.video) {
             const later = this.tl.clips
                 .filter(c => c.startMs != null && c.startMs > this.playhead && !this.isBroken(c.fileId))
@@ -353,12 +405,38 @@ class Player {
         this.drawTransport();
         // Synchronous, inside the click: Safari plays a media element only from a user's gesture.
         this.render(true);
+        this.unlockForLater();
+    }
+
+    /**
+     * Safari lets a page start a recording's sound only from a person's gesture, element by
+     * element. The hand-over to a recording that starts later happens with nobody pressing
+     * anything, so each one is started and stopped, silently, inside this first Play.
+     */
+    unlockForLater() {
+        const ua = navigator.userAgent;
+        if (!/AppleWebKit/.test(ua) || /Chrome|Chromium|CriOS|Edg|Android/.test(ua)) return;
+        for (const element of this.media.values()) {
+            if (this.unlocked.has(element)) continue;
+            this.unlocked.add(element);
+            if (!element.paused) continue;   // the one playing now was started by the gesture itself
+            const wasMuted = element.muted;
+            element.muted = true;
+            this.pendingPlay.add(element);
+            const done = () => this.pendingPlay.delete(element);
+            try { element.play().then(done, done); } catch { done(); }
+            this.quietly(element, () => element.pause());
+            element.muted = wasMuted;
+        }
     }
 
     pause() {
         this.playing = false;
         this.clockFile = null;
-        for (const element of this.media.values()) if (!element.paused) element.pause();
+        for (const element of this.media.values()) {
+            element.__fkSeekAt = 0;   // a move made now settles while paused: it says nothing about the network
+            if (!element.paused) element.pause();
+        }
         this.drawTransport();
         this.render(true);
     }
@@ -374,6 +452,7 @@ class Player {
 
     seek(ms, how) {
         this.playhead = Math.max(0, Math.min(this.tl.durationMs, ms));
+        this.parkedOn = null;
         this.reanchor(this.playhead);
         // The recording that was keeping time is moved like every other one. Left as the clock,
         // it was skipped by the seek and the next frame read its OLD time back — the drag thrown
@@ -385,15 +464,17 @@ class Player {
     }
 
     step_marker(forward) {
-        const target = stepMarker(this.tl, this.playhead, forward);
-        if (target !== null) this.seek(target);
+        const marker = stepMarkerTarget(this.tl, this.playhead, forward, this.parkedOn);
+        if (marker === null) return;
+        this.seek(markerJump(marker.t));
+        this.parkedOn = marker.t;
     }
 
     // ── Drawing a frame ──────────────────────────────────────────────────────
 
     /** snap: the playhead jumped (a seek, play, pause) — media and the arrow follow at once. */
     render(snap, keepScrubber) {
-        const frame = frameAt(this.tl, this.playhead);
+        const frame = this.frame(this.playhead);
         this.frames++;
 
         this.syncMedia(frame, snap);
@@ -579,7 +660,14 @@ class Player {
 
     drawClock() {
         if (!this.clockSlot) return;
-        const following = this.clockFile !== null;
+        // Steadied: at a hand-over, or while a recording catches up, the recording steps aside for
+        // a frame or two, and the badge used to flicker on and off with it.
+        const now = performance.now();
+        if (this.clockFile !== null) { this.followSince ??= now; this.followLast = now; }
+        else this.followSince = null;
+        const following = this.playing && (
+            (this.followSince !== null && now - this.followSince >= FOLLOW_SHOW_MS)
+            || (this.last.clock === true && now - this.followLast < FOLLOW_HOLD_MS));
         if (this.last.clock === following) return;
         this.last.clock = following;
         this.clockSlot.replaceChildren();
@@ -593,31 +681,34 @@ class Player {
     attachMedia(fileId, element) {
         if (this.attached.has(element)) return;
         this.attached.add(element);
+        element.__fkEnginePauses = 0;
         const onLength = () => this.learnedLength(fileId, element.duration);
-        element.addEventListener('loadedmetadata', onLength);
+        this.on(element, 'loadedmetadata', onLength);
         if (element.readyState >= 1) onLength();
-        element.addEventListener('waiting', () => {
-            if (!this.playing || !this.isCoveringAudio(fileId)) return;
+        this.on(element, 'waiting', () => {
+            if (!this.playing || !this.isCoveringMedia(fileId)) return;
             this.waiting = true;
-            this.waitingSince = performance.now();
         });
-        element.addEventListener('playing', () => {
+        this.on(element, 'playing', () => {
             this.waiting = false;
-            // How long a move took to sound again: the next correction aims that far ahead, so a
-            // recording on a slow connection catches the playhead instead of chasing it.
+            // How long a move made while playing took to sound again: the next correction aims
+            // that far ahead, so a recording on a slow connection catches the playhead instead of
+            // chasing it. A move made while paused settles at leisure and is not counted.
             if (element.__fkSeekAt) {
                 const took = (performance.now() - element.__fkSeekAt) / 1000;
                 this.seekLead.set(fileId, Math.min(MAX_LEAD_S, Math.max(0, took)));
                 element.__fkSeekAt = 0;
             }
         });
-        element.addEventListener('canplay', () => { this.waiting = false; });
-        element.addEventListener('error', () => this.failed(fileId, element));
+        this.on(element, 'canplay', () => { this.waiting = false; });
+        this.on(element, 'error', () => this.failed(fileId, element));
         // A file the browser could not decode can fail before this attached — preload starts the
         // moment Blazor renders the element — and the event has been and gone.
         if (element.error) queueMicrotask(() => this.failed(fileId, element));
+        // A new source starts paused without a pause event: nothing the engine counted is coming.
+        this.on(element, 'emptied', () => { element.__fkEnginePauses = 0; });
         // The browser's own controls on a recording in the list drive the session too.
-        element.addEventListener('play', () => {
+        this.on(element, 'play', () => {
             if (this.playing || this.pendingPlay.has(element)) return;
             const clip = this.clipById.get(fileId);
             if (!clip || clip.startMs == null) return;
@@ -626,20 +717,25 @@ class Player {
             this.reanchor(this.playhead);
             this.drawTransport();
         });
-        element.addEventListener('pause', () => {
+        this.on(element, 'pause', () => {
+            // The engine's own pauses are counted out first: each one it makes is followed by
+            // exactly one of these events. A timer used to stand in for the count, and lost the
+            // race at 4× and above, where the session then paused itself.
+            if (element.__fkEnginePauses > 0) { element.__fkEnginePauses--; return; }
             // Paused by something other than the engine — its own controls, the system's media
-            // keys — while it is the recording being heard: the session pauses with it. Asked of
-            // the recording at the playhead, not of the clock, which steps aside whenever the
-            // element is briefly short of data.
+            // keys, Now Playing, AirPods — while it is what is being heard or watched: the session
+            // pauses with it. A video counts when no recording covers the moment; on a video-only
+            // session the video was ignored and played straight back (10/28/2026).
             if (!this.playing || this.pendingPlay.has(element) || element.ended) return;
-            if (element.getAttribute('data-fk-pausing') === '1') return;
-            if (this.isCoveringAudio(fileId)) this.pause();
+            if (this.isCoveringMedia(fileId)) this.pause();
         });
     }
 
-    isCoveringAudio(fileId) {
-        const frame = frameAt(this.tl, this.playhead);
-        return frame.audio?.clip.fileId === fileId;
+    /** Whether this recording is what is heard (or, with no sound, seen) at the playhead. */
+    isCoveringMedia(fileId, frame) {
+        frame ??= this.frame(this.playhead);
+        if (frame.audio) return frame.audio.clip.fileId === fileId;
+        return frame.video?.clip.fileId === fileId;
     }
 
     /** The browser has read a recording's length: place it if its start waited on that. */
@@ -676,7 +772,7 @@ class Player {
         // out (the ticket in it lasts an hour), and the host renews it. Otherwise the browser
         // cannot play this file, and the host says so beside it.
         const decodedBefore = element.duration > 0 && isFinite(element.duration);
-        if (this.clockFile === fileId || this.isCoveringAudio(fileId)) this.pause();
+        if (this.clockFile === fileId || this.isCoveringMedia(fileId)) this.pause();
         this.broken ??= new Set();
         if (!decodedBefore) this.broken.add(fileId);
         this.dotnet.invokeMethodAsync('OnMediaFailed', fileId, decodedBefore).catch(() => { });
@@ -690,14 +786,14 @@ class Player {
 
     seekElement(element, seconds, fileId, now) {
         this.lastSeekAt.set(fileId, now);
-        element.__fkSeekAt = now;
+        element.__fkSeekAt = this.playing ? now : 0;
         if (element.readyState < 1) {
             // Before metadata, an assignment to currentTime may be dropped: remember the latest
             // target and apply it once, rather than queueing one listener per seek.
             element.__fkTarget = seconds;
             if (!element.__fkWaitingForMetadata) {
                 element.__fkWaitingForMetadata = true;
-                element.addEventListener('loadedmetadata', () => {
+                this.on(element, 'loadedmetadata', () => {
                     element.__fkWaitingForMetadata = false;
                     if (element.__fkTarget != null) element.currentTime = Math.min(element.__fkTarget, element.duration || element.__fkTarget);
                 }, { once: true });
@@ -788,10 +884,11 @@ class Player {
             this.seekElement(element, 0, next.fileId, now);
     }
 
-    /** Pauses an element without that pause being read as the person pausing the session. */
+    /** Pauses a playing element without that pause being read as the person pausing the session. */
     quietly(element, act) {
-        element.setAttribute('data-fk-pausing', '1');
-        try { act(); } finally { setTimeout(() => element.removeAttribute('data-fk-pausing'), 0); }
+        if (element.paused) return;   // no pause event would come to be counted
+        element.__fkEnginePauses = (element.__fkEnginePauses ?? 0) + 1;
+        act();
     }
 
     // ── Photographs ──────────────────────────────────────────────────────────
@@ -840,16 +937,17 @@ class Player {
             const f = Math.min(1, Math.max(0, (e.clientX - box.left) / Math.max(1, box.width)));
             this.seek(f * this.tl.durationMs);
         };
-        svg.addEventListener('pointerdown', e => {
+        this.on(svg, 'pointerdown', e => {
             this.pause();
             this.dragging = true;
             svg.setPointerCapture?.(e.pointerId);
             at(e);
         });
-        svg.addEventListener('pointermove', e => { if (this.dragging && e.buttons) at(e); });
+        this.on(svg, 'pointermove', e => { if (this.dragging && e.buttons) at(e); });
         const end = () => { if (this.dragging) { this.dragging = false; this.render(true); } };
-        svg.addEventListener('pointerup', end);
-        svg.addEventListener('pointercancel', end);
+        this.on(svg, 'pointerup', end);
+        this.on(svg, 'pointercancel', end);
+        this.on(svg, 'lostpointercapture', end);
     }
 
     onKey(e) {
