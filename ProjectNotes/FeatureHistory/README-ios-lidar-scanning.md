@@ -420,7 +420,11 @@ Tests: `RoomComparerTests` on synthetic room pairs (moved 2 cm → nothing; 4 cm
 `PlaceScanChanges` rows match the document; viewer camera binding unit tests; UI test with a fixture
 baseline + fixture comparison.
 
-### Phase 3 — Website
+### Phase 3 — Website (waits until the audio/EVP plan is through — Ben, 10/28/2026)
+
+Phases 1, 2 and 4 are iOS + API and may run while the audio/EVP work is on the site. Phase 3 is the
+website piece and starts only once `AudioEditor-EVP-Plan-2026-10-26.md` is finished, so two plans
+never edit the site at once. Phase 4 (person map) does not depend on phase 3 and may go before it.
 
 `PlaceScans.razor`, `ScanViewer.razor` + three.js, session player readings, public place page
 switch + route, admin list. Playwright: a fixture `.scan` on a seeded public place; the viewer loads
@@ -452,7 +456,7 @@ changelogs; the product documentation PDF. Store copy says LiDAR phones only.
 
 1. ~~Keyframes upload or stay on the phone?~~ Answered 10/28/2026: they upload with the scan.
 2. ~~Figure overlay on non-LiDAR phones?~~ Answered 10/28/2026: Pro (LiDAR) only, end to end.
-3. The website viewer (phase 3) waits until the audio/EVP plan is through, or runs alongside?
+3. ~~Website viewer timing?~~ Answered 10/28/2026: phase 3 waits for the audio/EVP plan.
 4. At a public location with **no** verified venue, the first scanner is the custodian. Should a
    SuperAdmin be able to hand custody to a group later (when a venue claim comes through, the
    verified venue takes over automatically — that part is in the plan)?
