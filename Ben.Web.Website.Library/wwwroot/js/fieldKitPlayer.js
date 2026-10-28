@@ -60,8 +60,8 @@ export function rebind(root) {
 }
 
 /** A recording's link was renewed: the element is loading again, and the playhead stays where it is. */
-export function mediaRenewed(root, fileId) {
-    players.get(root)?.renewed(fileId);
+export function mediaRenewed(root, fileId, url) {
+    players.get(root)?.renewed(fileId, url);
 }
 
 export function dispose(root) {
@@ -385,7 +385,10 @@ class Player {
         this.render(false);
     }
 
-    toggle() { this.playing ? this.pause() : this.play(); }
+    toggle() {
+        this.resumeOnRecovery = false;   // what the person chose now wins over an automatic resume
+        this.playing ? this.pause() : this.play();
+    }
 
     play() {
         if (this.playhead >= this.tl.durationMs) this.playhead = 0;
@@ -682,7 +685,10 @@ class Player {
         if (this.attached.has(element)) return;
         this.attached.add(element);
         element.__fkEnginePauses = 0;
-        const onLength = () => this.learnedLength(fileId, element.duration);
+        const onLength = () => {
+            this.learnedLength(fileId, element.duration);
+            if (element.__fkRenewing) this.recovered(fileId, element);
+        };
         this.on(element, 'loadedmetadata', onLength);
         if (element.readyState >= 1) onLength();
         this.on(element, 'waiting', () => {
@@ -768,20 +774,42 @@ class Player {
     }
 
     failed(fileId, element) {
-        // A recording that already told us its length DID decode; failing later means its link ran
-        // out (the ticket in it lasts an hour), and the host renews it. Otherwise the browser
-        // cannot play this file, and the host says so beside it.
+        // A recording that already told us its length DID decode, and one that failed on the
+        // network, is tried again by the host with a fresh link (10/28/2026: up to three times,
+        // and playing resumes by itself). One the browser could not decode is said beside it.
+        // Until it decodes it is left out of what plays, so the session plays on without it.
         const decodedBefore = element.duration > 0 && isFinite(element.duration);
-        if (this.clockFile === fileId || this.isCoveringMedia(fileId)) this.pause();
+        const code = element.error?.code ?? 0;
+        if (this.clockFile === fileId || this.isCoveringMedia(fileId)) {
+            if (this.playing) this.resumeOnRecovery = true;
+            this.pause();
+        }
         this.broken ??= new Set();
         if (!decodedBefore) this.broken.add(fileId);
-        this.dotnet.invokeMethodAsync('OnMediaFailed', fileId, decodedBefore).catch(() => { });
+        this.dotnet.invokeMethodAsync('OnMediaFailed', fileId, code, decodedBefore).catch(() => { });
     }
 
-    renewed(fileId) {
+    /** The host has given a recording a fresh link: it loads again, and the playhead stays put. */
+    renewed(fileId, url) {
         this.broken?.delete(fileId);
+        if (url) this.urls[fileId] = url;
         this.bind();
+        const element = this.media.get(fileId);
+        if (element) {
+            element.__fkRenewing = true;
+            if (element.readyState >= 1) this.recovered(fileId, element);
+        }
         this.render(true);
+    }
+
+    /** A renewed recording has loaded: the notice goes, and what was playing plays on. */
+    recovered(fileId, element) {
+        element.__fkRenewing = false;
+        this.dotnet.invokeMethodAsync('OnMediaRecovered', fileId).catch(() => { });
+        if (this.resumeOnRecovery && !this.playing) {
+            this.resumeOnRecovery = false;
+            this.play();
+        }
     }
 
     seekElement(element, seconds, fileId, now) {

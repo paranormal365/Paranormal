@@ -773,7 +773,7 @@ app.MapGet("/media/field-sessions/{sessionId:guid}/files/{fileId:guid}", async (
     IHttpClientFactory httpFactory, IConfiguration config,
     HttpContext ctx, CancellationToken ct) =>
 {
-    var accessToken = string.IsNullOrWhiteSpace(t) ? null : tickets.Unprotect(fileId, t);
+    var accessToken = await tickets.CallerAsync(fileId, t, ct);
     return await Ben.Web.Website.Services.MediaProxy.StreamAsync(
         $"{config["WebApi:BaseUrl"]}/api/field-sessions/{sessionId}/files/{fileId}",
         accessToken, httpFactory, ctx, ct);
@@ -787,7 +787,7 @@ app.MapGet("/media/place-file-review/{evidenceId:guid}", async (
     IHttpClientFactory httpFactory, IConfiguration config,
     HttpContext ctx, CancellationToken ct) =>
 {
-    var accessToken = string.IsNullOrWhiteSpace(t) ? null : tickets.Unprotect(evidenceId, t);
+    var accessToken = await tickets.CallerAsync(evidenceId, t, ct);
     if (accessToken is null) return Results.NotFound();
     return await Ben.Web.Website.Services.MediaProxy.StreamAsync(
         $"{config["WebApi:BaseUrl"]}/api/place-files/review/{evidenceId}/file",
@@ -802,7 +802,7 @@ app.MapGet("/media/event-files/{eventId:guid}/{fileId:guid}", async (
     IHttpClientFactory httpFactory, IConfiguration config,
     HttpContext ctx, CancellationToken ct) =>
 {
-    var accessToken = string.IsNullOrWhiteSpace(t) ? null : tickets.Unprotect(fileId, t);
+    var accessToken = await tickets.CallerAsync(fileId, t, ct);
     return await Ben.Web.Website.Services.MediaProxy.StreamAsync(
         $"{config["WebApi:BaseUrl"]}/api/public/hosted-events/{eventId}/files/{fileId}/download",
         accessToken, httpFactory, ctx, ct);
@@ -816,7 +816,7 @@ app.MapGet("/media/event-evidence/{eventId:guid}/{submissionId:guid}", async (
     IHttpClientFactory httpFactory, IConfiguration config,
     HttpContext ctx, CancellationToken ct) =>
 {
-    var accessToken = string.IsNullOrWhiteSpace(t) ? null : tickets.Unprotect(submissionId, t);
+    var accessToken = await tickets.CallerAsync(submissionId, t, ct);
     return await Ben.Web.Website.Services.MediaProxy.StreamAsync(
         $"{config["WebApi:BaseUrl"]}/api/events/{eventId}/evidence/{submissionId}/file",
         accessToken, httpFactory, ctx, ct);
@@ -830,7 +830,7 @@ app.MapGet("/media/event-keep/{orgId:guid}/{eventId:guid}", async (
     IHttpClientFactory httpFactory, IConfiguration config,
     HttpContext ctx, CancellationToken ct) =>
 {
-    var accessToken = string.IsNullOrWhiteSpace(t) ? null : tickets.Unprotect(eventId, t);
+    var accessToken = await tickets.CallerAsync(eventId, t, ct);
     if (accessToken is null) return Results.NotFound();
     return await Ben.Web.Website.Services.MediaProxy.StreamAsync(
         $"{config["WebApi:BaseUrl"]}/api/organizations/{orgId}/events/{eventId}/keep.zip?ids={Uri.EscapeDataString(ids ?? "")}",
@@ -844,7 +844,7 @@ app.MapGet("/media/event-room/{eventId:guid}/{messageId:guid}", async (
     IHttpClientFactory httpFactory, IConfiguration config,
     HttpContext ctx, CancellationToken ct) =>
 {
-    var accessToken = string.IsNullOrWhiteSpace(t) ? null : tickets.Unprotect(messageId, t);
+    var accessToken = await tickets.CallerAsync(messageId, t, ct);
     if (accessToken is null) return Results.NotFound();
     return await Ben.Web.Website.Services.MediaProxy.StreamAsync(
         $"{config["WebApi:BaseUrl"]}/api/public/hosted-events/{eventId}/room/messages/{messageId}/media",
@@ -915,7 +915,7 @@ app.MapGet("/media/menu-image/{fileId:guid}", async (
     IHttpClientFactory httpFactory, IConfiguration config,
     HttpContext ctx, CancellationToken ct) =>
 {
-    var accessToken = string.IsNullOrWhiteSpace(t) ? null : tickets.Unprotect(fileId, t);
+    var accessToken = await tickets.CallerAsync(fileId, t, ct);
     return await Ben.Web.Website.Services.MediaProxy.StreamAsync(
         $"{config["WebApi:BaseUrl"]}/api/public/menu-image/{fileId}",
         accessToken, httpFactory, ctx, ct);
@@ -997,7 +997,7 @@ app.MapGet("/media/store-files/{fileId:guid}", async (
     IHttpClientFactory httpFactory, IConfiguration config,
     HttpContext ctx, CancellationToken ct) =>
 {
-    var accessToken = string.IsNullOrWhiteSpace(t) ? null : tickets.Unprotect(fileId, t);
+    var accessToken = await tickets.CallerAsync(fileId, t, ct);
     if (accessToken is null) return Results.NotFound();
     return await Ben.Web.Website.Services.MediaProxy.StreamAsync(
         $"{config["WebApi:BaseUrl"]}/api/store/product-files/{fileId}/download",
@@ -1012,7 +1012,7 @@ app.MapGet("/media/store-downloads/{orderId:guid}/{fileId:guid}", async (
     IHttpClientFactory httpFactory, IConfiguration config,
     HttpContext ctx, CancellationToken ct) =>
 {
-    var accessToken = string.IsNullOrWhiteSpace(t) ? null : tickets.Unprotect(fileId, t);
+    var accessToken = await tickets.CallerAsync(fileId, t, ct);
     if (accessToken is null && string.IsNullOrWhiteSpace(o)) return Results.NotFound();
     var query = string.IsNullOrWhiteSpace(o) ? "" : $"?t={Uri.EscapeDataString(o)}";
     return await Ben.Web.Website.Services.MediaProxy.StreamAsync(
@@ -1051,7 +1051,7 @@ app.MapGet("/media/{fileId:guid}/{kind}", async (
 {
     if (kind is not ("thumbnail" or "download")) return Results.NotFound();
 
-    var accessToken = string.IsNullOrWhiteSpace(t) ? null : tickets.Unprotect(fileId, t);
+    var accessToken = await tickets.CallerAsync(fileId, t, ct);
     return await Ben.Web.Website.Services.MediaProxy.StreamAsync(
         $"{config["WebApi:BaseUrl"]}/api/upload-files/{fileId}/{kind}",
         accessToken, httpFactory, ctx, ct);

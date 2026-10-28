@@ -45,6 +45,9 @@ day-by-day account of building it would say nothing to anyone using it now.
 - Next and Previous mark, pressed while a session plays, go to the mark just ahead and the one just
   passed. Before, Next skipped a mark less than three seconds away.
 - After clicking anywhere on the session player, Space plays and pauses and the arrow keys move.
+- A recording in the session player keeps playing past the hour, and one whose connection drops is
+  tried again and carries on by itself. Before, it could stop partway through a long night and say it
+  "won't play in this browser" until the page was reloaded.
 
 ### Administration
 

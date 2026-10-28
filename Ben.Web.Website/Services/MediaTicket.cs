@@ -49,8 +49,8 @@ public sealed class MediaTicketService
     /// change between renders and the browser can cache the image — the same property the
     /// rounded-down expiry gave the encrypted version, for the same reason.
     /// </remarks>
-    public string Protect(Guid fileId, string accessToken)
-        => _store.Issue(Scope, fileId, accessToken, Lifetime);
+    public string Protect(Guid fileId, string accessToken, IMediaTokenSource? source = null)
+        => _store.Issue(Scope, fileId, accessToken, Lifetime, source);
 
     /// <summary>
     /// Reads a ticket back, returning the access token when it is valid for this file.
@@ -58,4 +58,26 @@ public sealed class MediaTicketService
     /// <returns>Null when the ticket is unknown, expired, or was minted for another file.</returns>
     public string? Unprotect(Guid fileId, string ticket)
         => _store.Redeem(Scope, fileId, ticket);
+
+    /// <summary>
+    /// Who a ticket's request is for, with the freshest token the page that drew it can give
+    /// (see <see cref="MediaCaller"/>). Null when there is no ticket or it is not valid for this file.
+    /// </summary>
+    public async Task<MediaCaller?> CallerAsync(Guid fileId, string? ticket, CancellationToken ct)
+    {
+        if (string.IsNullOrWhiteSpace(ticket) || _store.RedeemCaller(Scope, fileId, ticket) is not { } caller)
+            return null;
+        if (caller.Source is null) return caller;
+        try
+        {
+            return await caller.Source.CurrentAsync(ct) is { Length: > 0 } current
+                ? new MediaCaller(current, caller.Source)
+                : caller;
+        }
+        catch (Exception ex) when (ex is not OperationCanceledException)
+        {
+            // The page's renewal could not be reached: the ticket's own token is the honest fallback.
+            return caller;
+        }
+    }
 }
