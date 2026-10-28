@@ -13,17 +13,8 @@
     not a doorway they have been let through.
 *@
 
-@if (FieldKitPlayerChoice.UseLegacy(Configuration))
-{
-    <FieldKitPlayer SessionId="Guid.Empty" ShareToken="@Token" Standalone="true" />
-}
-else
-{
-    <FieldKitEnginePlayer SessionId="Guid.Empty" ShareToken="@Token" Standalone="true" />
-}
+<FieldKitEnginePlayer SessionId="Guid.Empty" ShareToken="@Token" Standalone="true" />
 
 @code {
-    [Inject] private Microsoft.Extensions.Configuration.IConfiguration Configuration { get; set; } = default!;
-
     [Parameter] public string Token { get; set; } = string.Empty;
 }

@@ -234,7 +234,10 @@ public sealed class ReachableComponentTests
     [Theory]
     [InlineData("CreateFieldSessionShareAsync", "nothing on any screen can make a share link")]
     [InlineData("RevokeFieldSessionShareAsync", "a link can be made and never withdrawn")]
-    [InlineData("GetSharedFieldSessionAsync", "no page opens a share link, so every link 404s for its recipient")]
+    // What the share page reads: the session's summary and its timeline. The first player read
+    // GetSharedFieldSessionAsync instead; it was retired on 10/28/2026.
+    [InlineData("GetSharedFieldSessionSummaryAsync", "no page opens a share link, so every link 404s for its recipient")]
+    [InlineData("GetSharedFieldSessionTimelineAsync", "a share link opens with nothing to play")]
     public void Both_halves_of_sharing_a_session_reach_a_screen(string method, string consequence)
     {
         var callers = RazorSources()
