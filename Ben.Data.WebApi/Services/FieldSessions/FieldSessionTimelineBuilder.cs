@@ -44,17 +44,24 @@ public static class FieldSessionTimelineBuilder
 
     private static readonly HashSet<string> CaptureKinds = new(StringComparer.Ordinal) { "photo", "video", "audio" };
 
-    public static SessionTimeline Build(string document, IReadOnlyList<TimelineFile> files, TimelinePositionPolicy policy)
+    /// <param name="arrived">Every file the session brought, when <paramref name="files"/> is only what this
+    /// audience may play (a share link of one file, the public archive's approved ones).</param>
+    public static SessionTimeline Build(string document, IReadOnlyList<TimelineFile> files, TimelinePositionPolicy policy,
+                                        IReadOnlyList<string>? arrived = null)
     {
         using var parsed = JsonDocument.Parse(document);
         var root = parsed.RootElement;
 
         DateTime? startedAt = null, endedAt = null;
+        string? timeZoneId = null;
+        double? batteryAtStart = null;
         if (root.ValueKind == JsonValueKind.Object
             && root.TryGetProperty("session", out var session) && session.ValueKind == JsonValueKind.Object)
         {
             startedAt = Moment(session, "started_at");
             endedAt = Moment(session, "ended_at");
+            timeZoneId = KnownZone(Text(session, "timezone"));
+            batteryAtStart = Number(session, "battery_percent_at_start");
         }
 
         // ── The readings, in time order (S3) ──────────────────────────────────
@@ -159,6 +166,9 @@ public static class FieldSessionTimelineBuilder
         var lengthFromReference = new Dictionary<string, double>(StringComparer.OrdinalIgnoreCase);
         var notedEnds = new Dictionary<string, long>(StringComparer.OrdinalIgnoreCase);
         var photoTimes = new Dictionary<string, long>(StringComparer.OrdinalIgnoreCase);
+        var photoRooms = new Dictionary<string, string?>(StringComparer.OrdinalIgnoreCase);
+        // Everything the document names, with when it first names it, to say which never arrived.
+        var named = new Dictionary<string, (string Kind, long T)>(StringComparer.OrdinalIgnoreCase);
 
         for (var i = 0; i < n; i++)
         {
@@ -166,6 +176,7 @@ public static class FieldSessionTimelineBuilder
             if (row.AudioFile is { } audioFile)
             {
                 var path = Normalise(audioFile);
+                named.TryAdd(path, (IsVideo(path) ? "video" : "audio", t[i]));
                 if (row.AudioDuration is { } length && length > 0) lengthFromReference.TryAdd(path, length);
                 // M5: a reference taken while the recording ran says how far in it was. M4: the one
                 // written when a clip ended says how long it ran. The first reference fixes the start.
@@ -176,9 +187,21 @@ public static class FieldSessionTimelineBuilder
             }
             if (row.Note is { } note)
             {
-                if (StartsWith(note, "photo: ", out var photo)) photoTimes.TryAdd(Normalise(photo), t[i]);
-                if (StartsWith(note, "video: ", out var video)) notedEnds.TryAdd(Normalise(video), t[i]);
-                if (StartsWith(note, "audio: ", out var audio)) notedEnds.TryAdd(Normalise(audio), t[i]);
+                if (StartsWith(note, "photo: ", out var photo) && photoTimes.TryAdd(Normalise(photo), t[i]))
+                {
+                    photoRooms[Normalise(photo)] = room[i] is { } r ? rooms[r] : null;
+                    named.TryAdd(Normalise(photo), ("photo", t[i]));
+                }
+                if (StartsWith(note, "video: ", out var video))
+                {
+                    notedEnds.TryAdd(Normalise(video), t[i]);
+                    named.TryAdd(Normalise(video), ("video", t[i]));
+                }
+                if (StartsWith(note, "audio: ", out var audio))
+                {
+                    notedEnds.TryAdd(Normalise(audio), t[i]);
+                    named.TryAdd(Normalise(audio), ("audio", t[i]));
+                }
             }
         }
 
@@ -192,7 +215,8 @@ public static class FieldSessionTimelineBuilder
                 // A photo with no "photo:" note has no moment; it is listed with the files, not on
                 // the timeline.
                 if (photoTimes.TryGetValue(path, out var takenAt))
-                    photos.Add(new TimelinePhoto(takenAt, file.FileId, file.RelativePath));
+                    photos.Add(new TimelinePhoto(takenAt, file.FileId, file.RelativePath,
+                                                 photoRooms.GetValueOrDefault(path)));
                 continue;
             }
             var kind = IsAudio(path) ? "audio" : IsVideo(path) ? "video" : null;
@@ -243,7 +267,15 @@ public static class FieldSessionTimelineBuilder
             .ToList());
         var track = policy == TimelinePositionPolicy.Exact ? Track(lat, lon) : [];
 
-        return new SessionTimeline(
+        var brought = (arrived ?? files.Select(f => f.RelativePath).ToList())
+            .Select(Normalise).ToHashSet(StringComparer.OrdinalIgnoreCase);
+        var missing = named
+            .Where(kv => !brought.Contains(kv.Key))
+            .Select(kv => new TimelineMissing(kv.Key, kv.Value.Kind, kv.Value.T))
+            .OrderBy(m => m.T)
+            .ToList();
+
+        var timeline = new SessionTimeline(
             Version: SessionTimeline.CurrentVersion,
             StartUtc: DateTime.SpecifyKind(start, DateTimeKind.Utc),
             DurationMs: endMs,
@@ -258,8 +290,25 @@ public static class FieldSessionTimelineBuilder
             Trace: new TimelineTrace(magnetic, soundTrace, magneticFromBase),
             Track: track,
             SkippedReadings: skipped,
-            FallbackEmfBase: lastBase);
+            FallbackEmfBase: lastBase,
+            TimeZoneId: timeZoneId,
+            BatteryAtStart: batteryAtStart is >= 0 and <= 100 ? Math.Round(batteryAtStart.Value) : null,
+            Missing: missing);
+
+        // A question's listening window, by the same rule the EVP scanner notes candidates against.
+        var windows = Audio.Scanning.EvpQuestionWindows.Of(timeline);
+        if (windows.Count == 0) return timeline;
+        var until = windows.ToDictionary(w => w.FromMs, w => w.ToMs);
+        return timeline with
+        {
+            Markers = timeline.Markers
+                .Select(m => m.Kind == "evp_question" && until.TryGetValue(m.T, out var to) ? m with { ListenUntilMs = to } : m)
+                .ToList(),
+        };
     }
+
+    /// <summary>A zone the site knows, by its IANA name, or null: the page never guesses at one it can't convert to.</summary>
+    private static string? KnownZone(string? id) => Ben.Data.Common.Helpers.Zones.Normalize(id);
 
     // ── One reading ───────────────────────────────────────────────────────────
 

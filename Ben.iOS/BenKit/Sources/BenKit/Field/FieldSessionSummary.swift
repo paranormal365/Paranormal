@@ -30,6 +30,9 @@ public struct FieldSessionSummary: Sendable, Identifiable, Equatable {
     public var hostedEventId: UUID?
     public var eventTitle: String?
     public var fieldLaunchId: UUID?
+    /// The zone the phone was in when the session was recorded. Sent with it, so the website says
+    /// the time where it happened — not wherever the phone was when it was sent (10/28/2026).
+    public var timezoneIdentifier: String
 
     public init(id: UUID, startedAt: Date, endedAt: Date?, outcome: FieldSessionOutcome,
                 locationLabel: String?, investigationId: UUID?, investigationTitle: String?,
@@ -39,7 +42,8 @@ public struct FieldSessionSummary: Sendable, Identifiable, Equatable {
                 importedAt: Date? = nil, sourceDeviceId: String? = nil,
                 recordedByAccountId: UUID? = nil, isPublicArchiveCopy: Bool = false,
                 orgCalendarEventId: UUID? = nil, hostedEventId: UUID? = nil,
-                eventTitle: String? = nil, fieldLaunchId: UUID? = nil) {
+                eventTitle: String? = nil, fieldLaunchId: UUID? = nil,
+                timezoneIdentifier: String = TimeZone.current.identifier) {
         self.id = id
         self.startedAt = startedAt
         self.endedAt = endedAt
@@ -61,6 +65,7 @@ public struct FieldSessionSummary: Sendable, Identifiable, Equatable {
         self.hostedEventId = hostedEventId
         self.eventTitle = eventTitle
         self.fieldLaunchId = fieldLaunchId
+        self.timezoneIdentifier = timezoneIdentifier
     }
 
     init(_ session: FieldSession) {
@@ -84,7 +89,8 @@ public struct FieldSessionSummary: Sendable, Identifiable, Equatable {
                   orgCalendarEventId: session.orgCalendarEventId,
                   hostedEventId: session.hostedEventId,
                   eventTitle: session.eventTitle,
-                  fieldLaunchId: session.fieldLaunchId)
+                  fieldLaunchId: session.fieldLaunchId,
+                  timezoneIdentifier: session.timezoneIdentifier)
     }
 
     /// Whether this session arrived as a `.ben` rather than being recorded on this device.

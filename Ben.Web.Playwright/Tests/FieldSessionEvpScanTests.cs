@@ -128,28 +128,4 @@ public class FieldSessionEvpScanTests : Oct16TestBase
             if (booked) await guest.DeleteAsync($"/api/public/hosted-events/{SeatsEventId}/my-booking");
         }
     }
-
-    /// <returns>True when this test made the booking (and so takes it away again).</returns>
-    private async Task<bool> EnsureAConfirmedSeatAsync(IAPIRequestContext guest, IAPIRequestContext organizer)
-    {
-        var mine = await guest.GetAsync($"/api/public/hosted-events/{SeatsEventId}/my-booking");
-        if (mine.Ok && (await mine.TextAsync()).Contains("\"status\":1")) return false;
-        await guest.DeleteAsync($"/api/public/hosted-events/{SeatsEventId}/my-booking");
-
-        var orgId = await OrgIdBySlugAsync(GroupSlug);
-        var layout = await OkJsonAsync(await organizer.GetAsync($"/api/organizations/{orgId}/events/{SeatsEventId}/layout"), "reading the seats");
-        var seat = layout.GetProperty("units").EnumerateArray().Last().GetProperty("id").GetString();
-        var ev = await OkJsonAsync(await organizer.GetAsync($"/api/organizations/{orgId}/events/{SeatsEventId}"), "reading the event");
-        var night = ev.GetProperty("nights").EnumerateArray().First().GetProperty("id").GetString();
-        var nights = new[] { new { hostedEventNightId = night, hostedEventLayoutUnitId = seat } };
-
-        var held = await OkJsonAsync(await guest.PostAsync($"/api/public/hosted-events/{SeatsEventId}/holds", new()
-        {
-            DataObject = new { nights, partySize = 1, firstName = "Daniel", lastName = "Park", phone = "615-555-0142" },
-        }), "holding a seat");
-        await OkJsonAsync(await organizer.PostAsync(
-            $"/api/organizations/{orgId}/events/{SeatsEventId}/bookings/{held.GetProperty("id").GetString()}/confirm",
-            new() { DataObject = new { nights, decisionNote = "See you on the night." } }), "confirming the seat");
-        return true;
-    }
 }

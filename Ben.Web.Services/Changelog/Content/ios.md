@@ -31,6 +31,8 @@ it is hidden from everybody else, but still takes its number. No other sub-headi
 
 - In a session's review, Next and Previous mark pressed while it plays go to the mark just ahead and
   the one just passed. Before, Next skipped a mark less than three seconds away.
+- A session sent to the website carries the time zone it was recorded in, so the website shows the time
+  where it happened rather than where the phone was when it was sent.
 
 ## 1.1.7 · 2026-10-24
 

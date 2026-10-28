@@ -10,6 +10,7 @@
 @inject IMediaUrlBuilder MediaUrls
 @inject Microsoft.Extensions.Options.IOptions<Ben.Data.Common.SiteIdentity> SiteOptions
 @inject IJSRuntime JS
+@inject TimeView TimeView
 @using Microsoft.Extensions.Logging
 @inject ILogger<FieldKitEnginePlayer> Logger
 @implements IAsyncDisposable
@@ -72,11 +73,25 @@
     }
     else
     {
-        <div class="d-flex flex-wrap align-items-baseline gap-2 mb-3">
-            <h3 class="mb-0">@(_session.LocationLabel ?? "Field session")</h3>
-            <span class="text-muted small">
-                @_session.StartedAt.ToViewerLocalTime(UserState).ToDisplayDateTime()
-                · @Ben.Web.Website.Library.Kit.DeviceNames.Friendly(_session.DeviceModel)
+        <div class="mb-3" data-testid="session-heading">
+            <div class="d-flex flex-wrap align-items-center gap-2">
+                <h3 class="mb-0 me-1">@(_session.LocationLabel ?? "Field session")</h3>
+                <span class="text-muted" data-testid="session-started">@Moment(_timeline.StartUtc)</span>
+                @if (_timeline.TimeZoneId is { } recordedIn)
+                {
+                    <TimeZoneSwitch ZoneId="@recordedIn" Noun="session" At="@_timeline.StartUtc" />
+                }
+            </div>
+
+            @* Where it belongs, said and linked (10/28/2026): a session sent to an event used to read
+               the same as one kept to oneself. *@
+            @if (BelongsSentence() is { } belongs)
+            {
+                <div class="small mt-1" data-testid="session-belongs">@belongs</div>
+            }
+
+            <div class="small text-secondary mt-1" data-testid="session-facts">
+                @Facts()
                 @if (!string.IsNullOrWhiteSpace(_session.RecordedByName))
                 {
                     <text> · recorded by @_session.RecordedByName</text>
@@ -85,7 +100,13 @@
                 {
                     <text> · <span class="text-warning">nobody signed in when recorded</span></text>
                 }
-            </span>
+            </div>
+            @if (!_timeline.HasEndTime)
+            {
+                <div class="small text-secondary mt-1" data-testid="session-interrupted">
+                    <BenIcon Name="alert-circle" Class="me-1" />The phone never closed this session, so it runs to the last thing it recorded.
+                </div>
+            }
         </div>
 
         @if (Shared)
@@ -108,7 +129,24 @@
         {
             <div class="alert alert-secondary py-2 small" data-testid="archive-banner">
                 <BenIcon Name="map-pin" Class="me-1" />
-                From the field archive for <a href="@($"/places/{published.PlaceId}")">@published.PlaceName</a>.
+                @if (published.EventTitle is { } eventTitle)
+                {
+                    @* Shown with an event's results, which is where a visitor came from (10/28/2026). *@
+                    <text>Shown with the results of </text>
+                    @if (published.EventUrl is { } eventUrl)
+                    {
+                        <a href="@eventUrl" data-testid="archive-event">@eventTitle</a>
+                    }
+                    else
+                    {
+                        <span data-testid="archive-event">@eventTitle</span>
+                    }
+                    @(published.GroupName is { } group ? $", by {group}" : "")<text>, at </text><a href="@($"/places/{published.PlaceId}")">@published.PlaceName</a><text>.</text>
+                }
+                else
+                {
+                    <text>From the field archive for </text><a href="@($"/places/{published.PlaceId}")">@published.PlaceName</a><text>.</text>
+                }
                 Where somebody stood is shown at the place's public point, never where their phone was.
                 @if (published.Files.Count == 0)
                 {
@@ -162,7 +200,7 @@
                                 {
                                     <button type="button" @key="photo.FileId" class="fk-thumb"
                                             data-testid="photo-thumb" data-fk-photo="@photo.FileId" data-fk-t="@photo.T"
-                                            title="Photo at @Elapsed(photo.T) — goes to that moment and shows it full size">
+                                            title="@PhotoTitle(photo)">
                                         <img src="@FileUrl(photo.FileId)" alt="Photo at @Elapsed(photo.T)" loading="lazy" />
                                         <span class="fk-thumb-time">@Elapsed(photo.T)</span>
                                     </button>
@@ -172,7 +210,10 @@
 
                         <div class="row g-3 mt-1" data-testid="session-readout">
                             <div class="col-6 col-md-3">
-                                <div class="text-muted small">Magnetic field@(_timeline.Trace.MagneticFromBase ? " (from base)" : "")</div>
+                                <div class="text-muted small" data-testid="field-label"
+                                     title="@(NoBase ? "No base level was set during this session, so the field is shown as measured." : null)">
+                                    Magnetic field@(_timeline.Trace.MagneticFromBase ? " (from base)" : NoBase ? " (no base set)" : "")
+                                </div>
                                 <div class="fs-5 font-monospace" data-fk="field"></div>
                             </div>
                             <div class="col-6 col-md-3">
@@ -264,11 +305,21 @@
                     </div>
                 </div>
 
-                @if (_session.Files.Count > 0)
+                @if (_session.Files.Count > 0 || Missing.Count > 0)
                 {
                     <div class="card mt-3">
                         <div class="card-header py-2">Recordings</div>
                         <ul class="list-group list-group-flush">
+                            @foreach (var gone in Missing)
+                            {
+                                @* Named in the session but never sent — the phone's sound file lost in iOS 1.1.5
+                                   (10/23/2026) is the case. Said, so a night with no sound doesn't look like a broken page. *@
+                                <li class="list-group-item d-flex align-items-center gap-3 flex-wrap" data-testid="media-missing">
+                                    <span class="font-monospace small text-secondary">@gone.Path</span>
+                                    <span class="badge text-bg-secondary">not sent</span>
+                                    <span class="small text-secondary">@MissingSentence(gone)</span>
+                                </li>
+                            }
                             @foreach (var file in _session.Files)
                             {
                                 var clip = _timeline.Clips.FirstOrDefault(c => c.FileId == file.Id);
@@ -329,15 +380,28 @@
                         <ul class="list-group list-group-flush">
                             @foreach (var marker in _timeline.Markers)
                             {
+                                var asked = marker.Kind == "evp_question";
                                 <li class="list-group-item d-flex align-items-center gap-3 fk-marker" data-fk-marker="@marker.T"
-                                    data-testid="marker-row">
-                                    <BenIcon Name="@(marker.Automatic ? "zap" : "flag")"
+                                    data-testid="@(asked ? "question-row" : "marker-row")">
+                                    <BenIcon Name="@(asked ? "help-circle" : marker.Automatic ? "zap" : "flag")"
                                              Class="@(marker.Automatic ? "fk-marker-icon text-warning" : "fk-marker-icon text-info")" />
                                     <button class="btn btn-sm btn-outline-secondary text-nowrap" data-fk-jump="@marker.T"
                                             title="Go to a moment before this">
                                         @Elapsed(marker.T)
                                     </button>
-                                    <span>@marker.Title</span>
+                                    @if (asked)
+                                    {
+                                        @* A question asked in an EVP session, and how long the room was given to answer. *@
+                                        <span>@(string.IsNullOrWhiteSpace(marker.Note) ? "A question asked" : $"Asked: “{marker.Note.Trim()}”")</span>
+                                        @if (marker.ListenUntilMs is { } until)
+                                        {
+                                            <span class="text-muted small" data-testid="question-listened">listened @Listened(until - marker.T)</span>
+                                        }
+                                    }
+                                    else
+                                    {
+                                        <span>@marker.Title</span>
+                                    }
                                     @if (MarkerFieldText(marker) is { } reading)
                                     {
                                         <span class="font-monospace small" data-testid="marker-field">@reading</span>
@@ -346,7 +410,7 @@
                                     {
                                         <span class="badge text-bg-secondary" data-testid="marker-room">@marker.Room</span>
                                     }
-                                    @if (!string.IsNullOrWhiteSpace(marker.Note))
+                                    @if (!asked && !string.IsNullOrWhiteSpace(marker.Note))
                                     {
                                         <span class="text-muted small">@marker.Note</span>
                                     }
@@ -354,7 +418,7 @@
                                     {
                                         @* Written by the investigator after the session, before sending it; read-only here. *@
                                         <div class="small w-100 mt-1" data-testid="marker-details">
-                                            <span class="text-secondary">Added after the session:</span> @marker.Details
+                                            <span class="text-secondary">Added after the session@(marker.DetailsAddedAt is { } addedAt ? $" on {addedAt.ToViewerLocalTime(UserState).ToDisplayDate()}" : ""):</span> @marker.Details
                                         </div>
                                     }
                                 </li>
@@ -374,6 +438,7 @@
             @if (!Anonymous)
             {
                 <FieldSessionSharePanel SessionId="@SessionId" Files="@_session.Files" />
+                <FieldSessionActionsPanel Session="@_session" />
             }
         }
     }
@@ -447,6 +512,11 @@
     private Guid? _requestedFor;
     private string? _requestedToken;
     private bool? _requestedPublic;
+
+    // The Local time / My time switch redraws the heading and the chart's times.
+    protected override void OnInitialized() => TimeView.Changed += RedrawForClock;
+
+    private void RedrawForClock() => _ = InvokeAsync(StateHasChanged);
 
     protected override async Task OnParametersSetAsync()
     {
@@ -703,6 +773,7 @@
 
     public async ValueTask DisposeAsync()
     {
+        TimeView.Changed -= RedrawForClock;
         await StopEngineAsync();
         try { if (_engine is not null) await _engine.DisposeAsync(); }
         catch (Exception gone) when (gone is JSDisconnectedException or OperationCanceledException) { }
@@ -744,8 +815,119 @@
         _ => "Readings over the session",
     };
 
+    /// <summary>
+    /// The zone the page's clock reads on: where the session was recorded, unless the reader has
+    /// chosen their own time (the site's Local time / My time switch, 10/28/2026). A session whose
+    /// document names no zone reads on the reader's.
+    /// </summary>
+    private TimeZoneInfo Clock => _timeline?.TimeZoneId is { } recordedIn && !TimeView.InMyTime
+        ? Ben.Data.Common.Helpers.Zones.Find(recordedIn)
+        : UserState.ViewerTimeZone;
+
     private string ClockAt(long ms)
-        => _timeline!.StartUtc.AddMilliseconds(ms).ToViewerLocalTime(UserState).ToDisplayTimeWithSeconds();
+        => Ben.Data.Common.Helpers.Zones.ToZone(_timeline!.StartUtc.AddMilliseconds(ms), Clock).ToDisplayTimeWithSeconds();
+
+    /// <summary>A moment as a date and time, with the zone's letters: "10/23/2026 7:48 AM CDT".</summary>
+    private string Moment(DateTime utc)
+    {
+        utc = DateTime.SpecifyKind(utc, DateTimeKind.Utc);
+        return $"{Ben.Data.Common.Helpers.Zones.ToZone(utc, Clock).ToDisplayDateTime()} {Ben.Data.Common.Helpers.Zones.Abbreviation(Clock, utc)}";
+    }
+
+    private bool NoBase => _timeline is { FallbackEmfBase: null } t && t.Readings.Emf.Any(e => e is not null);
+
+    private IReadOnlyList<TimelineMissing> Missing => _timeline?.Missing ?? [];
+
+    private static string MissingSentence(TimelineMissing gone) => gone.Kind switch
+    {
+        "audio" => $"The phone was recording sound here from {Elapsed(gone.T)}, but the sound file wasn't in what it sent.",
+        "video" => $"A video ending at {Elapsed(gone.T)} was noted, but the file wasn't in what was sent.",
+        _ => $"A photo taken at {Elapsed(gone.T)} wasn't in what was sent.",
+    };
+
+    private static string PhotoTitle(TimelinePhoto photo)
+        => $"Photo at {Elapsed(photo.T)}{(photo.Room is { } room ? $" in the {room}" : "")} — goes to that moment and shows it full size";
+
+    private static string Listened(long ms)
+    {
+        var span = TimeSpan.FromMilliseconds(Math.Max(0, ms));
+        return span.TotalMinutes >= 1 ? $"{(int)span.TotalMinutes} min {span.Seconds} s" : $"{span.Seconds} s";
+    }
+
+    /// <summary>"Ran for 57 s · 31 readings · iPhone 15 Pro Max · battery 82% at the start".</summary>
+    private string Facts()
+    {
+        var parts = new List<string>
+        {
+            $"Ran for {Ran(_timeline!.DurationMs)}",
+            $"{_timeline.Readings.T.Length:N0} reading{(_timeline.Readings.T.Length == 1 ? "" : "s")}",
+            Ben.Web.Website.Library.Kit.DeviceNames.Friendly(_session!.DeviceModel),
+        };
+        if (_timeline.BatteryAtStart is { } battery) parts.Add($"battery {battery:0}% at the start");
+        return string.Join(" · ", parts);
+    }
+
+    /// <summary>"1 hr 5 min", "1 min", "57 s" — a zero part is left out ("1 min 0 s" read like a typo).</summary>
+    private static string Ran(long ms)
+    {
+        var span = TimeSpan.FromMilliseconds(Math.Max(0, ms));
+        if (span.TotalHours >= 1) return span.Minutes == 0 ? $"{(int)span.TotalHours} hr" : $"{(int)span.TotalHours} hr {span.Minutes} min";
+        if (span.TotalMinutes >= 1) return span.Seconds == 0 ? $"{(int)span.TotalMinutes} min" : $"{(int)span.TotalMinutes} min {span.Seconds} s";
+        return $"{span.Seconds} s";
+    }
+
+    /// <summary>Where the session belongs, as a line with links, or null when it is the person's own.</summary>
+    private RenderFragment? BelongsSentence()
+    {
+        if (Anonymous || _session?.BelongsTo is not { } b) return null;
+        return @<span>
+            @if (b.InvestigationTitle is { } investigation)
+            {
+                <text>Sent to the investigation “@investigation”</text>
+            }
+            else if (b.EventTitle is { } eventTitle)
+            {
+                <text>Sent to @(b.IsHostedEvent ? "" : "the tour date ")</text>
+                @if (b.EventUrl is { } url)
+                {
+                    <a href="@url" data-testid="session-event">@eventTitle</a>
+                }
+                else
+                {
+                    <span data-testid="session-event">@eventTitle</span>
+                }
+                @if (b.EventStartsUtc is { } starts)
+                {
+                    <text>, @starts.ToDisplayDate()</text>
+                }
+            }
+            @if (b.GroupName is { } group)
+            {
+                <text> · </text>
+                @if (b.GroupUrlName is { } groupUrl)
+                {
+                    <a href="@($"/o/{groupUrl}")" data-testid="session-group">@group</a>
+                }
+                else
+                {
+                    <span data-testid="session-group">@group</span>
+                }
+            }
+            @if (_session.ShownWithEventResultsAtUtc is not null)
+            {
+                <text> · shown with the event's results</text>
+            }
+            @if (b.PlaceName is { } place && b.PlaceId is { } placeId)
+            {
+                <text> · @(_session.PublishedAtUtc is not null ? "in the field archive for " : "at ")</text>
+                <a href="@($"/places/{placeId}")" data-testid="session-place">@place</a>
+            }
+            @if (b.StartedByLaunch)
+            {
+                <text> · started with the group's launch</text>
+            }
+        </span>;
+    }
 
     private static string Elapsed(long ms)
     {

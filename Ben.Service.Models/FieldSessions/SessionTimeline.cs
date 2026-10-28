@@ -47,7 +47,16 @@ public sealed record SessionTimeline(
     int SkippedReadings,
     /// <summary>The base that stands in before the first reading to carry one (rule I3): the
     /// session's last base, as the phone has always used for the whole night.</summary>
-    double? FallbackEmfBase)
+    double? FallbackEmfBase,
+    /// <summary>The time zone the phone was in, as it wrote it (<c>session.timezone</c>, an IANA
+    /// name), so the page can say what time it was where the session was recorded. Null when the
+    /// document does not say (10/28/2026).</summary>
+    string? TimeZoneId = null,
+    /// <summary>The phone's battery when the session started, percent.</summary>
+    double? BatteryAtStart = null,
+    /// <summary>Recordings and photos the document names that did not arrive with it — the phone's
+    /// sound file lost in iOS 1.1.5 (10/23/2026) is the case this exists for.</summary>
+    IReadOnlyList<TimelineMissing>? Missing = null)
 {
     public const int CurrentVersion = 1;
 }
@@ -99,10 +108,23 @@ public sealed record TimelineMarker(
     /// (the package's <c>mark_details</c>, 10/15/2026). Shown as written; the website never edits it.</summary>
     string? Details = null,
     /// <summary>When those details were written.</summary>
-    DateTime? DetailsAddedAt = null);
+    DateTime? DetailsAddedAt = null,
+    /// <summary>For a question asked in an EVP session (<c>evp_question</c>): when the listening
+    /// after it ended — the first end of waiting, else the next question, else a minute on. The
+    /// same window the EVP scanner notes candidates against (10/28/2026).</summary>
+    long? ListenUntilMs = null);
 
-/// <summary>A photograph and the moment it was taken.</summary>
-public sealed record TimelinePhoto(long T, Guid FileId, string Path);
+/// <summary>A photograph, the moment it was taken, and the room said then.</summary>
+public sealed record TimelinePhoto(long T, Guid FileId, string Path, string? Room = null);
+
+/// <summary>A recording or photo the document names that the session did not bring with it.</summary>
+public sealed record TimelineMissing(
+    /// <summary>As the document names it, e.g. <c>media/audio-001.m4a</c>.</summary>
+    string Path,
+    /// <summary><c>audio</c>, <c>video</c> or <c>photo</c>.</summary>
+    string Kind,
+    /// <summary>When the document first names it, ms from the session's start.</summary>
+    long T);
 
 /// <summary>A stretch of sound or video.</summary>
 public sealed record TimelineClip(

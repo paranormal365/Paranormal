@@ -484,7 +484,14 @@ public sealed partial class FieldSessionUploadController : BenControllerBase
             || !_fileStorage.Exists(documentPath))
             return NotFound("This session's readings are no longer on the server.");
 
-        if (!document) return Ok(new FieldSessionDetail(ToRecord(session), ""));
+        var record = ToRecord(session) with
+        {
+            BelongsTo = await Services.FieldSessions.FieldSessionBelongings.ForAsync(db, session, ct),
+            SentByViewer = session.SubmittedByAppUserId == userId,
+            ViewerRunsTheEvent = session.HostedEventId is { } hostedId
+                && await Services.Access.FieldSessionAccess.IsHostedTeamAsync(db, hostedId, userId, ct),
+        };
+        if (!document) return Ok(new FieldSessionDetail(record, ""));
 
         string text;
         // For a bundle the document is a member of the session's one file rather than a file of
@@ -500,7 +507,7 @@ public sealed partial class FieldSessionUploadController : BenControllerBase
             text = await reader.ReadToEndAsync(ct);
         }
 
-        return Ok(new FieldSessionDetail(ToRecord(session), text));
+        return Ok(new FieldSessionDetail(record, text));
     }
 
     /// <summary>
@@ -1170,7 +1177,13 @@ public sealed record FieldSessionRecord(
     DateTime? ShownWithEventResultsAtUtc = null,
     // When the organizers chose it for the place's page, and when the sender said keep it off (10/25/2026).
     DateTime? OnPlaceChosenUtc = null,
-    DateTime? PlaceOptOutUtc = null);
+    DateTime? PlaceOptOutUtc = null,
+    // Where it belongs, by name, for its own page (10/28/2026). Only the single-session read fills it.
+    Ben.Service.Models.FieldSessions.FieldSessionBelonging? BelongsTo = null,
+    // What the person reading it may do with it on that page: their own session's delete and
+    // switches, or the hosted event's "show with the results". Only the single-session read fills them.
+    bool SentByViewer = false,
+    bool ViewerRunsTheEvent = false);
 
 /// <summary>A session and its document, for playing back.</summary>
 public sealed record FieldSessionDetail(FieldSessionRecord Session, string Document);
