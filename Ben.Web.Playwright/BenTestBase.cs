@@ -1708,6 +1708,29 @@ public abstract class BenTestBase : PageTest
         }
     }
 
+    // ── The session player's engine, for the player's tests (10/28/2026) ──────────────
+
+    /// <summary>
+    /// Imports the session player's engine into the page once and leaves a SYNCHRONOUS reader of its
+    /// state at <c>window.__fkState()</c>, so a wait can poll it.
+    /// </summary>
+    /// <remarks>
+    /// A wait whose check is async returns at once: a promise is truthy. The player's tests used fixed
+    /// sleeps around that, and the sleeps were what made them flaky on a busy machine.
+    /// </remarks>
+    protected Task ExposePlayerAsync(IPage? on = null) => (on ?? Page).EvaluateAsync(@"async () => {
+        const m = await import('/_content/Ben.Web.Website.Library/js/fieldKitPlayer.js');
+        window.__fkState = () => m.state(document.querySelector('[data-testid=field-player]'));
+    }");
+
+    /// <summary>Waits until the engine says <paramref name="condition"/> (JS over <c>s</c>, its state).</summary>
+    protected async Task WaitForPlayerAsync(string condition, int timeoutMs = 15_000, IPage? on = null)
+    {
+        await ExposePlayerAsync(on);
+        await (on ?? Page).WaitForFunctionAsync($"() => {{ const s = window.__fkState(); return !!s && ({condition}); }}",
+            null, new() { Timeout = timeoutMs, PollingInterval = 100 });
+    }
+
     protected Task WaitForTheCircuitAsync(IPage? on = null) => (on ?? Page).WaitForFunctionAsync(@"() => {
         const comments = document.createTreeWalker(document, NodeFilter.SHOW_COMMENT);
         while (comments.nextNode()) if (comments.currentNode.data.startsWith('Blazor:')) return false;

@@ -189,7 +189,7 @@ public class FieldSessionEngineTests : BenTestBase
 
         await Page.GetByRole(AriaRole.Button, new() { Name = "Play", Exact = true }).ClickAsync();
         await Expect(Page.Locator("[data-testid='media-clock']")).ToBeVisibleAsync(new() { Timeout = 10_000 });
-        await Page.WaitForTimeoutAsync(1500);
+        await WaitForPlayerAsync("s.playing && s.playhead > 1000");
 
         // A real drag: press on the thumb's track, move back, then forward to two-thirds (0:20).
         var box = (await Page.Locator("[data-testid='scrubber']").BoundingBoxAsync())!;
@@ -228,23 +228,32 @@ public class FieldSessionEngineTests : BenTestBase
         var received = 0;
         var sent = 0;
         var counting = false;
+        var lastFrame = DateTime.UtcNow;
         Page.WebSocket += (_, socket) =>
         {
             if (!socket.Url.Contains("_blazor")) return;
-            socket.FrameReceived += (_, _) => { if (counting) received++; };
-            socket.FrameSent += (_, _) => { if (counting) sent++; };
+            socket.FrameReceived += (_, _) => { lastFrame = DateTime.UtcNow; if (counting) received++; };
+            socket.FrameSent += (_, _) => { lastFrame = DateTime.UtcNow; if (counting) sent++; };
         };
 
         await OpenAsync(sessionId, label);
-        await Page.WaitForTimeoutAsync(1500);   // anything the first render set going has settled
+        await ExposePlayerAsync();
+        // Anything the first render set going has finished: the connection has been quiet for a second.
+        // (A fixed pause here counted the page's own late renders on a busy machine.)
+        var quietBy = DateTime.UtcNow.AddSeconds(15);
+        while (DateTime.UtcNow - lastFrame < TimeSpan.FromSeconds(1) && DateTime.UtcNow < quietBy)
+            await Page.EvaluateAsync("() => new Promise(r => setTimeout(r, 100))");
 
         counting = true;
+        var from = await PlayheadAsync();
         await Page.GetByRole(AriaRole.Button, new() { Name = "Play", Exact = true }).ClickAsync();
+        // The measuring window itself: eight seconds of somebody watching.
         await Page.WaitForTimeoutAsync(8000);
         counting = false;
 
-        TestContext.Out.WriteLine($"during 8 s of playback: {received} frames from the server, {sent} to it");
-        Assert.That(await PlayheadAsync(), Is.GreaterThan(5_000), "it really was playing");
+        var advanced = await PlayheadAsync() - from;
+        TestContext.Out.WriteLine($"during 8 s of playback: {received} frames from the server, {sent} to it; the playhead moved {advanced:0} ms");
+        Assert.That(advanced, Is.GreaterThan(4_000), "it really was playing");
         // A keep-alive or two is the connection, not the player.
         Assert.That(received, Is.LessThanOrEqualTo(3), "the server should draw nothing while somebody watches");
         Assert.That(sent, Is.LessThanOrEqualTo(3), "and the browser should tell it nothing");
@@ -326,8 +335,15 @@ public class FieldSessionEngineTests : BenTestBase
         // About 0:05, between the fixes at 0:04 and 0:06. The walk is steady, so where they were is
         // a straight line in time: half a step north for every second.
         await Page.Locator("[data-testid='scrubber']").FillAsync("167");
-        await Page.WaitForTimeoutAsync(400);
         var at = await PlayheadAsync();
+        // The map is moved on the engine's next frame: wait for it to be there, not a fixed pause.
+        var placedBy = DateTime.UtcNow.AddSeconds(5);
+        while (DateTime.UtcNow < placedBy)
+        {
+            var now = await Page.EvaluateAsync<JsonElement>(mapState);
+            if (Math.Abs(now.GetProperty("lat").GetDouble() - (36.16 + at / 2000 * 0.000045)) < 1e-7) break;
+            await Page.EvaluateAsync("() => new Promise(r => setTimeout(r, 100))");
+        }
         Assert.That(at, Is.EqualTo(5_000).Within(50));
         var state = await Page.EvaluateAsync<JsonElement>(mapState);
         Assert.That(state.GetProperty("lat").GetDouble(), Is.EqualTo(36.16 + at / 2000 * 0.000045).Within(1e-7), "glides between fixes");

@@ -122,10 +122,12 @@ public class MultiViewerPlaybackTests : BenTestBase
                 await v.Page.GetByRole(AriaRole.Button, new() { Name = "Play", Exact = true }).ClickAsync();
                 if (i % 2 == 1)
                 {
-                    await v.Page.WaitForTimeoutAsync(1500);
+                    // Once it has really been playing for a second, not after a fixed pause.
+                    await WaitForPlayerAsync("s.playing && s.playhead > 1000", 30_000, v.Page);
                     await v.Page.Locator("[data-testid='scrubber']").FillAsync("500");
                 }
             }));
+            // The measuring window itself: eight seconds of a room watching.
             await viewers[0].Page.WaitForTimeoutAsync(8000);
             counting = false;
 

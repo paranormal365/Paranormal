@@ -96,6 +96,17 @@ public class FieldSessionPlayerFixesTests : BenTestBase
             null, new() { Timeout = 10_000 });
     }
 
+    /// <summary>
+    /// The recording has finished its own seek and the page has drawn a few frames since: the moment
+    /// the old clock pulled the playhead back to where the recording said it was.
+    /// </summary>
+    private async Task SeekSettledAsync()
+    {
+        await Page.WaitForFunctionAsync("() => { const a = document.querySelector('audio'); return !!a && !a.seeking; }",
+            null, new() { Timeout = 10_000, PollingInterval = 50 });
+        await Page.EvaluateAsync("() => new Promise(r => { let n = 0; const f = () => ++n >= 5 ? r() : requestAnimationFrame(f); requestAnimationFrame(f); })");
+    }
+
     private async Task<double> ElapsedSecondsAsync()
     {
         var text = (await Page.Locator("[data-testid='elapsed']").InnerTextAsync()).Trim();
@@ -112,7 +123,7 @@ public class FieldSessionPlayerFixesTests : BenTestBase
 
         await Page.GetByRole(AriaRole.Button, new() { Name = "Play" }).ClickAsync();
         await Expect(Page.Locator("[data-testid='media-clock']")).ToBeVisibleAsync(new() { Timeout = 10_000 });
-        await Page.WaitForTimeoutAsync(2000);
+        await WaitForPlayerAsync("s.playing && s.playhead > 6000");
         await Page.GetByRole(AriaRole.Button, new() { Name = "Pause" }).ClickAsync();
         await Expect(Page.GetByRole(AriaRole.Button, new() { Name = "Play" })).ToBeVisibleAsync(new() { Timeout = 5_000 });
 
@@ -120,14 +131,14 @@ public class FieldSessionPlayerFixesTests : BenTestBase
 
         // Inside the recording: 900/1000 of twenty seconds is 0:18.
         await scrubber.FillAsync("900");
-        await Page.WaitForTimeoutAsync(1500);
+        await SeekSettledAsync();
         Assert.That(await ElapsedSecondsAsync(), Is.EqualTo(18).Within(1),
             "a paused recording's own seek must not move the playhead it was seeked to");
 
         // Before the recording begins: 0:02. The old clock clamped its seek to the recording's
         // first second and reported 0:04 back.
         await scrubber.FillAsync("100");
-        await Page.WaitForTimeoutAsync(1500);
+        await SeekSettledAsync();
         Assert.That(await ElapsedSecondsAsync(), Is.EqualTo(2).Within(1),
             "scrubbing outside the recording must not land on the recording's first second");
     }

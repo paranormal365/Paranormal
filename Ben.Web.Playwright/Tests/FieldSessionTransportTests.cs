@@ -126,12 +126,9 @@ public class FieldSessionTransportTests : BenTestBase
     private async Task<double> PlayheadAsync() => (await EngineAsync()).GetProperty("playhead").GetDouble();
 
     /// <summary>Waits until the playhead has passed <paramref name="ms"/>: a condition, not a sleep.</summary>
-    private Task PlayheadPastAsync(double ms)
-        => Page.WaitForFunctionAsync($@"async () => {{
-            const m = await import('{Module}');
-            const s = m.state(document.querySelector('[data-testid=field-player]'));
-            return !!s && s.playhead > {ms};
-        }}", null, new() { Timeout = 15_000, PollingInterval = 100 });
+    /// <remarks>This check imported the module inside the wait, which made it async; a promise is truthy,
+    /// so it returned at once and waited for nothing (fixed 10/28/2026).</remarks>
+    private Task PlayheadPastAsync(double ms) => WaitForPlayerAsync($"s.playhead > {ms}");
 
     private Task<bool> EveryRecordingPausedAsync()
         => Page.EvaluateAsync<bool>("() => [...document.querySelectorAll('[data-fk-media]')].every(m => m.paused)");
@@ -139,10 +136,7 @@ public class FieldSessionTransportTests : BenTestBase
     /// <summary>After a pause: stopped now, and still stopped a moment later, recordings and all.</summary>
     private async Task AssertHeldAsync(string how)
     {
-        await Page.WaitForFunctionAsync($@"async () => {{
-            const m = await import('{Module}');
-            return m.state(document.querySelector('[data-testid=field-player]')).playing === false;
-        }}", null, new() { Timeout = 3_000 });
+        await WaitForPlayerAsync("s.playing === false", 3_000);
         var at = await PlayheadAsync();
         // The thing being proved is that nothing starts it again: give the engine time to try.
         await Page.WaitForTimeoutAsync(1_500);
@@ -328,5 +322,110 @@ public class FieldSessionTransportTests : BenTestBase
         // Parked before 0:12 now: Next goes on to 0:20.
         await Page.GetByRole(AriaRole.Button, new() { Name = "Next mark" }).ClickAsync();
         Assert.That(await PlayheadAsync(), Is.EqualTo(17_000).Within(5));
+    }
+
+    /// <summary>
+    /// Two recordings back to back — <c>audio-001.wav</c> 0:04–0:14, <c>audio-002.wav</c> from 0:14, the
+    /// way the phone splits a long night — play across the join: the clock never steps back, and
+    /// the second recording is sounding within half a second of the playhead reaching it.
+    /// </summary>
+    [Test]
+    public async Task Two_recordings_hand_over_without_a_gap()
+    {
+        var label = $"Transport hand-over {Guid.NewGuid():N}"[..28];
+        var readings = new StringBuilder();
+        for (var t = 0; t <= 30; t += 2)
+        {
+            if (readings.Length > 0) readings.Append(',');
+            var reference = t switch
+            {
+                4 => ",\"audio_ref\":{\"filename\":\"media/audio-001.wav\",\"start_offset_seconds\":0}",
+                14 => ",\"audio_ref\":{\"filename\":\"media/audio-002.wav\",\"start_offset_seconds\":0}",
+                _ => "",
+            };
+            readings.Append("{\"at\":\"" + Stamp(Start.AddSeconds(t)) + "\",\"triggered_by\":\"interval\","
+                + "\"measurements\":{\"emf\":{\"value\":48,\"unit\":\"uT\",\"baseline\":48}}" + reference + "}");
+        }
+        var document = "{\"format_version\":\"1.0.0\",\"device\":{\"manufacturer\":\"Apple\",\"model\":\"iPhone16,2\"},"
+            + "\"session\":{\"started_at\":\"" + Stamp(Start) + "\",\"ended_at\":\"" + Stamp(Start.AddSeconds(30))
+            + "\",\"location_label\":\"" + label + "\"},\"readings\":[" + readings + "]}";
+
+        var api = await Playwright.APIRequest.NewContextAsync(new() { BaseURL = ApiUrl });
+        var login = await api.PostAsync("/login", new() { DataObject = new { email = MemberEmail, password = MemberPassword } });
+        Assert.That(login.Ok, Is.True);
+        var token = (await login.JsonAsync())!.Value.GetProperty("accessToken").GetString();
+        var auth = new Dictionary<string, string> { ["Authorization"] = $"Bearer {token}" };
+        var form = Context.APIRequest.CreateFormData();
+        form.Append("file", new FilePayload { Name = "data.json", MimeType = "application/json", Buffer = Encoding.UTF8.GetBytes(document) });
+        form.Append("deviceSessionId", Guid.NewGuid().ToString());
+        var upload = await api.PostAsync("/api/field-sessions/document", new() { Headers = auth, Multipart = form });
+        Assert.That(upload.Ok, Is.True, await upload.TextAsync());
+        var sessionId = (await upload.JsonAsync())!.Value.GetProperty("id").GetString()!;
+        foreach (var (path, seconds) in new[] { ("media/audio-001.wav", 10), ("media/audio-002.wav", 16) })
+        {
+            var bytes = Wav(seconds);
+            var files = Context.APIRequest.CreateFormData();
+            files.Append("file", new FilePayload { Name = Path.GetFileName(path), MimeType = "audio/wav", Buffer = bytes });
+            files.Append("relativePath", path);
+            files.Append("sha256", Convert.ToHexString(SHA256.HashData(bytes)).ToLowerInvariant());
+            var attach = await api.PostAsync($"/api/field-sessions/{sessionId}/files", new() { Headers = auth, Multipart = files });
+            Assert.That(attach.Ok, Is.True, await attach.TextAsync());
+        }
+
+        await LoginAsync(MemberEmail, MemberPassword);
+        await Page.GotoAsync($"{BaseUrl}/field-sessions/{sessionId}");
+        await Expect(Page.GetByText(label).First).ToBeVisibleAsync(new() { Timeout = 20_000 });
+        // The engine builds the transport after the page draws; the recordings can know their lengths first.
+        await Expect(Page.Locator("[data-testid=scrubber]")).ToBeVisibleAsync(new() { Timeout = 20_000 });
+        await Page.WaitForFunctionAsync("() => { const a = [...document.querySelectorAll('audio[data-fk-media]')]; return a.length === 2 && a.every(m => m.duration > 0); }",
+                                        null, new() { Timeout = 20_000 });
+
+        // From 0:12, two seconds before the join.
+        await Page.EvaluateAsync(@"() => {
+            const s = document.querySelector('[data-testid=scrubber]');
+            s.value = String(12000 / 30000 * 1000);
+            s.dispatchEvent(new Event('input', { bubbles: true }));
+            s.dispatchEvent(new Event('change', { bubbles: true }));
+        }");
+        await ExposePlayerAsync();
+        await Page.Locator("[data-testid=play-pause]").ClickAsync();
+
+        // Every frame for five seconds: the playhead, and whether the second recording is sounding.
+        var rows = await Page.EvaluateAsync<JsonElement>($@"async () => {{
+            const m = await import('{Module}');
+            const root = document.querySelector('[data-testid=field-player]');
+            const clips = JSON.parse(m.timelineJson(root)).clips ?? [];
+            const second = clips.find(c => (c.path ?? c.Path) === 'media/audio-002.wav');
+            const id = second.fileId ?? second.FileId;
+            const el = document.querySelector(`audio[data-fk-media='${{id}}']`);
+            const rows = [], t0 = performance.now();
+            await new Promise(done => {{
+                const f = () => {{
+                    const s = window.__fkState();
+                    rows.push({{ wall: performance.now() - t0, playhead: s.playhead,
+                                 sounding: !el.paused && !el.muted && el.currentTime > 0.05 }});
+                    performance.now() - t0 < 5000 ? requestAnimationFrame(f) : done();
+                }};
+                requestAnimationFrame(f);
+            }});
+            return rows;
+        }}");
+        await Page.Locator("[data-testid=play-pause]").ClickAsync();
+
+        var samples = rows.EnumerateArray()
+            .Select(r => (Wall: r.GetProperty("wall").GetDouble(), Playhead: r.GetProperty("playhead").GetDouble(),
+                          Sounding: r.GetProperty("sounding").GetBoolean()))
+            .ToList();
+        for (var i = 1; i < samples.Count; i++)
+            Assert.That(samples[i].Playhead, Is.GreaterThanOrEqualTo(samples[i - 1].Playhead - 1),
+                $"the clock stepped back at {samples[i].Wall:0} ms: {samples[i - 1].Playhead:0} → {samples[i].Playhead:0}");
+
+        var reached = samples.FirstOrDefault(r => r.Playhead >= 14_000);
+        Assert.That(reached.Wall, Is.GreaterThan(0), $"the playhead never reached the join (ended at {samples[^1].Playhead:0} ms)");
+        var sounding = samples.FirstOrDefault(r => r.Sounding && r.Wall >= reached.Wall);
+        TestContext.Out.WriteLine($"join reached at {reached.Wall:0} ms; second recording sounding at {sounding.Wall:0} ms; ended at {samples[^1].Playhead:0}");
+        Assert.That(sounding.Wall, Is.GreaterThan(0), "the second recording never sounded");
+        Assert.That(sounding.Wall - reached.Wall, Is.LessThan(500), "a gap in the sound at the hand-over");
+        Assert.That(samples[^1].Playhead, Is.GreaterThan(15_500), "it played on past the join");
     }
 }
