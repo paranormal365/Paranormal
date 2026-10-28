@@ -56,7 +56,16 @@ public sealed record SessionTimeline(
     double? BatteryAtStart = null,
     /// <summary>Recordings and photos the document names that did not arrive with it — the phone's
     /// sound file lost in iOS 1.1.5 (10/23/2026) is the case this exists for.</summary>
-    IReadOnlyList<TimelineMissing>? Missing = null)
+    IReadOnlyList<TimelineMissing>? Missing = null,
+    /// <summary>Rooms scanned for the place, and rooms compared with its scans (LiDAR plan, spec
+    /// 1.2). Empty for a session with none.</summary>
+    IReadOnlyList<TimelineRoomScan>? RoomScans = null,
+    /// <summary>What those comparisons found, one per thing (LiDAR plan, spec 1.2).</summary>
+    IReadOnlyList<TimelineScanChange>? ScanChanges = null,
+    /// <summary>Figures the person map saw, one per sighting (LiDAR plan, phase 4).</summary>
+    IReadOnlyList<TimelineFigure>? Figures = null,
+    /// <summary>Person-sized shapes the room's scan does not have (LiDAR plan, phase 4).</summary>
+    IReadOnlyList<TimelineShape>? Shapes = null)
 {
     public const int CurrentVersion = 1;
 }
@@ -113,6 +122,42 @@ public sealed record TimelineMarker(
     /// after it ended — the first end of waiting, else the next question, else a minute on. The
     /// same window the EVP scanner notes candidates against (10/28/2026).</summary>
     long? ListenUntilMs = null);
+
+/// <summary>A room scanned for its place, or compared with the place's scan of it (LiDAR plan).</summary>
+/// <param name="Kind"><c>scanned</c> or <c>compared</c>.</param>
+/// <param name="Path">For a comparison, the comparison scan inside the session's bundle.</param>
+/// <param name="Outcome">For a scan: <c>current</c>, <c>replaced</c> or <c>offered</c>.</param>
+public sealed record TimelineRoomScan(
+    long T, string Kind, string Room, Guid? PlaceScanId, int? Version,
+    string? Path, int? Changes, string? Outcome, double? DurationSeconds);
+
+/// <summary>One thing a comparison found: moved, missing or new (LiDAR plan).</summary>
+/// <param name="Picture">Inside the session's bundle: <c>scans/compare-001.scan#changes/01.jpg</c>.</param>
+public sealed record TimelineScanChange(
+    long T, string What, string Object, string? Note,
+    double? DistanceCm, double? RotationDeg, double[]? SizeCm, double[]? Where,
+    string? Picture, Guid? PlaceScanId);
+
+/// <summary>
+/// A figure the person map saw (LiDAR plan, phase 4): one continuous sighting, with the joints file
+/// a player draws it from and the picture of the moment it was clearest. Each file is a member of
+/// the session's bundle, served by its id.
+/// </summary>
+/// <param name="T">When it was first in view, ms from the session's start.</param>
+/// <param name="Joints">The joints file: <c>figures/figure-001.json</c>.</param>
+/// <param name="From">Seconds into <paramref name="Video"/>.</param>
+public sealed record TimelineFigure(
+    long T, string Joints, Guid? JointsFileId, string? Video, Guid? VideoFileId,
+    double? From, double? To, double? PeakConfidence, string? Picture, Guid? PictureFileId, string? Note);
+
+/// <summary>
+/// Something person-sized that is not in the room's scan (LiDAR plan, phase 4). Never jointed: its
+/// size, how far away, where in the scan's frame, and when in which video.
+/// </summary>
+/// <param name="Words">Its size in words: <c>45 × 160 × 30 cm</c>.</param>
+public sealed record TimelineShape(
+    long T, string Words, double[]? SizeCm, double? DistanceM, double[]? Where,
+    string? Video, Guid? VideoFileId, double? From, double? To, string? Picture, Guid? PictureFileId, string? Note);
 
 /// <summary>A photograph, the moment it was taken, and the room said then.</summary>
 public sealed record TimelinePhoto(long T, Guid FileId, string Path, string? Room = null);

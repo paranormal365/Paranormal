@@ -33,6 +33,11 @@ public final class ActiveFieldSession {
     /// single tap in the dark instead of typing a name again with cold hands.
     public private(set) var roomsVisited: [String] = []
 
+    /// The place this session is at, once known (LiDAR plan) — what its room scans belong to.
+    /// Set through `FieldSessionStore.setPlace`, which keeps it with the session.
+    public private(set) var placeId: UUID?
+    public private(set) var placeName: String?
+
     /// What has been captured into this session, newest first.
     public private(set) var captures: [CaptureRecord] = []
     /// The audio recording currently running, if any.
@@ -587,6 +592,52 @@ public final class ActiveFieldSession {
     ///
     /// The mark matters as much as the label: reviewing a night later, "they went into the
     /// cellar at 01:14" is exactly the sort of thing that explains a reading.
+    /// The store's word that the session's place changed. Not a way to set it: that is the
+    /// store's, which keeps it with the session.
+    public func placeChanged(placeId: UUID?, placeName: String?) {
+        self.placeId = placeId
+        self.placeName = placeName
+    }
+
+    /// Writes that a room was scanned for the place during this session, so the timeline shows
+    /// "Room scanned: Bedroom 1 (12 min)" (LiDAR plan). Nothing is written before Start, like
+    /// every other reading.
+    public func noteRoomScan(room: String, placeScanId: UUID, version: Int, outcome: String,
+                             durationSeconds: Double) async {
+        guard isRecording else { return }
+        await engine.noteRoomScan(room: room, placeId: placeId, placeScanId: placeScanId, version: version,
+                                  outcome: outcome, durationSeconds: durationSeconds)
+        readingCount = await engine.readingCount()
+    }
+
+    /// Files what the person map saw while a video ran (LiDAR plan, phase 4): each figure's joints
+    /// file and picture, and each shape's picture, moved into the session's `figures/` folder; and
+    /// a reading for each, dated to when it was first in view.
+    public func notePersonMap(_ clip: PersonMapPipeline.Clip, video: String) async {
+        let filed = PersonMapFiling.move(clip, into: files.directory(for: sessionId))
+        for figure in filed.figures {
+            await engine.noteFigure(file: figure.file, video: video, from: figure.from, to: figure.to,
+                                    peakConfidence: figure.peakConfidence, picture: figure.picture,
+                                    at: figure.startedAt)
+        }
+        for shape in filed.shapes {
+            let seen = shape.sighting
+            await engine.noteShape(words: seen.words, sizeCm: seen.sizeCm, distanceM: Double(seen.distanceM),
+                                   center: seen.center, video: video, from: seen.from, to: seen.to,
+                                   picture: shape.picture, at: seen.startedAt)
+        }
+        readingCount = await engine.readingCount()
+    }
+
+    /// Writes a comparison with the place's scan into the session (LiDAR plan, phase 2).
+    public func noteComparison(room: String, comparisonPath: String, placeScanId: UUID, version: Int,
+                               changes: [ScanChange]) async {
+        guard isRecording else { return }
+        await engine.noteComparison(room: room, comparisonPath: comparisonPath, placeScanId: placeScanId,
+                                    version: version, changes: changes)
+        readingCount = await engine.readingCount()
+    }
+
     public func setRoom(_ room: String?) async {
         let trimmed = room?.trimmingCharacters(in: .whitespacesAndNewlines)
         let value = (trimmed?.isEmpty ?? true) ? nil : trimmed

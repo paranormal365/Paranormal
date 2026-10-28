@@ -1,5 +1,6 @@
 using Ben.Data.Common.Enums;
 using Ben.Data.Source.Context;
+using Ben.Data.WebApi.Services;
 using Microsoft.EntityFrameworkCore;
 
 namespace Ben.Data.WebApi.Controllers.Public;
@@ -56,6 +57,11 @@ public static class ArchiveMediaPublication
             // the path of its member instead (since 2026-09-16 the archive serves those too, as a
             // range of the session file — the same way the share link and the phone read them).
             .Where(f => f.UploadFileId != null || f.BundleEntryPath != null)
+            // A comparison with a place's room scan is never public (LiDAR plan): its changes are
+            // readings and travel, its pictures of the inside of a building do not. Nor are the
+            // person map's joints and pictures (phase 4), which are of the people in it.
+            .Where(f => !f.RelativePath.StartsWith("scans/")
+                        && !f.RelativePath.StartsWith(FieldSessionFileGuard.FiguresFolder))
             .OrderBy(f => f.RelativePath)
             .Select(f => new
             {

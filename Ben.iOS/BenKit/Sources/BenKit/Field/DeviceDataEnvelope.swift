@@ -6,6 +6,10 @@ import Foundation
 /// session's append-only log rather than held here, so a five-hour session never has to fit in
 /// memory to be written out.
 public struct DeviceDataEnvelope: Codable, Sendable, Equatable {
+    /// The spec version this app writes. 1.2 added the room-scan and person-map channels; a reader
+    /// of any 1.x skips what it does not know, so older readers still load these documents.
+    public static let currentFormatVersion = "1.2.0"
+
     public var formatVersion: String
     public var device: Device
     public var session: Session
@@ -17,7 +21,7 @@ public struct DeviceDataEnvelope: Codable, Sendable, Equatable {
     /// of the document entirely when nothing was added.
     public var markDetails: [MarkDetails]?
 
-    public init(formatVersion: String = "1.0.0",
+    public init(formatVersion: String = DeviceDataEnvelope.currentFormatVersion,
                 device: Device, session: Session, readings: [FieldReading] = [],
                 markDetails: [MarkDetails]? = nil) {
         self.formatVersion = formatVersion

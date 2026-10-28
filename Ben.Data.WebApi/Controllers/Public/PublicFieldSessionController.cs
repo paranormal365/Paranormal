@@ -1,6 +1,7 @@
 using Ben.Data.Common.Enums;
 using Ben.Data.Common.Interfaces;
 using Ben.Data.Source.Context;
+using Ben.Data.WebApi.Services;
 using Ben.Data.WebApi.Services.FieldSessions;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
@@ -244,6 +245,8 @@ public sealed class PublicFieldSessionController : ControllerBase
         var files = approved
             ? session.Files
                 .Where(f => f.UploadFileId is not null || f.BundleEntryPath is { Length: > 0 })
+                .Where(f => !f.RelativePath.StartsWith("scans/", StringComparison.Ordinal)
+                            && !f.RelativePath.StartsWith(FieldSessionFileGuard.FiguresFolder, StringComparison.Ordinal))
                 .Select(f => new TimelineSourceFile(
                     f.UploadFileId ?? f.Id, f.RelativePath, f.UploadFile?.StoragePath, f.BundleEntryPath,
                     f.DateUpdated ?? f.DateCreated))

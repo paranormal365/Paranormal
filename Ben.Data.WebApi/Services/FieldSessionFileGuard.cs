@@ -32,7 +32,19 @@ public static class FieldSessionFileGuard
         [".jpeg"] = ["image/jpeg"],
         [".png"] = ["image/png"],
         [".heic"] = ["image/heic", "image/heif"],
+        // A comparison scan carried inside a session (LiDAR plan): a stored ZIP of its own, read
+        // in place like the session around it.
+        [".scan"] = [PlaceScanContentType, "application/zip"],
+        // The person map's joints, one file for each sighting of a figure (LiDAR plan, phase 4).
+        // Only under figures/ — see Refusal.
+        [".json"] = ["application/json"],
     };
+
+    /// <summary>Where the person map keeps a session's joints files and pictures (LiDAR plan, phase 4).</summary>
+    public const string FiguresFolder = "figures/";
+
+    /// <summary>What a room's LiDAR scan is served as.</summary>
+    public const string PlaceScanContentType = "application/vnd.ishaunted.room-scan";
 
     public static string? Refusal(string relativePath, string? contentType, long length, ReadOnlySpan<byte> header, int filesAlready)
     {
@@ -42,7 +54,10 @@ public static class FieldSessionFileGuard
             return $"that file is {length / (1024.0 * 1024 * 1024):0.#} GB; a session file can be at most {MaxFileBytes / (1024 * 1024 * 1024)} GB.";
 
         var extension = Path.GetExtension(relativePath);
-        if (string.IsNullOrEmpty(extension) || !ContentTypesByExtension.TryGetValue(extension, out var types))
+        if (string.IsNullOrEmpty(extension) || !ContentTypesByExtension.TryGetValue(extension, out var types)
+            // A joints file is the person map's and lives with it; JSON anywhere else is not a recording.
+            || (extension.Equals(".json", StringComparison.OrdinalIgnoreCase)
+                && !relativePath.Replace('\\', '/').StartsWith(FiguresFolder, StringComparison.Ordinal)))
             return $"a session cannot carry a \"{extension}\" file — only the recordings and photos the Paranormal Platform makes.";
 
         var declared = (contentType ?? "").Split(';')[0].Trim();
@@ -90,6 +105,17 @@ public static class FieldSessionFileGuard
                                       && h[8] == (byte)'W' && h[9] == (byte)'A' && h[10] == (byte)'V' && h[11] == (byte)'E';
             case ".jpg": case ".jpeg":
                 return h.Length >= 3 && h[0] == 0xFF && h[1] == 0xD8 && h[2] == 0xFF;
+            case ".scan":
+                // A ZIP's first local file header.
+                return h.Length >= 4 && h[0] == (byte)'P' && h[1] == (byte)'K' && h[2] == 0x03 && h[3] == 0x04;
+            case ".json":
+                // A joints file is a list: its first character, after any spacing, is "[".
+                foreach (var b in h)
+                {
+                    if (b is (byte)' ' or (byte)'\t' or (byte)'\r' or (byte)'\n') continue;
+                    return b == (byte)'[';
+                }
+                return false;
             case ".png":
                 return h.Length >= 8 && h[0] == 0x89 && h[1] == (byte)'P' && h[2] == (byte)'N' && h[3] == (byte)'G'
                                      && h[4] == 0x0D && h[5] == 0x0A && h[6] == 0x1A && h[7] == 0x0A;

@@ -46,13 +46,6 @@ public sealed class BenBundle
     public const string FileExtension = ".ben";
     public const string ContentType = "application/vnd.ishaunted.field-session";
 
-    /// <summary>
-    /// More than any session could honestly hold — <see cref="FieldSessionFileGuard.MaxFilesPerSession"/>
-    /// recordings, the document, and room for a manifest we have not invented yet. A bundle
-    /// claiming more is refused before a single name is read.
-    /// </summary>
-    private const int MaxEntries = 520;
-
     /// <summary>A path inside a bundle is a file name and maybe a folder, not an essay.</summary>
     private const int MaxEntryPathLength = 512;
 
@@ -92,32 +85,40 @@ public sealed class BenBundle
     /// Indexes a bundle. Throws <see cref="BenBundleFormatException"/> with a sentence a person
     /// can act on — these messages reach somebody who has just waited for an upload.
     /// </summary>
-    public static async Task<BenBundle> ReadAsync(Stream stream, CancellationToken ct = default)
+    public static Task<BenBundle> ReadAsync(Stream stream, CancellationToken ct = default)
+        => ReadAsync(stream, BenBundleRules.Session, ct);
+
+    /// <summary>
+    /// Indexes a stored ZIP of another kind — a room's <c>.scan</c> — under that kind's rules: its
+    /// own word in every refusal, and its own ceiling on how many members it may carry.
+    /// </summary>
+    public static async Task<BenBundle> ReadAsync(Stream stream, BenBundleRules rules, CancellationToken ct = default)
     {
+        var noun = rules.Noun;
         if (!stream.CanSeek)
         {
             // Every storage backend the app has can seek, and a ranged read of a member is the
             // whole point of this format. A backend that cannot must serve ranges its own way
             // rather than have this pretend to.
             throw new BenBundleFormatException(
-                "This session file can't be read where it is stored.");
+                $"This {noun} file can't be read where it is stored.");
         }
 
         var length = stream.Length;
-        if (length < 22) throw new BenBundleFormatException("That file is too small to be a session.");
+        if (length < 22) throw new BenBundleFormatException($"That file is too small to be a {noun}.");
         if (length > uint.MaxValue)
         {
             // The writer on the phone emits 32-bit sizes and offsets — no Zip64 — so a bundle
             // this large could not have been written by it and cannot be addressed by it either.
             throw new BenBundleFormatException(
-                "That session is larger than 4 GB, which this format can't carry. Send it in parts.");
+                $"That {noun} is larger than 4 GB, which this format can't carry.{rules.TooLargeAdvice}");
         }
 
-        var end = await ReadEndRecordAsync(stream, length, ct);
-        if (end.EntryCount > MaxEntries)
-            throw new BenBundleFormatException($"That session claims {end.EntryCount} files, which is more than one could hold.");
+        var end = await ReadEndRecordAsync(stream, length, noun, ct);
+        if (end.EntryCount > rules.MaxEntries)
+            throw new BenBundleFormatException($"That {noun} claims {end.EntryCount} files, which is more than one could hold.");
         if (end.DirectoryOffset + end.DirectorySize > length)
-            throw new BenBundleFormatException("That session file is incomplete — it may not have finished sending.");
+            throw new BenBundleFormatException($"That {noun} file is incomplete — it may not have finished sending.");
 
         var directory = new byte[end.DirectorySize];
         stream.Position = end.DirectoryOffset;
@@ -128,11 +129,11 @@ public sealed class BenBundle
         for (var index = 0; index < end.EntryCount; index++)
         {
             if (cursor + 46 > directory.Length)
-                throw new BenBundleFormatException("That session file is incomplete — it may not have finished sending.");
+                throw new BenBundleFormatException($"That {noun} file is incomplete — it may not have finished sending.");
 
             var record = directory.AsSpan(cursor);
             if (BinaryPrimitives.ReadUInt32LittleEndian(record) != CentralHeaderSignature)
-                throw new BenBundleFormatException("That doesn't look like a session file.");
+                throw new BenBundleFormatException($"That doesn't look like a {noun} file.");
 
             var method = BinaryPrimitives.ReadUInt16LittleEndian(record[10..]);
             var compressedSize = BinaryPrimitives.ReadUInt32LittleEndian(record[20..]);
@@ -144,33 +145,33 @@ public sealed class BenBundle
 
             var headerLength = 46 + nameLength + extraLength + commentLength;
             if (cursor + headerLength > directory.Length)
-                throw new BenBundleFormatException("That session file is incomplete — it may not have finished sending.");
+                throw new BenBundleFormatException($"That {noun} file is incomplete — it may not have finished sending.");
 
             if (method != StoredMethod)
             {
                 // Not a limitation to work around: serving a member as a byte range of the bundle
                 // is only possible because its bytes are in there unchanged.
                 throw new BenBundleFormatException(
-                    "That session file is compressed, and a session is stored uncompressed so it can be played from inside.");
+                    $"That {noun} file is compressed, and a {noun} is stored uncompressed so it can be {rules.ReadFromInside} from inside.");
             }
             if (compressedSize != uncompressedSize)
-                throw new BenBundleFormatException("That session file's contents don't match what it says they are.");
+                throw new BenBundleFormatException($"That {noun} file's contents don't match what it says they are.");
             if (compressedSize == uint.MaxValue || localHeaderOffset == uint.MaxValue)
-                throw new BenBundleFormatException("That session file uses a ZIP extension this format doesn't carry.");
+                throw new BenBundleFormatException($"That {noun} file uses a ZIP extension this format doesn't carry.");
 
             var name = Encoding.UTF8.GetString(record.Slice(46, nameLength));
-            if (RefusalForPath(name) is { } refusal) throw new BenBundleFormatException(refusal);
+            if (RefusalForPath(name, noun) is { } refusal) throw new BenBundleFormatException(refusal);
 
             // Where the member's bytes actually start: past its own local header, whose extra
             // field is allowed to differ in length from the central one's. Reading it is the only
             // way to know, and skipping that read is the classic way to serve 30 bytes of header
             // as if it were the start of an audio file.
-            var dataOffset = await DataOffsetAsync(stream, localHeaderOffset, nameLength, ct);
+            var dataOffset = await DataOffsetAsync(stream, localHeaderOffset, nameLength, noun, ct);
             if (dataOffset + compressedSize > length)
-                throw new BenBundleFormatException("That session file is incomplete — it may not have finished sending.");
+                throw new BenBundleFormatException($"That {noun} file is incomplete — it may not have finished sending.");
 
             if (!entries.TryAdd(name, new BenBundleEntry(name, dataOffset, compressedSize)))
-                throw new BenBundleFormatException($"That session file carries \"{name}\" twice.");
+                throw new BenBundleFormatException($"That {noun} file carries \"{name}\" twice.");
 
             cursor += headerLength;
         }
@@ -187,46 +188,46 @@ public sealed class BenBundle
     /// write them to disk when it imports the bundle. A name is checked once, here, rather than
     /// trusted differently by each of those.
     /// </remarks>
-    public static string? RefusalForPath(string? path)
+    public static string? RefusalForPath(string? path, string noun = "session")
     {
-        if (string.IsNullOrWhiteSpace(path)) return "That session file has an entry with no name.";
-        if (path.Length > MaxEntryPathLength) return "That session file has an entry with an absurdly long name.";
-        if (path.EndsWith('/')) return "That session file contains a folder, and a session is a flat list of files.";
-        if (path.Contains('\\')) return $"That session file has an entry with a backslash in its name: \"{path}\".";
-        if (path.StartsWith('/')) return $"That session file has an entry with an absolute path: \"{path}\".";
-        if (path.Contains('\0')) return "That session file has an entry with a broken name.";
-        if (path.Length > 1 && path[1] == ':') return $"That session file has an entry with a drive letter: \"{path}\".";
+        if (string.IsNullOrWhiteSpace(path)) return $"That {noun} file has an entry with no name.";
+        if (path.Length > MaxEntryPathLength) return $"That {noun} file has an entry with an absurdly long name.";
+        if (path.EndsWith('/')) return $"That {noun} file contains a folder, and a {noun} is a flat list of files.";
+        if (path.Contains('\\')) return $"That {noun} file has an entry with a backslash in its name: \"{path}\".";
+        if (path.StartsWith('/')) return $"That {noun} file has an entry with an absolute path: \"{path}\".";
+        if (path.Contains('\0')) return $"That {noun} file has an entry with a broken name.";
+        if (path.Length > 1 && path[1] == ':') return $"That {noun} file has an entry with a drive letter: \"{path}\".";
 
         foreach (var segment in path.Split('/'))
         {
-            if (segment is ".." or ".") return $"That session file has an entry that points outside itself: \"{path}\".";
-            if (segment.Length == 0) return $"That session file has an entry with an empty folder in its name: \"{path}\".";
+            if (segment is ".." or ".") return $"That {noun} file has an entry that points outside itself: \"{path}\".";
+            if (segment.Length == 0) return $"That {noun} file has an entry with an empty folder in its name: \"{path}\".";
         }
         return null;
     }
 
     private static async Task<long> DataOffsetAsync(
-        Stream stream, long localHeaderOffset, ushort centralNameLength, CancellationToken ct)
+        Stream stream, long localHeaderOffset, ushort centralNameLength, string noun, CancellationToken ct)
     {
         if (localHeaderOffset + 30 > stream.Length)
-            throw new BenBundleFormatException("That session file is incomplete — it may not have finished sending.");
+            throw new BenBundleFormatException($"That {noun} file is incomplete — it may not have finished sending.");
 
         var header = new byte[30];
         stream.Position = localHeaderOffset;
         await stream.ReadExactlyAsync(header, ct);
 
         if (BinaryPrimitives.ReadUInt32LittleEndian(header) != LocalHeaderSignature)
-            throw new BenBundleFormatException("That doesn't look like a session file.");
+            throw new BenBundleFormatException($"That doesn't look like a {noun} file.");
 
         var nameLength = BinaryPrimitives.ReadUInt16LittleEndian(header.AsSpan(26));
         var extraLength = BinaryPrimitives.ReadUInt16LittleEndian(header.AsSpan(28));
         if (nameLength != centralNameLength)
-            throw new BenBundleFormatException("That session file disagrees with itself about one of its entries.");
+            throw new BenBundleFormatException($"That {noun} file disagrees with itself about one of its entries.");
 
         return localHeaderOffset + 30 + nameLength + extraLength;
     }
 
-    private static async Task<EndRecord> ReadEndRecordAsync(Stream stream, long length, CancellationToken ct)
+    private static async Task<EndRecord> ReadEndRecordAsync(Stream stream, long length, string noun, CancellationToken ct)
     {
         var searchLength = (int)Math.Min(length, MaxEndRecordSearch);
         var tail = new byte[searchLength];
@@ -247,10 +248,31 @@ public sealed class BenBundle
                 DirectoryOffset: BinaryPrimitives.ReadUInt32LittleEndian(record[16..]));
         }
 
-        throw new BenBundleFormatException("That doesn't look like a session file.");
+        throw new BenBundleFormatException($"That doesn't look like a {noun} file.");
     }
 
     private readonly record struct EndRecord(int EntryCount, long DirectorySize, long DirectoryOffset);
+}
+
+/// <summary>
+/// What kind of stored ZIP is being read: the word its refusals use, and how many members it may
+/// carry.
+/// </summary>
+/// <param name="Noun">"session" or "scan" — these sentences reach the person who sent the file.</param>
+/// <param name="MaxEntries">A file claiming more members is refused before a single name is read.</param>
+/// <param name="ReadFromInside">How its members are used once stored: a session is played, a scan is viewed.</param>
+/// <param name="TooLargeAdvice">What to do about a file past 4 GB, with a leading space, or empty.</param>
+public sealed record BenBundleRules(string Noun, int MaxEntries, string ReadFromInside, string TooLargeAdvice)
+{
+    /// <summary>
+    /// A field session: more than any session could honestly hold —
+    /// <see cref="FieldSessionFileGuard.MaxFilesPerSession"/> recordings, the document, and room for
+    /// a manifest we have not invented yet.
+    /// </summary>
+    public static readonly BenBundleRules Session = new("session", 520, "played", " Send it in parts.");
+
+    /// <summary>A room's LiDAR scan: its keyframes are a picture and a depth map each.</summary>
+    public static readonly BenBundleRules Scan = new("scan", Places.PlaceScanManifest.MaxEntries, "viewed", "");
 }
 
 /// <summary>One member of a bundle, and where its bytes are inside it.</summary>

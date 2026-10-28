@@ -10404,6 +10404,269 @@ namespace Ben.Data.Source.Migrations
                     b.ToTable("PlaceRooms");
                 });
 
+            modelBuilder.Entity("Ben.Data.Source.Entities.PlaceScan", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<Guid>("CreatedByAppUserId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<DateTime>("DateCreated")
+                        .HasColumnType("datetime2");
+
+                    b.Property<DateTime?>("DateUpdated")
+                        .HasColumnType("datetime2");
+
+                    b.Property<Guid?>("DecidedByAppUserId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<DateTime?>("DecidedUtc")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("DecisionNote")
+                        .HasMaxLength(2000)
+                        .HasColumnType("nvarchar(2000)");
+
+                    b.Property<string>("DeviceModel")
+                        .HasMaxLength(60)
+                        .HasColumnType("nvarchar(60)");
+
+                    b.Property<long>("FileSize")
+                        .HasColumnType("bigint");
+
+                    b.Property<double?>("FloorAreaM2")
+                        .HasColumnType("float");
+
+                    b.Property<int>("KeyframeCount")
+                        .HasColumnType("int");
+
+                    b.Property<Guid?>("OwnerAppUserId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<Guid?>("OwnerOrganizationId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<Guid>("PlaceId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<Guid?>("PlaceRoomId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<byte>("Retention")
+                        .HasColumnType("tinyint");
+
+                    b.Property<string>("RoomKey")
+                        .IsRequired()
+                        .HasMaxLength(120)
+                        .HasColumnType("nvarchar(120)");
+
+                    b.Property<string>("RoomName")
+                        .IsRequired()
+                        .HasMaxLength(120)
+                        .HasColumnType("nvarchar(120)");
+
+                    b.Property<Guid>("ScannedByAppUserId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<Guid?>("ScannedForOrganizationId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<DateTime>("ScannedUtc")
+                        .HasColumnType("datetime2");
+
+                    b.Property<int>("ScannerVersion")
+                        .HasColumnType("int");
+
+                    b.Property<string>("Sha256")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("nchar(64)")
+                        .IsFixedLength();
+
+                    b.Property<bool>("ShownOnPlacePage")
+                        .HasColumnType("bit");
+
+                    b.Property<byte>("State")
+                        .HasColumnType("tinyint");
+
+                    b.Property<string>("StoragePath")
+                        .IsRequired()
+                        .HasMaxLength(400)
+                        .HasColumnType("nvarchar(400)");
+
+                    b.Property<int>("TriangleCount")
+                        .HasColumnType("int");
+
+                    b.Property<Guid?>("UpdatedByAppUserId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<int>("Version")
+                        .HasColumnType("int");
+
+                    b.Property<DateTime?>("YearNoticeSentUtc")
+                        .HasColumnType("datetime2");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("CreatedByAppUserId");
+
+                    b.HasIndex("DecidedByAppUserId");
+
+                    b.HasIndex("ScannedByAppUserId");
+
+                    b.HasIndex("UpdatedByAppUserId");
+
+                    b.HasIndex("PlaceId", "RoomKey")
+                        .IsUnique()
+                        .HasDatabaseName("IX_PlaceScans_PlaceId_RoomKey_Current")
+                        .HasFilter("[State] = 1");
+
+                    b.HasIndex("PlaceId", "RoomKey", "Version")
+                        .IsUnique();
+
+                    b.ToTable("PlaceScans");
+                });
+
+            modelBuilder.Entity("Ben.Data.Source.Entities.PlaceScanChange", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<DateTime>("ComparedUtc")
+                        .HasColumnType("datetime2");
+
+                    b.Property<double?>("DistanceCm")
+                        .HasColumnType("float");
+
+                    b.Property<Guid>("FieldSessionUploadId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<byte>("Kind")
+                        .HasColumnType("tinyint");
+
+                    b.Property<string>("ObjectCategory")
+                        .IsRequired()
+                        .HasMaxLength(40)
+                        .HasColumnType("nvarchar(40)");
+
+                    b.Property<string>("PictureEntryPath")
+                        .HasMaxLength(400)
+                        .HasColumnType("nvarchar(400)");
+
+                    b.Property<Guid>("PlaceScanId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<double?>("RotationDeg")
+                        .HasColumnType("float");
+
+                    b.Property<double?>("SizeXCm")
+                        .HasColumnType("float");
+
+                    b.Property<double?>("SizeYCm")
+                        .HasColumnType("float");
+
+                    b.Property<double?>("SizeZCm")
+                        .HasColumnType("float");
+
+                    b.Property<double>("WhereX")
+                        .HasColumnType("float");
+
+                    b.Property<double>("WhereY")
+                        .HasColumnType("float");
+
+                    b.Property<double>("WhereZ")
+                        .HasColumnType("float");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("FieldSessionUploadId");
+
+                    b.HasIndex("PlaceScanId", "ComparedUtc");
+
+                    b.ToTable("PlaceScanChanges");
+                });
+
+            modelBuilder.Entity("Ben.Data.Source.Entities.PlaceScanCustody", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<string>("ClosedReason")
+                        .HasMaxLength(20)
+                        .HasColumnType("nvarchar(20)");
+
+                    b.Property<DateTime?>("ClosedUtc")
+                        .HasColumnType("datetime2");
+
+                    b.Property<Guid>("GrantedByAppUserId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<DateTime>("GrantedUtc")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("Note")
+                        .HasMaxLength(2000)
+                        .HasColumnType("nvarchar(2000)");
+
+                    b.Property<Guid>("OrganizationId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<Guid>("PlaceId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("GrantedByAppUserId");
+
+                    b.HasIndex("OrganizationId");
+
+                    b.HasIndex("PlaceId")
+                        .IsUnique();
+
+                    b.ToTable("PlaceScanCustodies");
+                });
+
+            modelBuilder.Entity("Ben.Data.Source.Entities.PlaceScanHold", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<Guid>("AppUserId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<DateTime>("ExpiresUtc")
+                        .HasColumnType("datetime2");
+
+                    b.Property<Guid>("PlaceId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<string>("RoomKey")
+                        .IsRequired()
+                        .HasMaxLength(120)
+                        .HasColumnType("nvarchar(120)");
+
+                    b.Property<string>("RoomName")
+                        .IsRequired()
+                        .HasMaxLength(120)
+                        .HasColumnType("nvarchar(120)");
+
+                    b.Property<DateTime>("TakenUtc")
+                        .HasColumnType("datetime2");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("AppUserId");
+
+                    b.HasIndex("PlaceId", "RoomKey", "ExpiresUtc");
+
+                    b.ToTable("PlaceScanHolds");
+                });
+
             modelBuilder.Entity("Ben.Data.Source.Entities.Publication", b =>
                 {
                     b.Property<Guid>("Id")
@@ -20713,6 +20976,112 @@ namespace Ben.Data.Source.Migrations
                     b.Navigation("Place");
 
                     b.Navigation("UpdatedByAppUser");
+                });
+
+            modelBuilder.Entity("Ben.Data.Source.Entities.PlaceScan", b =>
+                {
+                    b.HasOne("Ben.Data.Source.Entities.AppUser", "CreatedByAppUser")
+                        .WithMany()
+                        .HasForeignKey("CreatedByAppUserId")
+                        .OnDelete(DeleteBehavior.NoAction)
+                        .IsRequired();
+
+                    b.HasOne("Ben.Data.Source.Entities.AppUser", "DecidedByAppUser")
+                        .WithMany()
+                        .HasForeignKey("DecidedByAppUserId")
+                        .OnDelete(DeleteBehavior.NoAction);
+
+                    b.HasOne("Ben.Data.Source.Entities.Place", "Place")
+                        .WithMany()
+                        .HasForeignKey("PlaceId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("Ben.Data.Source.Entities.AppUser", "ScannedByAppUser")
+                        .WithMany()
+                        .HasForeignKey("ScannedByAppUserId")
+                        .OnDelete(DeleteBehavior.NoAction)
+                        .IsRequired();
+
+                    b.HasOne("Ben.Data.Source.Entities.AppUser", "UpdatedByAppUser")
+                        .WithMany()
+                        .HasForeignKey("UpdatedByAppUserId")
+                        .OnDelete(DeleteBehavior.NoAction);
+
+                    b.Navigation("CreatedByAppUser");
+
+                    b.Navigation("DecidedByAppUser");
+
+                    b.Navigation("Place");
+
+                    b.Navigation("ScannedByAppUser");
+
+                    b.Navigation("UpdatedByAppUser");
+                });
+
+            modelBuilder.Entity("Ben.Data.Source.Entities.PlaceScanChange", b =>
+                {
+                    b.HasOne("Ben.Data.Source.Entities.FieldSessionUpload", "FieldSessionUpload")
+                        .WithMany()
+                        .HasForeignKey("FieldSessionUploadId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("Ben.Data.Source.Entities.PlaceScan", "PlaceScan")
+                        .WithMany()
+                        .HasForeignKey("PlaceScanId")
+                        .OnDelete(DeleteBehavior.NoAction)
+                        .IsRequired();
+
+                    b.Navigation("FieldSessionUpload");
+
+                    b.Navigation("PlaceScan");
+                });
+
+            modelBuilder.Entity("Ben.Data.Source.Entities.PlaceScanCustody", b =>
+                {
+                    b.HasOne("Ben.Data.Source.Entities.AppUser", "GrantedByAppUser")
+                        .WithMany()
+                        .HasForeignKey("GrantedByAppUserId")
+                        .OnDelete(DeleteBehavior.NoAction)
+                        .IsRequired();
+
+                    b.HasOne("Ben.Data.Source.Entities.Organization", "Organization")
+                        .WithMany()
+                        .HasForeignKey("OrganizationId")
+                        .OnDelete(DeleteBehavior.NoAction)
+                        .IsRequired();
+
+                    b.HasOne("Ben.Data.Source.Entities.Place", "Place")
+                        .WithMany()
+                        .HasForeignKey("PlaceId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("GrantedByAppUser");
+
+                    b.Navigation("Organization");
+
+                    b.Navigation("Place");
+                });
+
+            modelBuilder.Entity("Ben.Data.Source.Entities.PlaceScanHold", b =>
+                {
+                    b.HasOne("Ben.Data.Source.Entities.AppUser", "AppUser")
+                        .WithMany()
+                        .HasForeignKey("AppUserId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("Ben.Data.Source.Entities.Place", "Place")
+                        .WithMany()
+                        .HasForeignKey("PlaceId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("AppUser");
+
+                    b.Navigation("Place");
                 });
 
             modelBuilder.Entity("Ben.Data.Source.Entities.Publication", b =>

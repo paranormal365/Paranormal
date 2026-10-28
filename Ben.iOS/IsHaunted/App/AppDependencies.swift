@@ -40,6 +40,11 @@ final class AppDependencies {
     /// Which parts of the app apply to this person — the server decides, the shell renders it.
     let surfaces: SurfacesStore
 
+    /// A place's room scans on the server, and the scans kept on this phone until it has them
+    /// (LiDAR plan).
+    let placeScans: PlaceScanClient
+    let scanStore = ScanStore.applicationSupport()
+
     /// Sends room posts kept for a signal, and keeps the Share Extension's list of events (item 235 phase 14d).
     @ObservationIgnored private(set) lazy var roomOutbox = RoomOutboxDrain(dependencies: self)
 
@@ -76,6 +81,16 @@ final class AppDependencies {
         self.publicArchive = PublicArchiveClient(api: api)
         self.evidenceActions = EvidenceActions(api: api)
         self.surfaces = SurfacesStore(api: api)
+        self.placeScans = PlaceScanClient(api: api)
+        #if DEBUG
+        // A simulator has no LiDAR: these stand a fixture in for the sensor so the scanning screens
+        // can be reached and tested at all.
+        let arguments = ProcessInfo.processInfo.arguments
+        LidarSupport.simulated = arguments.contains("-scanFakeRoom") || arguments.contains("-figureFake")
+        // The person map's switch is remembered; a run on the stand-in starts with it off, so a
+        // test turns it on at a moment it knows.
+        if arguments.contains("-figureFake") { UserDefaults.standard.removeObject(forKey: "fieldkit.person-map") }
+        #endif
         self.appleSignIn = AppleSignInClient(api: api, tokens: tokens)
         // Saved event passes, and a door's guest lists and kept arrivals, belong to the person who signed in, not to
         // the phone (item 235 phase 14).

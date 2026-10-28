@@ -498,7 +498,7 @@ struct TrimmedExportTests {
         // same reader, and a trim that produced something subtly unreadable would fail at upload
         // rather than here.
         let decoded = try JSONSerialization.jsonObject(with: document) as? [String: Any]
-        #expect(decoded?["format_version"] as? String == "1.0.0")
+        #expect(decoded?["format_version"] as? String == DeviceDataEnvelope.currentFormatVersion)
         #expect(decoded?["device"] != nil)
         #expect(decoded?["readings"] != nil)
     }

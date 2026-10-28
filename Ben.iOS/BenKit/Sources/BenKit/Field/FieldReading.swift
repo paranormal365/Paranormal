@@ -81,9 +81,57 @@ public struct FieldReading: Codable, Sendable, Equatable {
         public var baseline: Double?
         public var outOfRange: Bool?
 
-        private enum CodingKeys: String, CodingKey {
-            case value, unit, accuracy, baseline
-            case outOfRange = "out_of_range"
+        /// Fields a channel carries beside its value — a room scan's id and version, where a
+        /// change was found (spec 1.2). The schema lets every measurement carry more than `value`,
+        /// so these are kept as they came: a document read and written again loses none of them,
+        /// whether or not this build knows what they mean.
+        public var details: [String: JSONValue]
+
+        public init(value: JSONValue, unit: String? = nil, accuracy: Double? = nil,
+                    baseline: Double? = nil, outOfRange: Bool? = nil,
+                    details: [String: JSONValue] = [:]) {
+            self.value = value
+            self.unit = unit
+            self.accuracy = accuracy
+            self.baseline = baseline
+            self.outOfRange = outOfRange
+            self.details = details
+        }
+
+        private struct Key: CodingKey {
+            var stringValue: String
+            var intValue: Int? { nil }
+            init(_ string: String) { stringValue = string }
+            init?(stringValue: String) { self.stringValue = stringValue }
+            init?(intValue: Int) { nil }
+        }
+
+        private static let named: Set<String> = ["value", "unit", "accuracy", "baseline", "out_of_range"]
+
+        public init(from decoder: Decoder) throws {
+            let container = try decoder.container(keyedBy: Key.self)
+            value = try container.decode(JSONValue.self, forKey: Key("value"))
+            unit = try container.decodeIfPresent(String.self, forKey: Key("unit"))
+            accuracy = try container.decodeIfPresent(Double.self, forKey: Key("accuracy"))
+            baseline = try container.decodeIfPresent(Double.self, forKey: Key("baseline"))
+            outOfRange = try container.decodeIfPresent(Bool.self, forKey: Key("out_of_range"))
+            var details: [String: JSONValue] = [:]
+            for key in container.allKeys where !Self.named.contains(key.stringValue) {
+                details[key.stringValue] = try container.decode(JSONValue.self, forKey: key)
+            }
+            self.details = details
+        }
+
+        public func encode(to encoder: Encoder) throws {
+            var container = encoder.container(keyedBy: Key.self)
+            try container.encode(value, forKey: Key("value"))
+            try container.encodeIfPresent(unit, forKey: Key("unit"))
+            try container.encodeIfPresent(accuracy, forKey: Key("accuracy"))
+            try container.encodeIfPresent(baseline, forKey: Key("baseline"))
+            try container.encodeIfPresent(outOfRange, forKey: Key("out_of_range"))
+            for (name, detail) in details.sorted(by: { $0.key < $1.key }) where !Self.named.contains(name) {
+                try container.encode(detail, forKey: Key(name))
+            }
         }
 
         /// The only way to build a numeric measurement — the unit is not optional, because the
@@ -99,6 +147,13 @@ public struct FieldReading: Codable, Sendable, Equatable {
         /// no unit.
         public static func label(_ value: String) -> Measurement {
             Measurement(value: .string(value), unit: nil)
+        }
+
+        /// A label with fields beside it — the spec 1.2 channels (`room_scan`, `scan`,
+        /// `scan_change`, `figure`, `shape`). Numbers among the details carry their unit in their
+        /// name (`distance_cm`), the way `position` does.
+        public static func label(_ value: String, details: [String: JSONValue]) -> Measurement {
+            Measurement(value: .string(value), unit: nil, details: details)
         }
     }
 
@@ -226,12 +281,15 @@ public struct FieldReading: Codable, Sendable, Equatable {
     }
 }
 
-/// The handful of JSON shapes a measurement value may take.
+/// The handful of JSON shapes a measurement value may take — and, among a measurement's details,
+/// a list (a position, a size) or an object.
 public enum JSONValue: Codable, Sendable, Equatable {
     case number(Double)
     case string(String)
     case bool(Bool)
     case null
+    case array([JSONValue])
+    case object([String: JSONValue])
 
     public init(from decoder: Decoder) throws {
         let container = try decoder.singleValueContainer()
@@ -241,6 +299,8 @@ public enum JSONValue: Codable, Sendable, Equatable {
         if let bool = try? container.decode(Bool.self) { self = .bool(bool); return }
         if let number = try? container.decode(Double.self) { self = .number(number); return }
         if let string = try? container.decode(String.self) { self = .string(string); return }
+        if let array = try? container.decode([JSONValue].self) { self = .array(array); return }
+        if let object = try? container.decode([String: JSONValue].self) { self = .object(object); return }
         throw DecodingError.dataCorruptedError(
             in: container, debugDescription: "Not a measurement value this format allows.")
     }
@@ -252,6 +312,19 @@ public enum JSONValue: Codable, Sendable, Equatable {
         case .string(let value): try container.encode(value)
         case .bool(let value): try container.encode(value)
         case .null: try container.encodeNil()
+        case .array(let values): try container.encode(values)
+        case .object(let fields): try container.encode(fields)
         }
+    }
+
+    /// The number, when this is one.
+    public var number: Double? { if case .number(let value) = self { value } else { nil } }
+    /// The text, when this is some.
+    public var string: String? { if case .string(let value) = self { value } else { nil } }
+    /// The numbers, when this is a list of only numbers — a position, a size.
+    public var numbers: [Double]? {
+        guard case .array(let values) = self else { return nil }
+        let numbers = values.compactMap(\.number)
+        return numbers.count == values.count ? numbers : nil
     }
 }

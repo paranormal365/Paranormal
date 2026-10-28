@@ -22,6 +22,9 @@ struct LiveSessionView: View {
     @State private var video = SessionVideoRecorder()
     /// Remembered between sessions: somebody who turns it off does not want it back every night.
     @AppStorage("fieldkit.watch-for-motion") private var watchForMotionPreference = true
+    /// The person map, on a LiDAR phone (LiDAR plan, phase 4). Off until somebody turns it on:
+    /// ARKit all night is heavier on the battery than the plain camera. Remembered once chosen.
+    @AppStorage("fieldkit.person-map") private var personMapPreference = false
     /// Set while Stop is closing the video and the session, so it cannot be pressed twice.
     @State private var stopping = false
     /// A permission somebody reached for and had refused — said, with the way to Settings.
@@ -48,6 +51,9 @@ struct LiveSessionView: View {
     @State private var notice = RailNotice()
     /// Typing the question while it is asked, where the phone can do it with no connection.
     @AppStorage("fieldkit.type-questions") private var typeQuestions = true
+    /// Scanning the room for its place, on a LiDAR phone (LiDAR plan). Made when the screen
+    /// comes up; nil until then.
+    @State private var scanFlow: ScanFlow?
 
     /// Room under the scrolling content for the pinned bar, so nothing ends up behind it.
     private static let barClearance: CGFloat = 96
@@ -94,6 +100,8 @@ struct LiveSessionView: View {
             .sheet(isPresented: $askingForNote) { noteComposer }
             .permissionRefusedAlert($refusedPermission)
             .sheet(isPresented: $choosingRoom) { roomSheet }
+            .modifier(ScanPresentations(flow: scanFlow, sessionId: sessionId, active: active,
+                                        scans: dependencies.scanStore))
             .onChange(of: store.active?.isRecording) { _, recording in
                 if recording != true { Task { await call.reset(dictation: dictation) } }
             }
@@ -115,7 +123,7 @@ struct LiveSessionView: View {
             .onChange(of: blackout) { _, isDark in applyBlackout(isDark) }
             .onChange(of: store.active?.channels) { _, channels in
                 if channels?.contains(.video) == true {
-                    camera.start()
+                    startCamera()
                     syncVideo()
                 } else {
                     // The clip is closed and filed BEFORE the camera goes, or it ends unfinished.
@@ -170,6 +178,15 @@ struct LiveSessionView: View {
                 Task { await call.reset(dictation: dictation) }
             }
             .task { await bringUp() }
+            .task(id: active?.room) {
+                if scanFlow == nil, LidarSupport.isAvailable {
+                    scanFlow = ScanFlow(client: dependencies.placeScans, scans: dependencies.scanStore,
+                                        store: store, sessionId: sessionId)
+                }
+                await scanFlow?.refresh()
+                // A different room is a different scan to tell shapes from.
+                if let map = camera.personMap { await loadBaseline(into: map) }
+            }
     }
 
     @ViewBuilder
@@ -356,7 +373,7 @@ struct LiveSessionView: View {
         store.load()
         await store.activate(sessionId)
         await store.active?.setWatchForMotion(watchForMotionPreference)
-        if store.active?.channels.contains(.video) == true { camera.start() }
+        if store.active?.channels.contains(.video) == true { startCamera() }
         syncVideo()
         if store.active?.channels.contains(.location) == true,
            store.active?.locationAuthorization == .notDetermined,
@@ -405,7 +422,14 @@ struct LiveSessionView: View {
     private func viewfinder(_ active: ActiveFieldSession) -> some View {
         VStack(alignment: .leading, spacing: 6) {
             ZStack(alignment: .topLeading) {
-                CameraPreview(session: camera.session)
+                Group {
+                    if let map = camera.personMap {
+                        PersonMapPreview(map: map)
+                            .overlay { PersonMapOverlay(map: map) }
+                    } else {
+                        CameraPreview(session: camera.session)
+                    }
+                }
                     .frame(height: 200)
                     .clipShape(RoundedRectangle(cornerRadius: 12))
                     // A camera's flash when Watch for Motion takes a photo, so it is plain that
@@ -485,6 +509,13 @@ struct LiveSessionView: View {
             .tint(Theme.ecto)
             .accessibilityIdentifier("watch-for-motion")
 
+            // LiDAR phones only: absent, not disabled, everywhere else (LiDAR plan, phase 4).
+            if LidarSupport.isAvailable {
+                FigureOverlayToggle(isOn: Binding(get: { personMapPreference },
+                                                  set: { setPersonMap($0) }),
+                                    shapes: camera.personMap?.shapes)
+            }
+
             if let problem = camera.problem {
                 Label(problem, systemImage: "exclamationmark.triangle")
                     .font(.caption).foregroundStyle(Theme.warning)
@@ -496,6 +527,9 @@ struct LiveSessionView: View {
                     .accessibilityIdentifier("video-problem")
             }
         }
+        // A container of its own: an identifier on the stack alone was handed to everything in
+        // it, and the switches under the picture answered to "camera-preview" instead of their own.
+        .accessibilityElement(children: .contain)
         .accessibilityIdentifier("camera-preview")
     }
 
@@ -590,7 +624,8 @@ struct LiveSessionView: View {
     @ViewBuilder
     private var roomSheet: some View {
         if let active {
-            RoomSheet(current: active.room, visited: active.roomsVisited) { room in
+            RoomSheet(current: active.room, visited: active.roomsVisited,
+                      placeRooms: scanFlow?.rooms?.rooms ?? []) { room in
                 Task { await active.setRoom(room) }
             }
         }
@@ -606,6 +641,12 @@ struct LiveSessionView: View {
                 .padding(.top, 8)
 
             RoomBar(room: active.room) { choosingRoom = true }
+
+            // Absent, not disabled, without LiDAR — and without an account, since a room's scan
+            // belongs to a place on the server.
+            if LidarSupport.isAvailable, dependencies.session.me != nil, let scanFlow {
+                ScanRoomButton(flow: scanFlow, room: active.room) { choosingRoom = true }
+            }
 
             if active.channels.contains(.video) {
                 viewfinder(active)
@@ -831,6 +872,54 @@ struct LiveSessionView: View {
             } catch {
                 errorMessage = error.localizedDescription
             }
+        }
+    }
+
+    /// Starts the camera the person chose: the person map on a LiDAR phone where it is turned on,
+    /// the session's own capture otherwise.
+    private func startCamera() {
+        if personMapPreference, LidarSupport.isAvailable {
+            let map = camera.turnOnPersonMap()
+            camera.start()
+            Task { await loadBaseline(into: map) }
+        } else {
+            camera.start()
+        }
+    }
+
+    /// Turns the person map on or off. The video so far is filed first, under the camera it was
+    /// filmed with, and the next stretch starts under the other.
+    private func setPersonMap(_ on: Bool) {
+        personMapPreference = on
+        Task {
+            await finishVideo()
+            if on {
+                let map = camera.turnOnPersonMap()
+                await loadBaseline(into: map)
+            } else {
+                camera.turnOffPersonMap()
+            }
+            syncVideo()
+        }
+    }
+
+    /// The room's scan, for the person map to tell a shape from the room: the place's current scan
+    /// of the room the session is in, fetched once. None, and only the figure is drawn.
+    private func loadBaseline(into map: PersonMapCamera) async {
+        if PersonMapCamera.usesFake {
+            map.use(PersonMapCamera.Baseline(mesh: PersonMapFixture.baseline, worldMap: nil))
+            return
+        }
+        guard let flow = scanFlow, let placeId = flow.placeId, let scan = flow.currentRoom?.current else {
+            map.use(nil)
+            return
+        }
+        switch await flow.fetch(placeId: placeId, scanId: scan.id) {
+        case .file(let url):
+            let baseline = await Task.detached { PersonMapCamera.baseline(from: url) }.value
+            map.use(baseline)
+        case .problem:
+            map.use(nil)
         }
     }
 

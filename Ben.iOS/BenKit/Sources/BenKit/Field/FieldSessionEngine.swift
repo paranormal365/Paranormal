@@ -658,6 +658,153 @@ public actor FieldSessionEngine {
         return withMarker
     }
 
+    // MARK: - Room scans
+
+    /// A room scanned for the place (LiDAR plan, spec 1.2): a `room_scan` marker carrying the
+    /// room, which version of the place's scan it became, and how long the scanning took.
+    @discardableResult
+    public func noteRoomScan(room: String, placeId: UUID?, placeScanId: UUID, version: Int,
+                             outcome: String, durationSeconds: Double) async -> FieldReading {
+        var entry = reading(at: now(), triggeredBy: MarkerKind.roomScan.trigger, marker: .roomScan,
+                            note: "Scanned \(room)")
+        var details: [String: JSONValue] = [
+            "place_scan_id": .string(placeScanId.uuidString.lowercased()),
+            "version": .number(Double(version)),
+            "outcome": .string(outcome),
+            "duration_seconds": .number(durationSeconds.rounded()),
+        ]
+        if let placeId { details["place_id"] = .string(placeId.uuidString.lowercased()) }
+        var measurements = entry.measurements ?? [:]
+        measurements["room_scan"] = .label(room, details: details)
+        entry.measurements = measurements
+        await append(entry)
+        emitMark(entry, kind: .roomScan)
+        return entry
+    }
+
+    /// Tells the screen about a mark written here rather than through `record`, so it is listed
+    /// and kept with the session like any other.
+    ///
+    /// - Parameter current: false for a mark noted after its moment, which carries nothing of the
+    ///   room as it is now — the levels then were not these.
+    private func emitMark(_ entry: FieldReading, kind: MarkerKind, current: Bool = true) {
+        guard logging else { return }
+        emit(.marked(FieldMarkerRecord(at: entry.at, kind: kind, note: entry.note, room: current ? room : nil,
+                                       magneticMicrotesla: current ? latest.magneticMicrotesla : nil,
+                                       soundDbfs: current ? latest.soundDbfs : nil,
+                                       latitude: current ? latest.position?.latitude : nil,
+                                       longitude: current ? latest.position?.longitude : nil)))
+    }
+
+    // MARK: - The person map
+
+    /// A reading for a moment already past: its marker and what it is, and nothing of the room as
+    /// it is now, since the levels, the position and the room at the time of writing are not the
+    /// ones at that moment.
+    private func pastReading(at moment: Date, kind: MarkerKind, note: String,
+                             channel: String, measurement: FieldReading.Measurement) -> FieldReading {
+        var entry = reading(at: moment, triggeredBy: kind.trigger, marker: kind, note: note)
+        entry.measurements = ["marker": .label(kind.rawValue), channel: measurement]
+        entry.position = nil
+        entry.motion = nil
+        return entry
+    }
+
+    /// A figure the person map saw (LiDAR plan, phase 4, spec 1.2): a `figure_seen` marker carrying
+    /// `figure` — its joints file, the video it was in and when, how clearly it was seen. Written
+    /// when the video is filed, dated to when the figure was first in view.
+    @discardableResult
+    public func noteFigure(file: String, video: String, from: Double, to: Double, peakConfidence: Double,
+                           picture: String?, at moment: Date) async -> FieldReading {
+        let seconds = max(1, Int((to - from).rounded()))
+        var details: [String: JSONValue] = [
+            "from": .number((from * 1000).rounded() / 1000),
+            "to": .number((to * 1000).rounded() / 1000),
+            "video": .string(video),
+            "peak_confidence": .number((min(1, max(0, peakConfidence)) * 100).rounded() / 100),
+        ]
+        if let picture { details["picture"] = .string(picture) }
+        let entry = pastReading(at: moment, kind: .figureSeen,
+                                note: "In view for \(seconds) second\(seconds == 1 ? "" : "s").",
+                                channel: "figure", measurement: .label(file, details: details))
+        await append(entry)
+        emitMark(entry, kind: .figureSeen, current: false)
+        return entry
+    }
+
+    /// Something person-sized the room's scan does not have (LiDAR plan, phase 4, spec 1.2): an
+    /// `unexplained_shape` marker carrying `shape` — its size in words and in numbers, how far
+    /// away, where in the scan's frame, and when in which video.
+    @discardableResult
+    public func noteShape(words: String, sizeCm: SIMD3<Float>, distanceM: Double, center: SIMD3<Float>,
+                          video: String, from: Double, to: Double, picture: String?, at moment: Date) async -> FieldReading {
+        let distance = (distanceM * 10).rounded() / 10
+        var details: [String: JSONValue] = [
+            "size_cm": .array([sizeCm.x, sizeCm.y, sizeCm.z].map { .number(Double($0.rounded())) }),
+            "distance_m": .number(distance),
+            "where": .array([center.x, center.y, center.z].map { .number((Double($0) * 100).rounded() / 100) }),
+            "from": .number((from * 1000).rounded() / 1000),
+            "to": .number((to * 1000).rounded() / 1000),
+            "video": .string(video),
+        ]
+        if let picture { details["picture"] = .string(picture) }
+        let entry = pastReading(at: moment, kind: .unexplainedShape,
+                                note: "\(words), \(Self.meters(distance)) away, not in the room's scan.",
+                                channel: "shape", measurement: .label(words, details: details))
+        await append(entry)
+        emitMark(entry, kind: .unexplainedShape, current: false)
+        return entry
+    }
+
+    static func meters(_ value: Double) -> String {
+        value == value.rounded() ? "\(Int(value)) m" : String(format: "%.1f m", value)
+    }
+
+    /// A room compared with the place's scan of it (LiDAR plan, phase 2, spec 1.2): a
+    /// `room_compared` reading carrying `scan` — which file, against which version, how many
+    /// changes — and one `scan_change` reading for each thing found, so the timeline lists them.
+    @discardableResult
+    public func noteComparison(room: String, comparisonPath: String, placeScanId: UUID, version: Int,
+                               changes: [ScanChange]) async -> [FieldReading] {
+        let moment = now()
+        let scanId = JSONValue.string(placeScanId.uuidString.lowercased())
+        var written: [FieldReading] = []
+
+        var entry = reading(at: moment, triggeredBy: MarkerKind.roomCompared.trigger, marker: .roomCompared,
+                            note: changes.isEmpty ? "Compared \(room): nothing changed" : "Compared \(room): \(changes.count) changed")
+        var measurements = entry.measurements ?? [:]
+        measurements["scan"] = .label(comparisonPath, details: [
+            "room": .string(room), "place_scan_id": scanId,
+            "place_scan_version": .number(Double(version)), "changes": .number(Double(changes.count)),
+        ])
+        entry.measurements = measurements
+        await append(entry)
+        emitMark(entry, kind: .roomCompared)
+        written.append(entry)
+
+        for change in changes {
+            var details: [String: JSONValue] = [
+                "object": .string(change.object),
+                "where": .array(change.where_.map(JSONValue.number)),
+                "place_scan_id": scanId,
+            ]
+            if let d = change.distanceCm { details["distance_cm"] = .number(d) }
+            if let r = change.rotationDeg { details["rotation_deg"] = .number(r) }
+            if let size = change.sizeCm { details["size_cm"] = .array(size.map(JSONValue.number)) }
+            if let picture = change.picture { details["picture"] = .string(picture) }
+
+            var changeEntry = reading(at: moment, triggeredBy: MarkerKind.scanChange.trigger, marker: .scanChange,
+                                      note: change.sentence)
+            var changeMeasurements = changeEntry.measurements ?? [:]
+            changeMeasurements["scan_change"] = .label(change.kind.rawValue, details: details)
+            changeEntry.measurements = changeMeasurements
+            await append(changeEntry)
+            emitMark(changeEntry, kind: .scanChange)
+            written.append(changeEntry)
+        }
+        return written
+    }
+
     // MARK: - EVP
 
     /// Marks a question being asked, and starts the wait.

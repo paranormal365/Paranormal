@@ -40,6 +40,7 @@ public static class FieldSessionTimelineBuilder
     private static readonly HashSet<string> AutomaticKinds = new(StringComparer.Ordinal)
     {
         "sentry_emf", "sentry_sound", "device_moved", "scene_motion", "app_backgrounded", "app_returned",
+        "scan_change", "figure_seen", "unexplained_shape",
     };
 
     private static readonly HashSet<string> CaptureKinds = new(StringComparer.Ordinal) { "photo", "video", "audio" };
@@ -267,6 +268,15 @@ public static class FieldSessionTimelineBuilder
             .ToList());
         var track = policy == TimelinePositionPolicy.Exact ? Track(lat, lon) : [];
 
+        var (roomScans, scanChanges) = root.ValueKind == JsonValueKind.Object
+                                       && root.TryGetProperty("readings", out var scanReadings)
+            ? ScanReadings(scanReadings, Ms)
+            : ([], []);
+        var (figures, shapes) = root.ValueKind == JsonValueKind.Object
+                                && root.TryGetProperty("readings", out var mapReadings)
+            ? PersonMapReadings(mapReadings, Ms, files)
+            : ([], []);
+
         var brought = (arrived ?? files.Select(f => f.RelativePath).ToList())
             .Select(Normalise).ToHashSet(StringComparer.OrdinalIgnoreCase);
         var missing = named
@@ -293,7 +303,11 @@ public static class FieldSessionTimelineBuilder
             FallbackEmfBase: lastBase,
             TimeZoneId: timeZoneId,
             BatteryAtStart: batteryAtStart is >= 0 and <= 100 ? Math.Round(batteryAtStart.Value) : null,
-            Missing: missing);
+            Missing: missing,
+            RoomScans: roomScans,
+            ScanChanges: scanChanges,
+            Figures: figures,
+            Shapes: shapes);
 
         // A question's listening window, by the same rule the EVP scanner notes candidates against.
         var windows = Audio.Scanning.EvpQuestionWindows.Of(timeline);
@@ -305,6 +319,105 @@ public static class FieldSessionTimelineBuilder
                 .Select(m => m.Kind == "evp_question" && until.TryGetValue(m.T, out var to) ? m with { ListenUntilMs = to } : m)
                 .ToList(),
         };
+    }
+
+    /// <summary>
+    /// The person map's figures and shapes a document records (LiDAR plan, phase 4, spec 1.2): a
+    /// <c>figure</c> measurement is a sighting whose value is its joints file, a <c>shape</c> one
+    /// says its size in words. Each names the video it was in and its picture, and those are found
+    /// among the session's files, so a player can fetch them by id.
+    /// </summary>
+    private static (List<TimelineFigure> Figures, List<TimelineShape> Shapes) PersonMapReadings(
+        JsonElement readings, Func<DateTime, long> ms, IReadOnlyList<TimelineFile> files)
+    {
+        var figures = new List<TimelineFigure>();
+        var shapes = new List<TimelineShape>();
+        if (readings.ValueKind != JsonValueKind.Array) return (figures, shapes);
+
+        var byPath = new Dictionary<string, Guid>(StringComparer.OrdinalIgnoreCase);
+        foreach (var file in files) byPath.TryAdd(Normalise(file.RelativePath), file.FileId);
+        Guid? Id(string? path) => path is { Length: > 0 } && byPath.TryGetValue(Normalise(path), out var id) ? id : null;
+
+        foreach (var element in readings.EnumerateArray())
+        {
+            if (Moment(element, "at") is not { } at
+                || !element.TryGetProperty("measurements", out var m) || m.ValueKind != JsonValueKind.Object)
+                continue;
+            var t = ms(at);
+            var note = element.TryGetProperty("note", out var n) && n.ValueKind == JsonValueKind.String ? n.GetString() : null;
+
+            if (m.TryGetProperty("figure", out var figure) && figure.ValueKind == JsonValueKind.Object
+                && Text(figure, "value") is { Length: > 0 } joints)
+            {
+                var video = Text(figure, "video");
+                var picture = Text(figure, "picture");
+                figures.Add(new TimelineFigure(t, joints, Id(joints), video, Id(video),
+                    Number(figure, "from"), Number(figure, "to"), Number(figure, "peak_confidence"),
+                    picture, Id(picture), note));
+            }
+            if (m.TryGetProperty("shape", out var shape) && shape.ValueKind == JsonValueKind.Object
+                && Text(shape, "value") is { Length: > 0 } words)
+            {
+                var video = Text(shape, "video");
+                var picture = Text(shape, "picture");
+                shapes.Add(new TimelineShape(t, words, Triple(shape, "size_cm"), Number(shape, "distance_m"),
+                    Triple(shape, "where"), video, Id(video), Number(shape, "from"), Number(shape, "to"),
+                    picture, Id(picture), note));
+            }
+        }
+        return (figures.OrderBy(f => f.T).ToList(), shapes.OrderBy(s => s.T).ToList());
+    }
+
+    private static double[]? Triple(JsonElement e, string name)
+        => e.TryGetProperty(name, out var v) && v.ValueKind == JsonValueKind.Array && v.GetArrayLength() == 3
+           && v.EnumerateArray().All(x => x.ValueKind == JsonValueKind.Number)
+            ? v.EnumerateArray().Select(x => x.GetDouble()).ToArray()
+            : null;
+
+    /// <summary>
+    /// The room scans and comparisons a document records, and what the comparisons found (LiDAR
+    /// plan, spec 1.2): a <c>room_scan</c> or <c>scan</c> measurement is a scan, a
+    /// <c>scan_change</c> is a change. Each is a measurement whose value says the room, the file or
+    /// what happened, with its other facts beside it.
+    /// </summary>
+    private static (List<TimelineRoomScan> Scans, List<TimelineScanChange> Changes) ScanReadings(
+        JsonElement readings, Func<DateTime, long> ms)
+    {
+        var scans = new List<TimelineRoomScan>();
+        var changes = new List<TimelineScanChange>();
+        if (readings.ValueKind != JsonValueKind.Array) return (scans, changes);
+
+        foreach (var element in readings.EnumerateArray())
+        {
+            if (Moment(element, "at") is not { } at
+                || !element.TryGetProperty("measurements", out var m) || m.ValueKind != JsonValueKind.Object)
+                continue;
+            var t = ms(at);
+
+            if (m.TryGetProperty("room_scan", out var scanned) && scanned.ValueKind == JsonValueKind.Object
+                && Text(scanned, "value") is { Length: > 0 } room)
+            {
+                scans.Add(new TimelineRoomScan(t, "scanned", room, Id(scanned, "place_scan_id"),
+                    (int?)Number(scanned, "version"), null, null, Text(scanned, "outcome"), Number(scanned, "duration_seconds")));
+            }
+            if (m.TryGetProperty("scan", out var compared) && compared.ValueKind == JsonValueKind.Object
+                && Text(compared, "value") is { Length: > 0 } path)
+            {
+                scans.Add(new TimelineRoomScan(t, "compared", Text(compared, "room") ?? "", Id(compared, "place_scan_id"),
+                    (int?)Number(compared, "place_scan_version"), path, (int?)Number(compared, "changes"), null, null));
+            }
+            if (m.TryGetProperty("scan_change", out var change) && change.ValueKind == JsonValueKind.Object
+                && Text(change, "value") is "moved" or "missing" or "new")
+            {
+                var note = element.TryGetProperty("note", out var n) && n.ValueKind == JsonValueKind.String ? n.GetString() : null;
+                changes.Add(new TimelineScanChange(t, Text(change, "value")!, Text(change, "object") ?? "unclassified", note,
+                    Number(change, "distance_cm"), Number(change, "rotation_deg"),
+                    Triple(change, "size_cm"), Triple(change, "where"), Text(change, "picture"), Id(change, "place_scan_id")));
+            }
+        }
+        return (scans, changes);
+
+        static Guid? Id(JsonElement e, string name) => Guid.TryParse(Text(e, name), out var id) ? id : null;
     }
 
     /// <summary>A zone the site knows, by its IANA name, or null: the page never guesses at one it can't convert to.</summary>
@@ -379,6 +492,12 @@ public static class FieldSessionTimelineBuilder
         "evp_question" => "Question asked",
         "evp_wait_end" => "Stopped waiting",
         "manual_marker" => "Marked",
+        // LiDAR plan: a room scanned for the place, what a comparison found, and the person map.
+        "room_scan" => "Room scanned",
+        "room_compared" => "Room compared",
+        "scan_change" => "Something changed",
+        "figure_seen" => "Figure seen",
+        "unexplained_shape" => "Unexplained shape",
         _ => kind,
     };
 

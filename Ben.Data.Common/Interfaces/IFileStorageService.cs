@@ -56,4 +56,15 @@ public interface IFileStorageService
     /// e.g. "cases/{caseId}/{storedFileName}"
     /// </summary>
     string CaseFilePath(Guid caseId, string storedFileName);
+
+    /// <summary>
+    /// Builds the canonical relative storage path for a file a place keeps — a room's LiDAR scan,
+    /// which belongs to the building rather than to whoever made it.
+    /// e.g. "places/{placeId}/{storedFileName}"
+    /// </summary>
+    /// <remarks>
+    /// Has a body so the test doubles that stand in for storage need not each learn it; both real
+    /// backends spell it out beside the other three.
+    /// </remarks>
+    string PlaceFilePath(Guid placeId, string storedFileName) => $"places/{placeId}/{storedFileName}";
 }
