@@ -67,6 +67,10 @@ day-by-day account of building it would say nothing to anyone using it now.
 - A session's recordings, a copy made to scan one, and a certified clip can no longer have their file
   replaced; save a new one instead.
 - An edit of a group's copy of a session recording now stays with the group, as a clip of it already did.
+- A field session's page has the site's look: its own section, the player in the theme's colors in light and
+  dark, the speeds as buttons you can see at a glance, and the map's path and pins in the same colors as the chart.
+- Pausing a session from your computer's media keys, Now Playing or headphones always holds. At just the wrong
+  moment the player used to start the sound again.
 
 ### Administration
 

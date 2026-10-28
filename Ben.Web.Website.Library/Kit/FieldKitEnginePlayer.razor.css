@@ -7,8 +7,50 @@
 
 .fk-player:focus { outline: none; }
 
+/* ── The Signal look (10/28/2026): the EVP lab's kicker, display title and gradient edge, built
+   from the theme's tokens only so light and dark both come from signal-tokens.css. ── */
+.fk-kicker {
+    display: inline-flex;
+    align-items: center;
+    gap: .35rem;
+    font-size: .68rem;
+    font-weight: 700;
+    letter-spacing: .16em;
+    text-transform: uppercase;
+    color: var(--ben-link);
+    margin-bottom: .15rem;
+}
+.fk-kicker ::deep .sa-icon { width: .85rem; height: .85rem; stroke: currentColor; --sa-icon-color: currentColor; fill: none; }
+
+.fk-title {
+    font-weight: var(--ben-display-weight);
+    letter-spacing: var(--ben-display-tracking);
+}
+
+.fk-deck {
+    border: 1px solid var(--ben-line);
+    border-radius: var(--ben-radius-lg);
+    background:
+        var(--ben-accent-grad) top / 100% 3px no-repeat,
+        radial-gradient(120% 140% at 100% 0%, rgba(var(--ben-accent-rgb), .10), transparent 55%),
+        var(--ben-surface);
+    box-shadow: var(--ben-shadow);
+}
+
 /* ── The transport ── */
 /* Six speeds do not fit beside each other on a phone: they wrap rather than run off the card. */
+/* The speeds as pills: the one playing is lit with the theme's accent. */
+.fk-player ::deep .fk-speeds { gap: .25rem; }
+.fk-player ::deep .fk-speeds > .btn {
+    margin: 0 !important;
+    border-radius: var(--ben-radius-pill) !important;
+    font-variant-numeric: tabular-nums;
+}
+.fk-player ::deep .fk-speeds > .btn[aria-pressed="true"] {
+    color: var(--ben-ink);
+    background: var(--ben-accent-soft);
+    border-color: rgba(var(--ben-accent-rgb), .55);
+}
 @media (max-width: 575.98px) {
     .fk-player ::deep .fk-speeds { flex-wrap: wrap; }
     .fk-player ::deep .fk-speeds > .btn { flex: 1 0 30%; }
@@ -20,8 +62,9 @@
     margin-top: .75rem;
     min-height: 120px;
     border-radius: .5rem;
-    background: var(--bs-secondary-bg);
-    border: 1px solid var(--bs-border-color);
+    background: var(--ben-bg-sunken);
+    border: 1px solid var(--ben-line);
+    border-radius: var(--ben-radius);
     overflow: hidden;
     transition: box-shadow .25s ease, border-color .25s ease;
 }
@@ -48,7 +91,7 @@
     height: 2rem;
 }
 
-.fk-player ::deep .fk-stage-empty[data-sound="1"] .fk-stage-icon { color: var(--bs-info); }
+.fk-player ::deep .fk-stage-empty[data-sound="1"] .fk-stage-icon { color: var(--ben-link); }
 
 /* Motion the camera saw with the phone still: the video is outlined, as on the phone. */
 .fk-player ::deep .fk-stage--motion {
@@ -104,7 +147,7 @@
     padding: 0;
     border: 0;
     background: none;
-    color: var(--bs-secondary-color);
+    color: var(--ben-ink-muted);
     cursor: pointer;
     transition: transform .3s ease;
 }
@@ -114,7 +157,7 @@
     height: 72px;
     object-fit: cover;
     border-radius: .5rem;
-    border: 1px solid var(--bs-border-color);
+    border: 1px solid var(--ben-line);
     transition: box-shadow .3s ease, border-color .3s ease;
 }
 
@@ -126,17 +169,17 @@
 /* As playback passes the moment it was taken: it glows and grows a little, as on the phone. */
 .fk-player ::deep .fk-thumb--glow {
     transform: scale(1.15);
-    color: var(--bs-emphasis-color);
+    color: var(--ben-ink);
     font-weight: 600;
 }
 
 .fk-player ::deep .fk-thumb--glow img {
-    border-color: var(--bs-success);
-    box-shadow: 0 0 0 3px var(--bs-success), 0 0 14px rgba(var(--bs-success-rgb), .9);
+    border-color: rgb(var(--ben-audio-confirmed-rgb));
+    box-shadow: 0 0 0 3px rgb(var(--ben-audio-confirmed-rgb)), 0 0 14px rgba(var(--ben-audio-confirmed-rgb), .9);
 }
 
 .fk-player ::deep .fk-thumb:focus-visible img {
-    outline: 2px solid var(--bs-focus-ring-color, var(--bs-info));
+    outline: 2px solid var(--ben-link);
     outline-offset: 2px;
 }
 
@@ -183,8 +226,8 @@
     flex: 1 1 auto;
     width: 100%;
     height: 100%;
-    background: var(--bs-secondary-bg);
-    border-radius: .35rem;
+    background: var(--ben-bg-sunken);
+    border-radius: var(--ben-radius-sm);
     cursor: col-resize;
     touch-action: none;
 }
@@ -195,20 +238,22 @@
     padding-left: 3.6rem;
     font-family: var(--bs-font-monospace);
 }
-.fk-player ::deep .fk-trace { fill: none; stroke: #7c5cff; stroke-width: 2; }
-.fk-player ::deep .fk-away { fill: var(--bs-secondary-color); opacity: .18; }
+/* The accent of the theme in force, light or dark; it was the dark accent written in (#7c5cff). */
+.fk-player ::deep .fk-trace { fill: none; stroke: rgb(var(--ben-accent-rgb)); stroke-width: 2; }
+.fk-player ::deep .fk-away { fill: var(--ben-ink-muted); opacity: .18; }
 /* The listening after a question asked in an EVP session (10/28/2026). */
-.fk-player ::deep .fk-listening { fill: var(--bs-info); opacity: .14; }
+.fk-player ::deep .fk-listening { fill: rgb(var(--ben-link-rgb)); opacity: .14; }
 .fk-player ::deep .fk-mark { stroke-width: 1; stroke-dasharray: 3 3; opacity: .75; }
 .fk-player ::deep .fk-mark--auto { stroke: var(--bs-warning); }
-.fk-player ::deep .fk-mark--manual { stroke: var(--bs-info); }
+.fk-player ::deep .fk-mark--manual { stroke: rgb(var(--ben-link-rgb)); }
 /* An EVP somebody kept (10/28/2026): solid, so it reads apart from the dashed marks. */
-.fk-player ::deep .fk-mark--evp { stroke: var(--bs-success); stroke-dasharray: none; stroke-width: 2; opacity: .9; }
-.fk-player ::deep .fk-playhead { stroke: var(--bs-emphasis-color); stroke-width: 2; }
+.fk-player ::deep .fk-mark--evp { stroke: rgb(var(--ben-audio-confirmed-rgb)); stroke-dasharray: none; stroke-width: 2; opacity: .9; }
+.fk-player ::deep .fk-playhead { stroke: var(--ben-ink); stroke-width: 2; }
 
 /* ── The marked list: the row the playhead is on ── */
 .fk-player ::deep .fk-marker { transition: background-color .2s ease; }
-.fk-player ::deep .fk-marker--now { background: rgba(var(--bs-info-rgb), .14); }
+.fk-player ::deep .fk-marker--now { background: rgba(var(--ben-accent-rgb), .14); }
+.fk-player ::deep .fk-marker--evp { box-shadow: inset 3px 0 0 rgb(var(--ben-audio-confirmed-rgb)); }
 .fk-player ::deep .fk-marker-icon { width: 1rem; height: 1rem; flex: 0 0 auto; }
 
 @keyframes fk-fade { from { opacity: 0; } to { opacity: 1; } }
