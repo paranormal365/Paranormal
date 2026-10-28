@@ -214,16 +214,6 @@ public sealed partial class BenAdminClientAdapter
         => _api.GetListAsync<FieldSessionShareViewRecord>(
             $"/api/field-sessions/{sessionId}/shares/{shareId}/views", token);
 
-    /// <summary>
-    /// Anonymous, and it must stay that way: the recipient has no account, and sending a bearer
-    /// token that happens to be lying around would make the page behave differently for a signed-in
-    /// visitor than for the person the link was actually for.
-    /// </summary>
-    public Task<SharedFieldSessionDetailRecord?> GetSharedFieldSessionAsync(
-        string shareToken, CancellationToken token = default)
-        => _api.GetAnonymousAsync<SharedFieldSessionDetailRecord>(
-            $"/api/shared-sessions/{Uri.EscapeDataString(shareToken)}", token);
-
     public Task<Ben.Service.Models.FieldSessions.PublicSessionSummary?> GetPublicFieldSessionSummaryAsync(
         Guid sessionId, CancellationToken token = default)
         => _api.GetAnonymousAsync<Ben.Service.Models.FieldSessions.PublicSessionSummary>(

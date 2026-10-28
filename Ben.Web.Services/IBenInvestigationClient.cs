@@ -205,17 +205,6 @@ public interface IBenInvestigationClient
     Task<LoadResult<FieldSessionShareViewRecord>> GetFieldSessionShareViewsAsync(
         Guid sessionId, Guid shareId, CancellationToken token = default);
 
-    /// <summary>
-    /// The session behind a share link, for somebody with no account.
-    /// </summary>
-    /// <remarks>
-    /// Anonymous on purpose: the recipient has no token and the whole feature is pointless if they
-    /// need one. Null covers unknown, expired and revoked alike, because the server answers all
-    /// three the same way and the page must not invent a distinction the server refused to make.
-    /// </remarks>
-    Task<SharedFieldSessionDetailRecord?> GetSharedFieldSessionAsync(
-        string shareToken, CancellationToken token = default);
-
     /// <summary>A session from a place's public archive: its heading and the files a visitor may have.</summary>
     Task<Ben.Service.Models.FieldSessions.PublicSessionSummary?> GetPublicFieldSessionSummaryAsync(
         Guid sessionId, CancellationToken token = default);
@@ -225,6 +214,11 @@ public interface IBenInvestigationClient
         Guid sessionId, CancellationToken token = default);
 
     /// <summary>The shared session without its document — the opening is still counted.</summary>
+    /// <remarks>
+    /// Anonymous on purpose: the recipient has no token and the whole feature is pointless if they
+    /// need one. Null covers unknown, expired and revoked alike, because the server answers all
+    /// three the same way and the page must not invent a distinction the server refused to make.
+    /// </remarks>
     Task<SharedFieldSessionDetailRecord?> GetSharedFieldSessionSummaryAsync(
         string shareToken, CancellationToken token = default);
 

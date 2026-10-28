@@ -75,7 +75,7 @@ It would also lose pan, zoom, the pins and the accuracy circle. Smooth movement 
     - the arrow is relative to the map's heading, eases its turns and snaps on a seek;
     - the follow camera with Recenter.
 
-The first player stays one setting away for a release: `FieldKit:Player = legacy`.
+The first player stayed one setting away for a release (`FieldKit:Player = legacy`) and was retired on 10/28/2026 (`feature/player-retire-legacy`).
 
 ## Proof
 
