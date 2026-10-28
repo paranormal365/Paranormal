@@ -141,7 +141,7 @@
                         @if (HasStage)
                         {
                             <div class="fk-stage" data-fk="stage" data-testid="media-stage">
-                                @foreach (var file in _session.Files.Where(f => IsVideo(f.RelativePath) && !_undecodable.Contains(f.Id)))
+                                @foreach (var file in _session.Files.Where(f => IsVideo(f.RelativePath) && !_undecodable.Contains(f.Id) && !_unreachable.Contains(f.Id)))
                                 {
                                     <video @key="file.Id" class="fk-stage-video" preload="metadata" playsinline
                                            style="display:none" src="@FileUrl(file.Id)" data-testid="stage-video"
@@ -287,7 +287,13 @@
                                     {
                                         <span class="badge text-bg-warning">arrived damaged</span>
                                     }
-                                    @if (_undecodable.Contains(file.Id))
+                                    @if (_unreachable.Contains(file.Id))
+                                    {
+                                        <span class="badge text-bg-warning" data-testid="unreachable">couldn't be reached</span>
+                                        <a class="btn btn-outline-secondary btn-sm ms-auto text-nowrap"
+                                           href="@FileUrl(file.Id)" download>Download the file</a>
+                                    }
+                                    else if (_undecodable.Contains(file.Id))
                                     {
                                         <span class="badge text-bg-warning" data-testid="undecodable">won't play in this browser</span>
                                         <a class="btn btn-outline-secondary btn-sm ms-auto text-nowrap"
@@ -408,13 +414,21 @@
     private bool _positionsWithheld;
     private string? _mediaNotice;
     private readonly HashSet<Guid> _undecodable = [];
-    private readonly HashSet<Guid> _renewed = [];
+
+    /// <summary>Recordings tried again and still not reached: said beside them, with the download.</summary>
+    private readonly HashSet<Guid> _unreachable = [];
+
+    /// <summary>How many fresh links each recording has been given since it last loaded.</summary>
+    private readonly Dictionary<Guid, int> _attempts = [];
+
+    /// <summary>Added to a recording's link after a retry, so the browser asks again rather than reusing a failure.</summary>
+    private readonly Dictionary<Guid, int> _linkGeneration = [];
 
     private ElementReference _root;
     private IJSObjectReference? _engine;
     private DotNetObjectReference<FieldKitEnginePlayer>? _self;
     private bool _started;
-    private Guid? _justRenewed;
+    private readonly List<Guid> _justRenewed = [];
 
     /// <summary>
     /// Set before the engine's start awaits anything. Blazor runs OnAfterRenderAsync after EVERY
@@ -451,6 +465,12 @@
         _signedOut = false;
         _session = null;
         _timeline = null;
+        _mediaNotice = null;
+        _undecodable.Clear();
+        _unreachable.Clear();
+        _attempts.Clear();
+        _linkGeneration.Clear();
+        _justRenewed.Clear();
         await StopEngineAsync();
         StateHasChanged();
 
@@ -579,10 +599,12 @@
             }
 
             // Rare: a recording that would not play, a renewed link. Elements may have changed.
-            if (_justRenewed is { } renewed)
+            if (_justRenewed.Count > 0)
             {
-                _justRenewed = null;
-                await _engine!.InvokeVoidAsync("mediaRenewed", _root, renewed.ToString());
+                var renewed = _justRenewed.ToList();
+                _justRenewed.Clear();
+                foreach (var id in renewed)
+                    await _engine!.InvokeVoidAsync("mediaRenewed", _root, id.ToString(), FileUrl(id));
             }
             else
             {
@@ -609,24 +631,65 @@
     }
 
     /// <summary>
-    /// A recording failed in the browser. One that already told the browser its length decoded
-    /// fine, so its link ran out (the ticket in it lasts an hour): renewed once. Anything else
-    /// is a file this browser cannot play, said beside it with the file still downloadable.
+    /// A recording failed in the browser (10/28/2026). One that had already loaded, or failed on the
+    /// network, is given a fresh link and tried again — up to three times, a little longer apart
+    /// each time, on a share link and the public archive too — and the engine plays on once it
+    /// loads. One that never loaded and that the browser calls undecodable is tried once more, in
+    /// case the link was stale, and then said to be a file this browser can't play.
     /// </summary>
+    /// <remarks>
+    /// Before, one renewal was all a recording got, only for a signed-in viewer, and a second
+    /// hiccup on a long night — or the first on a shared link — marked a perfectly good file
+    /// "won't play in this browser" until the page was reloaded.
+    /// </remarks>
     [JSInvokable]
-    public Task OnMediaFailed(string fileId, bool decodedBefore)
+    public Task OnMediaFailed(string fileId, int errorCode, bool decodedBefore)
     {
         if (!Guid.TryParse(fileId, out var id)) return Task.CompletedTask;
-        if (decodedBefore && !Anonymous && _renewed.Add(id))
+        var attempt = _attempts.GetValueOrDefault(id) + 1;
+        _attempts[id] = attempt;
+
+        // MediaError: 1 aborted, 2 network, 3 decode, 4 not supported (a refused link reads as 4).
+        var network = decodedBefore || errorCode is 1 or 2;
+        if (attempt <= (network ? RetryDelays.Length : 1))
         {
-            MediaUrls.RenewFieldSessionFile(SessionId, id);
-            _justRenewed = id;
-            _mediaNotice = "A recording's link ran out and has been renewed. Press Play to carry on.";
+            _mediaNotice = "A recording's connection dropped. Trying it again…";
+            _ = RetryAsync(id, RetryDelays[Math.Min(attempt, RetryDelays.Length) - 1]);
+        }
+        else if (network)
+        {
+            _unreachable.Add(id);
+            _mediaNotice = "A recording couldn't be reached. Reload the page to try again, or download it below.";
         }
         else
         {
             _undecodable.Add(id);
+            _mediaNotice = null;
         }
+        return InvokeAsync(StateHasChanged);
+    }
+
+    private static readonly TimeSpan[] RetryDelays =
+        [TimeSpan.FromSeconds(1), TimeSpan.FromSeconds(3), TimeSpan.FromSeconds(8)];
+
+    private async Task RetryAsync(Guid id, TimeSpan after)
+    {
+        try { await Task.Delay(after); } catch (TaskCanceledException) { return; }
+        if (!_started) return;
+        if (!Anonymous) MediaUrls.RenewFieldSessionFile(SessionId, id);
+        _linkGeneration[id] = _linkGeneration.GetValueOrDefault(id) + 1;
+        _justRenewed.Add(id);
+        try { await InvokeAsync(StateHasChanged); }
+        catch (ObjectDisposedException) { }
+    }
+
+    /// <summary>A recording given a fresh link has loaded again.</summary>
+    [JSInvokable]
+    public Task OnMediaRecovered(string fileId)
+    {
+        if (!Guid.TryParse(fileId, out var id)) return Task.CompletedTask;
+        _attempts.Remove(id);
+        _mediaNotice = null;
         return InvokeAsync(StateHasChanged);
     }
 
@@ -648,11 +711,17 @@
 
     // ── What the page says ────────────────────────────────────────────────────
 
-    private string FileUrl(Guid fileId) => Public
-        ? AdminClient.GetArchiveMediaUrl(SessionId, fileId)
-        : Shared
-            ? MediaUrls.SharedFieldSessionFile(ShareToken!, fileId)
-            : MediaUrls.FieldSessionFile(SessionId, fileId);
+    private string FileUrl(Guid fileId)
+    {
+        var url = Public
+            ? AdminClient.GetArchiveMediaUrl(SessionId, fileId)
+            : Shared
+                ? MediaUrls.SharedFieldSessionFile(ShareToken!, fileId)
+                : MediaUrls.FieldSessionFile(SessionId, fileId);
+        return _linkGeneration.TryGetValue(fileId, out var generation)
+            ? $"{url}{(url.Contains('?') ? '&' : '?')}r={generation}"
+            : url;
+    }
 
     private bool HasStage => _session?.Files.Any(f => IsAudio(f.RelativePath) || IsVideo(f.RelativePath) || IsImage(f.RelativePath)) == true;
 

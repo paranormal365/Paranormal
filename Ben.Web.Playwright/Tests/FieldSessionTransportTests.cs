@@ -253,6 +253,40 @@ public class FieldSessionTransportTests : BenTestBase
     }
 
     /// <summary>
+    /// A recording whose first fetch fails is tried again with a fresh link and plays (10/28/2026).
+    /// It used to be marked "won't play in this browser" for the rest of the visit.
+    /// </summary>
+    [Test]
+    public async Task A_recording_that_fails_to_load_once_is_tried_again_and_plays()
+    {
+        var label = $"Transport retry {Guid.NewGuid():N}"[..26];
+        var sessionId = await UploadAsync(label, videoOnly: false);
+        await LoginAsync(MemberEmail, MemberPassword);
+
+        var cut = 0;
+        await Page.RouteAsync("**/media/field-sessions/**", async route =>
+        {
+            if (Interlocked.Increment(ref cut) == 1) await route.AbortAsync("failed");
+            else await route.ContinueAsync();
+        });
+
+        await Page.GotoAsync($"{BaseUrl}/field-sessions/{sessionId}");
+        await Expect(Page.GetByText(label).First).ToBeVisibleAsync(new() { Timeout = 20_000 });
+        await Page.WaitForFunctionAsync("() => { const m = document.querySelector('audio[data-fk-media]'); return !!m && m.duration > 0; }",
+                                        null, new() { Timeout = 20_000 });
+
+        Assert.That(cut, Is.GreaterThanOrEqualTo(2), "the recording was not asked for again");
+        await Expect(Page.Locator("[data-testid=undecodable]")).ToHaveCountAsync(0);
+        await Expect(Page.Locator("[data-testid=unreachable]")).ToHaveCountAsync(0);
+        await Expect(Page.Locator("[data-testid=media-notice]")).ToHaveCountAsync(0, new() { Timeout = 10_000 });
+
+        await Page.Locator("[data-testid=play-pause]").ClickAsync();
+        await PlayheadPastAsync(1_500);
+        Assert.That(await Page.EvaluateAsync<bool>("() => !document.querySelector('audio[data-fk-media]').paused"), Is.True,
+                    "the recording isn't playing");
+    }
+
+    /// <summary>
     /// Playing 1.5 s before a mark, Next takes that mark (rule T4, 10/28/2026). It used to skip
     /// any mark under three seconds ahead.
     /// </summary>

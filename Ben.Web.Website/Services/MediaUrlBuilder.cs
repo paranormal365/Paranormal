@@ -30,10 +30,17 @@ public sealed class MediaUrlBuilder : IMediaUrlBuilder
     /// </remarks>
     private readonly Dictionary<string, string> _urls = [];
 
-    public MediaUrlBuilder(MediaTicketService tickets, IWebApiTokenStore tokens)
+    /// <summary>
+    /// This page's tokens by reference, so a link drawn now still works after the token in it has
+    /// been renewed (see <see cref="MediaCaller"/>). Null where nothing can renew (tests).
+    /// </summary>
+    private readonly IMediaTokenSource? _source;
+
+    public MediaUrlBuilder(MediaTicketService tickets, IWebApiTokenStore tokens, SessionRenewer? renewer = null)
     {
         _tickets = tickets;
         _tokens = tokens;
+        _source = renewer is null ? null : new CircuitMediaTokenSource(tokens, renewer);
     }
 
     public string Thumbnail(Guid fileId) => Build(fileId, "thumbnail");
@@ -46,7 +53,7 @@ public sealed class MediaUrlBuilder : IMediaUrlBuilder
         if (_urls.TryGetValue(cacheKey, out var cached)) return cached;
 
         var token = _tokens.AccessToken;
-        var ticket = string.IsNullOrWhiteSpace(token) ? null : _tickets.Protect(fileId, token);
+        var ticket = string.IsNullOrWhiteSpace(token) ? null : _tickets.Protect(fileId, token, _source);
         var url = ticket is null
             ? $"/media/field-sessions/{sessionId}/files/{fileId}"
             : $"/media/field-sessions/{sessionId}/files/{fileId}?t={Uri.EscapeDataString(ticket)}";
@@ -64,7 +71,7 @@ public sealed class MediaUrlBuilder : IMediaUrlBuilder
         if (_urls.TryGetValue(cacheKey, out var cached)) return cached;
         // Only for somebody signed in who may decide about it, so without a token there is nothing to fetch.
         var token = _tokens.AccessToken;
-        var ticket = string.IsNullOrWhiteSpace(token) ? "" : _tickets.Protect(evidenceId, token);
+        var ticket = string.IsNullOrWhiteSpace(token) ? "" : _tickets.Protect(evidenceId, token, _source);
         return _urls[cacheKey] = $"/media/place-file-review/{evidenceId}?t={Uri.EscapeDataString(ticket)}";
     }
 
@@ -76,7 +83,7 @@ public sealed class MediaUrlBuilder : IMediaUrlBuilder
         if (_urls.TryGetValue(cacheKey, out var cached)) return cached;
 
         var token = _tokens.AccessToken;
-        var ticket = string.IsNullOrWhiteSpace(token) ? null : _tickets.Protect(uploadFileId, token);
+        var ticket = string.IsNullOrWhiteSpace(token) ? null : _tickets.Protect(uploadFileId, token, _source);
         var url = ticket is null
             ? $"/media/menu-image/{uploadFileId}"
             : $"/media/menu-image/{uploadFileId}?t={Uri.EscapeDataString(ticket)}";
@@ -88,7 +95,7 @@ public sealed class MediaUrlBuilder : IMediaUrlBuilder
     public string EventKeepZip(Guid orgId, Guid eventId, IReadOnlyCollection<Guid> uploadFileIds)
     {
         var token = _tokens.AccessToken;
-        var ticket = string.IsNullOrWhiteSpace(token) ? "" : _tickets.Protect(eventId, token);
+        var ticket = string.IsNullOrWhiteSpace(token) ? "" : _tickets.Protect(eventId, token, _source);
         var ids = string.Join(",", uploadFileIds.Select(i => i.ToString("N")));
         return $"/media/event-keep/{orgId}/{eventId}?ids={ids}&t={Uri.EscapeDataString(ticket)}";
     }
@@ -99,7 +106,7 @@ public sealed class MediaUrlBuilder : IMediaUrlBuilder
         if (_urls.TryGetValue(cacheKey, out var cached)) return cached;
 
         var token = _tokens.AccessToken;
-        var ticket = string.IsNullOrWhiteSpace(token) ? null : _tickets.Protect(fileId, token);
+        var ticket = string.IsNullOrWhiteSpace(token) ? null : _tickets.Protect(fileId, token, _source);
         var url = ticket is null
             ? $"/media/event-files/{eventId}/{fileId}"
             : $"/media/event-files/{eventId}/{fileId}?t={Uri.EscapeDataString(ticket)}";
@@ -114,7 +121,7 @@ public sealed class MediaUrlBuilder : IMediaUrlBuilder
         if (_urls.TryGetValue(cacheKey, out var cached)) return cached;
 
         var token = _tokens.AccessToken;
-        var ticket = string.IsNullOrWhiteSpace(token) ? null : _tickets.Protect(submissionId, token);
+        var ticket = string.IsNullOrWhiteSpace(token) ? null : _tickets.Protect(submissionId, token, _source);
         var url = ticket is null
             ? $"/media/event-evidence/{eventId}/{submissionId}"
             : $"/media/event-evidence/{eventId}/{submissionId}?t={Uri.EscapeDataString(ticket)}";
@@ -130,7 +137,7 @@ public sealed class MediaUrlBuilder : IMediaUrlBuilder
 
         // The room is only for signed-in members, so without a token there is nothing to fetch.
         var token = _tokens.AccessToken;
-        var ticket = string.IsNullOrWhiteSpace(token) ? "" : _tickets.Protect(messageId, token);
+        var ticket = string.IsNullOrWhiteSpace(token) ? "" : _tickets.Protect(messageId, token, _source);
         var url = $"/media/event-room/{eventId}/{messageId}?t={Uri.EscapeDataString(ticket)}";
 
         _urls[cacheKey] = url;
@@ -156,7 +163,7 @@ public sealed class MediaUrlBuilder : IMediaUrlBuilder
         var cacheKey = $"store-file:{fileId}";
         if (_urls.TryGetValue(cacheKey, out var cached)) return cached;
         var token = _tokens.AccessToken;
-        var ticket = string.IsNullOrWhiteSpace(token) ? "" : _tickets.Protect(fileId, token);
+        var ticket = string.IsNullOrWhiteSpace(token) ? "" : _tickets.Protect(fileId, token, _source);
         return _urls[cacheKey] = $"/media/store-files/{fileId}?t={Uri.EscapeDataString(ticket)}";
     }
 
@@ -166,7 +173,7 @@ public sealed class MediaUrlBuilder : IMediaUrlBuilder
         if (_urls.TryGetValue(cacheKey, out var cached)) return cached;
         var token = _tokens.AccessToken;
         var query = new List<string>();
-        if (!string.IsNullOrWhiteSpace(token)) query.Add($"t={Uri.EscapeDataString(_tickets.Protect(fileId, token))}");
+        if (!string.IsNullOrWhiteSpace(token)) query.Add($"t={Uri.EscapeDataString(_tickets.Protect(fileId, token, _source))}");
         if (!string.IsNullOrWhiteSpace(orderToken)) query.Add($"o={Uri.EscapeDataString(orderToken)}");
         return _urls[cacheKey] = $"/media/store-downloads/{orderId}/{fileId}" + (query.Count > 0 ? "?" + string.Join("&", query) : "");
     }
@@ -179,7 +186,7 @@ public sealed class MediaUrlBuilder : IMediaUrlBuilder
         var token = _tokens.AccessToken;
         // Signed out is not an error: public files still resolve, and the endpoint simply calls
         // the API without a bearer token, which is exactly what an anonymous visitor should get.
-        var ticket = string.IsNullOrWhiteSpace(token) ? null : _tickets.Protect(fileId, token);
+        var ticket = string.IsNullOrWhiteSpace(token) ? null : _tickets.Protect(fileId, token, _source);
         var url = ticket is null
             ? $"/media/{fileId}/{kind}"
             : $"/media/{fileId}/{kind}?t={Uri.EscapeDataString(ticket)}";

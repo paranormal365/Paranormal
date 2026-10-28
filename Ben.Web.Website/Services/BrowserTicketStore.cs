@@ -46,7 +46,7 @@ public sealed class BrowserTicketStore
     public BrowserTicketStore(IMemoryCache cache) => _cache = cache;
 
     /// <summary>What a handle stands for. Kept server-side; never serialised to the browser.</summary>
-    private sealed record Entry(Guid Id, string AccessToken);
+    private sealed record Entry(Guid Id, string AccessToken, IMediaTokenSource? Source);
 
     /// <summary>
     /// Issues a handle for one id and one viewer, valid for <paramref name="lifetime"/>.
@@ -54,7 +54,11 @@ public sealed class BrowserTicketStore
     /// <param name="scope">
     /// Keeps media and upload handles apart, so one can never be redeemed as the other.
     /// </param>
-    public string Issue(string scope, Guid id, string accessToken, TimeSpan lifetime)
+    /// <param name="source">
+    /// The page's own token source, when a fresher token than <paramref name="accessToken"/> may be
+    /// needed by the time the handle is used (see <see cref="MediaCaller"/>).
+    /// </param>
+    public string Issue(string scope, Guid id, string accessToken, TimeSpan lifetime, IMediaTokenSource? source = null)
     {
         // Rounded down to the hour: the same viewer, the same file, the same hour gives the same
         // handle, so the URL is stable across renders and the browser can cache the bytes.
@@ -64,7 +68,7 @@ public sealed class BrowserTicketStore
         // Absolute, not sliding: a handle that renewed itself by being used would outlive the
         // session it belongs to, which is the opposite of what an expiry is for. The extra hour
         // matches the rounding above, so a handle minted at 10:59 still gets its full lifetime.
-        _cache.Set(CacheKey(scope, handle), new Entry(id, accessToken),
+        _cache.Set(CacheKey(scope, handle), new Entry(id, accessToken, source),
             new MemoryCacheEntryOptions { AbsoluteExpirationRelativeToNow = lifetime + TimeSpan.FromHours(1) });
 
         return handle;
@@ -78,6 +82,16 @@ public sealed class BrowserTicketStore
     /// answer the encrypted version gave, so every caller's handling is unchanged.
     /// </returns>
     public string? Redeem(string scope, Guid id, string handle)
+        => Find(scope, id, handle)?.AccessToken;
+
+    /// <summary>
+    /// Reads a handle back as a caller: the token it was issued with, and the page's token source
+    /// when it was issued from a signed-in page.
+    /// </summary>
+    public MediaCaller? RedeemCaller(string scope, Guid id, string handle)
+        => Find(scope, id, handle) is { } entry ? new MediaCaller(entry.AccessToken, entry.Source) : null;
+
+    private Entry? Find(string scope, Guid id, string handle)
     {
         if (string.IsNullOrWhiteSpace(handle)) return null;
         if (!_cache.TryGetValue(CacheKey(scope, handle), out Entry? entry) || entry is null) return null;
@@ -85,7 +99,7 @@ public sealed class BrowserTicketStore
         // Bound to ONE id, exactly as before: a handle lifted from one image cannot fetch another.
         // Checked even though the handle was derived from the id, because the check is what states
         // the rule — deriving it is an optimisation, not the guarantee.
-        return entry.Id != id ? null : entry.AccessToken;
+        return entry.Id != id ? null : entry;
     }
 
     private static string CacheKey(string scope, string handle) => $"ticket:{scope}:{handle}";
