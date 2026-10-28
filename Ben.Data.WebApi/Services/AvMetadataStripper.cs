@@ -16,7 +16,27 @@ public sealed class MediaToolOptions
     /// shared hosting it can be <c>App_Data\Tools\ffmpeg.exe</c> like the key files, with no
     /// need to know where the host keeps the site on disk. Left blank, that is where the API looks.
     /// </remarks>
-    public string? FfmpegPath { get; set; }
+    public string? FfmpegPath
+    {
+        // With no path set, the tools folder is searched on every read, so an ffmpeg.exe uploaded
+        // after the API started is found without restarting it (10/28/2026: it was uploaded after
+        // the deploy and the API, having looked once at startup, kept saying there was none).
+        get => string.IsNullOrWhiteSpace(_ffmpegPath) && _searchRoot is not null
+            ? SearchedLocations.FirstOrDefault(File.Exists) ?? _ffmpegPath
+            : _ffmpegPath;
+        set => _ffmpegPath = value;
+    }
+
+    private string? _ffmpegPath;
+    private string? _searchRoot;
+
+    /// <summary>
+    /// The full paths searched when no path is set, empty until <see cref="ResolveAgainst"/> has
+    /// named the site folder. The admin card prints the first, so a wrong folder shows itself.
+    /// </summary>
+    public IEnumerable<string> SearchedLocations => _searchRoot is null
+        ? []
+        : DefaultLocations.Select(relative => Path.GetFullPath(Path.Combine(_searchRoot, relative)));
 
     /// <summary>Where the API looks for ffmpeg when no path is set, from its own folder.</summary>
     public static readonly string[] DefaultLocations =
@@ -36,17 +56,14 @@ public sealed class MediaToolOptions
     /// </remarks>
     public void ResolveAgainst(string contentRoot)
     {
-        if (string.IsNullOrWhiteSpace(FfmpegPath))
+        if (string.IsNullOrWhiteSpace(_ffmpegPath))
         {
-            var found = DefaultLocations
-                .Select(relative => Path.GetFullPath(Path.Combine(contentRoot, relative)))
-                .FirstOrDefault(File.Exists);
-            if (found is not null) FfmpegPath = found;
+            _searchRoot = contentRoot;
             return;
         }
 
-        if (!Path.IsPathRooted(FfmpegPath))
-            FfmpegPath = Path.GetFullPath(Path.Combine(contentRoot, FfmpegPath));
+        if (!Path.IsPathRooted(_ffmpegPath))
+            _ffmpegPath = Path.GetFullPath(Path.Combine(contentRoot, _ffmpegPath));
     }
 
     /// <summary>How long one remux may take before it is abandoned and the original kept.</summary>
