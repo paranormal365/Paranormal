@@ -34,7 +34,14 @@ public class MapViewportTests : BenTestBase
     private async Task PanThriceAsync(ILocator map)
     {
         await map.ScrollIntoViewIfNeededAsync();
-        await Page.WaitForTimeoutAsync(300);
+
+        // A drag before MapKit has drawn the map moves nothing, and one made while the map is still
+        // framing its own pins is not reported, by design. The test waited a fixed 300 ms and failed
+        // whenever the framing ran longer — after other map tests in the same run (10/28/2026).
+        var module = await Page.EvaluateHandleAsync("path => import(path)", "/_content/Ben.Web.Website.Library/Kit/Maps/BenMap.razor.js");
+        var mapId = (await map.GetAttributeAsync("id"))!;
+        await Page.WaitForFunctionAsync("([mod, id]) => { const d = mod.describe(id); return !!d && !d.framing; }",
+                                        new object[] { module, mapId }, new() { Timeout = 30_000 });
 
         var box = (await map.BoundingBoxAsync())!;
         // Away from the middle: the map frames itself on its pins, so the middle is where a pin
@@ -51,8 +58,6 @@ public class MapViewportTests : BenTestBase
             await Page.Mouse.UpAsync();
             await Page.WaitForTimeoutAsync(80);   // well inside the 350 ms debounce
         }
-
-        await Page.WaitForTimeoutAsync(1500);     // let it fire and the answer land
     }
 
     [Test]
@@ -73,6 +78,12 @@ public class MapViewportTests : BenTestBase
             "nothing bounded before any gesture");
 
         await PanThriceAsync(map);
+
+        // The one request lands...
+        await Page.WaitForFunctionAsync($"() => ({ReadOrgCounter})() !== '0'", null, new() { Timeout = 15_000 });
+        // ...and no second follows. An absence needs a window: longer than the map's 250 ms settle
+        // and the page's 350 ms debounce together, several times over.
+        await Page.WaitForTimeoutAsync(2_000);
 
         Assert.That(await Page.EvaluateAsync<string>(ReadOrgCounter), Is.EqualTo("1"),
             "three gestures inside the debounce window should produce exactly one bounded request");

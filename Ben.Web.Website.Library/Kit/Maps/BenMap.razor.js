@@ -586,6 +586,9 @@ export function describe(containerId) {
         overlays: m.overlays.length,
         lastTap: _maps.get(containerId).lastTap ?? null,
         colorScheme: m.colorScheme,
+        // True while the map is moving itself (framing its pins, a fit): a gesture then is not
+        // reported, by design, so a test waits for it to end before it drags (10/28/2026).
+        framing: !!_maps.get(containerId).framing,
     }
 }
 
