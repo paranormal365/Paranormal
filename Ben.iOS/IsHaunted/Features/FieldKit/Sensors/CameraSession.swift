@@ -327,7 +327,7 @@ final class FieldCameraSession {
             captureRunning = false
             let session = session, token = UUID()
             personMapStart = token
-            queue.async {
+            queue.async { [weak self] in
                 session.stopRunning()
                 Task { @MainActor [weak self] in
                     guard let self, self.personMapStart == token else { return }
