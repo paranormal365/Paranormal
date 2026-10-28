@@ -10,6 +10,8 @@
 @inject IMediaUrlBuilder MediaUrls
 @inject Microsoft.Extensions.Options.IOptions<Ben.Data.Common.SiteIdentity> SiteOptions
 @inject IJSRuntime JS
+@using Microsoft.Extensions.Logging
+@inject ILogger<FieldKitEnginePlayer> Logger
 @implements IAsyncDisposable
 
 @*
@@ -126,7 +128,7 @@
         }
         else
         {
-            <div class="fk-player" @ref="_root" data-testid="field-player">
+            <div class="fk-player" @ref="_root" tabindex="-1" data-testid="field-player">
                 <div class="card mb-3">
                     <div class="card-body">
                         <div data-fk="transport"></div>
@@ -415,6 +417,15 @@
     private Guid? _justRenewed;
 
     /// <summary>
+    /// Set before the engine's start awaits anything. Blazor runs OnAfterRenderAsync after EVERY
+    /// render, including one that lands while the first is still awaiting the module; that pass
+    /// used to start the engine a second time on the same element, leaving the buttons wired to
+    /// the first engine and the recordings driven by both, so Pause stopped one and the other
+    /// played straight on (10/28/2026). BenMap guards the same window the same way.
+    /// </summary>
+    private bool _starting;
+
+    /// <summary>
     /// What was last ASKED for, set before the load starts. Checked against what had finished
     /// loading, a parent re-render arriving mid-load (the sign-in state settling does it) started
     /// a second load that tore down the player the first had just built.
@@ -541,15 +552,28 @@
     protected override async Task OnAfterRenderAsync(bool firstRender)
     {
         if (_timeline is null || _session is null || _root.Context is null) return;
+        if (_starting) return;
         try
         {
             if (!_started)
             {
+                _starting = true;
+                var root = _root;
+                var timeline = _timeline;
                 _engine ??= await JS.InvokeAsync<IJSObjectReference>("import", "./_content/Ben.Web.Website.Library/js/fieldKitPlayer.js");
                 _self ??= DotNetObjectReference.Create(this);
                 var urls = _session.Files.ToDictionary(f => f.Id.ToString(), f => FileUrl(f.Id));
-                await _engine.InvokeVoidAsync("init", _root, _self,
-                    JsonSerializer.Serialize(_timeline, TimelineJson), new { urls });
+                await _engine.InvokeVoidAsync("init", root, _self,
+                    JsonSerializer.Serialize(timeline, TimelineJson), new { urls });
+                _starting = false;
+                if (!ReferenceEquals(timeline, _timeline))
+                {
+                    // Another session was asked for while this one started: the element it started
+                    // on is gone. Stop it; the next render starts the right one.
+                    try { await _engine.InvokeVoidAsync("dispose", root); } catch (JSException) { }
+                    StateHasChanged();
+                    return;
+                }
                 _started = true;
                 return;
             }
@@ -568,6 +592,19 @@
         catch (Exception ex) when (ex is JSDisconnectedException or ObjectDisposedException or TaskCanceledException)
         {
             // The page went away mid-call; there is nothing left to drive.
+            _starting = false;
+        }
+        catch (JSException ex)
+        {
+            // A fault in the player's script is said on the page with a way to try again. Left to
+            // escape, it ended the whole connection and the page stopped answering anything.
+            _starting = false;
+            _started = false;
+            Logger.LogWarning(ex, "The session player's script failed for session {SessionId}", SessionId);
+            _session = null;
+            _timeline = null;
+            _refusal = "The player couldn't start. Try again, or reload the page.";
+            StateHasChanged();
         }
     }
 
