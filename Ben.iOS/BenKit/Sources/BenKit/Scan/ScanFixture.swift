@@ -12,8 +12,16 @@ import simd
 /// room, so what the UI test sends is what the unit tests read.
 public enum ScanFixture {
 
+    /// How the stand-in room looks on a later visit.
+    public enum Visit: Sendable {
+        /// As it was scanned.
+        case asScanned
+        /// The chair 40 cm toward the door, and a box on the floor that was not there.
+        case chairMovedAndABox
+    }
+
     /// The room's model: floor, four walls, a table and a chair.
-    public static func roomModel() -> ScanRoomModel {
+    public static func roomModel(_ visit: Visit = .asScanned) -> ScanRoomModel {
         let width: Float = 4, depth: Float = 5, height: Float = 2.5
         func at(_ x: Float, _ y: Float, _ z: Float, turned: Float = 0) -> simd_float4x4 {
             var m = simd_float4x4(simd_quatf(angle: turned, axis: SIMD3(0, 1, 0)))
@@ -33,18 +41,29 @@ public enum ScanFixture {
             ],
             objects: [
                 .init(category: "table", transform: at(0.5, 0.375, -1), dimensions: SIMD3(1.2, 0.75, 0.8)),
-                .init(category: "chair", transform: at(-0.4, 0.45, -0.6), dimensions: SIMD3(0.45, 0.9, 0.45)),
+                .init(category: "chair", transform: visit == .asScanned ? at(-0.4, 0.45, -0.6) : at(-0.4, 0.45, -0.2),
+                      dimensions: SIMD3(0.45, 0.9, 0.45)),
             ])
+    }
+
+    /// The mesh of a visit: the room's boxes, and on the later visit a box on the floor that no
+    /// model names — what only the surfaces can find.
+    public static func mesh(_ visit: Visit = .asScanned) -> ScanMesh {
+        var mesh = roomModel(visit).boxMesh()
+        if visit == .chairMovedAndABox {
+            mesh.appendBox(transform: .translation(SIMD3(1.2, 0.2, 1.4)), size: SIMD3(0.5, 0.4, 0.4))
+        }
+        return mesh
     }
 
     /// Writes the room into a new capture folder and records it, as the scanner does when Done is
     /// tapped. Returns the capture, its folder already in `store`.
     public static func makeCapture(in store: ScanStore, room: String, placeId: UUID?, sessionId: UUID?,
-                                   startedAt: Date, scannedAt: Date) throws -> ScanCapture {
+                                   startedAt: Date, scannedAt: Date, visit: Visit = .asScanned) throws -> ScanCapture {
         let id = UUID()
         let folder = try store.newCaptureFolder(id)
-        let model = roomModel()
-        let mesh = model.boxMesh()
+        let model = roomModel(visit)
+        let mesh = mesh(visit)
 
         try JSONEncoder().encode(model).write(to: folder.appendingPathComponent(ScanPackage.roomModelEntry))
         try MeshExporter.glb(mesh).write(to: folder.appendingPathComponent(ScanPackage.meshEntry))
@@ -58,13 +77,21 @@ public enum ScanFixture {
             try jpeg(width: 64, height: 48, shade: 0.2 + 0.2 * Double(index)).write(to: keyframesFolder.appendingPathComponent("\(name).jpg"))
             let depth = [Float](repeating: 2.5, count: 16 * 12)
             try DepthCodec.encode(depth).write(to: keyframesFolder.appendingPathComponent("\(name).depth"))
-            let pose = simd_float4x4.translation(SIMD3(Float(index) * 0.6 - 1.2, 1.5, 1.5))
+            // Standing by the near wall at eye height, looking a little down into the room, as a
+            // person scanning does — so the furniture is in the pictures.
+            var pose = simd_float4x4(simd_quatf(angle: -0.5, axis: SIMD3(1, 0, 0)))
+            pose.columns.3 = SIMD4(Float(index) * 0.6 - 1.2, 1.5, 1.5, 1)
             keyframes.append(ScanKeyframe(
                 file: "\(name).jpg", depth: "\(name).depth", depthWidth: 16, depthHeight: 12,
                 pose: pose.columnMajor, intrinsics: [60, 0, 0, 0, 60, 0, 32, 24, 1],
                 imageWidth: 64, imageHeight: 48, at: Double(index) * 20))
         }
         try JSONEncoder().encode(keyframes).write(to: keyframesFolder.appendingPathComponent("index.json"))
+
+        // Painted from its pictures, as a real scan is, so the viewer opens a textured model.
+        if let painted = Texturer.texture(mesh: mesh, keyframes: keyframes, folder: keyframesFolder, atlasSize: 256) {
+            try MeshExporter.glb(painted.mesh, texture: painted.atlas).write(to: folder.appendingPathComponent(ScanPackage.meshEntry))
+        }
 
         let capture = ScanCapture(
             id: id, room: room, placeId: placeId, sessionId: sessionId, startedAt: startedAt,

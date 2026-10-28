@@ -233,6 +233,16 @@ public struct DeviceDataExporter: Sendable {
             }
         }
 
+        // Comparisons with a place's room scan go in with the readings that name them (LiDAR plan,
+        // phase 2): what they found is the session's own finding. A place's scan itself is never in
+        // a session — it belongs to the place.
+        for path in Self.comparisonPathsNamed(in: document) where !included.contains(path) {
+            let url = files.fileURL(for: request.sessionId, relativePath: path)
+            guard FileManager.default.fileExists(atPath: url.path) else { continue }
+            entries.append(ZipWriter.Entry(path: path, file: url))
+            included.insert(path)
+        }
+
         let named = Self.mediaPathsNamed(in: document)
         let omitted = named.subtracting(included).sorted()
 
@@ -407,6 +417,22 @@ public struct DeviceDataExporter: Sendable {
 
     /// Every media path the document refers to — from `audio_ref` names and from the capture
     /// notes that carry photo and video paths.
+    /// The comparison scans a document names — `scans/compare-001.scan`, from a `scan` reading's
+    /// value or a change's picture (`…scan#changes/01.jpg`).
+    static func comparisonPathsNamed(in document: Data) -> Set<String> {
+        let text = String(decoding: document, as: UTF8.self)
+        var found: Set<String> = []
+        var search = text.startIndex..<text.endIndex
+        while let start = text.range(of: "\"scans/compare-", range: search) {
+            let after = text.index(after: start.lowerBound)
+            guard let end = text[after...].firstIndex(where: { $0 == "\"" || $0 == "#" }) else { break }
+            let path = String(text[after..<end])
+            if path.hasSuffix(".scan"), !path.contains(".."), !path.contains("\\") { found.insert(path) }
+            search = end..<text.endIndex
+        }
+        return found
+    }
+
     static func mediaPathsNamed(in document: Data) -> Set<String> {
         guard let text = String(data: document, encoding: .utf8) else { return [] }
         var found: Set<String> = []

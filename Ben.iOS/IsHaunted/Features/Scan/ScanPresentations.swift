@@ -27,6 +27,12 @@ struct ScanPresentations: ViewModifier {
                                  onCancel: { Task { await flow.cancelScanning() } })
                 }
             }
+            .fullScreenCover(isPresented: Binding(get: { flow?.comparing != nil }, set: { _ in })) {
+                if let flow, let comparing = flow.comparing {
+                    CompareRoomView(flow: flow, room: comparing.room, baseline: comparing.baseline,
+                                    sessionId: sessionId, scans: scans)
+                }
+            }
             .sheet(isPresented: Binding(get: { flow?.isSending == true },
                                         set: { if !$0 { flow?.dismissSending() } })) {
                 if let flow {

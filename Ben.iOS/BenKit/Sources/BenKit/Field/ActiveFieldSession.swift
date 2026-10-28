@@ -610,6 +610,15 @@ public final class ActiveFieldSession {
         readingCount = await engine.readingCount()
     }
 
+    /// Writes a comparison with the place's scan into the session (LiDAR plan, phase 2).
+    public func noteComparison(room: String, comparisonPath: String, placeScanId: UUID, version: Int,
+                               changes: [ScanChange]) async {
+        guard isRecording else { return }
+        await engine.noteComparison(room: room, comparisonPath: comparisonPath, placeScanId: placeScanId,
+                                    version: version, changes: changes)
+        readingCount = await engine.readingCount()
+    }
+
     public func setRoom(_ room: String?) async {
         let trimmed = room?.trimmingCharacters(in: .whitespacesAndNewlines)
         let value = (trimmed?.isEmpty ?? true) ? nil : trimmed

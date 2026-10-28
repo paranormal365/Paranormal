@@ -1,13 +1,18 @@
 import SwiftUI
 import RealityKit
+import ARKit
+import AVFoundation
 import CoreMotion
 import BenKit
 
-/// Standing inside a scanned room (LiDAR plan, phase 1, §5).
+/// Standing inside a scanned room (LiDAR plan, phases 1 and 2, §5).
 ///
-/// The room's mesh in RealityKit, seen from eye height in the middle of the room. A drag turns the
-/// head; the joystick walks, and stops short of the walls; **Look around** turns the room with the
-/// phone itself. A place with several scanned rooms can be walked room to room from the menu.
+/// The room's mesh in RealityKit, painted from its keyframes, seen from eye height in the middle of
+/// the room. A drag turns the head; the joystick walks, and stops short of the walls; **Look
+/// around** turns the room with the phone itself; **Walk** moves through it as the person walks
+/// their own room, never through a wall or the furniture. Standing where a keyframe was taken
+/// shows that picture close up. What a comparison found is pinned in the room, read aloud on a tap.
+/// A place with several scanned rooms can be walked room to room from the menu.
 struct ScanViewerView: View {
     let source: ScanViewerSource
     let flow: ScanFlow
@@ -18,7 +23,13 @@ struct ScanViewerView: View {
     @State private var problem: String?
     @State private var camera = ScanViewerCamera(roomMin: .zero, roomMax: SIMD3(1, 1, 1))
     @State private var lookAround = LookAround()
+    @State private var walk = WalkWithPhone()
     @State private var dragStart: CGSize = .zero
+    @State private var reader: ScanPackage.Reader?
+    @State private var keyframes: [ScanKeyframe] = []
+    @State private var occupancy: ScanOccupancy?
+    @State private var closeUp: (index: Int, image: UIImage)?
+    @State private var speech = AVSpeechSynthesizer()
 
     private var current: ScanViewerSource { showing ?? source }
 
@@ -55,7 +66,7 @@ struct ScanViewerView: View {
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
-                    Button("Close") { lookAround.stop(); dismiss() }
+                    Button("Close") { lookAround.stop(); walk.stop(); dismiss() }
                 }
                 if current.others.count > 1 {
                     ToolbarItem(placement: .primaryAction) {
@@ -75,7 +86,26 @@ struct ScanViewerView: View {
             }
         }
         .task { await load() }
-        .onDisappear { lookAround.stop() }
+        .onDisappear { lookAround.stop(); walk.stop() }
+        .onChange(of: camera) { _, moved in showCloseUp(from: moved) }
+    }
+
+    /// The scan's own picture taken from where the camera now stands, when there is one.
+    private func showCloseUp(from camera: ScanViewerCamera) {
+        guard let index = camera.closestKeyframe(keyframes) else { closeUp = nil; return }
+        guard closeUp?.index != index else { return }
+        guard let data = try? reader?.data("keyframes/\(keyframes[index].file)"), let image = UIImage(data: data) else { return }
+        closeUp = (index, image)
+    }
+
+    /// Turns to face a change and says it.
+    private func point(at change: ScanChange) {
+        guard change.where_.count == 3 else { return }
+        let target = SIMD3(Float(change.where_[0]), Float(change.where_[1]), Float(change.where_[2]))
+        let to = target - camera.position
+        camera.face(yaw: atan2(-to.x, -to.z), pitch: atan2(to.y, max(0.01, simd_length(SIMD2(to.x, to.z)))))
+        speech.stopSpeaking(at: .immediate)
+        speech.speak(AVSpeechUtterance(string: change.sentence))
     }
 
     // MARK: The room
@@ -92,6 +122,18 @@ struct ScanViewerView: View {
             light.look(at: .zero, from: SIMD3(1, 4, 2), relativeTo: nil)
             content.add(light)
 
+            // What a comparison found, pinned where it is: gold for moved, red for gone, cyan for new.
+            for change in current.changes where change.where_.count == 3 {
+                let color: UIColor = switch change.kind {
+                case .moved: .systemYellow
+                case .missing: .systemRed
+                case .new: .systemTeal
+                }
+                let pin = ModelEntity(mesh: .generateSphere(radius: 0.06), materials: [UnlitMaterial(color: color)])
+                pin.position = SIMD3(Float(change.where_[0]), Float(change.where_[1]) + 0.1, Float(change.where_[2]))
+                content.add(pin)
+            }
+
             let eye = PerspectiveCamera()
             eye.name = "eye"
             eye.camera.fieldOfViewInDegrees = 70
@@ -102,6 +144,7 @@ struct ScanViewerView: View {
                 eye.transform = Transform(matrix: camera.transform)
             }
         }
+        .id(current.scanId)
     }
 
     private var controls: some View {
@@ -114,12 +157,55 @@ struct ScanViewerView: View {
                     Label("Look around", systemImage: "gyroscope")
                 }
                 .toggleStyle(.button)
-                .disabled(!lookAround.isAvailable)
+                .disabled(!lookAround.isAvailable || walk.isOn)
                 .accessibilityIdentifier("scan-look-around")
+                Toggle(isOn: Binding(get: { walk.isOn }, set: { on in
+                    if on {
+                        lookAround.stop()
+                        walk.start(from: camera) { pose, start in
+                            camera.follow(device: pose, from: start) { occupancy?.blocks(eye: $0) == true }
+                        }
+                    } else {
+                        walk.stop()
+                    }
+                })) {
+                    Label("Walk", systemImage: "figure.walk")
+                }
+                .toggleStyle(.button)
+                .disabled(!walk.isAvailable)
+                .accessibilityIdentifier("scan-walk")
                 Spacer()
             }
             .padding(12)
+            if !current.changes.isEmpty {
+                ScrollView(.horizontal, showsIndicators: false) {
+                    HStack(spacing: 8) {
+                        ForEach(Array(current.changes.enumerated()), id: \.offset) { _, change in
+                            Button(change.sentence) { point(at: change) }
+                                .font(.caption)
+                                .buttonStyle(.signalSecondary)
+                                .accessibilityIdentifier("scan-change-pin")
+                        }
+                    }
+                    .padding(.horizontal, 12)
+                }
+            }
             Spacer()
+            if let closeUp {
+                HStack {
+                    Spacer()
+                    Image(uiImage: closeUp.image)
+                        .resizable().scaledToFit()
+                        .frame(maxWidth: 220)
+                        .clipShape(RoundedRectangle(cornerRadius: Theme.Radius.card))
+                        .overlay(alignment: .bottomLeading) {
+                            Text("Close up, from the scan").font(.caption2).padding(4)
+                                .background(.black.opacity(0.6)).foregroundStyle(Theme.bone)
+                        }
+                        .accessibilityIdentifier("scan-closeup")
+                }
+                .padding(.horizontal, 12)
+            }
             HStack {
                 Joystick { forward, right in camera.walk(forward: forward, right: right) }
                     .accessibilityIdentifier("scan-joystick")
@@ -148,6 +234,9 @@ struct ScanViewerView: View {
                 if let bounds = contents.mesh.bounds {
                     camera = ScanViewerCamera(roomMin: bounds.min, roomMax: bounds.max)
                 }
+                self.reader = reader
+                keyframes = (try? reader.keyframes()) ?? []
+                occupancy = ScanOccupancy(contents.mesh)
                 loaded = room
             } catch {
                 problem = (error as? LocalizedError)?.errorDescription ?? error.localizedDescription
@@ -217,6 +306,43 @@ final class LookAround {
 
     func stop() {
         motion.stopDeviceMotionUpdates()
+        isOn = false
+    }
+}
+
+/// Walking through the scan by walking (phase 2): the phone's own world tracking, no LiDAR needed,
+/// read thirty times a second and handed to the camera.
+@MainActor
+@Observable
+final class WalkWithPhone {
+    private let session = ARSession()
+    private var reading: Task<Void, Never>?
+    private(set) var isOn = false
+
+    var isAvailable: Bool { ARWorldTrackingConfiguration.isSupported }
+
+    func start(from camera: ScanViewerCamera,
+               _ apply: @escaping @MainActor (simd_float4x4, ScanViewerCamera.WalkStart) -> Void) {
+        guard isAvailable else { return }
+        isOn = true
+        session.run(ARWorldTrackingConfiguration(), options: [.resetTracking])
+        var start: ScanViewerCamera.WalkStart?
+        reading = Task { [session] in
+            while !Task.isCancelled {
+                if let frame = session.currentFrame, case .normal = frame.camera.trackingState {
+                    let pose = frame.camera.transform
+                    if start == nil { start = ScanViewerCamera.WalkStart(device: pose, camera: camera) }
+                    if let start { apply(pose, start) }
+                }
+                try? await Task.sleep(for: .milliseconds(33))
+            }
+        }
+    }
+
+    func stop() {
+        reading?.cancel()
+        reading = nil
+        session.pause()
         isOn = false
     }
 }

@@ -329,3 +329,71 @@ struct ScanViewerCameraTests {
         #expect(abs(c.yaw - (7 - 2 * .pi)) < 1e-4)
     }
 }
+
+/// Walking through a scan by walking (phase 2): the phone's moves become the camera's.
+@Suite("Scan viewer walking")
+struct ScanViewerWalkTests {
+
+    private func pose(x: Float = 0, z: Float = 0, yawDegrees: Float = 0) -> simd_float4x4 {
+        var m = simd_float4x4(simd_quatf(angle: yawDegrees * .pi / 180, axis: SIMD3(0, 1, 0)))
+        m.columns.3 = SIMD4(x, 1.4, z, 1)
+        return m
+    }
+
+    private func camera() -> ScanViewerCamera {
+        ScanViewerCamera(roomMin: SIMD3(-2, 0, -2.5), roomMax: SIMD3(2, 2.5, 2.5))
+    }
+
+    @Test func aStepForwardInTheRoomIsAStepForwardInTheScan() {
+        var c = camera()
+        let start = ScanViewerCamera.WalkStart(device: pose(), camera: c)
+        c.follow(device: pose(z: -1), from: start)
+        #expect(simd_distance(c.position, SIMD3(0, 1.6, -1)) < 1e-4)
+    }
+
+    @Test func theScanTurnsWhenThePersonFacesADifferentWayThanTheCamera() {
+        // The camera faces a quarter turn left of where the phone faced when walking began.
+        var c = camera()
+        c.look(yawBy: .pi / 2, pitchBy: 0)
+        let start = ScanViewerCamera.WalkStart(device: pose(), camera: c)
+        // The person steps forward in their own room: forward in the scan is the camera's forward.
+        c.follow(device: pose(z: -1), from: start)
+        #expect(simd_distance(c.position, SIMD3(-1, 1.6, 0)) < 1e-4)
+        // And turning the phone a little turns the camera by as much.
+        c.follow(device: pose(z: -1, yawDegrees: 10), from: start)
+        #expect(abs(c.yaw - (.pi / 2 + 10 * .pi / 180)) < 1e-4)
+    }
+
+    @Test func aWallStopsTheStepButNotTheTurn() {
+        var c = camera()
+        let start = ScanViewerCamera.WalkStart(device: pose(), camera: c)
+        c.follow(device: pose(z: -1, yawDegrees: 20), from: start, blocked: { _ in true })
+        #expect(c.position == SIMD3(0, 1.6, 0))
+        #expect(abs(c.yaw - 20 * .pi / 180) < 1e-4)
+    }
+
+    @Test func theRoomsFurnitureIsSolid() {
+        var mesh = ScanMesh()
+        mesh.appendBox(transform: .translation(SIMD3(0, 0.4, -1)), size: SIMD3(1.2, 0.8, 0.8))
+        let solid = ScanOccupancy(mesh)
+        #expect(solid.blocks(eye: SIMD3(0, 1.6, -1)))
+        #expect(!solid.blocks(eye: SIMD3(0, 1.6, 1)))
+    }
+
+    @Test func aCloseUpIsThePictureTakenFromWhereYouStandFacingYourWay() {
+        let keyframes = [
+            ScanKeyframe(file: "0001.jpg", depth: nil, depthWidth: nil, depthHeight: nil,
+                         pose: simd_float4x4.translation(SIMD3(0, 1.6, 0.3)).columnMajor,
+                         intrinsics: [], imageWidth: 10, imageHeight: 10, at: 0),
+            ScanKeyframe(file: "0002.jpg", depth: nil, depthWidth: nil, depthHeight: nil,
+                         pose: simd_float4x4(simd_quatf(angle: .pi, axis: SIMD3(0, 1, 0))).columnMajor,
+                         intrinsics: [], imageWidth: 10, imageHeight: 10, at: 0),
+        ]
+        var c = camera()
+        c.position = SIMD3(0, 1.6, 0)
+        // The second stands right here but faces the other way; the first is 30 cm off and facing ours.
+        #expect(c.closestKeyframe(keyframes) == 0)
+        c.position = SIMD3(0, 1.6, 2)
+        #expect(c.closestKeyframe(keyframes) == nil)
+    }
+}

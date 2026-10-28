@@ -70,6 +70,61 @@ final class RoomScanUITests: XCTestCase {
         app.buttons["scan-place-save"].tap()
     }
 
+    /// Scans the room and sends it, keeping the model and pictures, and waits for the server's word.
+    private func scanAndSend(_ app: XCUIApplication) -> XCUIElement {
+        let scan = app.buttons["scan-room"]
+        XCTAssertTrue(scan.waitForExistence(timeout: 20), "an unscanned room should offer Scan this room")
+        scan.tap()
+        let done = app.buttons["scan-done"]
+        XCTAssertTrue(done.waitForExistence(timeout: 15))
+        expectation(for: NSPredicate(format: "isEnabled == true"), evaluatedWith: done)
+        waitForExpectations(timeout: 10)
+        done.tap()
+        let pictures = app.buttons["scan-retention-pictures"]
+        XCTAssertTrue(pictures.waitForExistence(timeout: 15))
+        pictures.tap()
+        let result = app.descendants(matching: .any).matching(identifier: "scan-result").firstMatch
+        XCTAssertTrue(result.waitForExistence(timeout: 60), "the upload should finish and say what it became")
+        return result
+    }
+
+    /// Phase 2: a second visit to a scanned room, with the chair moved and a box on the floor.
+    func testComparingTheRoomFindsWhatMoved() throws {
+        let app = launch()
+        let room = "Compare test \(Int(Date().timeIntervalSince1970))"
+        recordingIn(room, app: app)
+        chooseThePlace(app)
+        _ = scanAndSend(app)
+        app.buttons["scan-result-done"].tap()
+
+        let compare = app.buttons["compare-room"]
+        XCTAssertTrue(compare.waitForExistence(timeout: 20), "a scanned room should offer Compare this room")
+        compare.tap()
+
+        let done = app.buttons["compare-done"]
+        XCTAssertTrue(done.waitForExistence(timeout: 30), "the stand-in room is recognized at once and scanned")
+        done.tap()
+
+        // The chair, in words, and the box nobody named.
+        let chair = app.buttons.matching(identifier: "scan-change-pin")
+            .containing(NSPredicate(format: "label CONTAINS[c] 'chair moved'")).firstMatch
+        XCTAssertTrue(chair.waitForExistence(timeout: 60), "the moved chair should be listed")
+        XCTAssertTrue(app.buttons.matching(identifier: "scan-change-pin")
+            .containing(NSPredicate(format: "label CONTAINS[c] 'Something is new'")).firstMatch.exists,
+                      "the box on the floor should be listed")
+        chair.tap()
+
+        app.buttons["compare-view-in-room"].tap()
+        XCTAssertTrue(app.descendants(matching: .any).matching(identifier: "scan-viewer").firstMatch.waitForExistence(timeout: 30))
+        XCTAssertTrue(app.buttons.matching(identifier: "scan-change-pin").firstMatch.waitForExistence(timeout: 10),
+                      "what changed should be pinned in the room")
+        app.buttons["Close"].tap()
+
+        // The comparison is in the session: its mark is on the timeline.
+        XCTAssertTrue(app.staticTexts.containing(NSPredicate(format: "label CONTAINS[c] 'Compared'")).firstMatch
+            .waitForExistence(timeout: 20), "the comparison should be marked in the session")
+    }
+
     func testPickAPlaceScanTheRoomSendItAndOpenTheViewer() throws {
         let app = launch()
         let room = "Scan test \(Int(Date().timeIntervalSince1970))"

@@ -47,7 +47,12 @@ public sealed record SessionTimeline(
     int SkippedReadings,
     /// <summary>The base that stands in before the first reading to carry one (rule I3): the
     /// session's last base, as the phone has always used for the whole night.</summary>
-    double? FallbackEmfBase)
+    double? FallbackEmfBase,
+    /// <summary>Rooms scanned for the place, and rooms compared with its scans (LiDAR plan, spec
+    /// 1.2). Empty for a session with none.</summary>
+    IReadOnlyList<TimelineRoomScan>? RoomScans = null,
+    /// <summary>What those comparisons found, one per thing (LiDAR plan, spec 1.2).</summary>
+    IReadOnlyList<TimelineScanChange>? ScanChanges = null)
 {
     public const int CurrentVersion = 1;
 }
@@ -100,6 +105,21 @@ public sealed record TimelineMarker(
     string? Details = null,
     /// <summary>When those details were written.</summary>
     DateTime? DetailsAddedAt = null);
+
+/// <summary>A room scanned for its place, or compared with the place's scan of it (LiDAR plan).</summary>
+/// <param name="Kind"><c>scanned</c> or <c>compared</c>.</param>
+/// <param name="Path">For a comparison, the comparison scan inside the session's bundle.</param>
+/// <param name="Outcome">For a scan: <c>current</c>, <c>replaced</c> or <c>offered</c>.</param>
+public sealed record TimelineRoomScan(
+    long T, string Kind, string Room, Guid? PlaceScanId, int? Version,
+    string? Path, int? Changes, string? Outcome, double? DurationSeconds);
+
+/// <summary>One thing a comparison found: moved, missing or new (LiDAR plan).</summary>
+/// <param name="Picture">Inside the session's bundle: <c>scans/compare-001.scan#changes/01.jpg</c>.</param>
+public sealed record TimelineScanChange(
+    long T, string What, string Object, string? Note,
+    double? DistanceCm, double? RotationDeg, double[]? SizeCm, double[]? Where,
+    string? Picture, Guid? PlaceScanId);
 
 /// <summary>A photograph and the moment it was taken.</summary>
 public sealed record TimelinePhoto(long T, Guid FileId, string Path);

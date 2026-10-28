@@ -678,7 +678,62 @@ public actor FieldSessionEngine {
         measurements["room_scan"] = .label(room, details: details)
         entry.measurements = measurements
         await append(entry)
+        emitMark(entry, kind: .roomScan)
         return entry
+    }
+
+    /// Tells the screen about a mark written here rather than through `record`, so it is listed
+    /// and kept with the session like any other.
+    private func emitMark(_ entry: FieldReading, kind: MarkerKind) {
+        guard logging else { return }
+        emit(.marked(FieldMarkerRecord(at: entry.at, kind: kind, note: entry.note, room: room,
+                                       magneticMicrotesla: latest.magneticMicrotesla, soundDbfs: latest.soundDbfs,
+                                       latitude: latest.position?.latitude, longitude: latest.position?.longitude)))
+    }
+
+    /// A room compared with the place's scan of it (LiDAR plan, phase 2, spec 1.2): a
+    /// `room_compared` reading carrying `scan` — which file, against which version, how many
+    /// changes — and one `scan_change` reading for each thing found, so the timeline lists them.
+    @discardableResult
+    public func noteComparison(room: String, comparisonPath: String, placeScanId: UUID, version: Int,
+                               changes: [ScanChange]) async -> [FieldReading] {
+        let moment = now()
+        let scanId = JSONValue.string(placeScanId.uuidString.lowercased())
+        var written: [FieldReading] = []
+
+        var entry = reading(at: moment, triggeredBy: MarkerKind.roomCompared.trigger, marker: .roomCompared,
+                            note: changes.isEmpty ? "Compared \(room): nothing changed" : "Compared \(room): \(changes.count) changed")
+        var measurements = entry.measurements ?? [:]
+        measurements["scan"] = .label(comparisonPath, details: [
+            "room": .string(room), "place_scan_id": scanId,
+            "place_scan_version": .number(Double(version)), "changes": .number(Double(changes.count)),
+        ])
+        entry.measurements = measurements
+        await append(entry)
+        emitMark(entry, kind: .roomCompared)
+        written.append(entry)
+
+        for change in changes {
+            var details: [String: JSONValue] = [
+                "object": .string(change.object),
+                "where": .array(change.where_.map(JSONValue.number)),
+                "place_scan_id": scanId,
+            ]
+            if let d = change.distanceCm { details["distance_cm"] = .number(d) }
+            if let r = change.rotationDeg { details["rotation_deg"] = .number(r) }
+            if let size = change.sizeCm { details["size_cm"] = .array(size.map(JSONValue.number)) }
+            if let picture = change.picture { details["picture"] = .string(picture) }
+
+            var changeEntry = reading(at: moment, triggeredBy: MarkerKind.scanChange.trigger, marker: .scanChange,
+                                      note: change.sentence)
+            var changeMeasurements = changeEntry.measurements ?? [:]
+            changeMeasurements["scan_change"] = .label(change.kind.rawValue, details: details)
+            changeEntry.measurements = changeMeasurements
+            await append(changeEntry)
+            emitMark(changeEntry, kind: .scanChange)
+            written.append(changeEntry)
+        }
+        return written
     }
 
     // MARK: - EVP

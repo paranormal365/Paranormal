@@ -28,6 +28,7 @@ namespace Ben.Data.Source.Context
         public virtual DbSet<PlaceScan> PlaceScans { get; set; }
         public virtual DbSet<PlaceScanHold> PlaceScanHolds { get; set; }
         public virtual DbSet<PlaceScanCustody> PlaceScanCustodies { get; set; }
+        public virtual DbSet<PlaceScanChange> PlaceScanChanges { get; set; }
         public virtual DbSet<SignInEvent> SignInEvents { get; set; }
         public virtual DbSet<EventReminderSent> EventReminderSents { get; set; }
         public virtual DbSet<VideoAsset> VideoAssets { get; set; }
@@ -840,6 +841,19 @@ namespace Ben.Data.Source.Context
             modelBuilder.Entity<PlaceScanCustody>().Property(c => c.Note).HasMaxLength(2000);
             modelBuilder.Entity<PlaceScanCustody>().Property(c => c.ClosedReason).HasMaxLength(20);
             modelBuilder.Entity<PlaceScanCustody>().HasIndex(c => c.PlaceId).IsUnique();
+
+            // What comparisons found (phase 2). They go with the session that found them; the
+            // version they were made against is never deleted (a removed scan keeps its row), so
+            // that key needs no action — and a second cascade path from Places would be refused.
+            modelBuilder.Entity<PlaceScanChange>()
+                .HasOne(c => c.PlaceScan).WithMany()
+                .HasForeignKey(c => c.PlaceScanId).OnDelete(DeleteBehavior.NoAction);
+            modelBuilder.Entity<PlaceScanChange>()
+                .HasOne(c => c.FieldSessionUpload).WithMany()
+                .HasForeignKey(c => c.FieldSessionUploadId).OnDelete(DeleteBehavior.Cascade);
+            modelBuilder.Entity<PlaceScanChange>().Property(c => c.ObjectCategory).HasMaxLength(40).IsRequired();
+            modelBuilder.Entity<PlaceScanChange>().Property(c => c.PictureEntryPath).HasMaxLength(400);
+            modelBuilder.Entity<PlaceScanChange>().HasIndex(c => new { c.PlaceScanId, c.ComparedUtc });
 
             // ── RateLimitRefusal ─────────────────────────────────────────────
             // One row per policy, so the tally is an update rather than an insert per refusal.

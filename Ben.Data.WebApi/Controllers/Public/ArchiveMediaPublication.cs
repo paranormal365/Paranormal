@@ -56,6 +56,9 @@ public static class ArchiveMediaPublication
             // the path of its member instead (since 2026-09-16 the archive serves those too, as a
             // range of the session file — the same way the share link and the phone read them).
             .Where(f => f.UploadFileId != null || f.BundleEntryPath != null)
+            // A comparison with a place's room scan is never public (LiDAR plan): its changes are
+            // readings and travel, its pictures of the inside of a building do not.
+            .Where(f => !f.RelativePath.StartsWith("scans/"))
             .OrderBy(f => f.RelativePath)
             .Select(f => new
             {

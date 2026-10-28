@@ -24,6 +24,8 @@ struct ScanSendSheet: View {
                     ScanResultView(flow: flow, result: result)
                 case .kept(let capture, let why):
                     ScanKeptView(flow: flow, capture: capture, why: why)
+                case .compared(let room, let result, let baseline):
+                    CompareResultsView(flow: flow, room: room, result: result, baseline: baseline)
                 default:
                     ProgressView()
                 }

@@ -34,6 +34,10 @@ final class ScanFlow {
         case done(PlaceScanUploadResult)
         /// Kept on the phone: the server could not be reached, or the person chose to.
         case kept(ScanCapture, String)
+        /// Comparing the room with the place's scan of it (phase 2): the scanner is open.
+        case comparing(room: String, baseline: PlaceScanSummary)
+        /// What the comparison found, written into the session.
+        case compared(room: String, result: ComparisonPackage.Result, baseline: PlaceScanSummary)
     }
 
     private(set) var step: Step = .idle
@@ -240,10 +244,55 @@ final class ScanFlow {
         if case .scanning(let room, _) = step { room } else { nil }
     }
 
+    /// The comparison under way, while it is.
+    var comparing: (room: String, baseline: PlaceScanSummary)? {
+        if case .comparing(let room, let baseline) = step { (room, baseline) } else { nil }
+    }
+
+    // MARK: Comparing (phase 2)
+
+    /// Opens the comparison for a scanned room.
+    func compare(room: String, against baseline: PlaceScanSummary) {
+        problem = nil
+        step = .comparing(room: room, baseline: baseline)
+    }
+
+    /// The comparison scanner finished: compare, write the comparison into the session, and mark it.
+    func compared(_ capture: ScanCapture, room: String, baseline: PlaceScanSummary) async {
+        guard let placeId else { return }
+        let file: URL
+        switch await fetch(placeId: placeId, scanId: baseline.id) {
+        case .problem(let why):
+            problem = why
+            step = .idle
+            return
+        case .file(let url):
+            file = url
+        }
+        do {
+            let result = try ComparisonPackage.write(
+                capture: capture, captureFolder: scans.captureFolder(capture.id),
+                baseline: try ScanPackage.Reader(url: file), baselineScanId: baseline.id, baselineVersion: baseline.version,
+                sessionFolder: store.files.directory(for: sessionId))
+            scans.remove(capture.id)
+            await active?.noteComparison(room: room, comparisonPath: result.relativePath, placeScanId: baseline.id,
+                                         version: baseline.version, changes: result.changes)
+            step = .compared(room: room, result: result, baseline: baseline)
+        } catch {
+            problem = (error as? LocalizedError)?.errorDescription ?? error.localizedDescription
+            step = .idle
+        }
+    }
+
+    /// The comparison file in the session, for its pictures.
+    func comparisonFile(_ result: ComparisonPackage.Result) -> URL {
+        store.files.directory(for: sessionId).appendingPathComponent(result.relativePath)
+    }
+
     /// Whether the sheet after the scanner is up.
     var isSending: Bool {
         switch step {
-        case .choosingRetention, .uploading, .conflict, .done, .kept: true
+        case .choosingRetention, .uploading, .conflict, .done, .kept, .compared: true
         default: false
         }
     }
@@ -304,12 +353,14 @@ final class ScanFlow {
     }
 }
 
-/// Which scan the viewer opens, and the place's other rooms it can switch to.
+/// Which scan the viewer opens, the place's other rooms it can switch to, and what a comparison
+/// found in it, to mark in the room.
 struct ScanViewerSource: Identifiable, Equatable {
     let placeId: UUID
     let scanId: UUID
     let room: String
     let others: [(String, UUID)]
+    var changes: [ScanChange] = []
 
     var id: UUID { scanId }
 

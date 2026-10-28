@@ -84,6 +84,66 @@ public struct ScanViewerCamera: Sendable, Equatable {
         return (Float(yaw), Float(pitch))
     }
 
+    // MARK: Walking by walking (phase 2)
+
+    /// Which way an ARKit camera faces: yaw counter-clockwise from −z seen from above, pitch up.
+    public static func facing(pose: simd_float4x4) -> (yaw: Float, pitch: Float) {
+        let forward = -SIMD3(pose.columns.2.x, pose.columns.2.y, pose.columns.2.z)
+        let pitch = asin(min(1, max(-1, forward.y)))
+        let yaw = atan2(-forward.x, -forward.z)
+        return (yaw, pitch)
+    }
+
+    /// Where walking began: the phone's pose in its own room, and the camera's in the scan's.
+    public struct WalkStart: Sendable, Equatable {
+        public var devicePosition: SIMD3<Float>
+        public var deviceYaw: Float
+        public var cameraPosition: SIMD3<Float>
+        public var cameraYaw: Float
+
+        public init(device pose: simd_float4x4, camera: ScanViewerCamera) {
+            devicePosition = pose.translation
+            deviceYaw = ScanViewerCamera.facing(pose: pose).yaw
+            cameraPosition = camera.position
+            cameraYaw = camera.yaw
+        }
+    }
+
+    /// Moves the camera as the phone moved since walking began: a step forward in the person's
+    /// own room is a step forward in the scan, a turn is a turn. A step that would put the camera
+    /// in a wall or out of the room is not taken; turning still is.
+    public mutating func follow(device pose: simd_float4x4, from start: WalkStart,
+                                blocked: (SIMD3<Float>) -> Bool = { _ in false }) {
+        let facing = Self.facing(pose: pose)
+        let turn = start.cameraYaw - start.deviceYaw
+        let moved = pose.translation - start.devicePosition
+        let rotated = simd_quatf(angle: turn, axis: SIMD3(0, 1, 0)).act(moved)
+        let target = SIMD3(start.cameraPosition.x + rotated.x, start.cameraPosition.y + rotated.y, start.cameraPosition.z + rotated.z)
+
+        face(yaw: facing.yaw + turn, pitch: facing.pitch)
+        let inside = clamped(target)
+        if inside.x == target.x, inside.z == target.z, !blocked(target) {
+            position = target
+        }
+    }
+
+    /// The keyframe taken from about where the camera stands and facing about the same way — a
+    /// close-up of what the person is looking at, from the scan's own picture.
+    public func closestKeyframe(_ keyframes: [ScanKeyframe], within meters: Float = 0.4,
+                                facingWithin degrees: Float = 30) -> Int? {
+        let look = forward
+        return keyframes.indices
+            .compactMap { index -> (Int, Float)? in
+                let pose = simd_float4x4(columnMajor: keyframes[index].pose)
+                let distance = simd_distance(pose.translation, position)
+                guard distance <= meters else { return nil }
+                let theirs = -SIMD3(pose.columns.2.x, pose.columns.2.y, pose.columns.2.z)
+                let angle = acos(min(1, max(-1, simd_dot(simd_normalize(theirs), look)))) * 180 / .pi
+                return angle <= degrees ? (index, distance) : nil
+            }
+            .min { $0.1 < $1.1 }?.0
+    }
+
     private func clamped(_ p: SIMD3<Float>) -> SIMD3<Float> {
         let low = floorMin + Self.wallMargin
         let high = floorMax - Self.wallMargin
@@ -98,5 +158,32 @@ public struct ScanViewerCamera: Sendable, Equatable {
         if a > .pi { a -= 2 * .pi }
         if a < -.pi { a += 2 * .pi }
         return a
+    }
+}
+
+/// What a walk through a scan must not pass through: the room's surfaces, as cells.
+public struct ScanOccupancy: Sendable {
+    private let voxels: Voxels
+
+    public init(_ mesh: ScanMesh) {
+        voxels = Voxels(mesh)
+    }
+
+    /// Whether a person whose eyes are here would be standing in something — a wall, a table —
+    /// anywhere from knee height to just above the eyes, within fifteen centimeters.
+    public func blocks(eye: SIMD3<Float>) -> Bool {
+        let size = RoomComparer.voxelMeters
+        let column = SIMD3<Int32>(Int32((eye.x / size).rounded(.down)), 0, Int32((eye.z / size).rounded(.down)))
+        let top = Int32(((eye.y + 0.1) / size).rounded(.down))
+        let knee = Int32(((eye.y - ScanViewerCamera.eyeHeight + 0.5) / size).rounded(.down))
+        guard knee <= top else { return false }
+        for y in knee...top {
+            for dx: Int32 in -3...3 {
+                for dz: Int32 in -3...3 where voxels.cells.contains(SIMD3(column.x + dx, y, column.z + dz)) {
+                    return true
+                }
+            }
+        }
+        return false
     }
 }

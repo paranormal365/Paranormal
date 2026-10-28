@@ -132,6 +132,9 @@ public sealed class AdminOrphanedFieldSessionController : BenControllerBase
 
             await db.FieldSessionUploadFiles.Where(f => ids.Contains(f.FieldSessionUploadId))
                 .ExecuteDeleteAsync(ct);
+            // What its comparisons with a place's room scans found (LiDAR plan). The key cascades;
+            // said here so this list stays the whole list.
+            await db.PlaceScanChanges.Where(c => ids.Contains(c.FieldSessionUploadId)).ExecuteDeleteAsync(ct);
             await db.FieldSessionUploads.Where(s => ids.Contains(s.Id)).ExecuteDeleteAsync(ct);
 
             await transaction.CommitAsync(ct);

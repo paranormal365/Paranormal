@@ -146,7 +146,7 @@ struct RoomScanView: View {
 }
 
 /// The camera, with the mesh ARKit is building drawn over it.
-private struct ScanCameraView: UIViewRepresentable {
+struct ScanCameraView: UIViewRepresentable {
     let session: ARSession
 
     func makeUIView(context: Context) -> ARView {

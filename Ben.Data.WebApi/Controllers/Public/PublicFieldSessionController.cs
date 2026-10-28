@@ -234,6 +234,7 @@ public sealed class PublicFieldSessionController : ControllerBase
         var files = approved
             ? session.Files
                 .Where(f => f.UploadFileId is not null || f.BundleEntryPath is { Length: > 0 })
+                .Where(f => !f.RelativePath.StartsWith("scans/", StringComparison.Ordinal))
                 .Select(f => new TimelineSourceFile(
                     f.UploadFileId ?? f.Id, f.RelativePath, f.UploadFile?.StoragePath, f.BundleEntryPath,
                     f.DateUpdated ?? f.DateCreated))

@@ -21,6 +21,8 @@ public enum MarkerKind: String, Codable, Sendable, CaseIterable {
     case appReturned = "app_returned"
     /// A room scanned for the place during the session (LiDAR plan). Carries `room_scan`.
     case roomScan = "room_scan"
+    /// A room compared with the place's scan of it (LiDAR plan, phase 2). Carries `scan`.
+    case roomCompared = "room_compared"
     /// Something a comparison scan found moved, missing or new. Carries `scan_change`.
     case scanChange = "scan_change"
     /// The person map saw a human figure; one per continuous sighting. Carries `figure`.
@@ -33,7 +35,7 @@ public enum MarkerKind: String, Codable, Sendable, CaseIterable {
         switch self {
         case .sentryEmf, .sentrySound, .deviceMoved, .sceneMotion, .appBackgrounded, .appReturned,
              .scanChange, .figureSeen, .unexplainedShape: .event
-        case .manual, .evpQuestion, .evpWaitEnd, .roomScan: .manual
+        case .manual, .evpQuestion, .evpWaitEnd, .roomScan, .roomCompared: .manual
         }
     }
 
@@ -41,7 +43,7 @@ public enum MarkerKind: String, Codable, Sendable, CaseIterable {
         switch self {
         case .sentryEmf, .sentrySound, .deviceMoved, .sceneMotion, .appBackgrounded, .appReturned,
              .scanChange, .figureSeen, .unexplainedShape: true
-        case .manual, .evpQuestion, .evpWaitEnd, .roomScan: false
+        case .manual, .evpQuestion, .evpWaitEnd, .roomScan, .roomCompared: false
         }
     }
 
@@ -57,6 +59,7 @@ public enum MarkerKind: String, Codable, Sendable, CaseIterable {
         case .appBackgrounded: "App put away"
         case .appReturned: "Back in the app"
         case .roomScan: "Room scanned"
+        case .roomCompared: "Room compared"
         case .scanChange: "Something changed"
         case .figureSeen: "Figure seen"
         case .unexplainedShape: "Unexplained shape"

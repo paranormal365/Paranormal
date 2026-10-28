@@ -138,6 +138,55 @@ namespace Ben.Data.Source.Entities
     }
 
     /// <summary>
+    /// One thing a comparison scan found, so a place can say "3 things moved since March" (LiDAR
+    /// plan, phase 2).
+    /// </summary>
+    /// <remarks>
+    /// <para>Written from the session document when a session is uploaded — each
+    /// <c>scan_change</c> reading becomes a row — and replaced with the document when the session is
+    /// sent again. The comparison itself stays in the session; the row is what the place keeps.</para>
+    ///
+    /// <para>Keyed to the version of the room's scan it was made against, which outlives being
+    /// replaced or taken down, so the row still says what it was compared with.</para>
+    /// </remarks>
+    public class PlaceScanChange
+    {
+        public Guid Id { get; set; }
+
+        /// <summary>The version of the room's scan the comparison was made against.</summary>
+        public Guid PlaceScanId { get; set; }
+
+        public Guid FieldSessionUploadId { get; set; }
+
+        public PlaceScanChangeKind Kind { get; set; }
+
+        /// <summary>RoomPlan's category (<c>chair</c>, <c>table</c>…) or <c>unclassified</c>.</summary>
+        public string ObjectCategory { get; set; } = null!;
+
+        /// <summary>For a move: how far, and how far it turned.</summary>
+        public double? DistanceCm { get; set; }
+        public double? RotationDeg { get; set; }
+
+        /// <summary>For something new or missing: its size.</summary>
+        public double? SizeXCm { get; set; }
+        public double? SizeYCm { get; set; }
+        public double? SizeZCm { get; set; }
+
+        /// <summary>Where, in metres, in the room scan's frame.</summary>
+        public double WhereX { get; set; }
+        public double WhereY { get; set; }
+        public double WhereZ { get; set; }
+
+        /// <summary>The picture of it inside the session bundle: <c>scans/compare-001.scan#changes/01.jpg</c>.</summary>
+        public string? PictureEntryPath { get; set; }
+
+        public DateTime ComparedUtc { get; set; }
+
+        public virtual PlaceScan PlaceScan { get; set; } = null!;
+        public virtual FieldSessionUpload FieldSessionUpload { get; set; } = null!;
+    }
+
+    /// <summary>
     /// A SuperAdmin handing a place's scans to a group (LiDAR plan, phase 1; Ben, 10/28/2026).
     /// </summary>
     /// <remarks>

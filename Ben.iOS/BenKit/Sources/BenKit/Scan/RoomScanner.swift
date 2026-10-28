@@ -31,7 +31,7 @@ public final class RoomScanner {
     }
 
     /// The session everything is captured from; a view shows its camera.
-    public let arSession = ARSession()
+    public let arSession: ARSession
 
     public private(set) var phase: Phase = .idle
     /// RoomPlan's coaching, in words, while there is something to say.
@@ -56,9 +56,13 @@ public final class RoomScanner {
     public static var isSupported: Bool { RoomCaptureSession.isSupported }
 
     /// A scanner writing into `folder`, which must exist with a `keyframes` folder inside.
-    public init(folder: URL) {
+    ///
+    /// A comparison hands in the session that has already found its place in the room's scan
+    /// (phase 2), so what this captures is in that scan's frame.
+    public init(folder: URL, session: ARSession = ARSession()) {
         self.folder = folder
-        self.roomSession = RoomCaptureSession(arSession: arSession)
+        self.arSession = session
+        self.roomSession = RoomCaptureSession(arSession: session)
         self.relay = Relay()
         relay.owner = self
         roomSession.delegate = relay
@@ -113,13 +117,18 @@ public final class RoomScanner {
             phase = .failed("Nothing of the room was found. Scan it again, slowly, with the lights on.")
             throw ScanPackage.PackageError.missingMesh
         }
-        try MeshExporter.glb(mesh).write(to: folder.appendingPathComponent(ScanPackage.meshEntry))
+        // Painted from the keyframes when there are some (phase 2); the plain mesh otherwise.
+        let keyframesFolder = folder.appendingPathComponent("keyframes")
+        if let painted = Texturer.texture(mesh: mesh, keyframes: keyframes, folder: keyframesFolder) {
+            try MeshExporter.glb(painted.mesh, texture: painted.atlas).write(to: folder.appendingPathComponent(ScanPackage.meshEntry))
+        } else {
+            try MeshExporter.glb(mesh).write(to: folder.appendingPathComponent(ScanPackage.meshEntry))
+        }
 
         if let worldMap {
             try worldMap.write(to: folder.appendingPathComponent(ScanPackage.worldMapEntry))
         }
 
-        let keyframesFolder = folder.appendingPathComponent("keyframes")
         try JSONEncoder().encode(keyframes).write(to: keyframesFolder.appendingPathComponent("index.json"))
         if let middle = keyframes.isEmpty ? nil : keyframes[keyframes.count / 2],
            let preview = Self.preview(from: keyframesFolder.appendingPathComponent(middle.file), context: imageContext) {

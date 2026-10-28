@@ -52,14 +52,18 @@ struct ScanRoomButton: View {
             header("\(known?.roomName ?? room) is scanned",
                    "Scanned \(EventClock.dayOnly(current.scannedUtc, nil, inMyTime: true)) by \(current.scannedByYou ? "you" : current.scannedBy).")
             HStack(spacing: 10) {
-                Button("View the scan") { flow.view(current, room: known?.roomName ?? room) }
-                    .buttonStyle(.signalPrimary)
-                    .accessibilityIdentifier("view-room-scan")
-                if known?.canReplace == true {
-                    Button("Scan it again") { Task { await flow.scan(room: room) } }
-                        .buttonStyle(.signalSecondary)
-                        .accessibilityIdentifier("replace-room-scan")
+                if known?.canCompare == true {
+                    Button("Compare this room") { flow.compare(room: known?.roomName ?? room, against: current) }
+                        .buttonStyle(.signalPrimary)
+                        .accessibilityIdentifier("compare-room")
                 }
+                Button("View the scan") { flow.view(current, room: known?.roomName ?? room) }
+                    .buttonStyle(.signalSecondary)
+                    .accessibilityIdentifier("view-room-scan")
+            }
+            if known?.canReplace == true {
+                Button("Scan it again, replacing this scan") { Task { await flow.scan(room: room) } }
+                    .accessibilityIdentifier("replace-room-scan")
             }
             if known?.canReplace == false, let why = known?.replaceReason {
                 Text(why).font(.caption).foregroundStyle(Theme.fog)
