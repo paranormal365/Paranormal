@@ -399,4 +399,32 @@ public abstract class Oct16TestBase : BenTestBase
     /// <summary>Fails with every problem found, one per line — never only the first.</summary>
     protected static void NothingWrong(List<string> problems)
         => Assert.That(problems, Is.Empty, "What looked wrong:\n" + string.Join("\n", problems));
+
+    /// <returns>True when this test made the booking (and so takes it away again).</returns>
+    /// <summary>
+    /// A confirmed seat at the seeded seats event for <paramref name="guest"/>, so they may send it a
+    /// session. Moved here from the EVP scan tests (10/28/2026) for the session page's tests.
+    /// </summary>
+    protected async Task<bool> EnsureAConfirmedSeatAsync(IAPIRequestContext guest, IAPIRequestContext organizer)
+    {
+        var mine = await guest.GetAsync($"/api/public/hosted-events/{SeatsEventId}/my-booking");
+        if (mine.Ok && (await mine.TextAsync()).Contains("\"status\":1")) return false;
+        await guest.DeleteAsync($"/api/public/hosted-events/{SeatsEventId}/my-booking");
+
+        var orgId = await OrgIdBySlugAsync(GroupSlug);
+        var layout = await OkJsonAsync(await organizer.GetAsync($"/api/organizations/{orgId}/events/{SeatsEventId}/layout"), "reading the seats");
+        var seat = layout.GetProperty("units").EnumerateArray().Last().GetProperty("id").GetString();
+        var ev = await OkJsonAsync(await organizer.GetAsync($"/api/organizations/{orgId}/events/{SeatsEventId}"), "reading the event");
+        var night = ev.GetProperty("nights").EnumerateArray().First().GetProperty("id").GetString();
+        var nights = new[] { new { hostedEventNightId = night, hostedEventLayoutUnitId = seat } };
+
+        var held = await OkJsonAsync(await guest.PostAsync($"/api/public/hosted-events/{SeatsEventId}/holds", new()
+        {
+            DataObject = new { nights, partySize = 1, firstName = "Daniel", lastName = "Park", phone = "615-555-0142" },
+        }), "holding a seat");
+        await OkJsonAsync(await organizer.PostAsync(
+            $"/api/organizations/{orgId}/events/{SeatsEventId}/bookings/{held.GetProperty("id").GetString()}/confirm",
+            new() { DataObject = new { nights, decisionNote = "See you on the night." } }), "confirming the seat");
+        return true;
+    }
 }

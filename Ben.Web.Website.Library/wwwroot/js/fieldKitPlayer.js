@@ -936,7 +936,7 @@ class Player {
             'aria-label': `Photo at ${hms(photo.t)}. ${caption}.`,
         },
             el('img', { src: this.urls[fileId] ?? '', alt: `Photo at ${hms(photo.t)}` }),
-            el('div', { class: 'fk-photo-caption' }, `${hms(photo.t)} into the session`,
+            el('div', { class: 'fk-photo-caption' }, `${hms(photo.t)} into the session${photo.room ? ` · ${photo.room}` : ''}`,
                 el('span', { class: 'opacity-75' }, ` · ${caption}`)));
         const close = () => this.closePhoto(resume);
         overlay.addEventListener('click', close);

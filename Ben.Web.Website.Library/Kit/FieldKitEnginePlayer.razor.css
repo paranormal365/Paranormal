@@ -197,6 +197,8 @@
 }
 .fk-player ::deep .fk-trace { fill: none; stroke: #7c5cff; stroke-width: 2; }
 .fk-player ::deep .fk-away { fill: var(--bs-secondary-color); opacity: .18; }
+/* The listening after a question asked in an EVP session (10/28/2026). */
+.fk-player ::deep .fk-listening { fill: var(--bs-info); opacity: .14; }
 .fk-player ::deep .fk-mark { stroke-width: 1; stroke-dasharray: 3 3; opacity: .75; }
 .fk-player ::deep .fk-mark--auto { stroke: var(--bs-warning); }
 .fk-player ::deep .fk-mark--manual { stroke: var(--bs-info); }

@@ -170,6 +170,7 @@ public sealed class PublicFieldSessionController : ControllerBase
                 s.Id, PlaceId = s.PlaceId!.Value, PlaceName = s.Place!.Name, s.LocationLabel,
                 s.StartedAt, s.EndedAt, s.DeviceModel,
                 RecordedBy = s.RecordedByName ?? s.SubmittedByAppUser.DisplayName ?? "A contributor",
+                EventTitle = (string?)null, EventOrg = (string?)null, EventUrlName = (string?)null, GroupName = (string?)null,
             })
             .FirstOrDefaultAsync(ct)
             // Or shown with a hosted event's results (event-scenario-gaps): the event's place stands in.
@@ -182,6 +183,12 @@ public sealed class PublicFieldSessionController : ControllerBase
                     PlaceName = db.HostedEvents.Where(h => h.Id == s.HostedEventId).Select(h => h.Place.Name).First(),
                     s.LocationLabel, s.StartedAt, s.EndedAt, s.DeviceModel,
                     RecordedBy = s.RecordedByName ?? s.SubmittedByAppUser.DisplayName ?? "A contributor",
+                    // Named and linked on the page (10/28/2026): it read "From the field archive" and
+                    // pointed back to the place, though a visitor came from the event's results.
+                    EventTitle = db.HostedEvents.Where(h => h.Id == s.HostedEventId).Select(h => (string?)h.Name).First(),
+                    EventOrg = db.HostedEvents.Where(h => h.Id == s.HostedEventId).Select(h => (string?)h.Organization.UrlName).First(),
+                    EventUrlName = db.HostedEvents.Where(h => h.Id == s.HostedEventId).Select(h => (string?)h.UrlName).First(),
+                    GroupName = db.HostedEvents.Where(h => h.Id == s.HostedEventId).Select(h => (string?)h.Organization.Name).First(),
                 })
                 .FirstOrDefaultAsync(ct);
         if (session is null) return NotFound();
@@ -194,7 +201,10 @@ public sealed class PublicFieldSessionController : ControllerBase
 
         return Ok(new Ben.Service.Models.FieldSessions.PublicSessionSummary(
             session.Id, session.PlaceId, session.PlaceName ?? "this place", session.LocationLabel,
-            session.StartedAt, session.EndedAt, session.DeviceModel, session.RecordedBy, files));
+            session.StartedAt, session.EndedAt, session.DeviceModel, session.RecordedBy, files,
+            EventTitle: session.EventTitle,
+            EventUrl: session.EventOrg is { } org && session.EventUrlName is { } slug ? $"/o/{org}/events/{slug}" : null,
+            GroupName: session.GroupName));
     }
 
     /// <summary>
@@ -258,7 +268,8 @@ public sealed class PublicFieldSessionController : ControllerBase
             session.Id, session.IsBundle, path, session.DocumentUploadFileId,
             session.DocumentUploadFile.DateUpdated ?? session.DocumentUploadFile.DateCreated,
             files, Ben.Service.Models.FieldSessions.TimelinePositionPolicy.PublicPoint, redact,
-            Variant: $"public:{shownAt.Ticks}:{(int)session.MediaReviewState}:{lat}:{lon}"), ct);
+            Variant: $"public:{shownAt.Ticks}:{(int)session.MediaReviewState}:{lat}:{lon}",
+            Arrived: session.Files.Select(f => f.RelativePath).ToList()), ct);
 
         return payload is null ? NotFound() : FieldSessionTimelineService.Respond(this, payload);
     }

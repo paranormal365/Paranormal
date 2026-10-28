@@ -48,6 +48,15 @@ day-by-day account of building it would say nothing to anyone using it now.
 - A recording in the session player keeps playing past the hour, and one whose connection drops is
   tried again and carries on by itself. Before, it could stop partway through a long night and say it
   "won't play in this browser" until the page was reloaded.
+- A field session's page says where it was sent — the investigation, the event or tour date, the group
+  and the place — with links, and gives the time it started where it was recorded, with a switch to your
+  own time.
+- In a session's marks, a question asked during an EVP session shows the question and how long the room
+  was given to answer, and the chart shades that time. Details added after the session say when.
+- A session whose phone recorded sound it never sent now says so by name, instead of showing nothing.
+- You can delete your own session, and say whether it may be shown with an event's results, from the
+  session's own page. An event's organizers can show it from there too.
+- A session shown with an event's results names the event and links back to it.
 
 ### Administration
 
