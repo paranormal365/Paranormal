@@ -434,10 +434,24 @@ Phases 1, 2 and 4 are iOS + API and may run while the audio/EVP work is on the s
 website piece and starts only once `AudioEditor-EVP-Plan-2026-10-26.md` is finished, so two plans
 never edit the site at once. Phase 4 (person map) does not depend on phase 3 and may go before it.
 
+**One switch for all of it on the website (Ben, 10/28/2026).** A SuperAdmin turns LiDAR on and off
+under **Site settings** (`/admin/site-settings`), as a site feature like the store's: a new key
+`features.lidar-scans` in the API's `SiteSettingsService` and the website's `SiteFeatures` (the guard
+test that compares the two sets keeps them together). It starts **off**, so the website shows nothing
+of it until a SuperAdmin chooses to. While it is off:
+- no scan viewer, no "Scans" on a place's page, no scan links anywhere, and the routes answer as if
+  there were nothing there (`FeatureGate`, the way the store's pages do);
+- the API's website-facing scan routes refuse in the same plain way;
+- the session player draws no figure from the person-map sidecar (phase 4's web half), and says
+  nothing about scans.
+The phone's own scanning and its uploads are not behind this switch; it gates the website only. Turning
+it back on loses nothing: scans keep arriving and are all there when it does.
+
 `PlaceScans.razor`, `ScanViewer.razor` + three.js, session player readings, public place page
 switch + route, admin list. Playwright: a fixture `.scan` on a seeded public place; the viewer loads
 `mesh.glb`; the custodian's switch shows/hides it for a visitor; an offer accepted on the web flips
-versions; a private residence's scan is 404 to a stranger.
+versions; a private residence's scan is 404 to a stranger. With `features.lidar-scans` off: the scan pages and links are gone for
+everybody, a scan's address answers as if it did not exist, and turning it on brings them back.
 
 ### Phase 4 — Person map (iOS + API readers)
 
@@ -466,5 +480,7 @@ changelogs; the product documentation PDF. Store copy says LiDAR phones only.
 2. ~~Figure overlay on non-LiDAR phones?~~ Answered 10/28/2026: Pro (LiDAR) only, end to end.
 3. ~~Website viewer timing?~~ Answered 10/28/2026: phase 3 waits for the audio/EVP plan.
 4. ~~SuperAdmin handing custody?~~ Answered 10/28/2026: yes (`PlaceScanCustody`, §2 rule 3, §4).
+5. ~~Can the website's LiDAR be switched off?~~ Answered 10/28/2026: yes, a SuperAdmin switch under Site
+   settings, `features.lidar-scans`, off until turned on; website only (phase 3).
 
 No open questions remain. Next step is phase 0 on Ben's phone.
