@@ -178,8 +178,9 @@ feature.
 
 ### Phase 5 — Person map
 
-- **Figure overlay** toggle in video recording on LiDAR phones (and, without depth, on any A12+
-  phone, labelled "2D"). World tracking + `.bodyDetection` + `.sceneDepth`: 17 joints lifted to 3D
+- **Figure overlay** toggle in video recording, on LiDAR phones only (Ben, 10/28/2026: "a LiDAR
+  (Pro) feature end to end" — no 2D mode; the toggle is absent, not greyed, on other phones, and the
+  help says which phones have it). World tracking + `.bodyDetection` + `.sceneDepth`: 17 joints lifted to 3D
   by the depth map, drawn as a glowing stick figure that sticks to the person, smoothed over 5
   frames so it does not jitter.
 - The joints sidecar and `figure_seen` readings (one per continuous sighting). Playback draws from
@@ -202,7 +203,6 @@ feature.
 ## Open questions for Ben
 
 1. ~~Keyframes upload or stay on the phone?~~ Answered 10/28/2026: they upload with the scan.
-2. Is the figure overlay allowed on non-LiDAR phones as a 2D-only mode, or is this a Pro feature
-   end to end?
+2. ~~Figure overlay on non-LiDAR phones?~~ Answered 10/28/2026: Pro (LiDAR) only, end to end.
 3. The walkthrough viewer on the website: Phase 4 is the biggest website piece. Fine to leave it
    last, after the audio/EVP plan is through?
