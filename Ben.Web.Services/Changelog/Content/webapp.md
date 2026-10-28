@@ -57,6 +57,16 @@ day-by-day account of building it would say nothing to anyone using it now.
 - You can delete your own session, and say whether it may be shown with an event's results, from the
   session's own page. An event's organizers can show it from there too.
 - A session shown with an event's results names the event and links back to it.
+- A field session's page shows the EVPs kept from its recordings, with what was heard, among its
+  marks and on its chart. Clips made from a recording are listed under it, enhanced or altered.
+- An enhanced clip keeps its moment in the session: switch on **Play the enhanced clips in their place**
+  to hear it there instead of the original. The session's own file is never changed.
+- Every clip made from a session's recording on this site has a certificate of authenticity: how it was
+  made, step by step, from what the phone recorded, with **Check it now** to confirm the file and the
+  certificate are unchanged. Nothing is generated and no AI changes the sound.
+- A session's recordings, a copy made to scan one, and a certified clip can no longer have their file
+  replaced; save a new one instead.
+- An edit of a group's copy of a session recording now stays with the group, as a clip of it already did.
 
 ### Administration
 

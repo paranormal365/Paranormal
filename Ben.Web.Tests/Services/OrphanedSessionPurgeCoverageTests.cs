@@ -87,6 +87,8 @@ public sealed class OrphanedSessionPurgeCoverageTests
         // Phase 9 of the audio plan (10/27/2026).
         [nameof(EvpScanJob)] = "a scan job only remembers which session's page to show it on; it is swept after a week",
         [nameof(FieldSessionAnalysisCopy)] = "a scanner's copy is their file, not the session's, and outlives it",
+        // Certificates of authenticity (10/28/2026).
+        [nameof(FileProvenance)] = "a certificate belongs to the clip it certifies and keeps saying where the clip came from after the session goes",
     };
 
     [Theory]

@@ -219,6 +219,7 @@ namespace Ben.Data.Source.Context
         public virtual DbSet<EvpScanJob> EvpScanJobs { get; set; }
         public virtual DbSet<EvpScanJobSegment> EvpScanJobSegments { get; set; }
         public virtual DbSet<FieldSessionAnalysisCopy> FieldSessionAnalysisCopies { get; set; }
+        public virtual DbSet<FileProvenance> FileProvenances { get; set; }
         public virtual DbSet<EvpRuling> EvpRulings { get; set; }
         public virtual DbSet<AuditLog> AuditLogs { get; set; }
         public virtual DbSet<SidecarInstallLog> SidecarInstallLogs { get; set; }
@@ -2737,6 +2738,17 @@ namespace Ben.Data.Source.Context
             modelBuilder.Entity<EvpScoringVersion>().Property(e => e.GateNote).HasMaxLength(500);
             modelBuilder.Entity<EvpScan>().Property(e => e.ScoringVersion).HasDefaultValue(1);
             modelBuilder.Entity<FieldSessionAnalysisCopy>().Property(e => e.SourceRelativePath).HasMaxLength(500);
+            // Certificates of authenticity (10/28/2026): one per certified file; only the file is a key.
+            modelBuilder.Entity<FileProvenance>()
+                .HasOne(e => e.UploadFile).WithMany()
+                .HasForeignKey(e => e.UploadFileId).OnDelete(DeleteBehavior.Cascade);
+            modelBuilder.Entity<FileProvenance>().HasIndex(e => e.UploadFileId).IsUnique();
+            modelBuilder.Entity<FileProvenance>().HasIndex(e => e.FieldSessionUploadId);
+            modelBuilder.Entity<FileProvenance>().Property(e => e.SourceClipPath).HasMaxLength(500);
+            modelBuilder.Entity<FileProvenance>().Property(e => e.SealSha256).HasMaxLength(64);
+            modelBuilder.Entity<FileProvenance>().Property(e => e.CopySha256).HasMaxLength(64);
+            modelBuilder.Entity<FileProvenance>().Property(e => e.ResultSha256).HasMaxLength(64);
+            modelBuilder.Entity<FileProvenance>().Property(e => e.Signature).HasMaxLength(512);
             modelBuilder.Entity<UploadFile>().Property(e => e.SourceClipPath).HasMaxLength(500);
             modelBuilder.Entity<UploadFile>()
                 .HasIndex(e => e.SourceFieldSessionUploadId).HasFilter("[SourceFieldSessionUploadId] IS NOT NULL");

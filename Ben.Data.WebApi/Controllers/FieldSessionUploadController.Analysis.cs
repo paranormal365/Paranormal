@@ -225,6 +225,22 @@ public sealed partial class FieldSessionUploadController
         return Ok(visible);
     }
 
+    /// <summary>
+    /// What was found in this session's recordings that this person can open: the EVPs kept, and
+    /// the clips made, each enhanced one placed in the recording's time (10/28/2026).
+    /// </summary>
+    [HttpGet("{sessionId:guid}/findings")]
+    public async Task<ActionResult<Ben.Service.Models.FieldSessions.SessionFindings>> GetFindings(Guid sessionId, CancellationToken ct)
+    {
+        var userId = GetCurrentUserId();
+        if (userId == Guid.Empty) return Unauthorized();
+
+        await using var db = await _db.CreateDbContextAsync(ct);
+        var session = await db.FieldSessionUploads.AsNoTracking().FirstOrDefaultAsync(s => s.Id == sessionId, ct);
+        if (session is null || !await MayReadAsync(db, session, userId, ct)) return NotFound();
+        return Ok(await Services.FieldSessions.SessionFindingsReader.ForViewerAsync(db, sessionId, userId, ct));
+    }
+
     /// <summary>The scan decision, or the response refusing it.</summary>
     /// <remarks>Somebody who may not read the session is told it isn't here, as every other route says.</remarks>
     private static async Task<(ScanDecision? Decision, ActionResult? Refused)> DecideAsync(

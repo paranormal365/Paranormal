@@ -184,6 +184,26 @@ public interface IBenInvestigationClient
         CancellationToken token = default);
 
     /// <summary>EVPs saved from this session's recordings that the caller can open.</summary>
+    /// <summary>EVPs and clips found in a session's recordings that the signed-in person can open (10/28/2026).</summary>
+    Task<Ben.Service.Models.FieldSessions.SessionFindings?> GetSessionFindingsAsync(Guid sessionId, CancellationToken token = default);
+
+    /// <summary>What a public session's page shows of what was found in it.</summary>
+    Task<Ben.Service.Models.FieldSessions.SessionFindings?> GetPublicSessionFindingsAsync(Guid sessionId, CancellationToken token = default);
+
+    /// <summary>A file's certificate of authenticity, or null when it has none or can't be opened.</summary>
+    Task<Ben.Service.Models.FieldSessions.FileCertificateRecord?> GetFileCertificateAsync(Guid fileId, CancellationToken token = default);
+
+    /// <summary>The file's bytes checked now against its certificate and the site's seal.</summary>
+    Task<Ben.Service.Models.FieldSessions.FileCertificateCheck?> CheckFileCertificateAsync(Guid fileId, CancellationToken token = default);
+
+    /// <summary>The certificate of a clip a public session's page shows.</summary>
+    Task<Ben.Service.Models.FieldSessions.FileCertificateRecord?> GetPublicFindingCertificateAsync(Guid sessionId, Guid fileId, CancellationToken token = default);
+
+    Task<Ben.Service.Models.FieldSessions.FileCertificateCheck?> CheckPublicFindingCertificateAsync(Guid sessionId, Guid fileId, CancellationToken token = default);
+
+    /// <summary>Absolute URL of a clip a public session's page shows (the API's origin).</summary>
+    string GetPublicFindingMediaUrl(Guid sessionId, Guid fileId);
+
     Task<LoadResult<Ben.Service.Models.FieldSessions.SessionEvpRecord>> GetFieldSessionEvpsAsync(
         Guid sessionId, CancellationToken token = default);
 

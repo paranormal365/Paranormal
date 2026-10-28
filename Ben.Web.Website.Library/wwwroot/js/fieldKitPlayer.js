@@ -149,6 +149,7 @@ class Player {
         this.raf = 0;
         this.timer = 0;
         this.parkedOn = null;        // the mark a step or a jump parked the playhead before (T4)
+        this.preferEnhanced = false; // "Play the enhanced clips in their place" (10/28/2026)
         this.unlocked = new WeakSet();
         this.followSince = null;
         this.followLast = 0;
@@ -246,6 +247,16 @@ class Player {
             if (this.attached.has(chart)) continue;
             this.attached.add(chart);
             this.attachChart(chart);
+        }
+        const prefer = this.root.querySelector('[data-fk-prefer-enhanced]');
+        if (prefer && !this.attached.has(prefer)) {
+            this.attached.add(prefer);
+            this.preferEnhanced = prefer.checked;
+            this.on(prefer, 'change', () => {
+                this.preferEnhanced = prefer.checked;
+                this.last = {};
+                this.render(true);
+            });
         }
         if (!this.attached.has(this.root)) {
             this.attached.add(this.root);
@@ -347,9 +358,29 @@ class Player {
         return { element, clip: frame.audio.clip };
     }
 
-    /** What is true at a moment, with recordings this browser cannot play left out (M6). */
+    /**
+     * What is true at a moment, with recordings this browser cannot play left out (M6). With "Play
+     * the enhanced clips in their place" on, an enhanced clip covering the moment is what is heard
+     * instead of the original (10/28/2026): the same moment, made clearer by our own processing.
+     */
     frame(ms) {
-        return frameAt(this.tl, ms, this.broken ? { broken: this.broken } : undefined);
+        const frame = frameAt(this.tl, ms, this.broken ? { broken: this.broken } : undefined);
+        if (this.preferEnhanced) {
+            const enhanced = this.enhancedAt(ms);
+            if (enhanced) frame.audio = { clip: enhanced, offsetMs: Math.max(0, ms - enhanced.startMs) };
+        }
+        return frame;
+    }
+
+    /** The enhanced clip playing at a moment, the latest to begin when two overlap. */
+    enhancedAt(ms) {
+        let best = null;
+        for (const clip of this.tl.clips) {
+            if (clip.kind !== 'enhanced' || clip.startMs == null || !(clip.durationMs > 0) || this.isBroken(clip.fileId)) continue;
+            if (ms < clip.startMs || ms >= clip.startMs + clip.durationMs) continue;
+            if (!best || clip.startMs >= best.startMs) best = clip;
+        }
+        return best;
     }
 
     step(now) {

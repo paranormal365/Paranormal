@@ -202,6 +202,8 @@
 .fk-player ::deep .fk-mark { stroke-width: 1; stroke-dasharray: 3 3; opacity: .75; }
 .fk-player ::deep .fk-mark--auto { stroke: var(--bs-warning); }
 .fk-player ::deep .fk-mark--manual { stroke: var(--bs-info); }
+/* An EVP somebody kept (10/28/2026): solid, so it reads apart from the dashed marks. */
+.fk-player ::deep .fk-mark--evp { stroke: var(--bs-success); stroke-dasharray: none; stroke-width: 2; opacity: .9; }
 .fk-player ::deep .fk-playhead { stroke: var(--bs-emphasis-color); stroke-width: 2; }
 
 /* ── The marked list: the row the playhead is on ── */
