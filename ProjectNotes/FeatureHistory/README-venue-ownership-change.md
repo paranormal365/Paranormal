@@ -70,6 +70,13 @@ entity: one column and two states.
    `OrganizationVenueGrant` the old venue made is revoked (`RevokedUtc`); scan custody (LiDAR plan)
    follows because it reads the verified venue; **the old group keeps its own events, rooms, cases
    and files** — it loses the venue role, not its work. Audited.
+   **Why this matters** (Ben, 10/28/2026): the owner decides what is public. The verified venue
+   reviews place files (`PlaceFileReviewController.Reviewable`), approves archive media, and — in
+   the LiDAR plan — holds scan custody and the *Show the walkthrough on the place page* switch.
+   The Coles would want The Thomas House public; a homeowner would not. All of those read the
+   verified venue, never a copied flag, so a transfer moves every one of them at once, and the
+   old venue's earlier "show on the place page" choices are re-asked of the new owner: on transfer
+   every scan's `ShownOnPlacePage` is reset to off, and the new venue is told so in letter D.
 6. **Refusal** keeps everything as it was; the challenger gets letter D with the admin's note.
 7. **One open request per place at a time.** A second group asking while one is open is told so
    and may add its own request to the queue (state Pending, `ChallengesOrganizationId` set), which
