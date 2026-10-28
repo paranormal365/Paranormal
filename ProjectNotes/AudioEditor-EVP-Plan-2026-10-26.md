@@ -773,6 +773,10 @@ semantics · `AvMetadataStripper` temp-file + process pattern · `BenBundleStore
 plugin · `ApexChart` · `BenTabs`, `BenModal`, `BenContextMenu`, `BenTextBox`, `BenIcon` · `SignInLink.For` ·
 `MediaLibraryGrid` multi-select.
 
+---
+
+### Phase 14 — Venue change-of-ownership requests: see README-venue-ownership-change.md; starts after the session page is done.
+
 ## Verification (end to end)
 1. Unit: `dotnet test Ben.Web.Tests --filter "Evp|AudioDecoder|FieldSessionAnalysis|AudioClip"` — pinned Version-1
    scores green through every phase; every "discriminates" test run once against the un-fixed code.
