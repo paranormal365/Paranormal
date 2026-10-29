@@ -45,7 +45,9 @@ public struct ZipReader: Sendable {
     public let entries: [Entry]
 
     /// Opens an archive, reading its directory. Throws for anything this reader does not take.
-    public init(url: URL) throws {
+    /// `mostEntries` is a session's ceiling unless the caller says otherwise — a room's `.scan`
+    /// carries a picture and a depth map per keyframe, so it allows more.
+    public init(url: URL, mostEntries: Int = ZipReader.mostEntries) throws {
         self.url = url
         let handle = try FileHandle(forReadingFrom: url)
         defer { try? handle.close() }
@@ -73,7 +75,7 @@ public struct ZipReader: Sendable {
         guard count != 0xFFFF, directorySize != 0xFFFF_FFFF, directoryOffset != 0xFFFF_FFFF else {
             throw ZipReaderError.unsupported("Zip64 archives")
         }
-        guard count <= Self.mostEntries else { throw ZipReaderError.tooManyEntries(count) }
+        guard count <= mostEntries else { throw ZipReaderError.tooManyEntries(count) }
         guard directoryOffset + directorySize <= length else { throw ZipReaderError.truncated }
 
         // ── The directory itself ──

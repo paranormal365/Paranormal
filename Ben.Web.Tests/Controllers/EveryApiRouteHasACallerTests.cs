@@ -60,6 +60,12 @@ public sealed class EveryApiRouteHasACallerTests
             "called by the scripts that start and deploy the hosts (run-e2e.sh, deploy-ishaunted.ps1) "
           + "to prove the running build is this one.",
 
+        // ── waiting for their screen ──────────────────────────────────────────
+        ["api/admin/places/{placeId:guid}/scan-custody"] =
+            "a SuperAdmin hands a place's room scans to a group (LiDAR plan, Ben 10/28/2026). Its screen is the "
+          + "website's admin page for place scans, phase 3 of the plan, which waits until the audio plan is done "
+          + "with the site. Remove this line when that page calls it.",
+
         // ── leftovers from the scaffold ───────────────────────────────────────
         ["api/admin/organization-addresses"] = ScaffoldCrud,
         ["api/admin/organization-emails"] = ScaffoldCrud,

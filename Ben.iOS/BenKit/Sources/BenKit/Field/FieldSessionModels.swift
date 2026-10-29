@@ -19,19 +19,31 @@ public enum MarkerKind: String, Codable, Sendable, CaseIterable {
     case appBackgrounded = "app_backgrounded"
     /// The app came back after being put away.
     case appReturned = "app_returned"
+    /// A room scanned for the place during the session (LiDAR plan). Carries `room_scan`.
+    case roomScan = "room_scan"
+    /// A room compared with the place's scan of it (LiDAR plan, phase 2). Carries `scan`.
+    case roomCompared = "room_compared"
+    /// Something a comparison scan found moved, missing or new. Carries `scan_change`.
+    case scanChange = "scan_change"
+    /// The person map saw a human figure; one per continuous sighting. Carries `figure`.
+    case figureSeen = "figure_seen"
+    /// Something person-sized that is not in the room's scan. Carries `shape`.
+    case unexplainedShape = "unexplained_shape"
 
     /// Which of the spec's three legal `triggered_by` values this kind reports as.
     public var trigger: FieldReading.Trigger {
         switch self {
-        case .sentryEmf, .sentrySound, .deviceMoved, .sceneMotion, .appBackgrounded, .appReturned: .event
-        case .manual, .evpQuestion, .evpWaitEnd: .manual
+        case .sentryEmf, .sentrySound, .deviceMoved, .sceneMotion, .appBackgrounded, .appReturned,
+             .scanChange, .figureSeen, .unexplainedShape: .event
+        case .manual, .evpQuestion, .evpWaitEnd, .roomScan, .roomCompared: .manual
         }
     }
 
     public var isAutomatic: Bool {
         switch self {
-        case .sentryEmf, .sentrySound, .deviceMoved, .sceneMotion, .appBackgrounded, .appReturned: true
-        case .manual, .evpQuestion, .evpWaitEnd: false
+        case .sentryEmf, .sentrySound, .deviceMoved, .sceneMotion, .appBackgrounded, .appReturned,
+             .scanChange, .figureSeen, .unexplainedShape: true
+        case .manual, .evpQuestion, .evpWaitEnd, .roomScan, .roomCompared: false
         }
     }
 
@@ -46,6 +58,11 @@ public enum MarkerKind: String, Codable, Sendable, CaseIterable {
         case .sceneMotion: "Motion detected"
         case .appBackgrounded: "App put away"
         case .appReturned: "Back in the app"
+        case .roomScan: "Room scanned"
+        case .roomCompared: "Room compared"
+        case .scanChange: "Something changed"
+        case .figureSeen: "Figure seen"
+        case .unexplainedShape: "Unexplained shape"
         }
     }
 }
@@ -142,6 +159,12 @@ public final class FieldSession {
     public var hostedEventId: UUID?
     public var eventTitle: String?
     public var fieldLaunchId: UUID?
+
+    /// The place the session is at, once it is known — chosen before the first room scan, or
+    /// taken from the investigation's place (LiDAR plan). A room's scan belongs to a place, so
+    /// scanning needs one. Optional, like every later attribute.
+    public var placeId: UUID?
+    public var placeName: String?
 
     @Relationship(deleteRule: .cascade, inverse: \FieldMarker.session)
     public var markers: [FieldMarker]

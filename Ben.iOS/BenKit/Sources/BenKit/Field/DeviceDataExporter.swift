@@ -89,6 +89,10 @@ public struct DeviceDataExporter: Sendable {
         /// file name would break every reference in the document. The session's own copy is never
         /// touched either way.
         public var substitutes: [String: URL]
+        /// Recordings cut short to send. A figure the person map kept is timed in seconds into the
+        /// video as it was recorded, so a cut video's figures would be drawn in the wrong place:
+        /// they stay on the phone (LiDAR plan, phase 4).
+        public var cutMedia: Set<String> = []
         /// Details added to marks after the session (`FieldSessionStore.markDetails(for:)`).
         public var markDetails: [DeviceDataEnvelope.MarkDetails] = []
         /// The account signed in when this was recorded, and the device that recorded it.
@@ -161,7 +165,7 @@ public struct DeviceDataExporter: Sendable {
         // Encoded with no readings, then the array spliced in — so the readings never have to
         // be held as objects.
         var document = try DeviceDataJSON.encoder.encode(envelope)
-        let lines = try await log.rawLines(within: request.window)
+        let lines = Self.inTimeOrder(try await log.rawLines(within: request.window))
 
         guard let insertion = Self.readingsArrayRange(in: document) else {
             throw ExportError.couldNotBuildDocument
@@ -231,6 +235,20 @@ public struct DeviceDataExporter: Sendable {
             if let digest = try? Self.sha256(of: url) {
                 document = Self.stampDigest(digest, forFilename: path, in: document)
             }
+        }
+
+        // Comparisons with a place's room scan go in with the readings that name them (LiDAR plan,
+        // phase 2): what they found is the session's own finding. A place's scan itself is never in
+        // a session — it belongs to the place. So do the person map's joints files and pictures
+        // (phase 4), with the videos they belong to.
+        let videos = Set(request.includedMedia).subtracting(request.cutMedia)
+        let companions = Self.comparisonPathsNamed(in: document)
+            .union(Self.figurePathsNamed(in: document, withVideos: videos))
+        for path in companions.sorted() where !included.contains(path) {
+            let url = files.fileURL(for: request.sessionId, relativePath: path)
+            guard FileManager.default.fileExists(atPath: url.path) else { continue }
+            entries.append(ZipWriter.Entry(path: path, file: url))
+            included.insert(path)
         }
 
         let named = Self.mediaPathsNamed(in: document)
@@ -407,6 +425,73 @@ public struct DeviceDataExporter: Sendable {
 
     /// Every media path the document refers to — from `audio_ref` names and from the capture
     /// notes that carry photo and video paths.
+    /// The comparison scans a document names — `scans/compare-001.scan`, from a `scan` reading's
+    /// value or a change's picture (`…scan#changes/01.jpg`).
+    static func comparisonPathsNamed(in document: Data) -> Set<String> {
+        let text = String(decoding: document, as: UTF8.self)
+        var found: Set<String> = []
+        var search = text.startIndex..<text.endIndex
+        while let start = text.range(of: "\"scans/compare-", range: search) {
+            let after = text.index(after: start.lowerBound)
+            guard let end = text[after...].firstIndex(where: { $0 == "\"" || $0 == "#" }) else { break }
+            let path = String(text[after..<end])
+            if path.hasSuffix(".scan"), !path.contains(".."), !path.contains("\\") { found.insert(path) }
+            search = end..<text.endIndex
+        }
+        return found
+    }
+
+    /// The log's lines in time order, as the format requires and the server checks.
+    ///
+    /// The log is in the order things were written, which until the person map was always time
+    /// order. Its readings are written when their video is filed but dated to when the figure was
+    /// first in view (LiDAR plan, phase 4), so they arrive late. A stable sort of whole lines:
+    /// each stays the bytes the device wrote, and a log already in order comes back as it was.
+    static func inTimeOrder(_ lines: [Data]) -> [Data] {
+        var times: [Date] = []
+        times.reserveCapacity(lines.count)
+        var last = Date.distantPast
+        for line in lines {
+            // A line with no time keeps its place behind the one before it.
+            if let stamp = try? DeviceDataJSON.decoder.decode(LineTime.self, from: line) { last = stamp.at }
+            times.append(last)
+        }
+        guard zip(times, times.dropFirst()).contains(where: { $0 > $1 }) else { return lines }
+        return lines.indices
+            .sorted { times[$0] != times[$1] ? times[$0] < times[$1] : $0 < $1 }
+            .map { lines[$0] }
+    }
+
+    private struct LineTime: Decodable {
+        let at: Date
+    }
+
+    /// The person map's files a document names — `figures/figure-001.json` and its picture,
+    /// `figures/shape-001.jpg` — for the videos going in with them. A figure drawn over a video
+    /// that was left out has nothing to be drawn over.
+    static func figurePathsNamed(in document: Data, withVideos videos: Set<String>) -> Set<String> {
+        // A night's document is large, and most have no person map: read it only when it names one.
+        guard !videos.isEmpty,
+              document.range(of: Data("\"figures/".utf8)) != nil || document.range(of: Data("\"figures\\/".utf8)) != nil,
+              let root = try? JSONSerialization.jsonObject(with: document) as? [String: Any],
+              let readings = root["readings"] as? [[String: Any]] else { return [] }
+        var found: Set<String> = []
+        for reading in readings {
+            guard let measurements = reading["measurements"] as? [String: Any] else { continue }
+            for channel in ["figure", "shape"] {
+                guard let measurement = measurements[channel] as? [String: Any],
+                      let video = measurement["video"] as? String, videos.contains(video) else { continue }
+                var paths = [measurement["picture"] as? String]
+                if channel == "figure" { paths.append(measurement["value"] as? String) }
+                for case let path? in paths
+                where path.hasPrefix("figures/") && !path.contains("..") && !path.contains("\\") {
+                    found.insert(path)
+                }
+            }
+        }
+        return found
+    }
+
     static func mediaPathsNamed(in document: Data) -> Set<String> {
         guard let text = String(data: document, encoding: .utf8) else { return [] }
         var found: Set<String> = []

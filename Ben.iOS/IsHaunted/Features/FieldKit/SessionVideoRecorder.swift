@@ -71,6 +71,11 @@ final class SessionVideoRecorder {
             await session.noteCapture(kind: .video, relativePath: adopted.relativePath,
                                       byteCount: adopted.byteCount, durationSeconds: length,
                                       startedAt: startedAt)
+            // What the person map saw in this stretch follows the video into the session
+            // (LiDAR plan, phase 4).
+            if let clip = camera.personMap?.takeClip() {
+                await session.notePersonMap(clip, video: adopted.relativePath)
+            }
         } catch {
             // The clip is lost, and that is said: the session carries on, and the next clip
             // starts as soon as the camera can.

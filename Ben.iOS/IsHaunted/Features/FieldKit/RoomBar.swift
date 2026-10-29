@@ -47,6 +47,10 @@ struct RoomBar: View {
 struct RoomSheet: View {
     let current: String?
     let visited: [String]
+    /// The place's rooms, when the session knows its place (LiDAR plan): the server's names, each
+    /// with whether it is scanned, first in the list. A name typed that is one of them, spelled
+    /// differently, becomes that one — "bedroom  1" is Bedroom 1, not a second room.
+    var placeRooms: [PlaceScanRoom] = []
     let onChoose: (String?) -> Void
 
     @Environment(\.dismiss) private var dismiss
@@ -59,10 +63,12 @@ struct RoomSheet: View {
                                  "Basement", "Attic", "Stairs", "Garage", "Outside"]
 
     private var suggestions: [String] {
-        var seen = Set(visited.map { $0.lowercased() })
-        var list = visited
-        for name in Self.common where !seen.contains(name.lowercased()) {
-            seen.insert(name.lowercased())
+        var seen = Set(placeRooms.map(\.roomKey))
+        var list: [String] = []
+        for name in visited where seen.insert(RoomKey.key(name)).inserted {
+            list.append(name)
+        }
+        for name in Self.common where seen.insert(RoomKey.key(name)).inserted {
             list.append(name)
         }
         return list
@@ -86,6 +92,29 @@ struct RoomSheet: View {
                     Text("A fix indoors covers the whole building, so this is the only thing "
                          + "that tells one room from another later. Changing it also drops a "
                          + "mark, so the timeline shows when you moved.")
+                }
+
+                if !placeRooms.isEmpty {
+                    Section("Rooms at this place") {
+                        ForEach(placeRooms) { room in
+                            Button { choose(room.roomName) } label: {
+                                HStack {
+                                    VStack(alignment: .leading, spacing: 1) {
+                                        Text(room.roomName)
+                                        Text(room.current.map { "Scanned \(EventClock.dayOnly($0.scannedUtc, nil, inMyTime: true))" }
+                                             ?? "Not scanned")
+                                            .font(.caption)
+                                            .foregroundStyle(Theme.fog)
+                                    }
+                                    Spacer()
+                                    if RoomKey.same(room.roomName, current) {
+                                        Image(systemName: "checkmark").foregroundStyle(Theme.ecto)
+                                    }
+                                }
+                            }
+                            .accessibilityIdentifier("room-suggestion")
+                        }
+                    }
                 }
 
                 Section("Quick pick") {
@@ -131,7 +160,9 @@ struct RoomSheet: View {
     private func choose(_ name: String) {
         let trimmed = name.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty else { return }
-        onChoose(trimmed)
+        // Snapped to the place's own spelling when it is one of its rooms.
+        let known = placeRooms.first { RoomKey.same($0.roomName, trimmed) }?.roomName
+        onChoose(known ?? trimmed)
         dismiss()
     }
 }

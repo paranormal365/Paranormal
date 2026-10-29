@@ -1,0 +1,28 @@
+[
+  {
+    "id": "e2b71f5c-f73c-42d0-82b2-ee69cdd943b1",
+    "version": 2,
+    "state": 3,
+    "retention": 1,
+    "scannedUtc": "2026-10-28T16:00:00",
+    "scannedBy": "Dana Reyes",
+    "scannedByYou": false,
+    "fileSize": 1837,
+    "keyframeCount": 2,
+    "floorAreaM2": 18.4,
+    "triangleCount": 1234
+  },
+  {
+    "id": "3c3c4798-a03d-4d98-9fb1-684a42f91c30",
+    "version": 1,
+    "state": 1,
+    "retention": 1,
+    "scannedUtc": "2026-10-28T15:18:00",
+    "scannedBy": "Sarah Whitfield",
+    "scannedByYou": true,
+    "fileSize": 1837,
+    "keyframeCount": 2,
+    "floorAreaM2": 18.4,
+    "triangleCount": 1234
+  }
+]

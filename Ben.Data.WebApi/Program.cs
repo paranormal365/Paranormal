@@ -594,6 +594,12 @@ builder.Services.AddScoped<Ben.Data.WebApi.Services.Scheduling.IScheduledJob,
 // Item 235 phase 9: a proved claim to run a place takes effect once its week for objections passes.
 builder.Services.AddScoped<Ben.Data.WebApi.Services.Scheduling.IScheduledJob,
                            Ben.Data.WebApi.Services.Scheduling.VenueClaimJob>();
+// LiDAR plan phase 1: room holds lapse after twenty minutes, and a room's scan turning a year old
+// is told to whoever looks after the place's scans, before a stranger's scan replaces it.
+builder.Services.AddScoped<Ben.Data.WebApi.Services.Scheduling.IScheduledJob,
+                           Ben.Data.WebApi.Services.Scheduling.PlaceScanHoldSweepJob>();
+builder.Services.AddScoped<Ben.Data.WebApi.Services.Scheduling.IScheduledJob,
+                           Ben.Data.WebApi.Services.Scheduling.PlaceScanAgeJob>();
 // Item 233: how long a file stays, for the plan it arrived under.
 builder.Services.AddScoped<Ben.Data.WebApi.Services.Media.MediaRetentionPolicy>();
 // Item 233: warns people what is about to go, then takes it.

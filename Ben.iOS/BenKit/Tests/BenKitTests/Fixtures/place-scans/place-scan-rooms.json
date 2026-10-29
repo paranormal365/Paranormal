@@ -1,0 +1,58 @@
+{
+  "placeId": "127d84fb-8bc3-44b1-a4c0-f2394da6f7ad",
+  "placeName": "The Hermitage Hotel",
+  "kind": 2,
+  "mayScan": true,
+  "whyCannotScan": null,
+  "custodian": {
+    "kind": "venue",
+    "name": "Hermitage Hotel",
+    "isYou": true
+  },
+  "storageLeftBytes": null,
+  "rooms": [
+    {
+      "roomKey": "room 217",
+      "roomName": "Room 217",
+      "current": {
+        "id": "3c3c4798-a03d-4d98-9fb1-684a42f91c30",
+        "version": 1,
+        "state": 1,
+        "retention": 1,
+        "scannedUtc": "2026-10-28T15:18:00",
+        "scannedBy": "Sarah Whitfield",
+        "scannedByYou": true,
+        "fileSize": 1837,
+        "keyframeCount": 2,
+        "floorAreaM2": 18.4,
+        "triangleCount": 1234
+      },
+      "canScan": false,
+      "canCompare": true,
+      "canReplace": true,
+      "replaceReason": null,
+      "holdBy": null,
+      "offersWaiting": 1,
+      "placeRoomId": "ec6c62bb-94b0-4b1a-9946-7a0c9db09100"
+    },
+    {
+      "roomKey": "the ballroom",
+      "roomName": "The Ballroom",
+      "current": null,
+      "canScan": false,
+      "canCompare": false,
+      "canReplace": false,
+      "replaceReason": null,
+      "holdBy": {
+        "holdId": null,
+        "roomKey": "the ballroom",
+        "roomName": "The Ballroom",
+        "heldBy": "Dana Reyes",
+        "isYou": false,
+        "until": "2026-10-28T16:20:00"
+      },
+      "offersWaiting": 0,
+      "placeRoomId": "44088942-9947-4000-9d20-321b268853d7"
+    }
+  ]
+}

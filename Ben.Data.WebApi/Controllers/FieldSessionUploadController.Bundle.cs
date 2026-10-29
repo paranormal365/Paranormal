@@ -308,6 +308,10 @@ public sealed partial class FieldSessionUploadController
             ExtractedAtUtc = DateTime.UtcNow,
         });
 
+        // What its comparisons with a place's room scans found (LiDAR plan, phase 2), as rows the
+        // place can count. Replaced with the document every time it is sent.
+        await Services.Places.PlaceScanChangeRows.ReplaceAsync(db, session, documentText, ct);
+
         await db.SaveChangesAsync(ct);
         await db.Entry(session).Collection(s => s.Files).LoadAsync(ct);
 

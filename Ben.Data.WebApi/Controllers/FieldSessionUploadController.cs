@@ -774,6 +774,9 @@ public sealed partial class FieldSessionUploadController : BenControllerBase
         session.PositionResolved = true;
         session.MarkerCount = summary.MarkerCount;
 
+        // What its comparisons with a place's room scans found (LiDAR plan, phase 2).
+        await Services.Places.PlaceScanChangeRows.ReplaceAsync(db, session, documentText, ct);
+
         await db.SaveChangesAsync(ct);
         await db.Entry(session).Collection(s => s.Files).LoadAsync(ct);
 

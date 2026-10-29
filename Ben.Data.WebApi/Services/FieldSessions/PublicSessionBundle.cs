@@ -63,7 +63,13 @@ public static class PublicSessionBundle
 
         if (includeRecordings)
         {
-            foreach (var entry in bundle.Recordings.OrderBy(e => e.Path, StringComparer.Ordinal))
+            // A comparison with a place's room scan stays out of the public copy (LiDAR plan): its
+            // changes are readings and travel, but its pictures are of the inside of a building.
+            // So do the person map's joints and pictures (phase 4): they are of the people in it.
+            foreach (var entry in bundle.Recordings
+                         .Where(e => !e.Path.StartsWith("scans/", StringComparison.Ordinal)
+                                     && !e.Path.StartsWith(FieldSessionFileGuard.FiguresFolder, StringComparison.Ordinal))
+                         .OrderBy(e => e.Path, StringComparer.Ordinal))
             {
                 var hash = await writer.AddFromAsync(entry.Path, source, entry.Offset, entry.Length, ct);
                 sealEntries.Add((entry.Path, hash, entry.Length));

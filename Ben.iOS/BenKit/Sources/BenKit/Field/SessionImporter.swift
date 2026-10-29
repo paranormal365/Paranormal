@@ -29,7 +29,8 @@ public enum SessionImporter {
         /// The session's own id: the seal's when there is one, so the same night opened twice is
         /// the same session; a fresh one for an unsealed bundle, which no build of this app writes.
         public var sessionId: UUID
-        /// The members under `media/`, which is where every recording lives.
+        /// The members under `media/`, which is where every recording lives; `scans/`, where a
+        /// comparison with a place's room scan does; and `figures/`, the person map's.
         public var media: [ZipReader.Entry]
 
         public var title: String {
@@ -105,7 +106,11 @@ public enum SessionImporter {
             seal = parsed
         }
 
-        let media = reader.entries.filter { $0.path.hasPrefix("media/") }
+        // Comparisons with a place's room scan, and the person map's figures, travel with the
+        // recordings (LiDAR plan, phases 2 and 4), and the seal lists them, so they come out with them.
+        let media = reader.entries.filter {
+            $0.path.hasPrefix("media/") || $0.path.hasPrefix("scans/") || $0.path.hasPrefix("figures/")
+        }
         return Opened(reader: reader, envelope: envelope, document: document, seal: seal,
                       sessionId: seal?.sessionId ?? UUID(), media: media)
     }

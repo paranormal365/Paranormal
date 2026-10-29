@@ -16,6 +16,10 @@ struct SessionReviewView: View {
     let sessionId: UUID
 
     @State private var replay = SessionReplay()
+    /// The person map's figures, drawn over the video they were seen in (LiDAR plan, phase 4).
+    @State private var figures = ReplayFigures()
+    @State private var showFigure = true
+    @State private var videoSize: CGSize?
     /// The picture. A whole-session video carries no sound of its own, so it plays beside the
     /// session's recording rather than instead of it — two players, one playhead.
     @State private var videoPlayer = AVPlayer()
@@ -179,6 +183,7 @@ struct SessionReviewView: View {
         VStack(spacing: 14) {
             if justEnded { nextSessionCard }
             mediaPane
+            figureControls
             photoStrip
             ReplayTransport(replay: replay)
             instrumentsAtPlayhead
@@ -300,10 +305,22 @@ struct SessionReviewView: View {
         ZStack {
             RoundedRectangle(cornerRadius: 12).fill(Theme.mist)
 
-            if replay.frame.activeVideo != nil {
+            if let video = replay.frame.activeVideo {
                 VideoPlayer(player: videoPlayer)
-                    .clipShape(RoundedRectangle(cornerRadius: 12))
                     .accessibilityIdentifier("replay-video")
+                    .overlay {
+                        if showFigure, let videoSize, let source {
+                            let seen = figures.sightings(in: video.segment.relativePath)
+                            if !seen.isEmpty {
+                                ReplayFigureOverlay(
+                                    player: videoPlayer,
+                                    offset: video.offset,
+                                    entries: seen.map { figures.entries(of: $0, in: store.files.directory(for: source.sessionId)) },
+                                    videoSize: videoSize)
+                            }
+                        }
+                    }
+                    .clipShape(RoundedRectangle(cornerRadius: 12))
             } else if let sound = replay.frame.activeAudio {
                 VStack(spacing: 6) {
                     Image(systemName: "waveform")
@@ -344,7 +361,47 @@ struct SessionReviewView: View {
             }
         }
         .animation(.easeInOut(duration: 0.25), value: replay.frame.motionDetected?.id)
+        // A container of its own, so what is inside keeps its own name: the figure drawn over
+        // the video was answering to "replay-media".
+        .accessibilityElement(children: .contain)
         .accessibilityIdentifier("replay-media")
+    }
+
+    /// The person map's controls, under a video it drew a figure on: the figure shown or hidden, and
+    /// a copy of the moment with it drawn in, to send on (LiDAR plan, phase 4).
+    @ViewBuilder
+    private var figureControls: some View {
+        if let video = replay.frame.activeVideo, let source {
+            let seen = figures.sightings(in: video.segment.relativePath)
+            if !seen.isEmpty {
+                let folder = store.files.directory(for: source.sessionId)
+                // The sighting the playhead is in, or the nearest to it.
+                let nearest = seen.min {
+                    distance(video.offset, $0) < distance(video.offset, $1)
+                }!
+                VStack(alignment: .leading, spacing: 8) {
+                    Toggle(isOn: $showFigure) {
+                        Label("Show the figure", systemImage: "figure.stand")
+                    }
+                    .tint(Theme.ecto)
+                    .accessibilityIdentifier("replay-figure-overlay")
+                    ExportWithFigureButton(video: store.files.fileURL(for: source.sessionId,
+                                                                      relativePath: video.segment.relativePath),
+                                           entries: figures.entries(of: nearest, in: folder))
+                        .id(nearest.file)
+                }
+                .padding(12)
+                .background(Theme.mist, in: RoundedRectangle(cornerRadius: 12))
+                .task(id: video.segment.id) {
+                    videoSize = await figures.uprightSize(
+                        of: store.files.fileURL(for: source.sessionId, relativePath: video.segment.relativePath))
+                }
+            }
+        }
+    }
+
+    private func distance(_ t: TimeInterval, _ sighting: PersonMapFiling.Sighting) -> TimeInterval {
+        t < sighting.from ? sighting.from - t : t > sighting.to ? t - sighting.to : 0
     }
 
     /// Every photograph taken during the session, in order. Tapping one moves the playhead to the
@@ -634,6 +691,7 @@ struct SessionReviewView: View {
         store.load()
         guard let source = store.replayData(for: sessionId) else { return }
         self.source = source
+        figures.load(readings: (try? await source.log.readings()) ?? [])
         await replay.load(readingLog: source.log, markers: source.markers,
                           media: source.media, baselines: source.baselines,
                           startedAt: source.startedAt, endedAt: source.endedAt)

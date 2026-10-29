@@ -251,6 +251,8 @@ public sealed class AppUserPurge
             // And which launches they were sent: a list of where a person was going to be.
             await db.FieldLaunchRecipients.Where(r => r.AppUserId == userId).ExecuteDeleteAsync(ct);
             await db.FieldLaunchJoinRequests.Where(r => r.AppUserId == userId).ExecuteDeleteAsync(ct);
+            // A room they were about to scan (LiDAR plan): twenty minutes of courtesy, nobody's record.
+            await db.PlaceScanHolds.Where(h => h.AppUserId == userId).ExecuteDeleteAsync(ct);
             await db.UserTourStates.Where(t => t.AppUserId == userId).ExecuteDeleteAsync(ct);
             await db.UserMessageTos.Where(m => m.ToAppUserId == userId).ExecuteDeleteAsync(ct);
             await db.UserFollows
@@ -463,6 +465,7 @@ public sealed class AppUserPurge
             nameof(EventBookingAlertPreference), nameof(EventBookingAlertState), nameof(EventPhotoConsent),
             nameof(InvestigationGuestPass),
             nameof(StoreReviewVote), nameof(StoreFavourite), nameof(StoreCart),
+            nameof(PlaceScanHold),
             // Detached rather than deleted, by the shared anonymise step (StoreOrderScrub): after
             // it no order or redemption names the account, so the preview must not count them.
             nameof(StoreOrder), nameof(StoreCouponRedemption),

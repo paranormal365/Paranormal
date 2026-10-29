@@ -132,6 +132,31 @@ public actor APIClient {
         }
     }
 
+    /// `upload`, with the answer UNINTERPRETED — for the upload whose refusal carries a structured
+    /// payload: a room's scan answered 409 with the choices the phone offers ("keep it as a
+    /// comparison, offer it, discard it"), which the prose mapper would replace with a status line.
+    /// Nil when the server could not be reached.
+    public func uploadRaw(_ endpoint: Endpoint) async -> (data: Data, statusCode: Int)? {
+        guard case .multipart(let multipart) = endpoint.body else {
+            assertionFailure("uploadRaw() requires a multipart endpoint body")
+            return nil
+        }
+        guard var request = await buildRequest(endpoint, omitBody: true) else { return nil }
+        request.setValue(multipart.contentTypeHeader, forHTTPHeaderField: "Content-Type")
+
+        let scratch = FileManager.default.temporaryDirectory
+            .appendingPathComponent("upload-\(UUID().uuidString)")
+        defer { try? FileManager.default.removeItem(at: scratch) }
+        do {
+            try multipart.write(to: scratch)
+            let (data, response) = try await transport.upload(request, fromFile: scratch)
+            await noteRefusal(response, to: request)
+            return (data, response.statusCode)
+        } catch {
+            return nil
+        }
+    }
+
     /// The absolute URL an endpoint resolves to — for handing anonymous media
     /// routes straight to AVPlayer/image loaders.
     public nonisolated func absoluteURL(for endpoint: Endpoint, in environment: APIEnvironment) -> URL? {

@@ -1,5 +1,6 @@
 import Foundation
 import AVFoundation
+import CoreImage
 
 /// Writes a smaller copy of a video for the upload, leaving the recording alone.
 ///
@@ -117,6 +118,88 @@ public struct SessionVideoConverter: Sendable {
         }
 
         return .converted(destination)
+    }
+
+    /// A copy of the stretch of a video around a figure, with the figure drawn into it (LiDAR plan,
+    /// phase 4): what somebody sends on when they want others to see what the person map saw.
+    ///
+    /// The recording itself is never changed; the copy goes into `scratch`. The stretch is the
+    /// sighting with three seconds either side, not the whole video, because a night's video with
+    /// a figure in it for four seconds is an hour nobody wants to send for those four.
+    ///
+    /// - Parameter entries: the sighting's joints file, read.
+    public func drawingFigure(_ original: URL, entries: [FigureSidecar.Entry],
+                              into scratch: URL) async -> Outcome {
+        guard let first = entries.first?.t, let last = entries.last?.t else {
+            return .sendOriginal(reason: "there is no figure to draw")
+        }
+        let asset = AVURLAsset(url: original)
+        guard let duration = try? await asset.load(.duration), duration.seconds > 0,
+              let track = try? await asset.loadTracks(withMediaType: .video).first else {
+            return .sendOriginal(reason: "this recording's video could not be read")
+        }
+        let natural = (try? await track.load(.naturalSize)) ?? .zero
+        let turn = PictureTurn(transform: (try? await track.load(.preferredTransform)) ?? .identity)
+
+        let composition: AVMutableVideoComposition
+        do {
+            composition = try await AVMutableVideoComposition.videoComposition(with: asset) { request in
+                let source = request.sourceImage
+                guard let joints = FigureSidecar.pose(at: request.compositionTime.seconds, in: entries) else {
+                    request.finish(with: source, context: nil)
+                    return
+                }
+                request.finish(with: Self.drawn(joints, over: source, natural: natural, turn: turn), context: nil)
+            }
+        } catch {
+            return .sendOriginal(reason: "this recording could not be drawn on")
+        }
+
+        guard let session = AVAssetExportSession(asset: asset, presetName: AVAssetExportPresetHighestQuality) else {
+            return .sendOriginal(reason: "this device cannot re-encode that recording")
+        }
+        session.videoComposition = composition
+        let start = max(0, first - 3), end = min(duration.seconds, last + 3)
+        session.timeRange = CMTimeRange(start: CMTime(seconds: start, preferredTimescale: 600),
+                                        end: CMTime(seconds: end, preferredTimescale: 600))
+
+        try? FileManager.default.createDirectory(at: scratch, withIntermediateDirectories: true)
+        let destination = scratch.appendingPathComponent("figure-\(UUID().uuidString.lowercased()).mp4")
+        do {
+            try await session.export(to: destination, as: .mp4)
+        } catch {
+            try? FileManager.default.removeItem(at: destination)
+            return .sendOriginal(reason: "this recording could not be re-encoded")
+        }
+        return .converted(destination)
+    }
+
+    /// The figure drawn over one frame. Points are where the joint is in the video as it plays; the
+    /// frame handed over is either that picture already or the picture as captured, which its size
+    /// gives away when the video was filmed upright.
+    static func drawn(_ joints: [FigurePoint?], over source: CIImage, natural: CGSize, turn: PictureTurn) -> CIImage {
+        let extent = source.extent
+        let width = Int(extent.width.rounded()), height = Int(extent.height.rounded())
+        guard width > 0, height > 0,
+              let context = CGContext(data: nil, width: width, height: height, bitsPerComponent: 8, bytesPerRow: 0,
+                                      space: CGColorSpace(name: CGColorSpace.sRGB)!,
+                                      bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue)
+        else { return source }
+
+        // Still as captured: the joints go back into the captured picture's frame.
+        let asCaptured = turn.swapsSides && abs(extent.width - natural.width) < 1 && abs(extent.height - natural.height) < 1
+        let points = asCaptured
+            ? joints.map { joint -> FigurePoint? in
+                guard let joint else { return nil }
+                let p = turn.captured(SIMD2(joint.x, joint.y))
+                return FigurePoint(x: p.x, y: p.y, z: joint.z, c: joint.c)
+            }
+            : joints
+        FigureDrawing.drawFigure(points, in: context, width: Double(width), height: Double(height))
+        guard let overlay = context.makeImage() else { return source }
+        return CIImage(cgImage: overlay)
+            .transformed(by: CGAffineTransform(translationX: extent.minX, y: extent.minY))
+            .composited(over: source)
     }
 
     static func preset(for resolution: VideoQuality.Resolution) -> String {

@@ -59,4 +59,12 @@
           Link="Fixtures\replay-conformance\%(Filename)%(Extension)"
           CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
+  <!-- A place's room scans (LiDAR plan): the room-key vectors both normalizers are held to. The
+       captured API answers in the same folder are written and checked from the source tree by
+       PlaceScanFixtureTests, so they are not copied. -->
+  <ItemGroup>
+    <None Include="..\Ben.iOS\BenKit\Tests\BenKitTests\Fixtures\place-scans\room-key-vectors.json"
+          Link="Fixtures\place-scans\room-key-vectors.json"
+          CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
 </Project>

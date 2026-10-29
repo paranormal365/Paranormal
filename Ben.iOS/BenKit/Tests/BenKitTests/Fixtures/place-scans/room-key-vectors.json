@@ -1,0 +1,75 @@
+{
+  "_about": "Room names and the keys they become. Read by PlaceScanRoomKeyTests (server) and RoomKeyParityTests (phone): a room's key must be the same on both, or one room becomes two scans.",
+  "vectors": [
+    {
+      "input": "Bedroom 1",
+      "name": "Bedroom 1",
+      "key": "bedroom 1"
+    },
+    {
+      "input": "  Bedroom   1 ",
+      "name": "Bedroom 1",
+      "key": "bedroom 1"
+    },
+    {
+      "input": "bedroom 1",
+      "name": "bedroom 1",
+      "key": "bedroom 1"
+    },
+    {
+      "input": "BEDROOM\t1",
+      "name": "BEDROOM 1",
+      "key": "bedroom 1"
+    },
+    {
+      "input": "Room 217\n",
+      "name": "Room 217",
+      "key": "room 217"
+    },
+    {
+      "input": "Back bedroom,\r\nnorth wall",
+      "name": "Back bedroom, north wall",
+      "key": "back bedroom, north wall"
+    },
+    {
+      "input": "Nursery Room",
+      "name": "Nursery Room",
+      "key": "nursery room"
+    },
+    {
+      "input": "The Chapel",
+      "name": "The Chapel",
+      "key": "the chapel"
+    },
+    {
+      "input": "THE ATTIC",
+      "name": "THE ATTIC",
+      "key": "the attic"
+    },
+    {
+      "input": "Salle à Manger",
+      "name": "Salle à Manger",
+      "key": "salle à manger"
+    },
+    {
+      "input": "Straße",
+      "name": "Straße",
+      "key": "straße"
+    },
+    {
+      "input": "Room​217",
+      "name": "Room​217",
+      "key": "room​217"
+    },
+    {
+      "input": "",
+      "name": null,
+      "key": ""
+    },
+    {
+      "input": "   \t ",
+      "name": null,
+      "key": ""
+    }
+  ]
+}

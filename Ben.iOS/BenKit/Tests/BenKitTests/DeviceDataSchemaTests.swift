@@ -164,6 +164,58 @@ struct DeviceDataSchemaTests {
         #expect(!problems.isEmpty, "the schema should reject an invented triggered_by")
     }
 
+    // MARK: - 1.2: the room-scan and person-map channels
+
+    /// One reading each of the five 1.2 channels, as the app writes them.
+    private func scanDocument(_ change: ((inout [String: FieldReading.Measurement]) -> Void)? = nil) throws -> Data {
+        let start = Date(timeIntervalSince1970: 1_793_221_200)
+        var channels: [String: FieldReading.Measurement] = [
+            "room_scan": .label("Bedroom 1", details: [
+                "place_scan_id": .string(UUID().uuidString.lowercased()), "version": .number(2),
+                "outcome": .string("replaced"), "duration_seconds": .number(722)]),
+            "scan": .label("scans/compare-001.scan", details: [
+                "room": .string("Bedroom 1"), "place_scan_version": .number(2), "changes": .number(1)]),
+            "scan_change": .label("moved", details: [
+                "object": .string("chair"), "distance_cm": .number(42),
+                "where": .array([.number(1.5), .number(0), .number(-2.25)]),
+                "picture": .string("scans/compare-001.scan#changes/01.jpg")]),
+            "figure": .label("figures/figure-001.json", details: [
+                "from": .number(12.5), "to": .number(15), "video": .string("media/video-001.mp4"),
+                "peak_confidence": .number(0.8), "picture": .string("figures/figure-001.jpg")]),
+            "shape": .label("45 × 160 × 30 cm", details: [
+                "size_cm": .array([.number(45), .number(160), .number(30)]), "distance_m": .number(2.4),
+                "from": .number(30), "to": .number(32.5), "picture": .string("figures/shape-001.jpg")]),
+        ]
+        change?(&channels)
+        let reading = FieldReading(at: start, precision: .millisecond, sequence: 1, triggeredBy: .manual,
+                                   measurements: channels)
+        let envelope = DeviceDataEnvelope(
+            device: .init(manufacturer: "Apple", model: "iPhone16,1", firmwareVersion: "iOS 18.2"),
+            session: .init(startedAt: start, trigger: .init(mode: .event, eventDescription: "a person did it")),
+            readings: [reading])
+        return try DeviceDataJSON.encoder.encode(envelope)
+    }
+
+    @Test func theRoomScanChannelsValidate() throws {
+        guard let problems = try validate(scanDocument()) else { return }
+        #expect(problems.isEmpty, "schema rejected the 1.2 channels:\n\(problems.joined(separator: "\n"))")
+    }
+
+    /// The six malformed documents the spec names for 1.2 — each must be refused, or the schema
+    /// describes the channels without checking them.
+    @Test(arguments: [
+        ("a change that is neither moved, missing nor new", "scan_change", FieldReading.Measurement.label("teleported")),
+        ("a comparison path that climbs out", "scan", .label("../scans/compare-001.scan")),
+        ("a figure seen before its video began", "figure", .label("figures/figure-001.json", details: ["from": .number(-1), "to": .number(2)])),
+        ("a figure's picture that climbs out", "figure", .label("figures/figure-001.json", details: ["picture": .string("../figure-001.jpg")])),
+        ("a shape with two dimensions", "shape", .label("tall", details: ["size_cm": .array([.number(45), .number(160)])])),
+        ("a room scan of version 0", "room_scan", .label("Bedroom 1", details: ["version": .number(0)])),
+    ])
+    func aMalformedScanChannelIsRefused(_ why: String, _ key: String, _ broken: FieldReading.Measurement) throws {
+        guard let problems = try validate(scanDocument { $0[key] = broken }) else { return }
+        #expect(!problems.isEmpty, "the schema accepted \(why)")
+    }
+
     @Test func theSpecsOwnExampleDecodesThroughOurTypes() throws {
         // The other direction: a document written by somebody ELSE against this spec must load
         // here, unknown keys and all (rule 6).

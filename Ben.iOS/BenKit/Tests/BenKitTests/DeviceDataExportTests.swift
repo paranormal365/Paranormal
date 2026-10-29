@@ -157,7 +157,7 @@ struct DeviceDataExportTests {
 
         let parsed = try #require(
             try JSONSerialization.jsonObject(with: extracted) as? [String: Any])
-        #expect(parsed["format_version"] as? String == "1.0.0")
+        #expect(parsed["format_version"] as? String == DeviceDataEnvelope.currentFormatVersion)
         #expect((parsed["readings"] as? [[String: Any]])?.count == 3)
     }
 

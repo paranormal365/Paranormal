@@ -40,14 +40,18 @@ public static class PlaceUsageCensus
     /// <param name="Contacts">Recorded ways to reach whoever runs it.</param>
     /// <param name="Claims">Outstanding or settled claims to run it.</param>
     /// <param name="MenuItems">Menu items kept at the venue (10/13/2026).</param>
+    /// <param name="Scans">Room scans the place keeps, every version (LiDAR plan).</param>
+    /// <param name="ScanHolds">Rooms somebody is about to scan there.</param>
+    /// <param name="ScanCustody">An administrator's grant of its scans to a group.</param>
     public sealed record Usage(
         int Cases, int Investigations, int Evidence, int FieldSessions, int CalendarEvents,
         int HostedEvents, int Posts, int Rooms, int VenueProfiles, int VenueGrants,
-        int Contacts, int Claims, int MenuItems = 0)
+        int Contacts, int Claims, int MenuItems = 0, int Scans = 0, int ScanHolds = 0, int ScanCustody = 0)
     {
         private int[] All =>
             [Cases, Investigations, Evidence, FieldSessions, CalendarEvents, HostedEvents,
-             Posts, Rooms, VenueProfiles, VenueGrants, Contacts, Claims, MenuItems];
+             Posts, Rooms, VenueProfiles, VenueGrants, Contacts, Claims, MenuItems,
+             Scans, ScanHolds, ScanCustody];
 
         /// <summary>Nothing anywhere points at this place.</summary>
         public bool IsEmpty => Total == 0;
@@ -86,6 +90,9 @@ public static class PlaceUsageCensus
             Say(Contacts, "contact", "contacts");
             Say(Claims, "claim", "claims");
             Say(MenuItems, "menu item", "menu items");
+            Say(Scans, "room scan", "room scans");
+            Say(ScanHolds, "room being scanned", "rooms being scanned");
+            Say(ScanCustody, "scan custody grant", "scan custody grants");
 
             return parts.Count == 1
                 ? parts[0]
@@ -108,5 +115,8 @@ public static class PlaceUsageCensus
             await db.OrganizationVenueGrants.CountAsync(x => x.PlaceId == placeId, ct),
             await db.PlaceContacts.CountAsync(x => x.PlaceId == placeId, ct),
             await db.VenuePlaceClaims.CountAsync(x => x.PlaceId == placeId, ct),
-            await db.MenuLibraryItems.CountAsync(x => x.PlaceId == placeId, ct));
+            await db.MenuLibraryItems.CountAsync(x => x.PlaceId == placeId, ct),
+            await db.PlaceScans.CountAsync(x => x.PlaceId == placeId, ct),
+            await db.PlaceScanHolds.CountAsync(x => x.PlaceId == placeId, ct),
+            await db.PlaceScanCustodies.CountAsync(x => x.PlaceId == placeId, ct));
 }

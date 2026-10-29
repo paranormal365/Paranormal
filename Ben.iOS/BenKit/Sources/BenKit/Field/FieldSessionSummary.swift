@@ -30,6 +30,9 @@ public struct FieldSessionSummary: Sendable, Identifiable, Equatable {
     public var hostedEventId: UUID?
     public var eventTitle: String?
     public var fieldLaunchId: UUID?
+    /// The place it is at, once known (LiDAR plan) — what its room scans belong to.
+    public var placeId: UUID?
+    public var placeName: String?
     /// The zone the phone was in when the session was recorded. Sent with it, so the website says
     /// the time where it happened — not wherever the phone was when it was sent (10/28/2026).
     public var timezoneIdentifier: String
@@ -43,6 +46,7 @@ public struct FieldSessionSummary: Sendable, Identifiable, Equatable {
                 recordedByAccountId: UUID? = nil, isPublicArchiveCopy: Bool = false,
                 orgCalendarEventId: UUID? = nil, hostedEventId: UUID? = nil,
                 eventTitle: String? = nil, fieldLaunchId: UUID? = nil,
+                placeId: UUID? = nil, placeName: String? = nil,
                 timezoneIdentifier: String = TimeZone.current.identifier) {
         self.id = id
         self.startedAt = startedAt
@@ -65,6 +69,8 @@ public struct FieldSessionSummary: Sendable, Identifiable, Equatable {
         self.hostedEventId = hostedEventId
         self.eventTitle = eventTitle
         self.fieldLaunchId = fieldLaunchId
+        self.placeId = placeId
+        self.placeName = placeName
         self.timezoneIdentifier = timezoneIdentifier
     }
 
@@ -90,6 +96,8 @@ public struct FieldSessionSummary: Sendable, Identifiable, Equatable {
                   hostedEventId: session.hostedEventId,
                   eventTitle: session.eventTitle,
                   fieldLaunchId: session.fieldLaunchId,
+                  placeId: session.placeId,
+                  placeName: session.placeName,
                   timezoneIdentifier: session.timezoneIdentifier)
     }
 

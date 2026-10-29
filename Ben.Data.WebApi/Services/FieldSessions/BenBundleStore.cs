@@ -11,14 +11,15 @@ public interface IBenBundleStore
     /// bytes and never changes, while the file it describes may be gigabytes and is read once per
     /// player scrub without it.
     /// </summary>
-    Task<BenBundle> IndexAsync(string storagePath, CancellationToken ct = default);
+    /// <param name="rules">What kind of file it is — a session unless a room's scan says otherwise.</param>
+    Task<BenBundle> IndexAsync(string storagePath, CancellationToken ct = default, BenBundleRules? rules = null);
 
     /// <summary>
     /// One member of a bundle, as a seekable stream of exactly its bytes. Null when the bundle
     /// does not carry that entry.
     /// </summary>
     Task<BundleWindowStream?> OpenEntryAsync(
-        string storagePath, string entryPath, CancellationToken ct = default);
+        string storagePath, string entryPath, CancellationToken ct = default, BenBundleRules? rules = null);
 
     /// <summary>The whole bundle, for handing back to a phone.</summary>
     Task<Stream> OpenBundleAsync(string storagePath, CancellationToken ct = default);
@@ -36,13 +37,13 @@ public sealed class BenBundleStore(IFileStorageService storage, IMemoryCache cac
     /// </summary>
     private static readonly TimeSpan IndexLifetime = TimeSpan.FromMinutes(30);
 
-    public async Task<BenBundle> IndexAsync(string storagePath, CancellationToken ct = default)
+    public async Task<BenBundle> IndexAsync(string storagePath, CancellationToken ct = default, BenBundleRules? rules = null)
     {
         if (cache.TryGetValue(Key(storagePath), out BenBundle? cached) && cached is not null)
             return cached;
 
         await using var stream = await storage.OpenReadAsync(storagePath, ct);
-        var bundle = await BenBundle.ReadAsync(stream, ct);
+        var bundle = await BenBundle.ReadAsync(stream, rules ?? BenBundleRules.Session, ct);
 
         cache.Set(Key(storagePath), bundle, new MemoryCacheEntryOptions
         {
@@ -55,9 +56,9 @@ public sealed class BenBundleStore(IFileStorageService storage, IMemoryCache cac
     }
 
     public async Task<BundleWindowStream?> OpenEntryAsync(
-        string storagePath, string entryPath, CancellationToken ct = default)
+        string storagePath, string entryPath, CancellationToken ct = default, BenBundleRules? rules = null)
     {
-        var bundle = await IndexAsync(storagePath, ct);
+        var bundle = await IndexAsync(storagePath, ct, rules);
         if (bundle.Find(entryPath) is not { } entry) return null;
 
         // A second handle rather than the one the index used: this one lives as long as the

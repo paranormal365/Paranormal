@@ -1,0 +1,79 @@
+{
+  "id": "3c3c4798-a03d-4d98-9fb1-684a42f91c30",
+  "placeId": "127d84fb-8bc3-44b1-a4c0-f2394da6f7ad",
+  "roomKey": "room 217",
+  "roomName": "Room 217",
+  "version": 1,
+  "state": 1,
+  "retention": 1,
+  "scannedUtc": "2026-10-28T15:18:00",
+  "scannedBy": "Sarah Whitfield",
+  "scannedByYou": false,
+  "fileSize": 1837,
+  "sha256": "abf91305cad1e59d4b215965ebc1d7295bc2392ff7e36cba22f1cd635f33d49c",
+  "deviceModel": "iPhone16,1",
+  "scannerVersion": 1,
+  "keyframeCount": 2,
+  "floorAreaM2": 18.4,
+  "triangleCount": 1234,
+  "shownOnPlacePage": false,
+  "decidedUtc": null,
+  "decisionNote": null,
+  "entries": [
+    {
+      "path": "keyframes/0001.depth",
+      "length": 16,
+      "contentType": "application/octet-stream"
+    },
+    {
+      "path": "keyframes/0001.jpg",
+      "length": 14,
+      "contentType": "image/jpeg"
+    },
+    {
+      "path": "keyframes/0002.depth",
+      "length": 16,
+      "contentType": "application/octet-stream"
+    },
+    {
+      "path": "keyframes/0002.jpg",
+      "length": 14,
+      "contentType": "image/jpeg"
+    },
+    {
+      "path": "keyframes/index.json",
+      "length": 2,
+      "contentType": "application/json"
+    },
+    {
+      "path": "manifest.json",
+      "length": 455,
+      "contentType": "application/json"
+    },
+    {
+      "path": "mesh.glb",
+      "length": 64,
+      "contentType": "model/gltf-binary"
+    },
+    {
+      "path": "preview.jpg",
+      "length": 14,
+      "contentType": "image/jpeg"
+    },
+    {
+      "path": "room.json",
+      "length": 14,
+      "contentType": "application/json"
+    },
+    {
+      "path": "room.usdz",
+      "length": 8,
+      "contentType": "model/vnd.usdz\u002Bzip"
+    },
+    {
+      "path": "worldmap.arworldmap",
+      "length": 32,
+      "contentType": "application/octet-stream"
+    }
+  ]
+}

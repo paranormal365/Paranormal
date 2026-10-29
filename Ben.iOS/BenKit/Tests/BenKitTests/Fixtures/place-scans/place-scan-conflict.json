@@ -1,0 +1,25 @@
+{
+  "reason": "already scanned",
+  "says": "Room 217 already has a scan. Your scan is still on your phone: keep it as a comparison, offer it to replace the room\u0027s scan, or discard it.",
+  "roomName": "Room 217",
+  "current": {
+    "id": "3c3c4798-a03d-4d98-9fb1-684a42f91c30",
+    "version": 1,
+    "state": 1,
+    "retention": 1,
+    "scannedUtc": "2026-10-28T15:18:00",
+    "scannedBy": "Sarah Whitfield",
+    "scannedByYou": false,
+    "fileSize": 1837,
+    "keyframeCount": 2,
+    "floorAreaM2": 18.4,
+    "triangleCount": 1234
+  },
+  "mayReplace": false,
+  "replaceReason": "Room 217 was scanned on 10/28/2026 by Sarah Whitfield. Hermitage Hotel decides whether a new scan replaces it, so yours can be offered to them or kept as a comparison. From 10/28/2027, anyone may replace it.",
+  "choices": [
+    "compare",
+    "offer",
+    "discard"
+  ]
+}

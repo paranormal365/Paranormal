@@ -641,6 +641,9 @@ public sealed class OrganizationPurge
                 .Where(x => x.PlaceRoomId != null && x.PlaceRoom!.OrganizationId == organizationId)
                 .ExecuteUpdateAsync(u => u.SetProperty(x => x.PlaceRoomId, (Guid?)null), ct);
             await db.PlaceRooms.Where(x => x.OrganizationId == organizationId).ExecuteDeleteAsync(ct);
+            // A SuperAdmin's grant of a place's scans to this group (LiDAR plan). The scans stay
+            // with the place; who looks after them falls back to the ordinary rule.
+            await db.PlaceScanCustodies.Where(x => x.OrganizationId == organizationId).ExecuteDeleteAsync(ct);
             await db.Publications.Where(x => x.OrganizationId == organizationId).ExecuteDeleteAsync(ct);
             await db.TierChangeNotices.Where(x => x.OrganizationId == organizationId).ExecuteDeleteAsync(ct);
             await db.UploadFileOrganizationShares.Where(x => x.OrganizationId == organizationId).ExecuteDeleteAsync(ct);

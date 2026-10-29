@@ -271,6 +271,41 @@ public sealed class AdminPlaceMergeController : BenControllerBase
         await RepointAsync(db.MenuLibraryItems.Where(x => x.PlaceId == id),
             x => x.PlaceId = request.IntoPlaceId, ct);
 
+        // Room scans (LiDAR plan). Their key to Place is CASCADE, so without this a merge would
+        // silently destroy every scan of the losing record. They move with their files where they
+        // are — a scan's path is kept on its row, never rebuilt from its place. Two records of one
+        // building can each have a scan of the same room: the survivor's stays the room's scan and
+        // the loser's is kept as a previous version, numbered after the survivor's, because one
+        // current scan per room is the rule the index enforces.
+        var survivorScans = await db.PlaceScans.AsNoTracking()
+            .Where(s => s.PlaceId == request.IntoPlaceId)
+            .Select(s => new { s.RoomKey, s.Version, s.State })
+            .ToListAsync(ct);
+        foreach (var scan in await db.PlaceScans.Where(s => s.PlaceId == id).ToListAsync(ct))
+        {
+            var there = survivorScans.Where(s => s.RoomKey == scan.RoomKey).ToList();
+            if (there.Count > 0)
+            {
+                scan.Version += there.Max(s => s.Version);
+                if (scan.State == Ben.Data.Common.Enums.PlaceScanState.Current
+                    && there.Any(s => s.State == Ben.Data.Common.Enums.PlaceScanState.Current))
+                {
+                    scan.State = Ben.Data.Common.Enums.PlaceScanState.Previous;
+                }
+            }
+            scan.PlaceId = request.IntoPlaceId;
+        }
+        // Somebody about to scan the losing record is about to scan a page that will not exist.
+        db.PlaceScanHolds.RemoveRange(await db.PlaceScanHolds.Where(h => h.PlaceId == id).ToListAsync(ct));
+        // An administrator's grant of the scans moves unless the survivor already has one.
+        if (await db.PlaceScanCustodies.FirstOrDefaultAsync(c => c.PlaceId == id, ct) is { } scanGrant)
+        {
+            if (await db.PlaceScanCustodies.AnyAsync(c => c.PlaceId == request.IntoPlaceId, ct))
+                db.PlaceScanCustodies.Remove(scanGrant);
+            else
+                scanGrant.PlaceId = request.IntoPlaceId;
+        }
+
         var survivingProfiles = await db.OrganizationVenueProfiles
             .Where(v => v.PlaceId == request.IntoPlaceId).ToListAsync(ct);
         var survivorVerified = survivingProfiles.Any(v => v.VerifiedUtc != null);
