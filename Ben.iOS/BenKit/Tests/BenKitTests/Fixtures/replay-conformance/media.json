@@ -432,11 +432,11 @@
     "glowing_photo": null,
     "video": null,
     "audio": {
-     "path": "media/audio-002.m4a",
-     "offset_ms": 0
+     "path": "media/audio-001.m4a",
+     "offset_ms": 14000
     }
    },
-   "note": "The second clip starts at 16 s but covers from 15 s (the 1 s lead), and the latest-starting clip wins."
+   "note": "The second clip starts at 16 s, so 15 s is in its 1 s lead; the first is still playing and keeps it (rule M6, 10/28/2026: the lead second never cuts a clip that has begun)."
   },
   {
    "at_ms": 17000,

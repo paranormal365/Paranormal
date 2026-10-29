@@ -105,15 +105,20 @@ export function trackBearingAt(timeline, ms) {
  * covers from its start on until the browser learns it.
  */
 export function coveringClip(timeline, kind, ms, broken) {
-    let best = null;
+    // A clip that has begun beats one only in its lead second (10/28/2026): the lead is for a
+    // recording that started a moment after the clock, never for cutting the last second off the
+    // one playing and starting the next a second early from its beginning.
+    let best = null, early = null;
     for (const clip of timeline.clips) {
         if (clip.kind !== kind || clip.startMs == null) continue;
         // A recording this browser cannot play never hides one it can (10/28/2026).
         if (broken?.has(clip.fileId)) continue;
         if (ms < clip.startMs - LEAD_MS) continue;
         if (clip.durationMs != null && ms >= clip.startMs + clip.durationMs) continue;
-        if (best === null || clip.startMs >= best.startMs) best = clip;
+        if (ms >= clip.startMs) { if (best === null || clip.startMs >= best.startMs) best = clip; }
+        else if (early === null || clip.startMs >= early.startMs) early = clip;
     }
+    best ??= early;
     return best === null ? null : { clip: best, offsetMs: Math.max(0, ms - best.startMs) };
 }
 

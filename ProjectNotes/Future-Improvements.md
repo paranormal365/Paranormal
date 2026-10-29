@@ -13858,6 +13858,11 @@ is not there yet. If people report that, show the recording's buffered fraction 
 duration) on the stage — "Loading the recording… 40%" — while it is behind, and hide it once it is in
 step. Watch the API's slow-request log (any data call over 5 s) and field reports before building it.
 
+10/28/2026 (session-player plan, phases 3 and 7): still not built, still open. Since then, a recording link
+that fails is renewed and tried again up to three times; the clock no longer stands still at Play while a
+recording is loading; and a playing recording that stands still is given its place after 150 ms. The case
+for the bar is narrower, but a very slow connection can still play the timeline ahead of the sound.
+
 ## 259. The menu shifts down a row when "Your groups" arrives (CLOSED 10/23/2026 — fix/menu-groups-no-shift-259)
 
 Found 10/14/2026 by the full browser run (The_admin_menu_reads_as_groups failed; passed alone). The menu

@@ -482,10 +482,13 @@ public final class SessionReplay {
         result.position = interpolatedPosition(at: moment)
         result.trackBearingDegrees = trackBearing(at: moment)
         // The LATEST-starting clip of each kind wins where two of a kind overlap: it is the one
-        // somebody started most recently, and so the one they are most likely looking for.
+        // somebody started most recently, and so the one they are most likely looking for. A clip
+        // that has begun beats one only in its lead second (10/28/2026, rule M6): the lead is for a
+        // recording that started a moment after the clock, not for cutting the last second off the
+        // one playing and starting the next a second early.
         func covering(_ kind: CaptureKind) -> (segment: MediaSegment, offset: TimeInterval)? {
-            timeline.media
-                .last(where: { $0.kind == kind && $0.covers(moment) })
+            let begun = timeline.media.last(where: { $0.kind == kind && $0.covers(moment) && moment >= $0.startedAt })
+            return (begun ?? timeline.media.last(where: { $0.kind == kind && $0.covers(moment) }))
                 .flatMap { segment in segment.offset(at: moment).map { (segment, $0) } }
         }
         result.activeVideo = covering(.video)

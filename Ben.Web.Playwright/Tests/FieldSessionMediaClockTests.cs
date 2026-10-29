@@ -95,7 +95,14 @@ public class FieldSessionMediaClockTests : BenTestBase
         await Page.GetByRole(AriaRole.Button, new() { Name = "Play" }).ClickAsync();
         await Expect(Page.Locator("[data-testid='media-clock']")).ToBeVisibleAsync(new() { Timeout = 10_000 });
 
-        await Page.WaitForTimeoutAsync(3000);
+        // Until the recording has played two seconds. A timeout here is not the failure: the
+        // assertion below says what the element was doing, which a bare timeout would not.
+        try
+        {
+            await Page.WaitForFunctionAsync("() => document.querySelector('audio')?.currentTime > 2",
+                null, new() { Timeout = 15_000, PollingInterval = 100 });
+        }
+        catch (TimeoutException) { }
         var audioTime = await Page.EvaluateAsync<double>("() => document.querySelector('audio').currentTime");
         var elapsed = (await Page.Locator("[data-testid='elapsed']").InnerTextAsync()).Trim();
         TestContext.Out.WriteLine($"audio at {audioTime:0.0}s, page shows {elapsed}");
@@ -114,9 +121,10 @@ public class FieldSessionMediaClockTests : BenTestBase
         var shown = parts.Reverse().Select((v, i) => v * Math.Pow(60, i)).Sum();
         Assert.That(shown, Is.EqualTo(4 + audioTime).Within(1.5), "the page's playhead should follow the recording's clock");
 
-        // The readings followed too: past ten seconds the room is the Cellar.
-        if (shown >= 10)
-            await Expect(Page.Locator("[data-testid='current-room']")).ToContainTextAsync("Cellar");
+        // The readings followed too: past ten seconds the room is the Cellar. (This was skipped when
+        // the fixed pause ended before 0:10; now it waits for the playhead to get there.)
+        await WaitForPlayerAsync("s.playhead > 10500");
+        await Expect(Page.Locator("[data-testid='current-room']")).ToContainTextAsync("Cellar");
 
         // Pausing the recording itself pauses the page.
         await Page.EvaluateAsync("() => document.querySelector('audio').pause()");
