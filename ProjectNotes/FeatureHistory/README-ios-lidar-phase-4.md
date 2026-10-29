@@ -79,8 +79,9 @@ session's bundle like any recording, served by the existing `files/{fileId}` rou
 - **Export with the figure drawn** is the sighting nearest the playhead with three seconds either
   side, not the whole video: a night's video with a figure in it for four seconds is an hour nobody
   wants to send for those four.
-- **A video cut short to send leaves its figures on the phone**: its joints are timed from the start
-  of the video as recorded. Rebasing them like the audio offsets is a follow-up.
+- **A video cut short to send keeps its figures** (10/29/2026): each figure's and shape's `from` and
+  `to`, and each joints file sent, are moved onto the cut video's clock, the way the audio offsets
+  are; frames outside the kept stretch are left out of the copy. The session's own files are untouched.
 - **Public copies leave `figures/` out**, like comparisons: they are of the people in the building.
 - **ARKit's 2D joints are mapped by name** (`head_joint`, `right_forearm_joint`…), so the file's
   order never depends on ARKit's.
@@ -118,4 +119,3 @@ session's bundle like any recording, served by the existing `files/{fileId}` rou
 - Phase 0 on Ben's phone: that ARKit runs body detection and scene depth together in world tracking
   at 30 frames a second (the code falls back to body detection alone, with no depth and no shapes),
   how warm the phone gets in an hour, and how the figure looks in a dark room.
-- Rebasing a cut video's joints (above).
