@@ -451,24 +451,62 @@ with where it was, who recorded it, how long it ran, and how much it contains. *
 session to the report; **Play back** opens the session's playback page, where the trace, the map and
 the recordings all play in sync.
 
-The playback page works just like the review screen in the app. Below the controls, the **video**
-at the playhead plays alongside the session's **sound**. The **photographs** taken during the night
-appear in a strip of thumbnails, and each one's border glows for three seconds as playback reaches
-the moment it was taken. Click a photograph to go to the moment it was taken and see it full size,
-and click again to carry on. When the camera saw movement while the phone was held still, the video
-is outlined and **Motion detected** appears for three seconds.
+The playback page works just like the review screen in the app. At the top it says where the session
+belongs, with a link there: the investigation it was sent to, the event whose results show it, or the
+place's field archive. It also says who recorded it. The start time is shown in the time zone where the
+session was recorded, with the zone named; if yours is different, you can switch to it. Under that you see
+how long it ran, how many readings it has, the phone it was recorded on and the battery at the start. If
+the phone stopped partway through, the page says the session was **interrupted** and plays it to the last
+thing recorded.
 
-Drag the bar under the controls, or drag across the chart, to move through the night; playback
-carries on from wherever you let go. The speed buttons go up to 32×, and the two buttons beside them
-step to the previous or next mark, starting a few seconds before it so you hear what led up to it.
-The left and right arrow keys move five seconds, and the space bar plays and pauses.
+Below the controls, the **video** at the playhead plays alongside the session's **sound**. The
+**photographs** taken during the night appear in a strip of thumbnails, and each one's border glows for
+three seconds as playback reaches the moment it was taken. Click a photograph to go to that moment and see
+it full size, with the room it was taken in, and click again to carry on. When the camera saw movement
+while the phone was held still, the video is outlined and **Motion detected** appears for three seconds.
 
-On the map, the marker moves along the path that was walked and the arrow turns to show which way
-the phone was facing. The map keeps the marker in view as it goes. If you move or zoom the map
-yourself, it stays where you put it until you press **Recenter**. As playback passes a mark, its row
-in the **Marked** list lights up.
+Drag the bar under the controls, or drag across the chart, to move through the night; playback carries on
+from wherever you let go. The speed buttons go up to 32×, and the two buttons beside them step to the
+previous or next mark, starting a few seconds before it so you hear what led up to it. Once you've clicked
+anywhere on the player, the left and right arrow keys move five seconds and the space bar plays and
+pauses. Pausing from your keyboard's media key, your headphones or your Mac's Now Playing controls
+pauses the page too.
+
+On the map, the marker moves along the path that was walked and the arrow turns to show which way the
+phone was facing. The map keeps the marker in view as it goes. If you move or zoom the map yourself, it
+stays where you put it until you press **Recenter**. As playback passes a mark, its row in the **Marked**
+list lights up.
 
 ![The playback page: the video with its sound, a photograph glowing in the strip, and Motion detected](/help/media/working-a-case/field-session-player.png)
+
+**Questions.** In an EVP session, each question appears in the **Marked** list as **Asked:** with what
+was asked and how long the room was given to answer, and the chart shades that listening time. A note
+added on the phone after the session says when it was added.
+
+**Recordings.** The **Recordings** list shows every sound and video file the session sent. If the phone
+was recording sound but the file wasn't in what it sent, a **not sent** row says so, so a missing
+recording is never silent. If a recording can't be reached for a moment, the page tries again by itself
+and carries on.
+
+**EVPs and enhanced clips.** When you or your group scan the session's sound for EVPs with **Scan for
+EVPs**, the EVPs you keep appear on the chart and in the **Marked** list, with what you hear in them, how
+sure you are and who kept them. The row's button goes to just before it, so you hear it in its place.
+
+A clip you make from a recording, and anything you do to it in the audio editor, is saved as a file of its
+own; the session's recording is never changed. The clip is listed under the recording it came from, at the
+moment it came from. It's marked **Enhanced** when only steps that keep the sound and its timing were used
+(cutting out a clip, normalizing, gain, fades), or **Altered** when something changed the timing or the
+sound itself. Turn on **Play the enhanced clips in their place** and the session plays each enhanced clip
+at its moment instead of the original.
+
+Each clip made this way has a **Certificate**: what it was made from, every step taken, and the checksums
+that tie it back to what the phone sealed. **Check it now** confirms the file still matches its
+certificate. Nothing on a certificate was generated, and no AI changed the sound.
+
+**On the page itself.** If the session is yours, you can delete it, turn **May be shown with the results**
+on or off, and choose **Keep it off the place's page** right there, without going back to **My field
+sessions**. When the session was sent to your event, you can show it with the event's results from here
+too.
 
 Citing a session adds a reference to it, never a copy. The session stays where it was uploaded and
 keeps its own checksum for each file, so what the client reads always matches what the instruments
