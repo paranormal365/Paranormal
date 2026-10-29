@@ -79,11 +79,13 @@ was taken shows that picture close up.
   skipped, the picture is served from inside the session, the public copy leaves comparisons out,
   the timeline lists the comparison and the change.
 - UI: `RoomScanUITests.testComparingTheRoomFindsWhatMoved` — fixture baseline, fixture visit,
-  the chair and the box listed, pins in the viewer, the mark in the session.
+  the chair and the box listed, pins in the viewer, the mark in the session. Passed on 10/29/2026
+  against an API on 5262 using `IsHauntedDb_lidar`.
+
+`PlaceScanChanges` is in the `PlaceScans` migration with phase 1's tables; see phase 1's README.
 
 ## Not done here
 
-- The migration for `PlaceScanChanges` waits with phase 1's for Ben's word.
 - Phase 0 has to confirm on Ben's phone that RoomPlan keeps the relocalized frame when it takes
   over the AR session, and whether it keeps a symmetric table's axes between scans.
 - The website's session player showing comparisons is phase 3.
