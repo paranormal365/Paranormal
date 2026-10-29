@@ -486,6 +486,52 @@ struct PersonMapSessionTests {
         #expect(envelope.readings[1].measurements?["figure"] != nil, "the figure sits where it was seen")
     }
 
+    /// A video cut short to send keeps its figures, moved onto the cut video's clock: the figure
+    /// seen 12 seconds into the recording is 2 seconds into a copy that starts at 10.
+    @Test func aCutVideosFiguresAreMovedOntoItsClock() throws {
+        let root = FileManager.default.temporaryDirectory.appendingPathComponent("pm-cut-\(UUID().uuidString)")
+        let files = SessionFileStore(root: root)
+        let sessionId = UUID()
+        let folder = files.directory(for: sessionId).appendingPathComponent("figures")
+        try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
+        let joints: [FigurePoint?] = [FigurePoint(x: 0.5, y: 0.2, z: 2, c: 1)]
+        let writer = try FigureSidecar.Writer(url: folder.appendingPathComponent("figure-001.json"))
+        for t in stride(from: 8.0, through: 16.0, by: 0.5) { writer.append(FigureSidecar.Entry(t: t, joints: joints)) }
+        writer.finish()
+
+        let document = Data("""
+            {"readings":[
+              {"at":"2026-10-28T21:00:12Z","measurements":{"figure":{"from":12,"to":16,"picture":"figures/figure-001.jpg","value":"figures/figure-001.json","video":"media/video-001.mov"}}},
+              {"at":"2026-10-28T21:00:30Z","measurements":{"shape":{"distance_m":2.4,"from":30.5,"size_cm":[45,150,5],"to":40,"value":"45 × 150 × 5 cm","video":"media/video-001.mov","where":[0.7,0.85,-0.2]}}},
+              {"at":"2026-10-28T21:00:50Z","measurements":{"figure":{"from":3,"to":4,"value":"figures/figure-002.json","video":"media/video-002.mov"}}}
+            ]}
+            """.utf8)
+        let scratch = root.appendingPathComponent("scratch")
+        let moved = DeviceDataExporter.rebasePersonMap(forVideo: "media/video-001.mov", from: 10, duration: 25,
+                                                        in: document, files: files, sessionId: sessionId, into: scratch)
+
+        let root2 = try #require(try JSONSerialization.jsonObject(with: moved.document) as? [String: Any])
+        let readings = try #require(root2["readings"] as? [[String: Any]])
+        func channel(_ i: Int, _ name: String) -> [String: Any] {
+            ((readings[i]["measurements"] as? [String: Any])?[name] as? [String: Any]) ?? [:]
+        }
+        #expect(channel(0, "figure")["from"] as? Double == 2)
+        #expect(channel(0, "figure")["to"] as? Double == 6)
+        #expect(channel(1, "shape")["from"] as? Double == 20.5)
+        #expect(channel(1, "shape")["to"] as? Double == 25, "past the end of the cut is its end")
+        #expect(channel(1, "shape")["size_cm"] as? [Double] == [45, 150, 5], "nothing else in it changes")
+        #expect(channel(2, "figure")["from"] as? Double == 3, "another video's figure is left alone")
+
+        let copy = try #require(moved.substitutes["figures/figure-001.json"])
+        let entries = try FigureSidecar.read(Data(contentsOf: copy))
+        #expect(entries.first?.t == 0, "the frames before the cut are left out")
+        #expect(entries.last?.t == 6)
+        #expect(moved.substitutes["figures/figure-002.json"] == nil)
+        // The session's own joints file is untouched.
+        let original = try FigureSidecar.read(Data(contentsOf: folder.appendingPathComponent("figure-001.json")))
+        #expect(original.first?.t == 8)
+    }
+
     @Test func theBundleCarriesAVideosFiguresAndLeavesOutOnesForVideosNotSent() throws {
         let document = Data("""
             {"readings":[

@@ -631,7 +631,8 @@ struct UploadSessionView: View {
             // replace its own record rather than make a second — so retrying is pressing Send
             // again, not untangling which half arrived.
             var substitutes: [String: URL] = [:]
-            var cut: Set<String> = []
+            /// The recordings actually cut, and where from: only these are re-timed below.
+            var cuts: [String: (from: TimeInterval, duration: TimeInterval, kind: CaptureKind)] = [:]
 
             for capture in captures where chosen.contains(capture.id) {
                 guard store.hasLocalFile(capture.relativePath, in: sessionId) else { continue }
@@ -657,7 +658,7 @@ struct UploadSessionView: View {
                         original, from: from, duration: duration, into: scratch)
                     if case .cut(let trimmed) = result {
                         url = trimmed
-                        cut.insert(capture.relativePath)
+                        cuts[capture.relativePath] = (from, duration, capture.kind)
                     }
                 }
 
@@ -679,10 +680,17 @@ struct UploadSessionView: View {
             // Each cut recording's readings still count their offsets from a beginning that will
             // not be in the uploaded file. Left alone, the player would place the audio as far
             // from its readings as the amount cut off the front.
-            for decision in plan?.cut ?? [] {
-                if case .cut(let from, _) = decision.outcome {
-                    document = DeviceDataExporter.rebaseAudioOffsets(
-                        forFilename: decision.media.relativePath, by: from, in: document)
+            // Only the ones the trimmer actually cut: a cut that failed sends the whole file, and
+            // its offsets are right as they stand.
+            for (path, cut) in cuts {
+                document = DeviceDataExporter.rebaseAudioOffsets(forFilename: path, by: cut.from, in: document)
+                // And a cut video's figures and shapes, onto the cut video's clock (LiDAR plan).
+                if cut.kind == .video {
+                    let moved = DeviceDataExporter.rebasePersonMap(
+                        forVideo: path, from: cut.from, duration: cut.duration, in: document,
+                        files: store.files, sessionId: sessionId, into: scratch)
+                    document = moved.document
+                    substitutes.merge(moved.substitutes) { _, new in new }
                 }
             }
 
@@ -692,7 +700,7 @@ struct UploadSessionView: View {
             // site receives is the same shape as what "Export a bundle" hands to the Files app —
             // and the same shape another phone can be given and open.
             let bundle = try await DeviceDataExporter(files: store.files).export(
-                exportRequest(window: window, substitutes: substitutes, cut: cut),
+                exportRequest(window: window, substitutes: substitutes),
                 log: ReadingLog(fileURL: store.files.readingLogURL(for: sessionId)),
                 to: scratch,
                 document: document)
@@ -752,7 +760,7 @@ struct UploadSessionView: View {
     /// Shared by the document build and the bundle build so a `.ben` and the `data.json` inside it
     /// can never disagree about the window, the label or which recordings are going.
     private func exportRequest(
-        window: SessionWindow?, substitutes: [String: URL] = [:], cut: Set<String> = []
+        window: SessionWindow?, substitutes: [String: URL] = [:]
     ) throws -> DeviceDataExporter.Request {
         guard let summary else { throw FieldSessionError.unavailable }
         // A clip is named for what it is — "back bedroom (20:00–30:00)" — on the server's list,
@@ -762,7 +770,7 @@ struct UploadSessionView: View {
                                       sessionStart: summary.startedAt, isWholeSession: false)
         } ?? summary.locationLabel
 
-        var request = DeviceDataExporter.Request(
+        return DeviceDataExporter.Request(
             sessionId: sessionId,
             startedAt: summary.startedAt,
             endedAt: summary.endedAt,
@@ -779,8 +787,6 @@ struct UploadSessionView: View {
             recordedByAccountId: dependencies.session.me?.userId,
             deviceId: DeviceModel.vendorIdentifier(),
             window: window)
-        request.cutMedia = cut
-        return request
     }
 
     private func buildDocument(window: SessionWindow? = nil) async throws -> Data {
