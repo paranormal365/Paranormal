@@ -107,7 +107,8 @@ says so instead of showing a switch that wouldn't change anything.
 
 **Paranormal Platform sessions** are shown in the phone's time. A session file records universal time and the
 time zone the phone was in when it recorded, so it plays back at the right moments on any phone and
-on the website, wherever the person opening it is.
+on the website, wherever the person opening it is. The website shows the time where it was recorded, with
+the zone named, and lets you switch to your own.
 
 ## The Paranormal Platform — the phone as an instrument
 
@@ -322,7 +323,8 @@ screen stays awake while watching so you can read it from across the room.
 EVP mode marks the **question and the silence after it**, not just the moment you spoke. Both marks
 point to the exact spot in the recording, so reviewing later means working through a list of places
 to listen instead of scrubbing through hours of audio. Asking the next question ends the previous
-wait. Recording keeps running when the screen locks.
+wait. Recording keeps running when the screen locks. On the website, each question is listed with how
+long the room was given to answer, and the chart shades that listening time.
 
 One large button takes you through it, and always says what pressing it will do: **Ask a
 question**, then **Done asking — listening** when you've finished speaking, then **Ask the next
@@ -448,7 +450,9 @@ keeps the session, its readings and its marks — those are small, and losing th
 just to free up video space would be a poor trade. You can delete individual captures at any time if
 they're not worth keeping.
 
-Uploaded sessions play back on the website too, with the same single playhead — and the case manager
+Uploaded sessions play back on the website too, with the same single playhead. There you can also mark
+the EVPs you find in a session's sound and make enhanced clips of them, each with a certificate showing
+it came from your recording; see *Working a case*. The case manager
 can **cite them in the final report**. A report section of type *Field Sessions* links to the
 sessions recorded for that case, and the PDF the client receives describes each one: where it was,
 when it ran, who recorded it, and how many readings and marks it has. Your work in the field ends up

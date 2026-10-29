@@ -227,7 +227,7 @@ figcaption { color: var(--faint); font-size: 8.4pt; margin-top: .07in; }
     <h1>Everything <span class="accent-text">IsHaunted</span> does.</h1>
     <p class="lede">The complete product documentation — every screen, rule and safeguard, written for the people who use it.</p>
   </div>
-  <div class="facts"><div class="fact"><b>Documents</b><span>21</span></div><div class="fact"><b>Sections</b><span>6</span></div><div class="fact"><b>Updated</b><span>10/27/2026</span></div></div>
+  <div class="facts"><div class="fact"><b>Documents</b><span>21</span></div><div class="fact"><b>Sections</b><span>6</span></div><div class="fact"><b>Updated</b><span>10/29/2026</span></div></div>
   <div class="about"><b>About this document.</b> This is the in-product help, reproduced in full and unaltered — the same text the application serves to its users. It describes the software as built. It contains no business, market or financial information, and no usage figures.</div>
   <div class="foot"><span>ishaunted.com</span><span>Product documentation</span></div>
 </section>
@@ -1363,7 +1363,8 @@ says so instead of showing a switch that wouldn't change anything.</p>
 <p><img alt="A case's visits, with the time they happen" src=".print-media/Ben.Web.Website/wwwroot/help/media/the-mobile-apps/iphone-case-visits.jpg" /></p>
 <p><strong>Paranormal Platform sessions</strong> are shown in the phone's time. A session file records universal time and the
 time zone the phone was in when it recorded, so it plays back at the right moments on any phone and
-on the website, wherever the person opening it is.</p>
+on the website, wherever the person opening it is. The website shows the time where it was recorded, with
+the zone named, and lets you switch to your own.</p>
 <h2>The Paranormal Platform — the phone as an instrument</h2>
 <p>The Paranormal Platform records an investigation on the device. It needs <strong>no signal and no account</strong>: a member
 standing in a cellar with no bars can start recording, and everything stays on the phone until they
@@ -1534,7 +1535,8 @@ screen stays awake while watching so you can read it from across the room.</p>
 <p>EVP mode marks the <strong>question and the silence after it</strong>, not just the moment you spoke. Both marks
 point to the exact spot in the recording, so reviewing later means working through a list of places
 to listen instead of scrubbing through hours of audio. Asking the next question ends the previous
-wait. Recording keeps running when the screen locks.</p>
+wait. Recording keeps running when the screen locks. On the website, each question is listed with how
+long the room was given to answer, and the chart shades that listening time.</p>
 <p>One large button takes you through it, and always says what pressing it will do: <strong>Ask a
 question</strong>, then <strong>Done asking — listening</strong> when you've finished speaking, then <strong>Ask the next
 question</strong>. The screen shows red while you ask, with the question as it's written down, and green
@@ -1627,7 +1629,9 @@ when <strong>every</strong> file is confirmed on the server. Clearing removes th
 keeps the session, its readings and its marks — those are small, and losing the record of a night
 just to free up video space would be a poor trade. You can delete individual captures at any time if
 they're not worth keeping.</p>
-<p>Uploaded sessions play back on the website too, with the same single playhead — and the case manager
+<p>Uploaded sessions play back on the website too, with the same single playhead. There you can also mark
+the EVPs you find in a session's sound and make enhanced clips of them, each with a certificate showing
+it came from your recording; see <em>Working a case</em>. The case manager
 can <strong>cite them in the final report</strong>. A report section of type <em>Field Sessions</em> links to the
 sessions recorded for that case, and the PDF the client receives describes each one: where it was,
 when it ran, who recorded it, and how many readings and marks it has. Your work in the field ends up
@@ -3438,21 +3442,52 @@ what you actually hand your client, so a report section can refer to those sessi
 with where it was, who recorded it, how long it ran, and how much it contains. <strong>Cite</strong> adds a
 session to the report; <strong>Play back</strong> opens the session's playback page, where the trace, the map and
 the recordings all play in sync.</p>
-<p>The playback page works just like the review screen in the app. Below the controls, the <strong>video</strong>
-at the playhead plays alongside the session's <strong>sound</strong>. The <strong>photographs</strong> taken during the night
-appear in a strip of thumbnails, and each one's border glows for three seconds as playback reaches
-the moment it was taken. Click a photograph to go to the moment it was taken and see it full size,
-and click again to carry on. When the camera saw movement while the phone was held still, the video
-is outlined and <strong>Motion detected</strong> appears for three seconds.</p>
-<p>Drag the bar under the controls, or drag across the chart, to move through the night; playback
-carries on from wherever you let go. The speed buttons go up to 32×, and the two buttons beside them
-step to the previous or next mark, starting a few seconds before it so you hear what led up to it.
-The left and right arrow keys move five seconds, and the space bar plays and pauses.</p>
-<p>On the map, the marker moves along the path that was walked and the arrow turns to show which way
-the phone was facing. The map keeps the marker in view as it goes. If you move or zoom the map
-yourself, it stays where you put it until you press <strong>Recenter</strong>. As playback passes a mark, its row
-in the <strong>Marked</strong> list lights up.</p>
+<p>The playback page works just like the review screen in the app. At the top it says where the session
+belongs, with a link there: the investigation it was sent to, the event whose results show it, or the
+place's field archive. It also says who recorded it. The start time is shown in the time zone where the
+session was recorded, with the zone named; if yours is different, you can switch to it. Under that you see
+how long it ran, how many readings it has, the phone it was recorded on and the battery at the start. If
+the phone stopped partway through, the page says the session was <strong>interrupted</strong> and plays it to the last
+thing recorded.</p>
+<p>Below the controls, the <strong>video</strong> at the playhead plays alongside the session's <strong>sound</strong>. The
+<strong>photographs</strong> taken during the night appear in a strip of thumbnails, and each one's border glows for
+three seconds as playback reaches the moment it was taken. Click a photograph to go to that moment and see
+it full size, with the room it was taken in, and click again to carry on. When the camera saw movement
+while the phone was held still, the video is outlined and <strong>Motion detected</strong> appears for three seconds.</p>
+<p>Drag the bar under the controls, or drag across the chart, to move through the night; playback carries on
+from wherever you let go. The speed buttons go up to 32×, and the two buttons beside them step to the
+previous or next mark, starting a few seconds before it so you hear what led up to it. Once you've clicked
+anywhere on the player, the left and right arrow keys move five seconds and the space bar plays and
+pauses. Pausing from your keyboard's media key, your headphones or your Mac's Now Playing controls
+pauses the page too.</p>
+<p>On the map, the marker moves along the path that was walked and the arrow turns to show which way the
+phone was facing. The map keeps the marker in view as it goes. If you move or zoom the map yourself, it
+stays where you put it until you press <strong>Recenter</strong>. As playback passes a mark, its row in the <strong>Marked</strong>
+list lights up.</p>
 <p><img alt="The playback page: the video with its sound, a photograph glowing in the strip, and Motion detected" src=".print-media/Ben.Web.Website/wwwroot/help/media/working-a-case/field-session-player.jpg" /></p>
+<p><strong>Questions.</strong> In an EVP session, each question appears in the <strong>Marked</strong> list as <strong>Asked:</strong> with what
+was asked and how long the room was given to answer, and the chart shades that listening time. A note
+added on the phone after the session says when it was added.</p>
+<p><strong>Recordings.</strong> The <strong>Recordings</strong> list shows every sound and video file the session sent. If the phone
+was recording sound but the file wasn't in what it sent, a <strong>not sent</strong> row says so, so a missing
+recording is never silent. If a recording can't be reached for a moment, the page tries again by itself
+and carries on.</p>
+<p><strong>EVPs and enhanced clips.</strong> When you or your group scan the session's sound for EVPs with <strong>Scan for
+EVPs</strong>, the EVPs you keep appear on the chart and in the <strong>Marked</strong> list, with what you hear in them, how
+sure you are and who kept them. The row's button goes to just before it, so you hear it in its place.</p>
+<p>A clip you make from a recording, and anything you do to it in the audio editor, is saved as a file of its
+own; the session's recording is never changed. The clip is listed under the recording it came from, at the
+moment it came from. It's marked <strong>Enhanced</strong> when only steps that keep the sound and its timing were used
+(cutting out a clip, normalizing, gain, fades), or <strong>Altered</strong> when something changed the timing or the
+sound itself. Turn on <strong>Play the enhanced clips in their place</strong> and the session plays each enhanced clip
+at its moment instead of the original.</p>
+<p>Each clip made this way has a <strong>Certificate</strong>: what it was made from, every step taken, and the checksums
+that tie it back to what the phone sealed. <strong>Check it now</strong> confirms the file still matches its
+certificate. Nothing on a certificate was generated, and no AI changed the sound.</p>
+<p><strong>On the page itself.</strong> If the session is yours, you can delete it, turn <strong>May be shown with the results</strong>
+on or off, and choose <strong>Keep it off the place's page</strong> right there, without going back to <strong>My field
+sessions</strong>. When the session was sent to your event, you can show it with the event's results from here
+too.</p>
 <p>Citing a session adds a reference to it, never a copy. The session stays where it was uploaded and
 keeps its own checksum for each file, so what the client reads always matches what the instruments
 recorded. Removing a citation removes only the reference — nothing is deleted.</p>
@@ -4384,7 +4419,8 @@ the most useful ones for teaching the scanner what a real find sounds like.</p>
 <p>When you place a marker by hand where the latest scan found nothing, it is noted as something the
 scan missed. Your marker is saved as usual.</p>
 <h3>Why a candidate was found</h3>
-<p>Every candidate has a <strong>Why?</strong> button (the ⓘ on its row). It opens its score in three parts:</p>
+<p>Every candidate has a <strong>Why?</strong> button (the ⓘ on its row). It opens its score in three parts. With
+the built-in weights they are:</p>
 <ul>
 <li><strong>Stood out</strong>, up to 50 points: how far it rose above the room around it. 20 dB or more counts in
   full.</li>
@@ -4392,6 +4428,8 @@ scan missed. Your marker is saved as usual.</p>
 <li><strong>Length</strong>, up to 20: speech-length sounds score highest; a click or a long stretch of talking
   scores less.</li>
 </ul>
+<p>Once the site has learned from enough decisions, the points each part is worth may change (see below);
+<strong>Why?</strong> always shows the points the scan that found it used.</p>
 <p>Under that are the measurements it was made from: how loud the room was, its loudest moment, how
 much its level moved (speech rises and falls, a hum holds steady), and how hiss-like it was. The
 score is how much a sound stood out, never how likely it is to be a voice.</p>
@@ -4457,9 +4495,13 @@ speaking voice's pitch, and how voice-like it read. Each keep or dismiss is save
 measurements, along with whether you played the candidate first and whether you decided blind. A
 marker you place where the scan found nothing is saved as a miss. No audio is copied, and nothing
 records who made the choice.</p>
-<p>Nothing changes how the scan scores yet. A future version will use this to rank candidates more the
-way investigators do. It will learn which sounds people tend to keep, not whether a sound is
-paranormal. If you delete the recording, its measurements and choices are deleted with it.</p>
+<p>Once there are enough decisions (at least 500, from at least 20 recordings), the site works out how
+much each part of the score should count, so the sounds investigators keep rise toward the top. It
+only learns how to weigh the same three parts; the score is still how much a sound stood out, and it
+learns which sounds people tend to keep, not whether a sound is paranormal. New weights are tested
+on recordings they didn't learn from and only used if they rank better, and a site administrator
+decides whether to use them. Scans already made keep their scores. If you delete the recording, its
+measurements and choices are deleted with it.</p>
 <p><img alt="How the smarter detector works" src=".print-media/Ben.Web.Website/wwwroot/help/media/using-the-audio-editor/evp-smarter-detector.jpg" />
 <em>What a scan and a review save, and what they don't.</em></p>
 <h2>Scanning a field session</h2>
@@ -6026,8 +6068,8 @@ page that used them automatically. You don't have to remember which pages they w
 image links work the same way — a link copied from the page stops working at the same moment.</p>
 <h2>Tours</h2>
 <p>If you run ghost walks, a <strong>tour</strong> is what you sell. The walk down
-Printers Alley is one tour whether you run it twice a year or four nights a week; a walk down a
-different street is a second tour. You'll find them under <strong>Administration → Tours</strong>, and each one
+Printers Alley is one tour whether you run it twice a year or four nights a week, wherever the route
+goes; a different walk is a second tour. You'll find them under <strong>Administration → Tours</strong>, and each one
 has its own page.</p>
 <p>Two things tell your tours apart. The <strong>meeting point</strong> is required and must be one of your own
 addresses, so you can correct it in one place and every date updates. The <strong>name</strong> tells apart two
@@ -6043,8 +6085,8 @@ between tours if you run more than one.</p>
 <h3>Adding a tour, and what it costs</h3>
 <p>Running tours takes a <strong>Ghost Walk Tour subscription</strong>: $29 a month per tour
 route, with unlimited walks and guests on each. A <strong>tour route</strong> is one tour on this page: the walk
-down Printers Alley is one route however often you run it, and a walk down a different street is a
-second. The subscription is separate from your group's plan, and any group can take it, on your
+down Printers Alley is one route wherever it goes and however often you run it, and a different walk
+is a second. The subscription is separate from your group's plan, and any group can take it, on your
 group's <strong>Billing</strong> page under <strong>Ghost Walk Tour subscription</strong>, or from the <strong>Pricing</strong> page. When
 you subscribe, it pays for every route you already run.</p>
 <p>Without it you can't add a route, bring a retired one back, or put a new date on the calendar. With
@@ -6266,8 +6308,8 @@ a weekend by a day and your Saturday keeps its title and notes.</p>
 apps, and opens it for bookings. This is when any charge applies, and the page tells you what it
 will be before you press the button.</p>
 <p>Publishing uses one <strong>event credit</strong>. No plan includes events, the largest included: every event is
-bought on its own. One credit covers one event, however many days in a row it runs, or a show's run
-of performances within a month. A credit is
+bought on its own. One credit publishes one event, start to finish: a night, a weekend, or a show's
+run of performances within a month. However many dates it has, it's one credit. A credit is
 <strong>the price shown on the Pricing page</strong>, and a group with a paid plan pays the percentage shown on the Pricing page of that:
 <strong>a share of that price</strong>. Before you press the button, you can see how many credits you
 have and what the button will do.</p>
