@@ -60,13 +60,13 @@ The whole player set five runs in a row in Chromium, plus a run in WebKit, with 
 
 ## What the five-run bar found (10/28/2026)
 
-The first 5× Chromium + WebKit pass failed three times. Two of them were real faults in the player.
+The 5× Chromium + WebKit passes failed in five ways. Two of them were real faults in the player.
 
 1. **The clock froze at Play on a slow connection** (Chromium run 5: the first second moved 0.2 s). After
    `play()`, an element is "not paused" with data long before it sounds, and the engine followed its
    standing-still time. `clockElement` now follows a recording only on frames where its `currentTime`
    moved; other frames run on the page's clock.
-2. **A gap at a hand-over in WebKit** (683 ms). Two causes:
+2. **A gap at a hand-over in WebKit** (683 ms). Three causes:
    - **Rule M6** let a clip in its lead second (start − 1 s) beat a clip already playing. At a join, the
      first recording lost its last second, and the second was started a second early and pulled back to
      0:00 until the join. The phone had the same rule. Fixed in `fieldKitTimeline.js` and
@@ -76,7 +76,6 @@ The first 5× Chromium + WebKit pass failed three times. Two of them were real f
    - **The start delay.** The engine learns how long `play()` takes to sound in this browser (`startLead`,
      measured on its own plays) and starts the next recording that much early, muted (`prerolling`). It is
      unmuted when it covers (rule M7).
-
    - **WebKit doesn't start a never-played recording until it is seeked.** After `play()` it stands at
      0:00, "playing" and fully loaded, until something sets its time; the drift rule did that only at
      0.35 s. A playing recording that shows the same time for 150 ms (`standingStill`, `STILL_KICK_MS`)
@@ -88,14 +87,14 @@ The first 5× Chromium + WebKit pass failed three times. Two of them were real f
    After these fixes the hand-over measured 150–165 ms in WebKit and 0–120 ms in Chromium, and the
    session keeps real time across it. The limit is 300 ms in WebKit and 250 ms in Chromium (it was
    500 ms for both).
+3. **`MyFieldSessionsTests.Panning_the_map…` in WebKit** dragged while the map was still framing its pins.
+   Like `MapViewportTests`, it now waits for `describe().framing` to end, and logs the center before and
+   after.
 4. **Sign-in refusals in WebKit.** The API allows 20 sign-ins a minute from one address. The transport
    tests signed in to the API in every test as well as on the page, which came to about 22 a minute,
    and the slower WebKit runs were refused. They now sign in to the API once per class.
 5. **`A_manager_can_cite…` skipped itself** as "case not in the seed data" when it ran first on a cold
    host. `OpenOrganizationAsync` read the groups page at NetworkIdle, before the list arrived over the
    circuit. It now waits for the group to appear.
-3. **`MyFieldSessionsTests.Panning_the_map…` in WebKit** dragged while the map was still framing its pins.
-   Like `MapViewportTests`, it now waits for `describe().framing` to end, and logs the center before and
-   after.
 
 Changelog lines: `webapp.md` (the hand-over and the slow start) and `ios.md` (the M6 hand-over, next build).
