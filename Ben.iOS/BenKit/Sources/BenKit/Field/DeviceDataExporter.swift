@@ -89,10 +89,6 @@ public struct DeviceDataExporter: Sendable {
         /// file name would break every reference in the document. The session's own copy is never
         /// touched either way.
         public var substitutes: [String: URL]
-        /// Recordings cut short to send. A figure the person map kept is timed in seconds into the
-        /// video as it was recorded, so a cut video's figures would be drawn in the wrong place:
-        /// they stay on the phone (LiDAR plan, phase 4).
-        public var cutMedia: Set<String> = []
         /// Details added to marks after the session (`FieldSessionStore.markDetails(for:)`).
         public var markDetails: [DeviceDataEnvelope.MarkDetails] = []
         /// The account signed in when this was recorded, and the device that recorded it.
@@ -241,11 +237,11 @@ public struct DeviceDataExporter: Sendable {
         // phase 2): what they found is the session's own finding. A place's scan itself is never in
         // a session — it belongs to the place. So do the person map's joints files and pictures
         // (phase 4), with the videos they belong to.
-        let videos = Set(request.includedMedia).subtracting(request.cutMedia)
+        // A trimmed video's joints files are moved to its clock, and stand in under the same path.
         let companions = Self.comparisonPathsNamed(in: document)
-            .union(Self.figurePathsNamed(in: document, withVideos: videos))
+            .union(Self.figurePathsNamed(in: document, withVideos: Set(request.includedMedia)))
         for path in companions.sorted() where !included.contains(path) {
-            let url = files.fileURL(for: request.sessionId, relativePath: path)
+            let url = request.substitutes[path] ?? files.fileURL(for: request.sessionId, relativePath: path)
             guard FileManager.default.fileExists(atPath: url.path) else { continue }
             entries.append(ZipWriter.Entry(path: path, file: url))
             included.insert(path)
@@ -439,6 +435,62 @@ public struct DeviceDataExporter: Sendable {
             search = end..<text.endIndex
         }
         return found
+    }
+
+    /// A trimmed video's person map, moved to the trimmed video's clock (LiDAR plan, phase 4).
+    ///
+    /// A figure or shape says when it was seen in seconds into its video, and the joints file says
+    /// the same for every frame. Cut the first `from` seconds off the video and both are that far
+    /// out, so the figure would be drawn beside the person. The document's `from` and `to` are
+    /// rewritten in place — only those numbers, as `rebaseAudioOffsets` rewrites only its offsets —
+    /// and each joints file is copied into `scratch` with its times moved and anything outside
+    /// the kept stretch left out. The copies stand in for the session's own under the same paths.
+    public static func rebasePersonMap(forVideo path: String, from: TimeInterval, duration: TimeInterval,
+                                       in document: Data, files: SessionFileStore, sessionId: UUID,
+                                       into scratch: URL) -> (document: Data, substitutes: [String: URL]) {
+        guard var text = String(data: document, encoding: .utf8) else { return (document, [:]) }
+        var substitutes: [String: URL] = [:]
+        func moved(_ t: Double) -> Double { (min(max(t - from, 0), duration) * 1000).rounded() / 1000 }
+
+        for spelling in [path, path.replacingOccurrences(of: "/", with: "\\/")] {
+            var search = text.startIndex..<text.endIndex
+            while let found = text.range(of: "\"video\":\"\(spelling)\"", range: search) {
+                // A figure or shape is one object with no objects inside it, so its braces are the
+                // nearest either side.
+                guard let open = text[..<found.lowerBound].lastIndex(of: "{"),
+                      let close = text[found.upperBound...].firstIndex(of: "}") else { break }
+                var object = String(text[open...close])
+                for key in ["from", "to"] {
+                    guard let keyRange = object.range(of: "\"\(key)\":") else { continue }
+                    let numberEnd = object[keyRange.upperBound...].firstIndex { $0 == "," || $0 == "}" } ?? object.endIndex
+                    guard let value = Double(object[keyRange.upperBound..<numberEnd].trimmingCharacters(in: .whitespaces))
+                    else { continue }
+                    object.replaceSubrange(keyRange.upperBound..<numberEnd, with: number(moved(value)))
+                }
+                // The joints file this figure names, its times moved the same way.
+                if let valueRange = object.range(of: "\"value\":\""),
+                   let end = object[valueRange.upperBound...].firstIndex(of: "\"") {
+                    let joints = String(object[valueRange.upperBound..<end]).replacingOccurrences(of: "\\/", with: "/")
+                    if joints.hasPrefix("figures/"), joints.hasSuffix(".json"), substitutes[joints] == nil,
+                       let data = try? Data(contentsOf: files.fileURL(for: sessionId, relativePath: joints)),
+                       let entries = try? FigureSidecar.read(data) {
+                        try? FileManager.default.createDirectory(at: scratch, withIntermediateDirectories: true)
+                        let copy = scratch.appendingPathComponent("moved-\(UUID().uuidString.lowercased()).json")
+                        if let writer = try? FigureSidecar.Writer(url: copy) {
+                            for entry in entries where entry.t >= from - 0.001 && entry.t <= from + duration + 0.001 {
+                                writer.append(FigureSidecar.Entry(t: moved(entry.t), joints: entry.joints))
+                            }
+                            writer.finish()
+                            substitutes[joints] = copy
+                        }
+                    }
+                }
+                text.replaceSubrange(open...close, with: object)
+                let resume = text.index(open, offsetBy: object.count)
+                search = resume..<text.endIndex
+            }
+        }
+        return (text.data(using: .utf8) ?? document, substitutes)
     }
 
     /// The log's lines in time order, as the format requires and the server checks.
