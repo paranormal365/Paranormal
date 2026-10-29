@@ -33,6 +33,11 @@ day-by-day account of building it would say nothing to anyone using it now.
 
 ## Unreleased
 
+- A session with more than one recording plays straight from one to the next, in Safari too. The first
+  used to lose its last second, and Safari could leave a gap of half a second or more.
+- Pressing Play on a session over a slow connection starts the clock at once, instead of holding it until
+  the recording arrived and then jumping ahead.
+
 - Your billing page lists your extra months for a show's run: the ones ready to use, the ones on a show, and past ones.
 - Archiving an event keeps its findings as they were, and the guests at a called-off event can still see what was found.
 - A field session's page has Scan for EVPs, listing its recordings, what each copy holds, and the EVPs

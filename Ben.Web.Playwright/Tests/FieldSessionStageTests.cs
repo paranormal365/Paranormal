@@ -16,10 +16,12 @@ namespace Ben.Web.Playwright.Tests;
 /// 0:04 to 0:12 whose note is written when it FINISHES at 0:12, photographs at 0:02, 0:08 and 0:15,
 /// motion seen at 0:05 and 0:08 with the phone still, and a mark at 0:10.</para>
 ///
-/// <para><b>Real Chrome, not the suite's Chromium.</b> The phone records H.264 and AAC, which
+/// <para><b>WebKit, not the suite's Chromium.</b> The phone records H.264 and AAC, which
 /// Playwright's own Chromium build cannot decode and every browser a visitor uses can. Testing the
 /// stage in a browser that cannot play the phone's video would test the "won't play" badge and
-/// nothing else. The sign-in happens in the suite's browser and its cookies are carried over.</para>
+/// nothing else. These ran in real Chrome until 10/28/2026; they run in Playwright's WebKit now,
+/// which is Safari's engine (where Ben's own sessions misbehaved) and plays the phone's formats on
+/// the Mac. The sign-in happens in the suite's browser and its cookies are carried over.</para>
 /// </remarks>
 [TestFixture]
 [Category("FieldSessionStage")]
@@ -52,16 +54,22 @@ public class FieldSessionStageTests : BenTestBase
         return (await upload.JsonAsync())!.Value.GetProperty("id").GetString()!;
     }
 
-    /// <summary>Signs in with the suite's browser, then opens the session in real Chrome as the same person.</summary>
-    private async Task<(IBrowser Browser, IPage Page)> OpenInChromeAsync(string sessionId, bool dark = false)
+    /// <summary>Signs in with the suite's browser, then opens the session in WebKit as the same person.</summary>
+    private async Task<(IBrowser Browser, IPage Page)> OpenInWebKitAsync(string sessionId, bool dark = false)
     {
         await LoginAsync(MemberEmail, MemberPassword);
         var state = await Context.StorageStateAsync();
-        var chrome = await Playwright.Chromium.LaunchAsync(new()
+        IBrowser webkit;
+        try
         {
-            Channel = "chrome", Headless = true, Args = ["--disable-audio-output", "--autoplay-policy=no-user-gesture-required"],
-        });
-        var context = await chrome.NewContextAsync(new()
+            webkit = await Playwright.Webkit.LaunchAsync(new() { Headless = true });
+        }
+        catch (PlaywrightException e) when (e.Message.Contains("Executable doesn't exist"))
+        {
+            Assert.Ignore("Playwright's WebKit is not installed: pwsh bin/Debug/net10.0/playwright.ps1 install webkit");
+            throw;
+        }
+        var context = await webkit.NewContextAsync(new()
         {
             StorageState = state, ViewportSize = new() { Width = 1280, Height = 1100 },
             // The help screenshots are dark, like every other one on the site.
@@ -76,16 +84,27 @@ public class FieldSessionStageTests : BenTestBase
         // The video's length arrives with its metadata, and its start is worked out from it.
         await page.WaitForFunctionAsync("() => { const v = document.querySelector('video'); return v && v.duration > 0; }",
                                         null, new() { Timeout = 20_000 });
-        await page.WaitForTimeoutAsync(500);
-        return (chrome, page);
+        // And the engine has the whole session's length (it waits for the recordings' own).
+        await WaitForPlayerAsync($"Math.abs(s.duration - {Length * 1000}) < 1000", on: page);
+        return (webkit, page);
     }
 
+    /// <summary>
+    /// Moves the playhead and waits until the page has drawn it: the engine's frame has run, and every
+    /// recording it moved has finished seeking and has a picture to show.
+    /// </summary>
     private static async Task ScrubToAsync(IPage page, double seconds)
     {
         var value = (int)Math.Round(seconds / Length * 1000);
         await page.Locator("input[type=range]").FillAsync(value.ToString());
-        await page.WaitForTimeoutAsync(600);
+        await page.EvaluateAsync(Frames);
+        await page.WaitForFunctionAsync(
+            "() => [...document.querySelectorAll('[data-fk-media]')].every(m => !m.seeking && (m.offsetParent === null || m.readyState >= 2))",
+            null, new() { Timeout = 10_000, PollingInterval = 50 });
+        await page.EvaluateAsync(Frames);
     }
+
+    private const string Frames = "() => new Promise(r => { let n = 0; const f = () => ++n >= 3 ? r() : requestAnimationFrame(f); requestAnimationFrame(f); })";
 
     private static Task<bool> VideoShownAsync(IPage page)
         => page.EvaluateAsync<bool>("() => { const v = document.querySelector('video'); return !!v && v.offsetParent !== null; }");
@@ -100,7 +119,7 @@ public class FieldSessionStageTests : BenTestBase
     public async Task The_video_sits_where_it_was_filmed_and_plays_beside_the_sound()
     {
         var sessionId = await UploadAsync();
-        var (chrome, page) = await OpenInChromeAsync(sessionId);
+        var (browser, page) = await OpenInWebKitAsync(sessionId);
         try
         {
             // 0:02.5 — before the video began (and outside the one second a clip is shown early,
@@ -122,7 +141,16 @@ public class FieldSessionStageTests : BenTestBase
             // Play: the SOUND is the clock and the video follows it, muted so nothing is heard twice.
             await page.GetByRole(AriaRole.Button, new() { Name = "Play", Exact = true }).ClickAsync();
             await Expect(page.Locator("[data-testid='media-clock']")).ToBeVisibleAsync(new() { Timeout = 10_000 });
-            await page.WaitForTimeoutAsync(1500);
+            // A second of both playing: the sound past 0:07.5 and the video moving beside it. A timeout
+            // is not the failure; the assertions below say which of the two stopped.
+            try
+            {
+                await page.WaitForFunctionAsync(@"() => {
+                    const v = document.querySelector('video'), a = document.querySelector('audio');
+                    return !a.paused && a.currentTime > 7.5 && !v.paused && v.currentTime > 3.2;
+                }", null, new() { Timeout = 15_000, PollingInterval = 100 });
+            }
+            catch (TimeoutException) { }
             var state = await page.EvaluateAsync<JsonElement>(@"() => {
                 const v = document.querySelector('video'), a = document.querySelector('audio');
                 return { videoPaused: v.paused, videoMuted: v.muted, videoTime: v.currentTime,
@@ -140,7 +168,7 @@ public class FieldSessionStageTests : BenTestBase
         }
         finally
         {
-            await chrome.CloseAsync();
+            await browser.CloseAsync();
         }
     }
 
@@ -148,7 +176,7 @@ public class FieldSessionStageTests : BenTestBase
     public async Task Photos_glow_as_their_moment_passes_and_open_full_size()
     {
         var sessionId = await UploadAsync();
-        var (chrome, page) = await OpenInChromeAsync(sessionId);
+        var (browser, page) = await OpenInWebKitAsync(sessionId);
         try
         {
             await Expect(page.Locator("[data-testid='photo-strip'] button")).ToHaveCountAsync(3);
@@ -175,7 +203,7 @@ public class FieldSessionStageTests : BenTestBase
             // Opened while playing, closing it carries on playing.
             await ScrubToAsync(page, 1);
             await page.GetByRole(AriaRole.Button, new() { Name = "Play", Exact = true }).ClickAsync();
-            await page.WaitForTimeoutAsync(800);
+            await WaitForPlayerAsync("s.playing && s.playhead > 1500", on: page);
             await page.Locator("[data-testid='photo-strip'] button").First.ClickAsync();
             await Expect(page.Locator("[data-testid='photo-expanded']")).ToContainTextAsync("keep playing");
             await Expect(page.GetByRole(AriaRole.Button, new() { Name = "Play", Exact = true })).ToBeVisibleAsync();
@@ -185,7 +213,7 @@ public class FieldSessionStageTests : BenTestBase
         }
         finally
         {
-            await chrome.CloseAsync();
+            await browser.CloseAsync();
         }
     }
 
@@ -200,7 +228,7 @@ public class FieldSessionStageTests : BenTestBase
             Assert.Ignore("Set BEN_CAPTURE=1 to re-capture the help screenshots.");
 
         var sessionId = await UploadAsync();
-        var (chrome, page) = await OpenInChromeAsync(sessionId, dark: true);
+        var (browser, page) = await OpenInWebKitAsync(sessionId, dark: true);
         try
         {
             await ScrubToAsync(page, 8.6);
@@ -221,7 +249,7 @@ public class FieldSessionStageTests : BenTestBase
         }
         finally
         {
-            await chrome.CloseAsync();
+            await browser.CloseAsync();
         }
     }
 
@@ -229,7 +257,7 @@ public class FieldSessionStageTests : BenTestBase
     public async Task Motion_detected_shows_for_a_few_seconds_where_the_camera_saw_it()
     {
         var sessionId = await UploadAsync();
-        var (chrome, page) = await OpenInChromeAsync(sessionId);
+        var (browser, page) = await OpenInWebKitAsync(sessionId);
         try
         {
             await ScrubToAsync(page, 4.4);
@@ -252,7 +280,7 @@ public class FieldSessionStageTests : BenTestBase
         }
         finally
         {
-            await chrome.CloseAsync();
+            await browser.CloseAsync();
         }
     }
 }
