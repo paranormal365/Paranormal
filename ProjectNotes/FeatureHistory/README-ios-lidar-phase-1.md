@@ -104,10 +104,16 @@ malformed documents are kept as schema tests.
   `RoomScanReadingTests`, and the 1.2 schema tests.
 - UI: `RoomScanUITests` — pick a place, Scan, Done, keep what, upload, open the viewer; and a
   phone without LiDAR has no scan card. Needs an API with these routes (`TEST_RUNNER_BEN_API_BASE_URL`).
+  All three passed on 10/29/2026 against an API on 5262 using the side database `IsHauntedDb_lidar`.
+
+## The migration
+
+`20261028200857_PlaceScans` creates this phase's three tables and phase 2's `PlaceScanChanges`, on
+top of the session player's `FileProvenances`; added 10/28/2026 with Ben's yes. On 10/29/2026 it went
+into a fresh `IsHauntedDb_lidar` with every migration before it, cleanly. Production waits for Ben:
+`Claude outputs/PlaceScans-20261028.sql`, idempotent, before develop is deployed.
 
 ## Not done here
 
-- **The EF migration** waits for Ben's word (the session-player plan adds one in its phase 5; the
-  second to land rebuilds on the first's snapshot).
 - Phase 0's measurements on Ben's phone (sizes, relocalization, RoomPlan's session contents).
 - The e2e (Playwright) checks the plan lists for phase 1 are website tests; they wait for phase 3.
