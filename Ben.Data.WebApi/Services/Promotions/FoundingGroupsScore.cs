@@ -27,7 +27,10 @@ public static class FoundingGroupsScore
         int Members, int Events, int Referrals, int GroupPoints, int Total, decimal PerMember,
         IReadOnlyList<MemberPoints> People);
 
-    /// <summary>The group's score for activity from <paramref name="fromUtc"/> up to <paramref name="toUtc"/>.</summary>
+    /// <summary>
+    /// The group's score for activity from <paramref name="fromUtc"/> up to <paramref name="toUtc"/>. Callers end the
+    /// window at now at the latest, which is what keeps a planned investigation from counting before it happens.
+    /// </summary>
     public static async Task<GroupScore> ScoreAsync(
         BenDataContext db, Promotion p, Guid organizationId, DateTime fromUtc, DateTime toUtc, CancellationToken ct)
     {
@@ -44,12 +47,11 @@ public static class FoundingGroupsScore
             .GroupBy(s => s.SubmittedByAppUserId).Select(g => new { g.Key, N = g.Count() })
             .ToDictionaryAsync(x => x.Key, x => x.N, ct);
 
-        var now = DateTime.UtcNow;
         var investigations = await (
             from a in db.InvestigationAttendees.AsNoTracking()
             join i in db.Investigations.AsNoTracking() on a.InvestigationId equals i.Id
             where i.OrganizationId == organizationId && ids.Contains(a.AppUserId)
-               && i.ScheduledDateTime >= fromUtc && i.ScheduledDateTime < toUtc && i.ScheduledDateTime <= now
+               && i.ScheduledDateTime >= fromUtc && i.ScheduledDateTime < toUtc
                && i.Status != InvestigationStatus.Cancelled
                && (a.DidAttend == true || (a.DidAttend == null && a.Rsvp == RsvpStatus.Accepted))
             group a by a.AppUserId into g

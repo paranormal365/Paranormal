@@ -885,8 +885,12 @@ public sealed class HostedEventControllerTests
         // named a different date and the test failed. Not a flake: it would have failed on every
         // run from then on. A test about "before the event" has to say before WHAT, and relative
         // to when it runs.
+        //
+        // And the weekend a month out, for the same reason (11/02/2026): it was 10/30/2026, which became the past,
+        // so a credit lapsing tomorrow no longer lapsed before it.
         var lapses = DateTime.UtcNow.Date.AddDays(1);
-        var record = Created(await controller.Create(OrgId, Weekend(), default));
+        var weekend = UpcomingWeekend();
+        var record = Created(await controller.Create(OrgId, weekend, default));
 
         await using (var db = await f.CreateDbContextAsync())
         {
@@ -899,7 +903,7 @@ public sealed class HostedEventControllerTests
 
         var sentence = Assert.IsType<string>(refusal.Value);
         Assert.Contains(lapses.ToString("MM/dd/yyyy"), sentence);
-        Assert.Contains("10/30/2026", sentence);
+        Assert.Contains(weekend.StartsOn.ToString("MM/dd/yyyy"), sentence);
 
         // And it was not taken for an event it could not cover.
         await using var after = await f.CreateDbContextAsync();

@@ -262,6 +262,8 @@ public sealed class AppUserPurge
             await db.OrganizationMembershipRequests.Where(r => r.AppUserId == userId).ExecuteDeleteAsync(ct);
             await db.OrganizationAccessGrants.Where(g => g.AppUserId == userId).ExecuteDeleteAsync(ct);
             await db.OrganizationUserMemberships.Where(m => m.AppUserId == userId).ExecuteDeleteAsync(ct);
+            // No longer a member, so no longer counted for a founding group (11/02/2026).
+            await db.PromotionMembers.Where(m => m.AppUserId == userId).ExecuteDeleteAsync(ct);
             // How often they heard about a group's bookings, and how far they had been told (item
             // 235 phase 8): settings about a person, of use to nobody once the person is gone.
             await db.EventBookingAlertPreferences.Where(p => p.AppUserId == userId).ExecuteDeleteAsync(ct);
@@ -460,7 +462,7 @@ public sealed class AppUserPurge
         {
             nameof(SignInEvent), nameof(PushDevice), nameof(FieldLaunchRecipient), nameof(FieldLaunchJoinRequest), nameof(UserTourState), nameof(UserMessageTo), nameof(UserFollow),
             nameof(UserBlock), nameof(OrganizationMembershipRequest), nameof(OrganizationAccessGrant),
-            nameof(OrganizationUserMembership), nameof(UserAddress), nameof(UserEmail),
+            nameof(OrganizationUserMembership), nameof(PromotionMember), nameof(UserAddress), nameof(UserEmail),
             nameof(UserPhone), nameof(UserLink), nameof(AppUserPhoto),
             nameof(EventBookingAlertPreference), nameof(EventBookingAlertState), nameof(EventPhotoConsent),
             nameof(InvestigationGuestPass),
