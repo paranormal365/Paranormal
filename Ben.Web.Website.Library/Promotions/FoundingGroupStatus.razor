@@ -1,0 +1,221 @@
+@page "/organizations/{OrgId:guid}/founding-group"
+@namespace Ben.Web.Website.Library.Promotions
+@inject IBenAdminClient Client
+@inject IBenUserState UserState
+@inject NavigationManager Nav
+
+<PageTitle>@(_s?.OrganizationName is { Length: > 0 } n ? $"Founding group — {n}" : "Founding group")</PageTitle>
+
+@*
+    One group's place in the founding groups promotion (Ben, 11/02/2026): claiming a spot, the week's countdown,
+    who counts and why not, the free plan, and the score. Administrators see every member's points; a member sees
+    their own (Ben: "the group admin can see their members' score and the group score").
+*@
+
+<div class="container-fluid px-3 py-4" style="max-width:900px; margin:0 auto;">
+    <div class="text-secondary small"><a href="/founding-groups">Founding groups</a></div>
+    <h1 class="h3 mb-3">@(_s?.OrganizationName ?? "Your group") and the founding groups</h1>
+
+    @if (_error is { Length: > 0 }) { <div class="alert alert-danger" id="founding-error" role="alert">@_error</div> }
+    @if (_note is { Length: > 0 }) { <div class="alert alert-success" id="founding-note" role="status">@_note</div> }
+
+    @if (_loading)
+    {
+        <BenLoaderOverlay Visible="true" Text="Loading…" />
+    }
+    else if (_s is not { } s)
+    {
+        <div class="alert alert-warning" id="founding-missing">This group's standing couldn't be read, or you aren't one of its members.</div>
+    }
+    else
+    {
+        @switch (s.State)
+        {
+            case null:
+                <div class="card mb-3" id="founding-claim-card">
+                    <div class="card-body">
+                        <p>
+                            Claim a spot and your group has a week to gather @s.MinimumMembers or more members. Then it gets the
+                            plan its size earns, free for a year. <a href="/founding-groups/rules">The rules</a>
+                        </p>
+                        @if (s.WhyCantClaim is { Length: > 0 } why)
+                        {
+                            <p class="text-secondary mb-0" id="founding-why-not">@why</p>
+                        }
+                        else if (!s.CanManage)
+                        {
+                            <p class="text-secondary mb-0">Ask one of your group's administrators to claim a spot.</p>
+                        }
+                        else
+                        {
+                            <button type="button" class="btn btn-primary" id="founding-claim" disabled="@_busy" @onclick="ClaimAsync">
+                                @(_busy ? "Claiming…" : "Claim a spot and start our week")
+                            </button>
+                        }
+                    </div>
+                </div>
+                break;
+
+            case PromotionEntryState.Gathering:
+                var counted = s.Members.Count(m => m.Counts);
+                <div class="card mb-3" id="founding-gathering">
+                    <div class="card-body">
+                        <h2 class="h5">Your week to gather members</h2>
+                        <p class="mb-1" data-testid="founding-countdown">
+                            Ends @s.GatherEndsUtc!.Value.ToViewerLocalTime(UserState).ToString("MM/dd/yyyy h:mm tt")
+                            (@Left(s.GatherEndsUtc.Value)).
+                        </p>
+                        <p class="mb-0">
+                            <strong>@counted</strong> @(counted == 1 ? "member counts" : "members count") so far; you need at least @s.MinimumMembers.
+                            @if (s.PlanWouldEarn is { Length: > 0 } plan)
+                            {
+                                <span> That earns the <strong>@plan</strong> plan.</span>
+                            }
+                        </p>
+                    </div>
+                </div>
+                @if (s.CanManage)
+                {
+                    <Ben.Web.Website.Library.Organization.OrganizationInviteCard OrgId="@OrgId" OrgName="@s.OrganizationName" />
+                }
+                break;
+
+            case PromotionEntryState.Qualified:
+                <div class="card mb-3" id="founding-qualified">
+                    <div class="card-body">
+                        <h2 class="h5">You're a founding group</h2>
+                        <p class="mb-1">
+                            Your group is on the <strong>@(s.PlanName ?? "plan its size earns")</strong> plan
+                            @(s.FreeUntilUtc is { } until ? $"free until {until.ToViewerLocalTime(UserState):MM/dd/yyyy}" : "")@(s.FreeUntilUtc is null ? "" : ".")
+                            It moves up a plan, still free, if you grow.
+                        </p>
+                        @if (s.ContestEndsUtc is { } contestEnds)
+                        {
+                            <p class="mb-0 text-secondary">Your score counts until @contestEnds.ToViewerLocalTime(UserState).ToString("MM/dd/yyyy").</p>
+                        }
+                        @if (s.FinalRank is { } rank)
+                        {
+                            <p class="mb-0 mt-2" id="founding-final-rank">Final place: <strong>@rank</strong>.</p>
+                        }
+                    </div>
+                </div>
+                break;
+
+            case PromotionEntryState.Released:
+                <div class="alert alert-secondary" id="founding-released">
+                    Your group's week ended with fewer than @s.MinimumMembers members counted, so its spot went back.
+                </div>
+                break;
+
+            case PromotionEntryState.Disqualified:
+                <div class="alert alert-warning" id="founding-disqualified">
+                    Your group was taken out of the promotion. @s.DisqualifiedReason
+                </div>
+                break;
+        }
+
+        @if (s.Score is { } score)
+        {
+            <div class="card mb-3" id="founding-score">
+                <div class="card-body">
+                    <h2 class="h5">The score so far</h2>
+                    <p class="mb-2">
+                        <strong>@score.PerMember.ToString("0.##")</strong> points per member
+                        (<span>@score.PerMemberPerMonth.ToString("0.##") a month</span>), from @score.Total points and @score.Members
+                        @(score.Members == 1 ? "member" : "members").
+                        @if (score.GroupPoints > 0)
+                        {
+                            <span> @score.GroupPoints of them are the group's: @score.Events @(score.Events == 1 ? "event" : "events") and @score.Referrals @(score.Referrals == 1 ? "referral" : "referrals").</span>
+                        }
+                    </p>
+                    @if (score.People.Count > 0)
+                    {
+                        <div class="table-responsive">
+                            <table class="table table-sm align-middle mb-0" data-testid="founding-member-scores">
+                                <thead><tr><th>@(s.CanManage ? "Member" : "You")</th><th class="text-end">Sessions</th><th class="text-end">Investigations</th><th class="text-end">Evidence</th><th class="text-end">Points</th></tr></thead>
+                                <tbody>
+                                    @foreach (var person in score.People)
+                                    {
+                                        <tr>
+                                            <td>@person.Name</td>
+                                            <td class="text-end">@person.Sessions</td>
+                                            <td class="text-end">@person.Investigations</td>
+                                            <td class="text-end">@person.Evidence</td>
+                                            <td class="text-end"><strong>@person.Points</strong></td>
+                                        </tr>
+                                    }
+                                </tbody>
+                            </table>
+                        </div>
+                    }
+                </div>
+            </div>
+        }
+
+        @if (s.State is not null && s.Members.Count > 0)
+        {
+            <div class="card mb-3" id="founding-members">
+                <div class="card-body">
+                    <h2 class="h5">Who counts</h2>
+                    <ul class="list-unstyled mb-0">
+                        @foreach (var m in s.Members)
+                        {
+                            <li class="py-1" data-member="@m.AppUserId">
+                                @if (m.Counts)
+                                {
+                                    <BenIcon Name="check" Class="text-success me-1" /><span>@m.Name</span>
+                                }
+                                else
+                                {
+                                    <BenIcon Name="minus" Class="text-secondary me-1" /><span>@m.Name</span>
+                                    <span class="text-secondary small"> @(m.WhyNot ?? "will count shortly")</span>
+                                }
+                            </li>
+                        }
+                    </ul>
+                </div>
+            </div>
+        }
+
+        @if (s.CanManage)
+        {
+            <Ben.Web.Website.Library.Billing.GroupReferralCard OrgId="@OrgId" />
+        }
+    }
+</div>
+
+@code {
+    [Parameter] public Guid OrgId { get; set; }
+
+    private FoundingGroupStatusRecord? _s;
+    private bool _loading = true, _busy;
+    private string? _error, _note;
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (!firstRender) return;
+        if (!await UserState.WaitUntilAuthReadyAsync(RendererInfo.IsInteractive)) return;
+        if (!UserState.IsAuthenticated) { Nav.NavigateTo(Ben.Web.Website.Library.Kit.SignInLink.For(Nav)); return; }
+        _s = (await Client.GetFoundingGroupAsync(OrgId)).Item;
+        _loading = false;
+        StateHasChanged();
+    }
+
+    private async Task ClaimAsync()
+    {
+        _busy = true; _error = null; _note = null;
+        var (saved, error) = await Client.ClaimFoundingGroupSpotAsync(OrgId);
+        _busy = false;
+        if (saved is null) { _error = error ?? "The spot couldn't be claimed just now."; return; }
+        _s = saved;
+        _note = "Your spot is claimed and your week has started. Invite your members below.";
+    }
+
+    private static string Left(DateTime endsUtc)
+    {
+        var left = endsUtc - DateTime.UtcNow;
+        if (left <= TimeSpan.Zero) return "any minute now";
+        if (left.TotalDays >= 1) return $"{(int)left.TotalDays} {((int)left.TotalDays == 1 ? "day" : "days")} and {left.Hours} {(left.Hours == 1 ? "hour" : "hours")} left";
+        return $"{Math.Max(1, (int)left.TotalHours)} {((int)left.TotalHours == 1 ? "hour" : "hours")} left";
+    }
+}

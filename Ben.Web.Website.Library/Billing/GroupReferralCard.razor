@@ -1,0 +1,143 @@
+@namespace Ben.Web.Website.Library.Billing
+@inject IBenAdminClient Client
+@inject IBenUserState UserState
+@using Ben.Web.Website.Library.Kit
+
+@*
+    Which group told this one about IsHaunted, and the free months this group has earned (Ben, 11/02/2026): "Each
+    paid referral where the group includes the name of the group who referred them earns a free extra month for the
+    group who referred the new one." The referrer is picked from the site's groups by name, not typed, so a typo
+    can't lose a month, and it's fixed once this group pays.
+*@
+
+<div class="card mb-4" id="group-referral" data-testid="group-referral">
+    <div class="card-body">
+        <h2 class="h5 card-title">Referrals and free months</h2>
+
+        @if (_r.Failed)
+        {
+            <div class="alert alert-warning mb-0">@(_r.Reason ?? "This couldn't be loaded just now.")</div>
+        }
+        else if (_r.Item is { } r)
+        {
+            @if (_error is { Length: > 0 }) { <div class="alert alert-danger py-2" role="alert" id="referral-error">@_error</div> }
+
+            <p class="mb-1">
+                @if (r.ReferredByName is { Length: > 0 } by)
+                {
+                    <span id="referral-by">This group was referred by <strong>@by</strong>.</span>
+                }
+                else
+                {
+                    <span>Which group told you about IsHaunted? When your group first pays for its plan, they earn a free month.</span>
+                }
+            </p>
+
+            @if (r.CanManage && !r.ReferrerFixed)
+            {
+                <div class="d-flex flex-wrap gap-2 align-items-start mt-2" style="max-width:520px;">
+                    <BenTextBox id="referral-search" class="form-control form-control-sm" style="flex:1 1 14rem;"
+                                placeholder="Start typing the group's name" Value="@_text"
+                                OnInput="@(e => SearchAsync(e.Value?.ToString() ?? ""))" />
+                    @if (r.ReferredByOrganizationId is not null)
+                    {
+                        <button type="button" class="btn btn-outline-secondary btn-sm" id="referral-clear" disabled="@_busy" @onclick="() => SetAsync(null)">Clear</button>
+                    }
+                </div>
+                @if (_picks.Count > 0)
+                {
+                    <div class="list-group mt-1" style="max-width:520px;" id="referral-picks">
+                        @foreach (var g in _picks)
+                        {
+                            var pick = g;
+                            <button type="button" class="list-group-item list-group-item-action" disabled="@_busy" @onclick="() => SetAsync(pick.Id)">@pick.Name</button>
+                        }
+                    </div>
+                }
+            }
+            else if (r.ReferrerFixed && r.ReferredByName is not null)
+            {
+                <p class="small text-secondary mb-0">It's fixed now that your group has paid for its plan.</p>
+            }
+
+            <h3 class="h6 mt-4">Free months</h3>
+            @if (r.FreeMonths.Count == 0)
+            {
+                <p class="small text-secondary mb-0" id="free-months-none">
+                    None yet. Your group earns a free month for each group that names yours as its referrer and pays for its plan.
+                </p>
+            }
+            else
+            {
+                <div class="table-responsive">
+                    <table class="table table-sm align-middle mb-0" data-testid="free-months">
+                        <thead><tr><th>Earned</th><th>For</th><th class="text-end">Months</th><th>Status</th></tr></thead>
+                        <tbody>
+                            @foreach (var m in r.FreeMonths)
+                            {
+                                <tr>
+                                    <td class="text-nowrap">@m.EarnedUtc.ToViewerLocalTime(UserState).ToString("MM/dd/yyyy")</td>
+                                    <td>@(m.Note ?? Why(m.Reason))</td>
+                                    <td class="text-end">@m.Months</td>
+                                    <td class="text-nowrap">
+                                        @if (m.RevokedUtc is not null) { <span class="badge bg-secondary">Taken back</span> }
+                                        else if (m.AppliedToPeriodEndUtc is { } end) { <span class="badge bg-info">On your plan</span> <span class="small text-secondary">to @end.ToViewerLocalTime(UserState).ToString("MM/dd/yyyy")</span> }
+                                        else { <span class="badge bg-success">Waiting for a plan</span> }
+                                    </td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                </div>
+                <p class="small text-secondary mt-2 mb-0">
+                    Free months are added to your plan: a free plan runs that much longer, and a paid plan renews that much later.
+                    Months wait while your group has no plan running.
+                </p>
+            }
+        }
+    </div>
+</div>
+
+@code {
+    [Parameter, EditorRequired] public Guid OrgId { get; set; }
+
+    private Ben.Web.Services.WebApi.ItemResult<GroupReferralRecord> _r;
+    private List<GroupPickRecord> _picks = [];
+    private string _text = "";
+    private bool _busy;
+    private string? _error;
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (!firstRender) return;
+        if (!await UserState.WaitUntilAuthReadyAsync(RendererInfo.IsInteractive)) return;
+        _r = await Client.GetGroupReferralAsync(OrgId);
+        StateHasChanged();
+    }
+
+    private async Task SearchAsync(string text)
+    {
+        _text = text;
+        _picks = text.Trim().Length < 2 ? [] : [.. (await Client.FindReferrerGroupsAsync(OrgId, text.Trim())).Items];
+    }
+
+    private async Task SetAsync(Guid? referrer)
+    {
+        _busy = true; _error = null;
+        var (saved, error) = await Client.SetGroupReferrerAsync(OrgId, referrer);
+        _busy = false;
+        if (saved is null) { _error = error ?? "That couldn't be saved just now."; return; }
+        _r = Ben.Web.Services.WebApi.ItemResult<GroupReferralRecord>.Ok(saved);
+        _picks = [];
+        _text = "";
+    }
+
+    private static string Why(FreeMonthReason reason) => reason switch
+    {
+        FreeMonthReason.Referral => "A group you referred paid for its plan",
+        FreeMonthReason.GroupOfTheMonth => "Founding group of the month",
+        FreeMonthReason.ReachedTheScore => "Reached the founding groups' score",
+        FreeMonthReason.SecondYear => "A top founding group: a second year free",
+        _ => "Given by IsHaunted",
+    };
+}

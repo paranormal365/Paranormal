@@ -1,0 +1,212 @@
+@page "/founding-groups"
+@namespace Ben.Web.Website.Library.Promotions
+@inject IBenAdminClient Client
+@inject IBenUserState UserState
+
+<PageTitle>Founding groups — IsHaunted</PageTitle>
+
+@*
+    The founding groups promotion (Ben, 11/02/2026): what's on offer, how it works, the prizes, the score, the
+    leaderboard once a second group has qualified, and the way in. Every number comes from the promotion's own
+    settings, so the page can't promise what the rules don't say.
+*@
+
+<div class="container-fluid px-3 py-4" style="max-width:1000px; margin:0 auto;">
+    @if (_loading)
+    {
+        <BenLoaderOverlay Visible="true" Text="Loading…" />
+    }
+    else if (_p is not { Showing: true } p)
+    {
+        <h1 class="h3">Founding groups</h1>
+        <div class="alert alert-secondary" id="founding-not-open">The founding groups promotion isn't open right now.</div>
+    }
+    else
+    {
+        <section class="founding-hero mb-4" data-testid="founding-hero">
+            <div class="ben-kicker">Founding groups</div>
+            <h1 class="founding-hero__title">Free for a year: <span class="ben-accent-text">the first @p.Spots groups.</span></h1>
+            <p class="lead">
+                Bring your team to IsHaunted. Gather @p.MinimumMembers or more members in @p.GatherDays days, and your group gets
+                the plan its size earns, free for @Months(p.FreeMonths). It moves up for free if you grow, and the most active
+                groups win a second year.
+            </p>
+            <FoundingLanterns Total="p.Spots" Lit="p.SpotsLeft" />
+            <p class="mt-2 mb-3" data-testid="founding-spots-left">
+                @if (p.ClaimsOpen)
+                {
+                    <strong>@p.SpotsLeft of @p.Spots spots left.</strong>
+                    @if (p.ClaimsCloseUtc is { } closes)
+                    {
+                        <span class="text-secondary"> Claims close on @closes.ToViewerLocalTime(UserState).ToString("MM/dd/yyyy").</span>
+                    }
+                }
+                else
+                {
+                    <strong>Claims are closed.</strong>
+                    <span class="text-secondary"> Every spot has been taken, or the time to claim one has passed.</span>
+                }
+            </p>
+            @if (p.ClaimsOpen)
+            {
+                @if (_signedIn)
+                {
+                    @if (_groups is { Count: > 0 })
+                    {
+                        <div class="d-flex flex-wrap gap-2" id="founding-my-groups">
+                            @foreach (var g in _groups)
+                            {
+                                <a class="btn btn-primary" href="@($"/organizations/{g.OrganizationId}/founding-group")">Claim a spot for @g.Name</a>
+                            }
+                            <a class="btn btn-outline-light" href="/organizations/new">Start a new group</a>
+                        </div>
+                    }
+                    else
+                    {
+                        <a class="btn btn-primary" href="/organizations/new" id="founding-start-group">Start your group</a>
+                    }
+                }
+                else
+                {
+                    <a class="btn btn-primary" href="/signup" id="founding-signup">Join free and start your group</a>
+                    <a class="btn btn-link" href="/login">I have an account</a>
+                }
+            }
+            <a class="btn btn-link" href="/founding-groups/rules">Read the rules</a>
+        </section>
+
+        <h2 class="h4">How it works</h2>
+        <ol class="founding-steps mb-4">
+            <li><strong>Start your group</strong> on IsHaunted, or use one you've just started.</li>
+            <li><strong>Claim a spot.</strong> Your group has @p.GatherDays days from then to gather its members.</li>
+            <li>
+                <strong>Gather your members.</strong> A member counts once they've confirmed their email address, if they're
+                new to IsHaunted or in no other group. Each person counts for one group only.
+            </li>
+            <li>
+                <strong>Your free @(p.FreeMonths == 12 ? "year" : $"{p.FreeMonths} months") starts</strong> when the
+                @p.GatherDays days are up, on the plan your size earns. Grow during the year and you move up a plan, still free.
+            </li>
+        </ol>
+
+        @if (p.Plans.Count > 0)
+        {
+            <h2 class="h4">The plan your size earns</h2>
+            <div class="table-responsive mb-4">
+                <table class="table align-middle" data-testid="founding-plans">
+                    <thead><tr><th>Members</th><th>Plan, free for @Months(p.FreeMonths)</th><th class="text-end">Normally</th></tr></thead>
+                    <tbody>
+                        @foreach (var plan in p.Plans)
+                        {
+                            <tr>
+                                <td>@(plan.MaxMembers is { } max ? $"{plan.MinMembers}–{max}" : $"{plan.MinMembers} or more")</td>
+                                <td>@plan.Name</td>
+                                <td class="text-end text-nowrap">@(plan.MonthlyPrice is { } price ? $"{BenMoney.Format(price)} a month" : "")</td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+        }
+
+        <h2 class="h4">Prizes all year</h2>
+        <ul class="mb-4">
+            @if (p.GroupOfTheMonthMonths > 0)
+            {
+                <li><strong>Group of the month:</strong> the best score per member each month earns @Months(p.GroupOfTheMonthMonths) free (not the same group two months running).</li>
+            }
+            @if (p.ReachedScoreMonths > 0)
+            {
+                <li><strong>Reach @p.ReachableScorePerMember points per member</strong> in your twelve months and your group earns @Months(p.ReachedScoreMonths) free, whatever the others do.</li>
+            }
+            @if (p.Winners > 0)
+            {
+                <li><strong>The top @p.Winners</strong>, once every founding group has finished its twelve months, win a second year free.</li>
+            }
+            <li><strong>Referrals:</strong> when a group that names yours as the one that told it about IsHaunted pays for its plan, your group earns a free month@(p.PointsPerReferral > 0 ? $" and {p.PointsPerReferral} points" : "").</li>
+        </ul>
+
+        <h2 class="h4">The score</h2>
+        <p>
+            Each group is scored on its own twelve months from the day its free year starts, so a group that joins later has
+            just as long. Points are divided by the group's members, so a small group isn't outnumbered.
+        </p>
+        <div class="table-responsive mb-4">
+            <table class="table table-sm" data-testid="founding-points">
+                <tbody>
+                    <tr><td>A field session with at least @p.MinimumReadingsPerSession readings</td><td class="text-end">@p.PointsPerSession</td></tr>
+                    <tr><td>An investigation of your group's, for each member who was there</td><td class="text-end">@p.PointsPerInvestigation</td></tr>
+                    <tr><td>Evidence a member offered that was accepted</td><td class="text-end">@p.PointsPerEvidence</td></tr>
+                    <tr><td>An event your group hosted that happened</td><td class="text-end">@p.PointsPerEvent</td></tr>
+                    <tr><td>A group you referred that paid for its plan</td><td class="text-end">@p.PointsPerReferral</td></tr>
+                </tbody>
+            </table>
+        </div>
+
+        @if (p.Leaderboard is { Count: > 0 } board)
+        {
+            <h2 class="h4">@(p.Decided ? "The final standings" : "The leaderboard")</h2>
+            <p class="text-secondary small">
+                @(p.Decided ? "Every founding group's twelve months are done." : "Points per member per month so far, so groups at different stages compare fairly. Updated as things happen.")
+            </p>
+            <div class="table-responsive mb-4">
+                <table class="table align-middle" data-testid="founding-leaderboard">
+                    <thead><tr><th>#</th><th>Group</th><th class="text-end">Per member per month</th><th class="text-end">Months in</th></tr></thead>
+                    <tbody>
+                        @foreach (var row in board)
+                        {
+                            <tr>
+                                <td>@row.Rank</td>
+                                <td>
+                                    @if (row.GroupUrlName is { Length: > 0 } url)
+                                    {
+                                        <a href="@($"/o/{url}")">@row.GroupName</a>
+                                    }
+                                    else { @row.GroupName }
+                                </td>
+                                <td class="text-end">@row.PerMemberPerMonth.ToString("0.##")</td>
+                                <td class="text-end">@row.MonthsIn</td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+        }
+
+        @if (p.MonthWinners.Count > 0)
+        {
+            <h2 class="h4">Groups of the month</h2>
+            <ul class="mb-4" data-testid="founding-month-winners">
+                @foreach (var w in p.MonthWinners)
+                {
+                    <li>@w.Month.ToString("MMMM yyyy"): @w.GroupName</li>
+                }
+            </ul>
+        }
+
+        <p><a href="/founding-groups/rules">Read the full rules</a></p>
+    }
+</div>
+
+@code {
+    private FoundingGroupsPublicRecord? _p;
+    private bool _loading = true, _signedIn;
+    private List<MyMembershipOrgItem>? _groups;
+
+    protected override async Task OnInitializedAsync()
+    {
+        _p = (await Client.GetFoundingGroupsAsync()).Item;
+        _loading = false;
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (!firstRender) return;
+        if (!await UserState.WaitUntilAuthReadyAsync(RendererInfo.IsInteractive)) return;
+        _signedIn = UserState.IsAuthenticated;
+        if (_signedIn) _groups = [.. (await Client.GetMyMembershipOrganizationsAsync()).Items];
+        StateHasChanged();
+    }
+
+    private static string Months(int n) => n == 12 ? "a year" : n == 1 ? "1 month" : $"{n} months";
+}

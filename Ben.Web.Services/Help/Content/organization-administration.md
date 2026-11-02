@@ -2737,3 +2737,44 @@ a **receipt**: open **Billing history** on your group's card on the Pricing page
 charge, payment and adjustment, and download any receipt by its number. Receipts are generated
 from the payment record itself, so a receipt you download five years from now will say exactly what
 it said on the day you paid.
+
+## The founding groups promotion
+
+While it's open, the first groups that gather enough members in their week get the plan their size
+earns, free for a year. The details are on the **Founding groups** page, linked from the home page and
+the Pricing page, and its rules page.
+
+1. **Claim a spot.** Open **Founding groups**, choose your group, and press **Claim a spot and start our
+   week**. Anyone who can change the group's settings can claim it.
+2. **Gather your members.** Your group's page shows the countdown, who counts, and why anyone doesn't
+   yet: a member counts once they've confirmed their email address, and only if they're new to
+   IsHaunted or not in another group. Each person counts for one group only. Use the invitation link on
+   the same page to bring people in.
+3. **The free plan.** When the week ends, a group with enough members counted gets the plan its size
+   earns, free for a year, with no card needed. If it grows during the year it moves up a plan, still
+   free. A group without enough members gives its spot back.
+
+![Your group in the founding groups promotion](help-media:organization-administration/founding-group.png)
+
+**The score** counts your group's own twelve months: field sessions with readings, investigations
+(for each member who was there), accepted evidence, events your group hosted, and groups you referred
+that paid. It's divided by your members, so a small group isn't outnumbered. Your group's
+administrators see every member's points; each member sees their own.
+
+**Prizes:** the group of the month earns a free month; reaching the set score per member earns three;
+and the top three, decided once every founding group has finished its year, win a second year free.
+
+**When the free time ends,** choose your plan on the billing page to keep it. We write a month and a
+week before.
+
+## Referrals and free months
+
+On your group's **Billing** page, **Referrals and free months** asks which group told you about
+IsHaunted. Start typing its name and choose it from the list. When your group first pays for its plan,
+and the payment has stood for two weeks, that group earns a free month. You can change or clear the name
+until then; after that it's fixed. A group can't name itself, or a group with the same owner or
+administrators.
+
+The same card lists the free months your group has earned, from referrals or from the founding groups'
+prizes, and whether each is on your plan yet. Free months are added to your plan: a free plan runs that
+much longer, and a paid plan renews that much later. While your group has no plan running, they wait.

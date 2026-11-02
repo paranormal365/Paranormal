@@ -1,0 +1,50 @@
+@namespace Ben.Web.Website.Library.Promotions
+@inject IBenAdminClient Client
+
+@*
+    The home page's shout-out for the founding groups promotion (Ben, 11/02/2026): how many of the free spots are
+    left, lanterns going dark as they're taken, and the way in. Renders nothing unless spots can be claimed right
+    now, so it disappears by itself when the last spot goes or the window closes.
+*@
+
+@if (_p is { ClaimsOpen: true } p)
+{
+    <div class="home-band">
+        <section class="founding-shout" data-testid="founding-shout">
+            <div class="founding-shout__text">
+                <div class="ben-kicker">Founding groups</div>
+                <h2 class="founding-shout__title">
+                    Free for a year: <span class="ben-accent-text">the first @p.Spots groups.</span>
+                </h2>
+                <p class="founding-shout__lede">
+                    Gather your team in a week and your group gets the plan its size earns, free for
+                    @(p.FreeMonths == 12 ? "a year" : $"{p.FreeMonths} months"). The most active groups win a second year.
+                </p>
+                <div class="founding-shout__ctas">
+                    <a class="btn btn-primary" href="/founding-groups" data-testid="founding-shout-go">Claim a spot</a>
+                    <a class="btn btn-outline-light" href="/founding-groups/rules">The rules</a>
+                </div>
+            </div>
+            <div class="founding-shout__count">
+                <FoundingLanterns Total="p.Spots" Lit="p.SpotsLeft" />
+                <div class="founding-shout__left" @key="p.SpotsLeft" data-testid="founding-shout-left">
+                    <strong>@p.SpotsLeft</strong> of @p.Spots spots left
+                </div>
+                @if (p.ClaimsCloseUtc is { } closes)
+                {
+                    var days = Math.Max(0, (int)Math.Ceiling((closes - DateTime.UtcNow).TotalDays));
+                    <div class="founding-shout__closes">
+                        @(days <= 1 ? "Claims close tomorrow" : $"Claims close in {days} days")
+                    </div>
+                }
+            </div>
+        </section>
+    </div>
+}
+
+@code {
+    private FoundingGroupsPublicRecord? _p;
+
+    protected override async Task OnInitializedAsync()
+        => _p = (await Client.GetFoundingGroupsAsync()).Item;
+}

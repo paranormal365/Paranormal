@@ -17,6 +17,9 @@
 @* What the signed-in person is going to next, counting down (10/16/2026). Renders nothing for a
    visitor, and nothing for somebody with nothing coming up. *@
 <Ben.Web.Website.Library.Shared.HomeEventCountdown />
+@* The founding groups promotion (Ben, 11/02/2026), for everybody, near the top. Renders nothing unless spots
+   can be claimed right now. *@
+<Ben.Web.Website.Library.Promotions.FoundingGroupsShoutOut />
 <MemberDesk OnHasGroups="@(v => { _hasGroups = v; StateHasChanged(); })" />
 @if (!_hasGroups)
 {

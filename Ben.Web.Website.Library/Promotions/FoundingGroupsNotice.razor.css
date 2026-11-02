@@ -1,0 +1,22 @@
+.founding-notice {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 1rem;
+    align-items: center;
+    padding: 1rem 1.25rem;
+    margin-bottom: 1.5rem;
+    border-radius: .75rem;
+    border: 1px solid rgba(255, 196, 92, .35);
+    background: rgba(255, 196, 92, .08);
+}
+
+.founding-notice__text {
+    flex: 1 1 18rem;
+    min-width: 0;
+}
+
+.founding-notice__links {
+    display: flex;
+    gap: .25rem;
+    align-items: center;
+}

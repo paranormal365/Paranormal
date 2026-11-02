@@ -3265,6 +3265,37 @@ public sealed class HelpMediaCapture : BenTestBase
             selector: "#after-findings", proves: "Who can see the findings");
     }
 
+    /// <summary>A group in the founding groups promotion during its week (11/02/2026): who counts, and why not.</summary>
+    [Test]
+    [Description("organization-administration: the founding groups promotion.")]
+    public async Task Capture_FoundingGroup()
+    {
+        var orgId = await OrgIdBySlugAsync("benco");
+        var admin = await ApiAsAsync(await ApiTokenAsync(SuperAdminEmail, SuperAdminPassword));
+        var got = await admin.GetAsync("/api/admin/founding-groups");
+        Assert.That(got.Ok, Is.True, await got.TextAsync());
+        var settings = System.Text.Json.JsonSerializer.Deserialize<Dictionary<string, object>>(
+            (await got.JsonAsync())!.Value.GetProperty("settings").GetRawText())!;
+        settings["isOpen"] = true;
+        Assert.That((await admin.PutAsync("/api/admin/founding-groups", new() { DataObject = settings })).Ok, Is.True);
+        try
+        {
+            var owner = await ApiAsAsync(await ApiTokenAsync(UserEmail, UserPassword));
+            await owner.PostAsync($"/api/organizations/{orgId}/founding-group/claim");
+
+            await LoginAsync(UserEmail, UserPassword);
+            await GoAsync($"/organizations/{orgId}/founding-group");
+            await Expect(Page.Locator("#founding-members")).ToBeVisibleAsync(new() { Timeout = 30_000 });
+            await ShootAsync("organization-administration", "founding-group.png", gated: true,
+                selector: "#founding-members", proves: "Who counts");
+        }
+        finally
+        {
+            settings["isOpen"] = false;
+            await admin.PutAsync("/api/admin/founding-groups", new() { DataObject = settings });
+        }
+    }
+
     /// <summary>Keeping an event's files before they are removed (item 235 phase 12).</summary>
     [Test]
     [Description("organization-administration: pick and zip.")]

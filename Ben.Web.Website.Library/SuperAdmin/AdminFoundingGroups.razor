@@ -1,0 +1,258 @@
+@page "/admin/founding-groups"
+
+@inject IBenAdminClient AdminClient
+@inject IBenUserState UserState
+@using Ben.Web.Services.WebApi
+@using Ben.Web.Website.Library.Kit
+@using Ben.Web.Website.Library.Help
+
+<PageTitle>SuperAdmin — Founding Groups</PageTitle>
+
+@*
+    The founding groups promotion for a SuperAdmin (Ben, 11/02/2026): every number, switching it on, every group in
+    it, and free months given by hand or taken back. Nothing about the promotion shows anywhere on the site while
+    it's switched off. Switching it on the first time starts the claim window.
+*@
+
+<div class="container-fluid px-3" style="max-width:1100px;">
+    <h3 class="mb-1">Founding Groups<HelpLink Slug="site-administration" Anchor="founding-groups" /></h3>
+    <p class="text-secondary small">
+        The first groups that gather enough members in their week get the plan their size earns, free. See
+        <a href="/founding-groups" target="_blank">the page</a> and <a href="/founding-groups/rules" target="_blank">the rules</a>
+        as visitors see them; they read these numbers.
+    </p>
+
+    @if (_error is { Length: > 0 }) { <div class="alert alert-danger" role="alert" id="fg-error">@_error</div> }
+    @if (_note is { Length: > 0 }) { <div class="alert alert-success" role="status" id="fg-note">@_note</div> }
+
+    @if (_r.Failed)
+    {
+        <div class="alert alert-warning">@(_r.Reason ?? "The promotion couldn't be loaded.")</div>
+    }
+    else if (_r.Item is not { } r || _s is null)
+    {
+        <BenLoaderOverlay Visible="true" Text="Loading…" />
+    }
+    else
+    {
+        <div class="card mb-3" id="fg-settings">
+            <div class="card-body">
+                <div class="form-check form-switch mb-2">
+                    <input class="form-check-input" type="checkbox" id="fg-open" @bind="_s.IsOpen" />
+                    <label class="form-check-label" for="fg-open"><strong>Open</strong>: show the page, the notices and the shout-out, and take claims</label>
+                </div>
+                <p class="small text-secondary">
+                    @(r.OpenedUtc is { } opened ? $"First opened {opened.ToViewerLocalTime(UserState):MM/dd/yyyy}; claims close {r.ClaimsCloseUtc?.ToViewerLocalTime(UserState):MM/dd/yyyy} or when the spots fill." : "Never opened. Claims run for the window below from the moment you first open it.")
+                    @r.SpotsTaken of @_s.Spots spots taken.
+                    @(r.DecidedUtc is { } decided ? $" Decided {decided.ToViewerLocalTime(UserState):MM/dd/yyyy}." : "")
+                </p>
+
+                <div class="row g-2">
+                    @Number("Spots", _s.Spots, v => _s.Spots = v, "fg-spots")
+                    @Number("Claim window (days)", _s.ClaimWindowDays, v => _s.ClaimWindowDays = v, "fg-window")
+                    @Number("Days to gather members", _s.GatherDays, v => _s.GatherDays = v, "fg-gather")
+                    @Number("Fewest members", _s.MinimumMembers, v => _s.MinimumMembers = v, "fg-min")
+                    @Number("Free months", _s.FreeMonths, v => _s.FreeMonths = v, "fg-free")
+                    @Number("Winners", _s.Winners, v => _s.Winners = v, "fg-winners")
+                    @Number("Winners' months", _s.WinnerMonths, v => _s.WinnerMonths = v, "fg-winner-months")
+                    @Number("Group of the month: months", _s.GroupOfTheMonthMonths, v => _s.GroupOfTheMonthMonths = v, "fg-month")
+                    @Number("Reachable score (per member)", _s.ReachableScorePerMember, v => _s.ReachableScorePerMember = v, "fg-reach")
+                    @Number("Reachable score: months", _s.ReachedScoreMonths, v => _s.ReachedScoreMonths = v, "fg-reach-months")
+                    @Number("Points: field session", _s.PointsPerSession, v => _s.PointsPerSession = v, "fg-p-session")
+                    @Number("Readings a session needs", _s.MinimumReadingsPerSession, v => _s.MinimumReadingsPerSession = v, "fg-readings")
+                    @Number("Points: investigation", _s.PointsPerInvestigation, v => _s.PointsPerInvestigation = v, "fg-p-inv")
+                    @Number("Points: evidence", _s.PointsPerEvidence, v => _s.PointsPerEvidence = v, "fg-p-ev")
+                    @Number("Points: event", _s.PointsPerEvent, v => _s.PointsPerEvent = v, "fg-p-event")
+                    @Number("Points: paid referral", _s.PointsPerReferral, v => _s.PointsPerReferral = v, "fg-p-ref")
+                </div>
+                <button type="button" class="btn btn-primary btn-sm mt-3" id="fg-save" disabled="@_busy" @onclick="SaveAsync">
+                    @(_busy ? "Saving…" : "Save")
+                </button>
+            </div>
+        </div>
+
+        <h4 class="h5">Groups</h4>
+        @if (r.Entries.Count == 0)
+        {
+            <p class="text-secondary" id="fg-no-entries">No group has claimed a spot yet.</p>
+        }
+        else
+        {
+            <div class="table-responsive mb-4">
+                <table class="table table-sm align-middle" id="fg-entries">
+                    <thead><tr><th>Group</th><th>State</th><th>Claimed</th><th class="text-end">Counted</th><th>Plan</th><th class="text-end">Per member</th><th>Rank</th><th></th></tr></thead>
+                    <tbody>
+                        @foreach (var e in r.Entries)
+                        {
+                            var entry = e;
+                            <tr data-entry="@entry.Id">
+                                <td><a href="@($"/organizations/{entry.OrganizationId}/founding-group")">@entry.OrganizationName</a></td>
+                                <td>@entry.State@(entry.DisqualifiedReason is { } why ? $": {why}" : "")</td>
+                                <td class="text-nowrap">@entry.ClaimedUtc.ToViewerLocalTime(UserState).ToString("MM/dd/yyyy")</td>
+                                <td class="text-end">@entry.CountedMembers</td>
+                                <td>@entry.PlanName</td>
+                                <td class="text-end">@((entry.FinalScorePerMember ?? entry.PerMemberSoFar)?.ToString("0.##"))</td>
+                                <td>@entry.FinalRank</td>
+                                <td class="text-nowrap">
+                                    <button type="button" class="btn btn-outline-secondary btn-sm" disabled="@_busy" @onclick="() => _giveTo = entry">Give months</button>
+                                    @if (entry.State is PromotionEntryState.Gathering or PromotionEntryState.Qualified)
+                                    {
+                                        <button type="button" class="btn btn-outline-danger btn-sm" disabled="@_busy" @onclick="() => _disqualify = entry">Take out</button>
+                                    }
+                                </td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+        }
+
+        @if (_disqualify is { } dq)
+        {
+            <div class="card mb-3 border-danger" id="fg-disqualify">
+                <div class="card-body">
+                    <p class="mb-2">Take <strong>@dq.OrganizationName</strong> out of the promotion. They're told this reason.</p>
+                    <BenTextBox id="fg-disqualify-reason" class="form-control form-control-sm mb-2" Value="@_reason"
+                                OnInput="@(e => _reason = e.Value?.ToString() ?? "")" placeholder="e.g. Members were made up to reach a bigger plan." />
+                    <button type="button" class="btn btn-danger btn-sm" disabled="@_busy" @onclick="DisqualifyAsync">Take them out</button>
+                    <button type="button" class="btn btn-link btn-sm" @onclick="() => _disqualify = null">Cancel</button>
+                </div>
+            </div>
+        }
+
+        @if (_giveTo is { } give)
+        {
+            <div class="card mb-3" id="fg-give">
+                <div class="card-body">
+                    <p class="mb-2">Give <strong>@give.OrganizationName</strong> free months. They see the note.</p>
+                    <div class="d-flex flex-wrap gap-2">
+                        <input type="number" min="1" max="24" class="form-control form-control-sm" style="width:6rem;" id="fg-give-months" @bind="_giveMonths" />
+                        <BenTextBox id="fg-give-note" class="form-control form-control-sm" style="flex:1 1 16rem;" Value="@_giveNote"
+                                    OnInput="@(e => _giveNote = e.Value?.ToString() ?? "")" placeholder="e.g. Thank you for helping us test." />
+                    </div>
+                    <button type="button" class="btn btn-primary btn-sm mt-2" disabled="@_busy" @onclick="GiveAsync">Give</button>
+                    <button type="button" class="btn btn-link btn-sm mt-2" @onclick="() => _giveTo = null">Cancel</button>
+                </div>
+            </div>
+        }
+
+        <h4 class="h5">Free months</h4>
+        @if (r.FreeMonths.Count == 0)
+        {
+            <p class="text-secondary" id="fg-no-months">No free months have been earned or given yet.</p>
+        }
+        else
+        {
+            <div class="table-responsive">
+                <table class="table table-sm align-middle" id="fg-months">
+                    <thead><tr><th>Group</th><th>Why</th><th class="text-end">Months</th><th>Earned</th><th>Status</th><th></th></tr></thead>
+                    <tbody>
+                        @foreach (var m in r.FreeMonths)
+                        {
+                            var months = m;
+                            <tr>
+                                <td>@months.OrganizationName</td>
+                                <td>@months.Reason@(months.FromGroupName is { } from ? $" ({from})" : "")@(months.Note is { } n ? $": {n}" : "")</td>
+                                <td class="text-end">@months.Months</td>
+                                <td class="text-nowrap">@months.EarnedUtc.ToViewerLocalTime(UserState).ToString("MM/dd/yyyy")</td>
+                                <td>@(months.RevokedUtc is not null ? "Taken back" : months.AppliedUtc is not null ? "On the plan" : "Waiting")</td>
+                                <td>
+                                    @if (months.AppliedUtc is null && months.RevokedUtc is null)
+                                    {
+                                        <button type="button" class="btn btn-outline-danger btn-sm" disabled="@_busy" @onclick="() => RevokeAsync(months)">Take back</button>
+                                    }
+                                </td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+        }
+    }
+</div>
+
+@code {
+    private ItemResult<AdminFoundingGroupsRecord> _r;
+    private Settings? _s;
+    private bool _busy;
+    private string? _error, _note, _reason, _giveNote;
+    private int _giveMonths = 1;
+    private AdminFoundingGroupEntryRecord? _disqualify, _giveTo;
+
+    /// <summary>The settings as the form edits them.</summary>
+    private sealed class Settings
+    {
+        public bool IsOpen;
+        public int ClaimWindowDays, Spots, GatherDays, MinimumMembers, FreeMonths, Winners, WinnerMonths, GroupOfTheMonthMonths,
+            ReachedScoreMonths, ReachableScorePerMember, PointsPerSession, PointsPerInvestigation, PointsPerEvent, PointsPerEvidence,
+            PointsPerReferral, MinimumReadingsPerSession;
+    }
+
+    private RenderFragment Number(string label, int value, Action<int> set, string id) => __builder =>
+    {
+        <div class="col-6 col-md-3">
+            <label class="form-label small mb-0" for="@id">@label</label>
+            <input type="number" min="0" class="form-control form-control-sm" id="@id" value="@value"
+                   @onchange="@(e => { if (int.TryParse(e.Value?.ToString(), out var n)) set(n); })" />
+        </div>
+    };
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (!firstRender) return;
+        if (!await UserState.WaitUntilAuthReadyAsync(RendererInfo.IsInteractive)) return;
+        Take(await AdminClient.GetAdminFoundingGroupsAsync());
+        StateHasChanged();
+    }
+
+    private void Take(ItemResult<AdminFoundingGroupsRecord> r)
+    {
+        _r = r;
+        if (r.Item?.Settings is not { } s) return;
+        _s = new Settings
+        {
+            IsOpen = s.IsOpen, ClaimWindowDays = s.ClaimWindowDays, Spots = s.Spots, GatherDays = s.GatherDays,
+            MinimumMembers = s.MinimumMembers, FreeMonths = s.FreeMonths, Winners = s.Winners, WinnerMonths = s.WinnerMonths,
+            GroupOfTheMonthMonths = s.GroupOfTheMonthMonths, ReachedScoreMonths = s.ReachedScoreMonths,
+            ReachableScorePerMember = s.ReachableScorePerMember, PointsPerSession = s.PointsPerSession,
+            PointsPerInvestigation = s.PointsPerInvestigation, PointsPerEvent = s.PointsPerEvent,
+            PointsPerEvidence = s.PointsPerEvidence, PointsPerReferral = s.PointsPerReferral,
+            MinimumReadingsPerSession = s.MinimumReadingsPerSession,
+        };
+    }
+
+    private async Task RunAsync(Task<(AdminFoundingGroupsRecord? Result, string? Error)> call, string done)
+    {
+        _busy = true; _error = null; _note = null;
+        var (saved, error) = await call;
+        _busy = false;
+        if (saved is null) { _error = error ?? "That couldn't be saved just now."; return; }
+        Take(ItemResult<AdminFoundingGroupsRecord>.Ok(saved));
+        _note = done;
+    }
+
+    private Task SaveAsync()
+        => RunAsync(AdminClient.SaveFoundingGroupsSettingsAsync(new FoundingGroupsSettingsRecord(
+            _s!.IsOpen, _s.ClaimWindowDays, _s.Spots, _s.GatherDays, _s.MinimumMembers, _s.FreeMonths, _s.Winners, _s.WinnerMonths,
+            _s.GroupOfTheMonthMonths, _s.ReachedScoreMonths, _s.ReachableScorePerMember, _s.PointsPerSession,
+            _s.PointsPerInvestigation, _s.PointsPerEvent, _s.PointsPerEvidence, _s.PointsPerReferral, _s.MinimumReadingsPerSession)),
+            _s.IsOpen ? "Saved. The promotion is open." : "Saved. The promotion is switched off.");
+
+    private async Task DisqualifyAsync()
+    {
+        var who = _disqualify!;
+        await RunAsync(AdminClient.DisqualifyFoundingGroupAsync(who.Id, _reason ?? ""), $"{who.OrganizationName} has been taken out and told why.");
+        if (_error is null) { _disqualify = null; _reason = null; }
+    }
+
+    private async Task GiveAsync()
+    {
+        var who = _giveTo!;
+        await RunAsync(AdminClient.GiveFreeMonthsAsync(new GiveFreeMonthsRequest(who.OrganizationId, _giveMonths, _giveNote ?? "")),
+            $"Given to {who.OrganizationName}.");
+        if (_error is null) { _giveTo = null; _giveNote = null; _giveMonths = 1; }
+    }
+
+    private Task RevokeAsync(AdminFreeMonthsRecord m)
+        => RunAsync(AdminClient.RevokeFreeMonthsAsync(m.Id, null), $"Taken back from {m.OrganizationName}.");
+}

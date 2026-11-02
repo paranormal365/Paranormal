@@ -1,0 +1,147 @@
+@page "/founding-groups/rules"
+@namespace Ben.Web.Website.Library.Promotions
+@inject IBenAdminClient Client
+
+<PageTitle>Founding groups: the rules — IsHaunted</PageTitle>
+
+@*
+    The founding groups promotion's rules (Ben, 11/02/2026), in plain words. Every number is read from the
+    promotion's settings, so changing one on the admin page changes the rules here too.
+*@
+
+<div class="container-fluid px-3 py-4" style="max-width:820px; margin:0 auto;">
+    <div class="text-secondary small"><a href="/founding-groups">Founding groups</a></div>
+    <h1 class="h3 mb-3">The founding groups rules</h1>
+
+    @if (_loading)
+    {
+        <BenLoaderOverlay Visible="true" Text="Loading…" />
+    }
+    else if (_p is not { Showing: true } p)
+    {
+        <div class="alert alert-secondary">The founding groups promotion isn't open right now.</div>
+    }
+    else
+    {
+        <div class="founding-rules" data-testid="founding-rules">
+            <h2 class="h5">Who can take part</h2>
+            <ul>
+                <li>Any new group of paranormal investigators on IsHaunted. Tour businesses have a plan of their own and can't take part.</li>
+                <li>A group that already pays for a plan can't take a free one.</li>
+                <li>There are @p.Spots spots. A spot is held from the moment a group claims it.</li>
+                <li>
+                    Spots can be claimed until they're all taken@(p.ClaimsCloseUtc is { } closes ? $" or until {closes:MM/dd/yyyy}, whichever comes first" : "").
+                    If a group's week ends without enough members, its spot opens again.
+                </li>
+            </ul>
+
+            <h2 class="h5">The week to gather your members</h2>
+            <ul>
+                <li>Your group has @p.GatherDays days from claiming its spot to gather its members.</li>
+                <li>
+                    A member counts once they've <strong>confirmed their email address</strong>, and only if they're new to
+                    IsHaunted or not a member of any other group when they join.
+                </li>
+                <li>
+                    Each person counts for <strong>one group only</strong>. Somebody counted for one founding group can't be
+                    counted for another, and can't start a second free group.
+                </li>
+                <li>A member who leaves the group during its week stops counting.</li>
+                <li>
+                    When the @p.GatherDays days are up, a group with @p.MinimumMembers or more members counted starts its free
+                    @(p.FreeMonths == 12 ? "year" : $"{p.FreeMonths} months"). A group with fewer gives its spot back.
+                </li>
+            </ul>
+
+            <h2 class="h5">The free plan</h2>
+            <ul>
+                @foreach (var plan in p.Plans)
+                {
+                    <li>@(plan.MaxMembers is { } max ? $"{plan.MinMembers} to {max}" : $"{plan.MinMembers} or more") members: <strong>@plan.Name</strong>.</li>
+                }
+                <li>The plan is free for @Months(p.FreeMonths) from the day the week ends. No card is needed.</li>
+                <li>If your group grows during those months, it moves up to the plan its new size earns, still free. It never moves down.</li>
+                <li>
+                    When the free time ends, choose your plan on your group's billing page to keep it, at its normal price.
+                    We'll write a month and a week before. If it isn't paid, the plan keeps going for two weeks and then stops;
+                    nothing you've made is lost.
+                </li>
+            </ul>
+
+            <h2 class="h5">The score</h2>
+            <ul>
+                <li>Each group is scored on its own twelve months, from the day its free plan starts.</li>
+                <li>
+                    Points: @p.PointsPerSession for each field session with at least @p.MinimumReadingsPerSession readings;
+                    @p.PointsPerInvestigation for each investigation of your group's, for each member who was there;
+                    @p.PointsPerEvidence for each piece of evidence a member offered that was accepted;
+                    @p.PointsPerEvent for each event your group hosted that happened;
+                    and @p.PointsPerReferral for each group you referred that paid for its plan.
+                </li>
+                <li>A group's score is its points divided by its members with confirmed email addresses.</li>
+                <li>Your group's administrators see every member's points and the group's; each member sees their own.</li>
+                <li>
+                    The leaderboard shows points per member per month so far, so groups that started at different times compare
+                    fairly. It appears once a second group has started its free plan.
+                </li>
+            </ul>
+
+            <h2 class="h5">Prizes</h2>
+            <ul>
+                @if (p.GroupOfTheMonthMonths > 0)
+                {
+                    <li>
+                        <strong>Group of the month:</strong> each calendar month, the founding group with the best score per member
+                        that month earns @Months(p.GroupOfTheMonthMonths) free. A group can't win two months running.
+                    </li>
+                }
+                @if (p.ReachedScoreMonths > 0)
+                {
+                    <li>
+                        <strong>Reach the score:</strong> any group with @p.ReachableScorePerMember or more points per member at the
+                        end of its twelve months earns @Months(p.ReachedScoreMonths) free.
+                    </li>
+                }
+                @if (p.Winners > 0)
+                {
+                    <li>
+                        <strong>The top @p.Winners:</strong> once claims are closed and every founding group has finished its twelve
+                        months, the @p.Winners with the most points per member win @Months(p.WinnerMonths) free, from then. A tie goes
+                        to the group with more points in all, then to the group whose free plan started first.
+                    </li>
+                }
+                <li>Free months are added to your plan: a free plan runs that much longer, and a paid plan's next renewal comes that much later.</li>
+            </ul>
+
+            <h2 class="h5">Referrals</h2>
+            <ul>
+                <li>On its billing page, a group can name the group that told it about IsHaunted.</li>
+                <li>
+                    When that group first pays for its plan, and the payment has stood for two weeks, the group it named earns
+                    one free month. That's one month for each group referred, whatever the size of either.
+                </li>
+                <li>A group can't name itself, or a group with the same owner or administrators. The name is fixed once it has paid.</li>
+                <li>Referrals count for every group on IsHaunted, not only the founding groups.</li>
+            </ul>
+
+            <h2 class="h5">Fair play</h2>
+            <ul>
+                <li>We may take a group out of the promotion for making up members or activity. We'll tell it why.</li>
+                <li>If we change a number in these rules, the change applies from then on, never to what a group has already earned.</li>
+            </ul>
+        </div>
+    }
+</div>
+
+@code {
+    private FoundingGroupsPublicRecord? _p;
+    private bool _loading = true;
+
+    protected override async Task OnInitializedAsync()
+    {
+        _p = (await Client.GetFoundingGroupsAsync()).Item;
+        _loading = false;
+    }
+
+    private static string Months(int n) => n == 12 ? "a year" : n == 1 ? "1 month" : $"{n} months";
+}

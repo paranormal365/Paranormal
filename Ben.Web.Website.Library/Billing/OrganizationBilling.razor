@@ -251,6 +251,9 @@
             links straight to this anchor. The card is shared with a person's own credits page.  *@
         <EventCreditsCard Credits="@_credits" StartCheckout="@StartCreditCheckoutAsync" />
 
+        @* ── Referrals and free months (11/02/2026) ────────────────────────── *@
+        <GroupReferralCard OrgId="@OrgId" />
+
         @* ── Ghost Walk Tour subscription (10/21/2026) ───────────────────────── *@
         @*  Its own monthly subscription beside the plan. Shown only while it is on sale: when the
             SuperAdmin turns it off, this page says nothing about it (Ben's rule).  *@

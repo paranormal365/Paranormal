@@ -1,0 +1,27 @@
+@namespace Ben.Web.Website.Library.Promotions
+@inject IBenAdminClient Client
+
+@* The pricing page's notice (Ben, 11/02/2026): above the plans, while founding spots can still be claimed. *@
+
+@if (_p is { ClaimsOpen: true } p)
+{
+    <div class="founding-notice" role="note" data-testid="founding-notice">
+        <FoundingLanterns Total="p.Spots" Lit="p.SpotsLeft" Compact="true" />
+        <div class="founding-notice__text">
+            <strong>Free for a year: the first @p.Spots groups.</strong>
+            @p.SpotsLeft of @p.Spots spots left. Gather @p.MinimumMembers or more members in @p.GatherDays days and your
+            group gets the plan below that fits its size, free.
+        </div>
+        <div class="founding-notice__links">
+            <a class="btn btn-primary btn-sm" href="/founding-groups">Claim a spot</a>
+            <a class="btn btn-link btn-sm" href="/founding-groups/rules">The rules</a>
+        </div>
+    </div>
+}
+
+@code {
+    private FoundingGroupsPublicRecord? _p;
+
+    protected override async Task OnInitializedAsync()
+        => _p = (await Client.GetFoundingGroupsAsync()).Item;
+}
