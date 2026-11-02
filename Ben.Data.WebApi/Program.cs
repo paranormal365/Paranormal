@@ -550,6 +550,10 @@ builder.Services.AddScoped<Ben.Data.WebApi.Services.Access.HostedEventAccess>(sp
 // unspent credit past its date is gone by the clock, so there is no state for a job to get wrong.
 builder.Services.AddScoped<Ben.Data.WebApi.Services.Scheduling.IScheduledJob,
                            Ben.Data.WebApi.Services.Scheduling.EventCreditExpiryJob>();
+// 11/02/2026: the founding groups promotion and group-to-group referral months. Every step is keyed or stamped,
+// so it is safe at the scheduler's pace.
+builder.Services.AddScoped<Ben.Data.WebApi.Services.Scheduling.IScheduledJob,
+                           Ben.Data.WebApi.Services.Scheduling.FoundingGroupsJob>();
 // 10/21/2026: plans stopped including events. Once, after the deploy, this hands a credit to each
 // group whose plan covered a draft event it was already preparing; then it never acts again.
 builder.Services.AddScoped<Ben.Data.WebApi.Services.Scheduling.IScheduledJob,

@@ -8059,6 +8059,12 @@ namespace Ben.Data.Source.Migrations
                         .HasMaxLength(500)
                         .HasColumnType("nvarchar(500)");
 
+                    b.Property<DateTime?>("ReferredAtUtc")
+                        .HasColumnType("datetime2");
+
+                    b.Property<Guid?>("ReferredByOrganizationId")
+                        .HasColumnType("uniqueidentifier");
+
                     b.Property<bool>("RunsPublicTours")
                         .HasColumnType("bit");
 
@@ -8094,6 +8100,8 @@ namespace Ben.Data.Source.Migrations
                     b.HasIndex("JoinToken")
                         .IsUnique()
                         .HasFilter("[JoinToken] IS NOT NULL");
+
+                    b.HasIndex("ReferredByOrganizationId");
 
                     b.HasIndex("RunsPublicTours");
 
@@ -8871,6 +8879,76 @@ namespace Ben.Data.Source.Migrations
                     b.HasIndex("OrganizationId");
 
                     b.ToTable("OrganizationFileDeleteLogs", (string)null);
+                });
+
+            modelBuilder.Entity("Ben.Data.Source.Entities.OrganizationFreeMonths", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<DateTime?>("AppliedToPeriodEndUtc")
+                        .HasColumnType("datetime2");
+
+                    b.Property<DateTime?>("AppliedUtc")
+                        .HasColumnType("datetime2");
+
+                    b.Property<Guid>("CreatedByAppUserId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<DateTime>("DateCreated")
+                        .HasColumnType("datetime2");
+
+                    b.Property<DateTime?>("DateUpdated")
+                        .HasColumnType("datetime2");
+
+                    b.Property<DateTime>("EarnedUtc")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("Key")
+                        .IsRequired()
+                        .HasMaxLength(120)
+                        .HasColumnType("nvarchar(120)");
+
+                    b.Property<int>("Months")
+                        .HasColumnType("int");
+
+                    b.Property<string>("Note")
+                        .HasMaxLength(500)
+                        .HasColumnType("nvarchar(500)");
+
+                    b.Property<Guid>("OrganizationId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<Guid?>("PromotionEntryId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<int>("Reason")
+                        .HasColumnType("int");
+
+                    b.Property<string>("RevokedReason")
+                        .HasMaxLength(500)
+                        .HasColumnType("nvarchar(500)");
+
+                    b.Property<DateTime?>("RevokedUtc")
+                        .HasColumnType("datetime2");
+
+                    b.Property<Guid?>("SourceOrganizationId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<Guid?>("UpdatedByAppUserId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("Key")
+                        .IsUnique();
+
+                    b.HasIndex("SourceOrganizationId");
+
+                    b.HasIndex("OrganizationId", "AppliedUtc");
+
+                    b.ToTable("OrganizationFreeMonths");
                 });
 
             modelBuilder.Entity("Ben.Data.Source.Entities.OrganizationLink", b =>
@@ -10665,6 +10743,221 @@ namespace Ben.Data.Source.Migrations
                     b.HasIndex("PlaceId", "RoomKey", "ExpiresUtc");
 
                     b.ToTable("PlaceScanHolds");
+                });
+
+            modelBuilder.Entity("Ben.Data.Source.Entities.Promotion", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<int>("ClaimWindowDays")
+                        .HasColumnType("int");
+
+                    b.Property<Guid>("CreatedByAppUserId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<DateTime>("DateCreated")
+                        .HasColumnType("datetime2");
+
+                    b.Property<DateTime?>("DateUpdated")
+                        .HasColumnType("datetime2");
+
+                    b.Property<DateTime?>("DecidedUtc")
+                        .HasColumnType("datetime2");
+
+                    b.Property<int>("FreeMonths")
+                        .HasColumnType("int");
+
+                    b.Property<int>("GatherDays")
+                        .HasColumnType("int");
+
+                    b.Property<DateTime?>("GroupOfTheMonthDecidedThroughUtc")
+                        .HasColumnType("datetime2");
+
+                    b.Property<int>("GroupOfTheMonthMonths")
+                        .HasColumnType("int");
+
+                    b.Property<bool>("IsOpen")
+                        .HasColumnType("bit");
+
+                    b.Property<string>("Key")
+                        .IsRequired()
+                        .HasMaxLength(60)
+                        .HasColumnType("nvarchar(60)");
+
+                    b.Property<int>("MinimumMembers")
+                        .HasColumnType("int");
+
+                    b.Property<int>("MinimumReadingsPerSession")
+                        .HasColumnType("int");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("nvarchar(200)");
+
+                    b.Property<DateTime?>("OpenedUtc")
+                        .HasColumnType("datetime2");
+
+                    b.Property<int>("PointsPerEvent")
+                        .HasColumnType("int");
+
+                    b.Property<int>("PointsPerEvidence")
+                        .HasColumnType("int");
+
+                    b.Property<int>("PointsPerInvestigation")
+                        .HasColumnType("int");
+
+                    b.Property<int>("PointsPerReferral")
+                        .HasColumnType("int");
+
+                    b.Property<int>("PointsPerSession")
+                        .HasColumnType("int");
+
+                    b.Property<int>("ReachableScorePerMember")
+                        .HasColumnType("int");
+
+                    b.Property<int>("ReachedScoreMonths")
+                        .HasColumnType("int");
+
+                    b.Property<int>("Spots")
+                        .HasColumnType("int");
+
+                    b.Property<Guid?>("UpdatedByAppUserId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<int>("WinnerMonths")
+                        .HasColumnType("int");
+
+                    b.Property<int>("Winners")
+                        .HasColumnType("int");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("Key")
+                        .IsUnique();
+
+                    b.ToTable("Promotions");
+                });
+
+            modelBuilder.Entity("Ben.Data.Source.Entities.PromotionEntry", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<Guid>("ClaimedByAppUserId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<DateTime>("ClaimedUtc")
+                        .HasColumnType("datetime2");
+
+                    b.Property<Guid>("CreatedByAppUserId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<DateTime>("DateCreated")
+                        .HasColumnType("datetime2");
+
+                    b.Property<DateTime?>("DateUpdated")
+                        .HasColumnType("datetime2");
+
+                    b.Property<DateTime?>("DayLeftSentUtc")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("DisqualifiedReason")
+                        .HasMaxLength(500)
+                        .HasColumnType("nvarchar(500)");
+
+                    b.Property<DateTime?>("DisqualifiedUtc")
+                        .HasColumnType("datetime2");
+
+                    b.Property<int?>("FinalRank")
+                        .HasColumnType("int");
+
+                    b.Property<decimal?>("FinalScorePerMember")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("decimal(18,2)");
+
+                    b.Property<decimal?>("FinalScoreTotal")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("decimal(18,2)");
+
+                    b.Property<DateTime?>("FreeYearEndsUtc")
+                        .HasColumnType("datetime2");
+
+                    b.Property<DateTime>("GatherEndsUtc")
+                        .HasColumnType("datetime2");
+
+                    b.Property<int>("MembersAtQualifying")
+                        .HasColumnType("int");
+
+                    b.Property<Guid>("OrganizationId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<Guid>("PromotionId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<DateTime?>("QualifiedUtc")
+                        .HasColumnType("datetime2");
+
+                    b.Property<int>("State")
+                        .HasColumnType("int");
+
+                    b.Property<Guid?>("SubscriptionTierIdEarned")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<Guid?>("UpdatedByAppUserId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<DateTime?>("YearEndMonthNoticeSentUtc")
+                        .HasColumnType("datetime2");
+
+                    b.Property<DateTime?>("YearEndWeekNoticeSentUtc")
+                        .HasColumnType("datetime2");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("OrganizationId");
+
+                    b.HasIndex("SubscriptionTierIdEarned");
+
+                    b.HasIndex("PromotionId", "OrganizationId")
+                        .IsUnique();
+
+                    b.HasIndex("PromotionId", "State");
+
+                    b.ToTable("PromotionEntries");
+                });
+
+            modelBuilder.Entity("Ben.Data.Source.Entities.PromotionMember", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<Guid>("AppUserId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<DateTime>("CountedUtc")
+                        .HasColumnType("datetime2");
+
+                    b.Property<Guid>("PromotionEntryId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<Guid>("PromotionId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("AppUserId");
+
+                    b.HasIndex("PromotionEntryId");
+
+                    b.HasIndex("PromotionId", "AppUserId")
+                        .IsUnique();
+
+                    b.ToTable("PromotionMembers");
                 });
 
             modelBuilder.Entity("Ben.Data.Source.Entities.Publication", b =>
@@ -20227,6 +20520,24 @@ namespace Ben.Data.Source.Migrations
                     b.Navigation("UploadFileType");
                 });
 
+            modelBuilder.Entity("Ben.Data.Source.Entities.OrganizationFreeMonths", b =>
+                {
+                    b.HasOne("Ben.Data.Source.Entities.Organization", "Organization")
+                        .WithMany()
+                        .HasForeignKey("OrganizationId")
+                        .OnDelete(DeleteBehavior.NoAction)
+                        .IsRequired();
+
+                    b.HasOne("Ben.Data.Source.Entities.Organization", "SourceOrganization")
+                        .WithMany()
+                        .HasForeignKey("SourceOrganizationId")
+                        .OnDelete(DeleteBehavior.NoAction);
+
+                    b.Navigation("Organization");
+
+                    b.Navigation("SourceOrganization");
+                });
+
             modelBuilder.Entity("Ben.Data.Source.Entities.OrganizationLink", b =>
                 {
                     b.HasOne("Ben.Data.Source.Entities.AppUser", "CreatedByAppUser")
@@ -21082,6 +21393,51 @@ namespace Ben.Data.Source.Migrations
                     b.Navigation("AppUser");
 
                     b.Navigation("Place");
+                });
+
+            modelBuilder.Entity("Ben.Data.Source.Entities.PromotionEntry", b =>
+                {
+                    b.HasOne("Ben.Data.Source.Entities.Organization", "Organization")
+                        .WithMany()
+                        .HasForeignKey("OrganizationId")
+                        .OnDelete(DeleteBehavior.NoAction)
+                        .IsRequired();
+
+                    b.HasOne("Ben.Data.Source.Entities.Promotion", "Promotion")
+                        .WithMany("Entries")
+                        .HasForeignKey("PromotionId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("Ben.Data.Source.Entities.SubscriptionTier", "SubscriptionTierEarned")
+                        .WithMany()
+                        .HasForeignKey("SubscriptionTierIdEarned")
+                        .OnDelete(DeleteBehavior.NoAction);
+
+                    b.Navigation("Organization");
+
+                    b.Navigation("Promotion");
+
+                    b.Navigation("SubscriptionTierEarned");
+                });
+
+            modelBuilder.Entity("Ben.Data.Source.Entities.PromotionMember", b =>
+                {
+                    b.HasOne("Ben.Data.Source.Entities.AppUser", "AppUser")
+                        .WithMany()
+                        .HasForeignKey("AppUserId")
+                        .OnDelete(DeleteBehavior.NoAction)
+                        .IsRequired();
+
+                    b.HasOne("Ben.Data.Source.Entities.PromotionEntry", "PromotionEntry")
+                        .WithMany("Members")
+                        .HasForeignKey("PromotionEntryId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("AppUser");
+
+                    b.Navigation("PromotionEntry");
                 });
 
             modelBuilder.Entity("Ben.Data.Source.Entities.Publication", b =>
@@ -23798,6 +24154,16 @@ namespace Ben.Data.Source.Migrations
                     b.Navigation("Cases");
 
                     b.Navigation("Investigations");
+                });
+
+            modelBuilder.Entity("Ben.Data.Source.Entities.Promotion", b =>
+                {
+                    b.Navigation("Entries");
+                });
+
+            modelBuilder.Entity("Ben.Data.Source.Entities.PromotionEntry", b =>
+                {
+                    b.Navigation("Members");
                 });
 
             modelBuilder.Entity("Ben.Data.Source.Entities.Publication", b =>

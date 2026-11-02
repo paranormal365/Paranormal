@@ -79,5 +79,12 @@ namespace Ben.Data.Source.Entities
 
         /// <summary>Who issued the link, so a group can see whose invitation let somebody in.</summary>
         public Guid? JoinTokenCreatedByAppUserId { get; set; }
+
+        /// <summary>
+        /// The group that told this one about IsHaunted, named by its admins (11/02/2026). When this group first
+        /// really pays, the referrer earns a free month. Fixed once this group has paid.
+        /// </summary>
+        public Guid? ReferredByOrganizationId { get; set; }
+        public DateTime? ReferredAtUtc { get; set; }
     }
 }

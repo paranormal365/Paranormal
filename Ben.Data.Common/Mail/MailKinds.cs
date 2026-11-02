@@ -425,6 +425,12 @@ public static class MailKinds
         ["AppUsers", "Organizations"],
         CanDecline: true);
 
+    public static readonly MailKindInfo FoundingGroups = new(
+        "founding-groups", "The founding groups promotion",
+        "A group's news in the founding groups promotion: its week, its free year, prizes and free months.",
+        ["AppUsers", "Organizations"],
+        CanDecline: true);
+
     public static readonly MailKindInfo EventCreditExpiring = new(
         "event-credit-expiring", "An event credit expires soon",
         "The warning before a bought credit runs out.",
@@ -518,7 +524,7 @@ public static class MailKinds
         SessionMoved, SessionCancelled, SessionPromoted,
         EventThankYou, EventMissedYou, EventResults, StaffInvite, GuestRemoved, AppealAnswered, HoldYourPlaces,
         BookingsArrived, BookingsDigest,
-        PaymentReceipt, SubscriptionLapsing, PlanChanged, EventCreditExpiring, EventRunMonthExpiring,
+        PaymentReceipt, SubscriptionLapsing, PlanChanged, EventCreditExpiring, EventRunMonthExpiring, FoundingGroups,
         VenueClaimCode,
         StoreOrderConfirmation, StoreOrderPlaced, StoreOrderLink, StoreOrderShipped, StoreOrderRefunded, StoreLowStock,
         StoreSellerParcelToShip,

@@ -176,6 +176,10 @@ namespace Ben.Data.Source.Context
         public virtual DbSet<OutboxEmailAttachment> OutboxEmailAttachments { get; set; }
         public virtual DbSet<EventCredit> EventCredits { get; set; }
         public virtual DbSet<EventRunMonth> EventRunMonths { get; set; }
+        public virtual DbSet<Promotion> Promotions { get; set; }
+        public virtual DbSet<PromotionEntry> PromotionEntries { get; set; }
+        public virtual DbSet<PromotionMember> PromotionMembers { get; set; }
+        public virtual DbSet<OrganizationFreeMonths> OrganizationFreeMonths { get; set; }
         public virtual DbSet<TourGuide> TourGuides { get; set; }
         public virtual DbSet<TourSocialLink> TourSocialLinks { get; set; }
         public virtual DbSet<MessagePoll> MessagePolls { get; set; }
@@ -2013,6 +2017,46 @@ namespace Ben.Data.Source.Context
             modelBuilder.Entity<EventCredit>()
                 .HasOne(c => c.UpdatedByAppUser).WithMany()
                 .HasForeignKey(c => c.UpdatedByAppUserId).OnDelete(DeleteBehavior.NoAction);
+
+            // ── The founding groups promotion, and free months (11/02/2026) ──
+            modelBuilder.Entity<Promotion>().HasIndex(p => p.Key).IsUnique();
+            modelBuilder.Entity<Promotion>().Property(p => p.Key).HasMaxLength(60);
+            modelBuilder.Entity<Promotion>().Property(p => p.Name).HasMaxLength(200);
+            modelBuilder.Entity<PromotionEntry>().HasIndex(e => new { e.PromotionId, e.OrganizationId }).IsUnique();
+            modelBuilder.Entity<PromotionEntry>().HasIndex(e => new { e.PromotionId, e.State });
+            modelBuilder.Entity<PromotionEntry>().Property(e => e.DisqualifiedReason).HasMaxLength(500);
+            modelBuilder.Entity<PromotionEntry>().Property(e => e.FinalScorePerMember).HasPrecision(18, 2);
+            modelBuilder.Entity<PromotionEntry>().Property(e => e.FinalScoreTotal).HasPrecision(18, 2);
+            modelBuilder.Entity<PromotionEntry>()
+                .HasOne(e => e.Promotion).WithMany(p => p.Entries)
+                .HasForeignKey(e => e.PromotionId).OnDelete(DeleteBehavior.Cascade);
+            modelBuilder.Entity<PromotionEntry>()
+                .HasOne(e => e.Organization).WithMany()
+                .HasForeignKey(e => e.OrganizationId).OnDelete(DeleteBehavior.NoAction);
+            modelBuilder.Entity<PromotionEntry>()
+                .HasOne(e => e.SubscriptionTierEarned).WithMany()
+                .HasForeignKey(e => e.SubscriptionTierIdEarned).OnDelete(DeleteBehavior.NoAction);
+            // Nobody is counted twice in one promotion, held by the database (Ben's rule 4).
+            modelBuilder.Entity<PromotionMember>().HasIndex(m => new { m.PromotionId, m.AppUserId }).IsUnique();
+            modelBuilder.Entity<PromotionMember>()
+                .HasOne(m => m.PromotionEntry).WithMany(e => e.Members)
+                .HasForeignKey(m => m.PromotionEntryId).OnDelete(DeleteBehavior.Cascade);
+            modelBuilder.Entity<PromotionMember>()
+                .HasOne(m => m.AppUser).WithMany()
+                .HasForeignKey(m => m.AppUserId).OnDelete(DeleteBehavior.NoAction);
+            // A month is given once, whatever the job does: the key says what earned it.
+            modelBuilder.Entity<OrganizationFreeMonths>().HasIndex(m => m.Key).IsUnique();
+            modelBuilder.Entity<OrganizationFreeMonths>().HasIndex(m => new { m.OrganizationId, m.AppliedUtc });
+            modelBuilder.Entity<OrganizationFreeMonths>().Property(m => m.Key).HasMaxLength(120);
+            modelBuilder.Entity<OrganizationFreeMonths>().Property(m => m.RevokedReason).HasMaxLength(500);
+            modelBuilder.Entity<OrganizationFreeMonths>().Property(m => m.Note).HasMaxLength(500);
+            modelBuilder.Entity<OrganizationFreeMonths>()
+                .HasOne(m => m.Organization).WithMany()
+                .HasForeignKey(m => m.OrganizationId).OnDelete(DeleteBehavior.NoAction);
+            modelBuilder.Entity<OrganizationFreeMonths>()
+                .HasOne(m => m.SourceOrganization).WithMany()
+                .HasForeignKey(m => m.SourceOrganizationId).OnDelete(DeleteBehavior.NoAction);
+            modelBuilder.Entity<Organization>().HasIndex(o => o.ReferredByOrganizationId);
 
             // ── Extra months for a show's run (10/24/2026) ─────────────────
             // Never a kind of credit: publishing reads EventCredits only. Owned by a group OR a person,
