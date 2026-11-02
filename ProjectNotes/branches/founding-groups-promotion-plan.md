@@ -77,6 +77,21 @@ Branch: `feature/founding-groups` (from develop). Plan only; nothing built yet.
 - [ ] 3.3 On the group's page during its week: a countdown, members who count, members who don't and why, the plan
       that count would earn now, and a join link to share.
 
+## Phase 3b — getting it seen (Ben, 11/02)
+- [ ] 3b.1 **Rules page** `/founding-groups/rules`, linked from everywhere below: who can enter, the plans by size,
+      the week, who counts as a member, the score and its weights, the timing, every prize, referrals, how ties go,
+      disqualification, and what happens when the free year ends. Plain words; Ben reviews before opening.
+- [ ] 3b.2 **Pricing page notice**: a banner above the plans, "Free for a year: the first 10 groups", with spots left
+      and links to the promotion and its rules.
+- [ ] 3b.3 **Home page shout-out**: a band near the top with the spots-left count, a link to claim, and an animation
+      to draw the eye: ten ghost-lantern icons, lit while a spot is open and going dark as each is taken, with a soft
+      glow and a counter that ticks when the number changes. Also a slide in the home ad player.
+- [ ] 3b.4 Animation as CSS/SVG, not a GIF: sharp at any size, a few KB, matches the dark Signal look, and still
+      when the visitor's device asks for reduced motion.
+- [ ] 3b.5 All three appear only while claims are open, and update themselves when the last spot goes or the
+      window closes. Nothing shows while the promotion is switched off.
+- [ ] 3b.6 Phone width checked; screenshots for help; Ben approves the look before it opens.
+
 ## Phase 4 — the end of the week (a scheduled job)
 - [ ] 4.1 At the week's end: 2+ counted members → Qualified; the plan for that count, free for 12 months; letter to
       the admins. Fewer than 2 → Released, spot back, letter saying so.
