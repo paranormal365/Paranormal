@@ -1,6 +1,32 @@
 # The founding groups promotion, and group-to-group referrals (plan, 11/02/2026)
 
-Branch: `feature/founding-groups` (from develop). Plan only; nothing built yet.
+Branch: `feature/founding-groups` (from develop).
+
+## Status (11/02/2026): built
+
+- **Data:** `Promotion`, `PromotionEntry`, `PromotionMember` (unique per person per promotion), `OrganizationFreeMonths`
+  (unique key per gift), `Organization.ReferredByOrganizationId`. Migration `FoundingGroups`.
+- **Rules:** `Services/Promotions/FoundingGroups.cs` (claim, who counts and why not, the week's end, the $0 free year,
+  growing free), `FoundingGroupsScore.cs` (per member; window-bounded), `FreeMonths.cs` (give once, add to a running
+  plan's end, referrals earned 14 days after the referred group's first plan payment).
+- **Job:** `FoundingGroupsJob` (every pass: count, end weeks, grow, group of the month, years' end + reachable score,
+  decide the top three, year-end letters, referral months, apply waiting months). Letters via bell + email
+  (`MailKinds.FoundingGroups`).
+- **API:** `api/public/founding-groups`, `api/organizations/{id}/founding-group[/claim]`, `…/referral[/groups]`,
+  `api/admin/founding-groups` (+ disqualify, give/take back months).
+- **Pages:** `/founding-groups`, `/founding-groups/rules`, `/founding-groups/mine`, `/organizations/{id}/founding-group`,
+  home shout-out (`FoundingGroupsShoutOut`, CSS/SVG lanterns), pricing notice, billing `GroupReferralCard`,
+  `/admin/founding-groups` (Billing menu). All silent while the promotion is off.
+- **Tests:** `Ben.Web.Tests/Services/FoundingGroupsTests.cs` (20, SQLite; growth, referral wait and "another group"
+  each checked against the code with the rule switched off); Playwright `Tests/FoundingGroupsTests.cs`;
+  captures `founding-groups.png` (getting-started) and `founding-group.png` (organization-administration).
+
+**Not done:** the referrer isn't asked at group creation (it's on the billing page and the founding group page);
+the home ad player has no promotion slide (it plays videos; one would have to be made); no card-on-file before a free
+year ends (a group chooses its plan on the billing page, with the usual two-week grace).
+
+**Deploy:** migration `FoundingGroups` (idempotent script, run twice on a reset copy). Then web API + website.
+The promotion starts switched off; Ben opens it from Admin → Billing → Founding Groups.
 
 ## Ben's rules (11/02/2026)
 

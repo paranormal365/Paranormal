@@ -160,16 +160,16 @@
                     <ul class="list-unstyled mb-0">
                         @foreach (var m in s.Members)
                         {
-                            <li class="py-1" data-member="@m.AppUserId">
-                                @if (m.Counts)
-                                {
-                                    <BenIcon Name="check" Class="text-success me-1" /><span>@m.Name</span>
-                                }
-                                else
-                                {
-                                    <BenIcon Name="minus" Class="text-secondary me-1" /><span>@m.Name</span>
-                                    <span class="text-secondary small"> @(m.WhyNot ?? "will count shortly")</span>
-                                }
+                            <li class="d-flex align-items-center gap-2 py-1" data-member="@m.AppUserId">
+                                <span class="flex-shrink-0">
+                                    @if (m.Counts) { <BenIcon Name="check" Class="text-success" /> }
+                                    else { <BenIcon Name="minus" Class="text-secondary" /> }
+                                </span>
+                                <span style="min-width:0; overflow-wrap:anywhere;">
+                                    @m.Name
+                                    @if (m.Counts) { <span class="text-success small ms-1">counts</span> }
+                                    else { <span class="text-secondary small ms-1">@(m.WhyNot ?? "will count shortly")</span> }
+                                </span>
                             </li>
                         }
                     </ul>

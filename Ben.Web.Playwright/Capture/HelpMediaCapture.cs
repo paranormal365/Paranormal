@@ -3283,6 +3283,11 @@ public sealed class HelpMediaCapture : BenTestBase
             var owner = await ApiAsAsync(await ApiTokenAsync(UserEmail, UserPassword));
             await owner.PostAsync($"/api/organizations/{orgId}/founding-group/claim");
 
+            // The home page's shout-out, for visitors (getting-started).
+            await GoAsync("/");
+            await Expect(Page.Locator("[data-testid='founding-shout']")).ToBeVisibleAsync(new() { Timeout = 30_000 });
+            await ShootAsync("getting-started", "founding-groups.png", selector: "[data-testid='founding-shout']", proves: "spots left");
+
             await LoginAsync(UserEmail, UserPassword);
             await GoAsync($"/organizations/{orgId}/founding-group");
             await Expect(Page.Locator("#founding-members")).ToBeVisibleAsync(new() { Timeout = 30_000 });
