@@ -34,6 +34,8 @@ day-by-day account of building it would say nothing to anyone using it now.
 ## Unreleased
 
 - The founding groups: the first groups that gather their members in a week get the plan their size earns, free for a year, and can grow for free. The home page and Pricing say how many spots are left, and the promotion has its own page and rules.
+- Only paranormal investigation groups can claim a founding group spot. The Founding groups page offers a spot only
+  for your investigation groups, and its rules say ghost walking tours, event providers and haunted properties can't take part.
 - Founding groups are scored on their own twelve months, per member, with a group of the month, a score every group can reach, and a second free year for the top three.
 - A group can name the group that told it about IsHaunted; when it first pays for its plan, that group earns a free month. Free months show on the billing page.
 

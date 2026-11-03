@@ -204,7 +204,8 @@
         if (!firstRender) return;
         if (!await UserState.WaitUntilAuthReadyAsync(RendererInfo.IsInteractive)) return;
         _signedIn = UserState.IsAuthenticated;
-        if (_signedIn) _groups = [.. (await Client.GetMyMembershipOrganizationsAsync()).Items];
+        // Only investigation groups can claim a spot (Ben, 11/03/2026), so a tour, event or property is never offered one.
+        if (_signedIn) _groups = [.. (await Client.GetMyMembershipOrganizationsAsync()).Items.Where(g => g.Kind == OrganizationKind.InvestigationGroup)];
         StateHasChanged();
     }
 
