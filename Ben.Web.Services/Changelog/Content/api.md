@@ -44,9 +44,16 @@ belongs there; this is for the part underneath.
 - The build report says which version is running.
 - The menu's numbers are counted by the service instead of being sent in full, so pages stay quick
   as the site grows.
+- Room scans from a LiDAR iPhone are kept with the place, not the session: the first scan of a room
+  becomes its scan, later ones become new versions, comparisons or offers for the room's keeper to
+  accept or decline, and the next person at the building is told while somebody is scanning a room.
+- A session can carry a room comparison (what moved, went missing or appeared, with a picture of each)
+  and the figures and unexplained shapes the person map saw, and its timeline names each of them.
+- A person's room scans count against their storage allowance.
 
 ### Administration
 
+- A SuperAdmin can name who keeps a place's room scans; a verified claim on the venue ends that.
 - Any request that takes more than five seconds is recorded in the error log, with how long it took.
 - Saving a person's site roles works again. Since early September every save was refused with a
   server error.

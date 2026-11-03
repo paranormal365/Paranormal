@@ -35,6 +35,12 @@ it is hidden from everybody else, but still takes its number. No other sub-headi
   where it happened rather than where the phone was when it was sent.
 - In a session's review, a recording that starts while another is still playing takes over when it begins.
   Before, the one playing lost its last second and the next started a second early.
+- On an iPhone with LiDAR, Scan this room on the session screen keeps a 3D model of the room with the
+  place, and View the scan lets anyone walk through it, painted from the scan's own pictures.
+- Compare this room scans it again and lists what moved, went missing or appeared since the room's scan,
+  each with a picture, and shows them pinned in the room.
+- Person map draws a stick figure over anyone in view and outlines person-sized shapes the room's scan
+  doesn't have, keeping a picture of each with the session's video.
 
 ## 1.1.7 · 2026-10-24
 
