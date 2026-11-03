@@ -50,6 +50,11 @@ belongs there; this is for the part underneath.
 - A session can carry a room comparison (what moved, went missing or appeared, with a picture of each)
   and the figures and unexplained shapes the person map saw, and its timeline names each of them.
 - A person's room scans count against their storage allowance.
+- The founding groups promotion: anybody can ask how many spots are left, a group can see where it
+  stands and claim its spot, and its owners are told by message and email as its week, its months and
+  its year go by.
+- A group can name the group that told it about IsHaunted, and that group earns a free month when the
+  new group first pays.
 
 ### Administration
 
