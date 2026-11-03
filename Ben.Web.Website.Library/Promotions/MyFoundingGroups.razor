@@ -1,0 +1,47 @@
+@page "/founding-groups/mine"
+@namespace Ben.Web.Website.Library.Promotions
+@inject IBenAdminClient Client
+@inject IBenUserState UserState
+@inject NavigationManager Nav
+
+<PageTitle>Your founding groups — IsHaunted</PageTitle>
+
+@* Where the founding groups' letters link (11/02/2026): each of your groups, and its place in the promotion. *@
+
+<div class="container-fluid px-3 py-4" style="max-width:800px; margin:0 auto;">
+    <div class="text-secondary small"><a href="/founding-groups">Founding groups</a></div>
+    <h1 class="h3 mb-3">Your groups and the founding groups</h1>
+
+    @if (_groups is null)
+    {
+        <BenLoaderOverlay Visible="true" Text="Loading…" />
+    }
+    else if (_groups.Count == 0)
+    {
+        <p>You aren't in a group yet. <a href="/organizations/new">Start one</a> to take part.</p>
+    }
+    else
+    {
+        <div class="list-group" id="founding-mine">
+            @foreach (var g in _groups)
+            {
+                <a class="list-group-item list-group-item-action" href="@($"/organizations/{g.OrganizationId}/founding-group")">@g.Name</a>
+            }
+        </div>
+    }
+</div>
+
+@code {
+    private List<MyMembershipOrgItem>? _groups;
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (!firstRender) return;
+        if (!await UserState.WaitUntilAuthReadyAsync(RendererInfo.IsInteractive)) return;
+        if (!UserState.IsAuthenticated) { Nav.NavigateTo("/login?returnUrl=%2Ffounding-groups%2Fmine"); return; }
+        List<MyMembershipOrgItem> groups = [.. (await Client.GetMyMembershipOrganizationsAsync()).Items];
+        _groups = groups;
+        if (groups.Count == 1) { Nav.NavigateTo($"/organizations/{groups[0].OrganizationId}/founding-group"); return; }
+        StateHasChanged();
+    }
+}

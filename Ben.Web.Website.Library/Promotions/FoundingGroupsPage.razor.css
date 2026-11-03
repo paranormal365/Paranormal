@@ -1,0 +1,17 @@
+.founding-hero {
+    padding: 1.5rem;
+    border-radius: 1rem;
+    border: 1px solid rgba(255, 196, 92, .35);
+    background:
+        radial-gradient(120% 140% at 100% 0%, rgba(255, 196, 92, .16), transparent 60%),
+        var(--bs-tertiary-bg, #1b1e27);
+}
+
+.founding-hero__title {
+    font-size: clamp(1.6rem, 4vw, 2.4rem);
+    margin: .25rem 0 .75rem;
+}
+
+.founding-steps li {
+    margin-bottom: .5rem;
+}

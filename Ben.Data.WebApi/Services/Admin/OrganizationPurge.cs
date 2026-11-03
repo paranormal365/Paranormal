@@ -391,6 +391,15 @@ public sealed class OrganizationPurge
             await db.EventCredits.Where(x => x.OwnerOrganizationId == organizationId).ExecuteDeleteAsync(ct);
             // Extra months for a show's run, the same way: the group paid; the ledger keeps the money.
             await db.EventRunMonths.Where(x => x.OwnerOrganizationId == organizationId).ExecuteDeleteAsync(ct);
+            // The founding groups promotion and free months (11/02/2026): the group's own entry and months go; a
+            // month it earned another group stays theirs, with the source forgotten; a group it referred keeps going
+            // without a referrer. Members counted for the entry cascade with it.
+            await db.PromotionEntries.Where(x => x.OrganizationId == organizationId).ExecuteDeleteAsync(ct);
+            await db.OrganizationFreeMonths.Where(x => x.OrganizationId == organizationId).ExecuteDeleteAsync(ct);
+            await db.OrganizationFreeMonths.Where(x => x.SourceOrganizationId == organizationId)
+                .ExecuteUpdateAsync(u => u.SetProperty(x => x.SourceOrganizationId, (Guid?)null), ct);
+            await db.Organizations.Where(x => x.ReferredByOrganizationId == organizationId)
+                .ExecuteUpdateAsync(u => u.SetProperty(x => x.ReferredByOrganizationId, (Guid?)null), ct);
             // Hosted events (item 235) block the deletion the same way a tour does: they point at
             // the group and at a place, both NoAction. They go after the calendar rows above,
             // because the umbrella row names its event. The nights cascade from the event, so

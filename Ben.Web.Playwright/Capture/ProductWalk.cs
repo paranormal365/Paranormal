@@ -657,7 +657,7 @@ public sealed class ProductWalk : BenTestBase
                      "/admin/users", "/admin/cases", "/admin/investigations", "/admin/events", "/admin/event-credits",
                      "/admin/pricing",
                      "/admin/org-subscriptions", "/admin/subscription-tiers", "/admin/member-seats", "/admin/coupons",
-                     "/admin/billing-ledger", "/admin/tax-rates", "/admin/referrals", "/admin/org-ads", "/admin/roles",
+                     "/admin/billing-ledger", "/admin/tax-rates", "/admin/referrals", "/admin/founding-groups", "/admin/org-ads", "/admin/roles",
                      "/admin/site-settings", "/admin/rate-limits", "/admin/mail", "/admin/email-templates",
                      "/admin/audit-log", "/admin/error-log",
                      "/admin/support-tickets", "/admin/feed-reports", "/admin/test-posts", "/admin/venue-claims",

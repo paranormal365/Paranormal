@@ -57,6 +57,7 @@ public sealed class AuthReadyOnRoutablePagesTests
         ["PublicEventDetail.razor"]     = "Public event page.",
         ["PublicInvestigationDetailPage.razor"] = "Public investigation page.",
         ["Login.razor"]                 = "The sign-in page itself.",
+        ["FoundingGroupsRules.razor"]   = "The founding groups' rules, for visitors before they sign up (11/02/2026).",
         ["SignUp.razor"]                = "Creating an account.",
         ["ConfirmEmail.razor"]          = "Reached from an email link, signed out.",
         ["InviteAccept.razor"]          = "Reached from an invitation link, possibly signed out.",

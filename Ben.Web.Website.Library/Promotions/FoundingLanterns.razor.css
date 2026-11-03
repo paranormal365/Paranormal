@@ -1,0 +1,80 @@
+.lanterns {
+    display: flex;
+    flex-wrap: wrap;
+    gap: .5rem;
+    align-items: flex-end;
+}
+
+.lantern {
+    width: 2.4rem;
+    height: 3.6rem;
+    overflow: visible;
+}
+
+.lanterns--compact .lantern {
+    width: 1.4rem;
+    height: 2.1rem;
+}
+
+.lantern__handle {
+    fill: none;
+    stroke: var(--bs-secondary-color, #8a8fa3);
+    stroke-width: 1.6;
+}
+
+.lantern__cap,
+.lantern__base {
+    fill: var(--bs-secondary-color, #8a8fa3);
+}
+
+.lantern__glass {
+    fill: rgba(255, 255, 255, .05);
+    stroke: var(--bs-secondary-color, #8a8fa3);
+    stroke-width: 1.2;
+}
+
+.lantern--lit .lantern__glass {
+    fill: rgba(255, 196, 92, .22);
+    stroke: #ffc45c;
+}
+
+.lantern__flame {
+    fill: transparent;
+}
+
+.lantern--lit .lantern__flame {
+    fill: #ffc45c;
+    transform-origin: 16px 32px;
+    animation: lantern-flicker 2.4s ease-in-out infinite;
+    animation-delay: calc(var(--i) * -0.37s);
+}
+
+.lantern--lit {
+    filter: drop-shadow(0 0 .45rem rgba(255, 196, 92, .65));
+    animation: lantern-sway 5s ease-in-out infinite;
+    animation-delay: calc(var(--i) * -0.6s);
+    transform-origin: 50% 0;
+}
+
+.lantern--dark {
+    opacity: .45;
+}
+
+@keyframes lantern-flicker {
+    0%, 100% { transform: scale(1, 1); opacity: 1; }
+    20% { transform: scale(.92, 1.06); opacity: .85; }
+    45% { transform: scale(1.04, .95); opacity: 1; }
+    70% { transform: scale(.96, 1.03); opacity: .9; }
+}
+
+@keyframes lantern-sway {
+    0%, 100% { transform: rotate(-2deg); }
+    50% { transform: rotate(2deg); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .lantern--lit,
+    .lantern--lit .lantern__flame {
+        animation: none;
+    }
+}

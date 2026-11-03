@@ -82,6 +82,8 @@
 </PageHero>
 
 <div class="home-band">
+    @* The founding groups promotion (Ben, 11/02/2026), above the plans while spots are open. *@
+    <Ben.Web.Website.Library.Promotions.FoundingGroupsNotice />
     <BenListState TItem="PublicSubscriptionTier" Result="@_tiersResult" Loading="@_loading"
                   EmptyText="Pricing is being updated — check back shortly" OnRetry="@LoadAsync">
         <div class="row g-4 justify-content-center pricing-bands">

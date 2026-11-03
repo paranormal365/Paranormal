@@ -33,6 +33,10 @@ day-by-day account of building it would say nothing to anyone using it now.
 
 ## Unreleased
 
+- The founding groups: the first groups that gather their members in a week get the plan their size earns, free for a year, and can grow for free. The home page and Pricing say how many spots are left, and the promotion has its own page and rules.
+- Founding groups are scored on their own twelve months, per member, with a group of the month, a score every group can reach, and a second free year for the top three.
+- A group can name the group that told it about IsHaunted; when it first pays for its plan, that group earns a free month. Free months show on the billing page.
+
 - A session with more than one recording plays straight from one to the next, in Safari too. The first
   used to lose its last second, and Safari could leave a gap of half a second or more.
 - Pressing Play on a session over a slow connection starts the clock at once, instead of holding it until
@@ -79,6 +83,7 @@ day-by-day account of building it would say nothing to anyone using it now.
 
 ### Administration
 
+- Founding Groups, under Billing: open the promotion, set its numbers, see every group in it, take a group out, and give or take back free months.
 - Making an event's findings public or private, and choosing what shows on the place's page, is recorded in the audit log.
 - The dashboard shows whether the site can read recordings made on the phone, and what is missing when it can't.
 - The site finds its recording tool in its own tools folder without a setting, and the dashboard says which folder when it is missing.

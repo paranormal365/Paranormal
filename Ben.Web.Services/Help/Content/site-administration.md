@@ -1153,6 +1153,29 @@ counted, and when that happens the owed figure shows a **partial** badge, so a l
 mistaken for a final one. Recording a payout fills in the outstanding balance for you, and it goes
 on the ledger like everything else.
 
+## Founding groups
+
+**Founding Groups**, under Billing, runs the founding groups promotion: the first groups that gather
+enough members in their week get the plan their size earns, free for a year. Nothing about it shows on
+the site, not the page, the pricing notice or the home page's shout-out, until you turn on **Open** and
+save. The first time you open it, the claim window starts; claims stop when the spots fill or the window
+ends, whichever comes first.
+
+- **The numbers** are all on this page: the spots, the claim window, the days a group has to gather
+  members, the fewest members, the free months, the prizes, and the points for each kind of activity.
+  The promotion's page and its rules read them, so changing one changes what visitors are told. Change
+  them before you open it where you can: a change applies from then on.
+- **Groups** lists every group that has claimed a spot, with its state, how many members count, its
+  plan, and its score per member so far. **Take out** removes a group from the promotion with a reason
+  it's told; its plan runs to the end of its current period, and its members can be counted for
+  another group. **Give months** adds free months to a group's plan, with a note it sees.
+- **Free months** lists every month earned or given: referrals, groups of the month, reaching the score,
+  second years, and yours. **Take back** works only on months not yet added to a plan.
+
+Free months are added to a plan when it's running: a free plan runs longer, and a paid plan's next
+renewal comes later. A group with no plan running keeps them until it has one. A referral month is
+earned when the referred group's first payment for its plan has stood for two weeks.
+
 ## The store
 
 The store sells scientific gear for investigations (EMF meters, spirit boxes, recorders) to anyone,
