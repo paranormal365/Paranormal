@@ -2745,7 +2745,8 @@ earns, free for a year. The details are on the **Founding groups** page, linked 
 the Pricing page, and its rules page.
 
 1. **Claim a spot.** Open **Founding groups**, choose your group, and press **Claim a spot and start our
-   week**. Anyone who can change the group's settings can claim it.
+   week**. Anyone who can change the group's settings can claim it. Only investigation groups can take
+   part: ghost walking tours, event providers and haunted properties have plans of their own.
 2. **Gather your members.** Your group's page shows the countdown, who counts, and why anyone doesn't
    yet: a member counts once they've confirmed their email address, and only if they're new to
    IsHaunted or not in another group. Each person counts for one group only. Use the invitation link on

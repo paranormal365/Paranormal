@@ -53,6 +53,8 @@ belongs there; this is for the part underneath.
 - The founding groups promotion: anybody can ask how many spots are left, a group can see where it
   stands and claim its spot, and its owners are told by message and email as its week, its months and
   its year go by.
+- Only an investigation group can claim a founding group spot; a haunted property was let through before. The list of
+  your own groups says what kind each one is.
 - A group can name the group that told it about IsHaunted, and that group earns a free month when the
   new group first pays.
 

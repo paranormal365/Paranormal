@@ -92,11 +92,12 @@ public class OrganizationMembershipController : BenControllerBase
     {
         var appUserId = GetCurrentUserIdOrThrow();
         var organizations = await _organizationSecurityService.GetMembershipOrganizationsAsync(appUserId, cancellationToken);
-        return Ok(organizations.Select(o => new MyMembershipOrganizationResponse(o.Id, o.Name)));
+        return Ok(organizations.Select(o => new MyMembershipOrganizationResponse(o.Id, o.Name, o.Kind)));
     }
 
-    /// <summary>One row of the caller's own groups, shaped for a navigation link.</summary>
-    public sealed record MyMembershipOrganizationResponse(Guid OrganizationId, string Name);
+    /// <summary>One row of the caller's own groups, shaped for a navigation link. The kind lets a page
+    /// offer only the groups something applies to, such as the founding groups' claim.</summary>
+    public sealed record MyMembershipOrganizationResponse(Guid OrganizationId, string Name, Ben.Data.Common.Enums.OrganizationKind Kind);
 
     /// <summary>
     /// What the caller may see in one group — the UI's mirror of the Phase-D gates (item 156).

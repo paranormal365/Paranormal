@@ -63,8 +63,10 @@ public static class FoundingGroups
         var org = await db.Organizations.AsNoTracking()
             .Where(o => o.Id == organizationId).Select(o => new { o.Name, o.Kind }).FirstOrDefaultAsync(ct);
         if (org is null) return "That group couldn't be found.";
-        if (SubscriptionTierResolver.IsBusinessKind(org.Kind))
-            return "Tour businesses have a plan of their own, so they can't take part.";
+        // Investigation groups only (Ben, 11/03/2026): walking tours, event providers and haunted
+        // properties are businesses with plans of their own, so none of them can take a free spot.
+        if (org.Kind != OrganizationKind.InvestigationGroup)
+            return "Only paranormal investigation groups can take part. Tours, events and haunted properties have plans of their own.";
 
         if (await db.PromotionEntries.AnyAsync(e => e.PromotionId == p.Id && e.OrganizationId == organizationId, ct))
             return "This group has already taken part.";

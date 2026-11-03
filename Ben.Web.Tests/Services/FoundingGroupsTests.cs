@@ -41,11 +41,11 @@ public sealed class FoundingGroupsTests
             return id;
         }
 
-        public async Task<Guid> GroupAsync(string name, Guid owner)
+        public async Task<Guid> GroupAsync(string name, Guid owner, OrganizationKind kind = OrganizationKind.InvestigationGroup)
         {
             var id = Guid.NewGuid();
             await using var db = await Db();
-            db.Organizations.Add(new Organization { Id = id, Name = name, UrlName = $"g{id:N}", DateCreated = Start, CreatedByAppUserId = owner });
+            db.Organizations.Add(new Organization { Id = id, Name = name, UrlName = $"g{id:N}", Kind = kind, DateCreated = Start, CreatedByAppUserId = owner });
             await db.SaveChangesAsync();
             await JoinAsync(id, owner, OrganizationMemberRole.Owner);
             return id;
@@ -145,6 +145,26 @@ public sealed class FoundingGroupsTests
         var p = await FoundingGroups.GetAsync(db, default);
 
         Assert.Equal("The founding groups promotion isn't open.", await FoundingGroups.WhyCantClaimAsync(db, p, org, owner, Start, default));
+    }
+
+    [Theory]
+    [InlineData(OrganizationKind.GhostWalkingTour)]
+    [InlineData(OrganizationKind.PublicEventProvider)]
+    [InlineData(OrganizationKind.HauntedProperty)]
+    public async Task Only_an_investigation_group_can_claim_a_spot(OrganizationKind kind)
+    {
+        await using var w = await CreateAsync();
+        var p = await w.OpenAsync();
+        var owner = await w.PersonAsync("o");
+        var business = await w.GroupAsync("b", owner, kind);
+        await using var db = await w.Db();
+
+        Assert.StartsWith("Only paranormal investigation groups can take part.",
+            await FoundingGroups.WhyCantClaimAsync(db, p, business, owner, Start, default));
+
+        // An investigation group in the same promotion still can.
+        var founder = await w.PersonAsync("f");
+        await w.ClaimAsync(await w.GroupAsync("i", founder), founder);
     }
 
     [Fact]

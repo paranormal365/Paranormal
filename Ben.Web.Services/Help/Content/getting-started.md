@@ -40,7 +40,8 @@ same clock, then sends the whole night to your group's case.
 While it's running, the first groups that gather their members in a week get the plan their size
 earns, free for a year. The home page and the Pricing page say how many spots are left; open
 **Founding groups** to see how it works, the prizes and the leaderboard, and its **rules** for every
-detail. To take part, start your group, then claim a spot from the Founding groups page.
+detail. To take part, start your investigation group, then claim a spot from the Founding groups page.
+Tours, events and haunted properties have plans of their own and can't take part.
 
 ![The founding groups on the home page: a lantern for each spot still open](/help/media/getting-started/founding-groups.png)
 

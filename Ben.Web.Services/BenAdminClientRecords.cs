@@ -831,7 +831,7 @@ public sealed record SavePlaceRoomRequest(
     string? BedNote = null,
     bool    ClearCapacity = false);
 
-public sealed record MyMembershipOrgItem(Guid OrganizationId, string Name);
+public sealed record MyMembershipOrgItem(Guid OrganizationId, string Name, OrganizationKind Kind = OrganizationKind.InvestigationGroup);
 
 /// <summary>One of my groups, and whether it may name me on its public pages (backlog 256).</summary>
 public sealed record MyPublicListing(Guid OrganizationId, string OrganizationName, bool ShowOnPublicPages);
