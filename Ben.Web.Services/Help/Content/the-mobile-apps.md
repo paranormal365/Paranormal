@@ -267,8 +267,8 @@ Rooms you've already used in this session appear first in the list, so walking a
 house is one tap per room instead of typing names again in the dark. You can stop naming rooms at
 any time; readings keep their position and just stop being tied to a room.
 
-When you publish the session to a public place's archive, you can also say which of the place's rooms
-the session was in. See *Which room it was in*, below.
+Once the session is published to a public place's archive, you can also say which of the place's rooms
+the whole session was in. See *Which room it was in*, below.
 
 ### Marking, and setting the level things get marked at
 
@@ -670,8 +670,6 @@ way in this field to tell those two apart.
    same cave's name slightly differently would create two.
 4. Nothing nearby? Type the place's name, and it will still be checked against existing records
    before a new one is created.
-5. Once it's published, the app asks **Which room?** Tap one of the place's rooms, or type the
-   room's name and tap **Save**. You can skip this and add the room later on the website.
 
 ### Which room it was in
 
@@ -683,9 +681,9 @@ so you can read every night in Room 217 together. You choose the room from these
 - **Any other room**, typed in. If you type the name of one of the place's rooms, the session goes
   in that room.
 
-To add or change the room later, open **My field sessions** on the website. The **Room** column
-says *Say which*, or the room's name. Tap it to open the session, choose a room, or tap **No room** to
-clear it.
+To say which room, open **My field sessions** on the website. The **Room** column says *Say which*,
+or the room's name. Tap it to open the session, then choose a room, type one and tap **Save**, or tap
+**No room** to clear it.
 
 This is the room for the whole session. The room you tap while recording, described above, is
 stamped on each reading as it happens, and stays as it was.
