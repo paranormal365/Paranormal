@@ -227,7 +227,7 @@ figcaption { color: var(--faint); font-size: 8.4pt; margin-top: .07in; }
     <h1>Everything <span class="accent-text">IsHaunted</span> does.</h1>
     <p class="lede">The complete product documentation — every screen, rule and safeguard, written for the people who use it.</p>
   </div>
-  <div class="facts"><div class="fact"><b>Documents</b><span>21</span></div><div class="fact"><b>Sections</b><span>6</span></div><div class="fact"><b>Updated</b><span>11/02/2026</span></div></div>
+  <div class="facts"><div class="fact"><b>Documents</b><span>21</span></div><div class="fact"><b>Sections</b><span>6</span></div><div class="fact"><b>Updated</b><span>11/21/2026</span></div></div>
   <div class="about"><b>About this document.</b> This is the in-product help, reproduced in full and unaltered — the same text the application serves to its users. It describes the software as built. It contains no business, market or financial information, and no usage figures.</div>
   <div class="foot"><span>ishaunted.com</span><span>Product documentation</span></div>
 </section>
@@ -270,7 +270,8 @@ same clock, then sends the whole night to your group's case.
 <p>While it's running, the first groups that gather their members in a week get the plan their size
 earns, free for a year. The home page and the Pricing page say how many spots are left; open
 <strong>Founding groups</strong> to see how it works, the prizes and the leaderboard, and its <strong>rules</strong> for every
-detail. To take part, start your group, then claim a spot from the Founding groups page.</p>
+detail. To take part, start your investigation group, then claim a spot from the Founding groups page.
+Tours, events and haunted properties have plans of their own and can't take part.</p>
 <p><img alt="The founding groups on the home page: a lantern for each spot still open" src=".print-media/Ben.Web.Website/wwwroot/help/media/getting-started/founding-groups.jpg" /></p>
 <h2>Who does what</h2>
 <table>
@@ -1500,6 +1501,8 @@ room you're in, and it doesn't pretend to. You telling it is the only reliable w
 <p>Rooms you've already used in this session appear first in the list, so walking a loop through a
 house is one tap per room instead of typing names again in the dark. You can stop naming rooms at
 any time; readings keep their position and just stop being tied to a room.</p>
+<p>When you publish the session to a public place's archive, you can also say which of the place's rooms
+the session was in. See <em>Which room it was in</em>, below.</p>
 <h3>Marking, and setting the level things get marked at</h3>
 <p><strong>Mark</strong> adds a marker at this exact second; <strong>Note</strong> adds one with a line of explanation. Under
 <em>Levels</em> you set the base and the <strong>report level</strong> — how far the field or the sound has to change
@@ -1804,11 +1807,29 @@ way in this field to tell those two apart.</p>
    same cave's name slightly differently would create two.</li>
 <li>Nothing nearby? Type the place's name, and it will still be checked against existing records
    before a new one is created.</li>
+<li>Once it's published, the app asks <strong>Which room?</strong> Tap one of the place's rooms, or type the
+   room's name and tap <strong>Save</strong>. You can skip this and add the room later on the website.</li>
 </ol>
+<h3>Which room it was in</h3>
+<p>A place's page lists each session with the room it was recorded in, and has a button for each room,
+so you can read every night in Room 217 together. You choose the room from these:</p>
+<ul>
+<li><strong>The place's public rooms</strong>, which the group that runs the place shows on its page.</li>
+<li><strong>Your own group's rooms</strong> at the place, including ones your group keeps off its page.</li>
+<li><strong>Any other room</strong>, typed in. If you type the name of one of the place's rooms, the session goes
+  in that room.</li>
+</ul>
+<p>To add or change the room later, open <strong>My field sessions</strong> on the website. The <strong>Room</strong> column
+says <em>Say which</em>, or the room's name. Tap it to open the session, choose a room, or tap <strong>No room</strong> to
+clear it.</p>
+<p>This is the room for the whole session. The room you tap while recording, described above, is
+stamped on each reading as it happens, and stays as it was.</p>
+<p>If a group renames a room, its sessions show the new name. If a group removes a room that has
+sessions in it, the room stops being offered, and its sessions still say they were recorded there.</p>
 <h3>What becomes public, and what does not</h3>
 <ul>
 <li><strong>Your readings, your name, and when you recorded</strong> appear on the location's page.</li>
-<li><strong>Photos, video and audio</strong> are shared too, and any reader can flag them. A flagged session has its
+<li><strong>Photos, video and audio you chose to send</strong> are shared too, and any reader can flag them. A flagged session has its
   media hidden immediately until a moderator reviews it. The readings stay either way.</li>
 <li><strong>Public locations only.</strong> A session recorded at someone's home can never be archived. That work
   stays with you and your group, which is what the paid plans are for. A session sent to a group's
@@ -6642,6 +6663,10 @@ have unsaved changes. If you try to leave with unsaved changes, you are asked fi
 <p>The rooms themselves are set up on the venue's own <strong>Rooms</strong> page, which the event's Details card
 links to as <em>Describe the venue's rooms</em>. Each room can say how many it sleeps, whether it can be
 booked, and what beds it has.</p>
+<p>The same rooms are offered to people publishing a field session at the venue, so they can say which
+room it was recorded in. Rooms marked public are offered to anyone. The others are offered only to
+your group's members. Renaming a room renames it on those sessions too. Removing a room that has
+sessions in it retires it instead: it's no longer offered, and the sessions keep its name.</p>
 <p>A blank <strong>Sleeps</strong> means nobody has entered a number yet. Ask the venue, and any event that offers
 the room will need to enter its own number. <strong>Zero</strong> is a deliberate choice — a room nobody sleeps
 in, such as a parlor or a séance room that guests visit and leave. Blank and zero look similar on a
@@ -7586,7 +7611,8 @@ earns, free for a year. The details are on the <strong>Founding groups</strong> 
 the Pricing page, and its rules page.</p>
 <ol>
 <li><strong>Claim a spot.</strong> Open <strong>Founding groups</strong>, choose your group, and press <strong>Claim a spot and start our
-   week</strong>. Anyone who can change the group's settings can claim it.</li>
+   week</strong>. Anyone who can change the group's settings can claim it. Only investigation groups can take
+   part: ghost walking tours, event providers and haunted properties have plans of their own.</li>
 <li><strong>Gather your members.</strong> Your group's page shows the countdown, who counts, and why anyone doesn't
    yet: a member counts once they've confirmed their email address, and only if they're new to
    IsHaunted or not in another group. Each person counts for one group only. Use the invitation link on
