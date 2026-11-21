@@ -248,6 +248,13 @@ start_host() {
     if [[ "$name" == web ]]; then
       export Serilog__WriteTo__0__Args__connectionString="$CONN"
     fi
+    # The API's own sink (WriteTo index 1, after Console) too (11/21/2026). It was left on the local
+    # file's server, so when that server was out of reach — the Mac off the home network, the test
+    # database moved to MonsterASP — the API hung at startup waiting for its log table and the run
+    # said only "api never became ready".
+    if [[ "$name" == api ]]; then
+      export Serilog__WriteTo__1__Args__connectionString="$CONN"
+    fi
     # The phone's .m4a is read through ffmpeg (audio phase 4). Without it the API refuses .m4a
     # scans and clips in a sentence, so a machine that has ffmpeg tests the path production takes.
     if [[ "$name" == api ]] && command -v ffmpeg >/dev/null 2>&1; then

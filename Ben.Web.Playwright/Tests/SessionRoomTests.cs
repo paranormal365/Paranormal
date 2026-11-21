@@ -115,14 +115,15 @@ public class SessionRoomTests : Oct16TestBase
         // The place's page: the room beside the night, and the room to narrow the archive to.
         await Page.GotoAsync($"{BaseUrl}/places/{_placeId}");
         var rooms = Page.Locator("[data-testid=archive-rooms]");
-        await Expect(rooms).ToContainTextAsync("Room 217 (1)", new() { Timeout = 20_000 });
+        // The archive comes in after the rest of the page, and later still on a slow database.
+        await Expect(rooms).ToContainTextAsync("Room 217 (1)", new() { Timeout = 60_000 });
         await rooms.GetByRole(AriaRole.Button, new() { Name = "Room 217 (1)" }).ClickAsync();
         await Expect(Page.Locator("[data-testid=archive-room]")).ToHaveCountAsync(1);
         await Expect(Page.Locator("[data-testid=archive-room]")).ToHaveTextAsync("Room 217");
 
         // Its public playback says so too.
         await Page.Locator("[data-testid=archive-play]").First.ClickAsync();
-        await Expect(Page.Locator("[data-testid=archive-room-banner]")).ToContainTextAsync("Recorded in Room 217", new() { Timeout = 20_000 });
+        await Expect(Page.Locator("[data-testid=archive-room-banner]")).ToContainTextAsync("Recorded in Room 217", new() { Timeout = 60_000 });
     }
 
     [Test]
