@@ -24,7 +24,9 @@ public sealed record PublicSessionSummary(
     /// <summary>That event's public page.</summary>
     string? EventUrl = null,
     /// <summary>The group that ran the event.</summary>
-    string? GroupName = null);
+    string? GroupName = null,
+    /// <summary>The room at the place it was recorded in, when its sender said (11/21/2026).</summary>
+    string? Room = null);
 
 /// <summary>A file a visitor may be served, by the id the archive's media route takes.</summary>
 public sealed record PublicSessionFile(Guid Id, string RelativePath, string ContentType);

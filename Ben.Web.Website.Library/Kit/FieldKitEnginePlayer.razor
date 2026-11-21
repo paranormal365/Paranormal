@@ -148,6 +148,10 @@
                 {
                     <text>From the field archive for </text><a href="@($"/places/{published.PlaceId}")">@published.PlaceName</a><text>.</text>
                 }
+                @if (published.Room is { Length: > 0 } room)
+                {
+                    <span data-testid="archive-room-banner"> Recorded in <strong>@room</strong>.</span>
+                }
                 Where somebody stood is shown at the place's public point, never where their phone was.
                 @if (published.Files.Count == 0)
                 {

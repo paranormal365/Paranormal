@@ -167,3 +167,58 @@ extension ArchiveActions {
         return await api.load(Endpoint(.get, path), as: SessionInsights.self).value
     }
 }
+
+/// One room a session may be put in: a public room of its place, or one of your own groups' rooms there.
+public struct SessionRoomChoice: Codable, Sendable, Equatable, Identifiable {
+    public let id: UUID
+    public let name: String
+    public let floor: String?
+    /// The group that named it.
+    public let groupName: String
+
+    public init(id: UUID, name: String, floor: String?, groupName: String) {
+        self.id = id
+        self.name = name
+        self.floor = floor
+        self.groupName = groupName
+    }
+}
+
+/// A session's room now, and the rooms of its place it may be put in (Ben, 11/21/2026).
+public struct SessionRoomChoices: Codable, Sendable, Equatable {
+    public let placeId: UUID?
+    public let placeName: String?
+    public let placeRoomId: UUID?
+    public let roomName: String?
+    public let rooms: [SessionRoomChoice]
+
+    public init(placeId: UUID?, placeName: String?, placeRoomId: UUID?, roomName: String?, rooms: [SessionRoomChoice]) {
+        self.placeId = placeId
+        self.placeName = placeName
+        self.placeRoomId = placeRoomId
+        self.roomName = roomName
+        self.rooms = rooms
+    }
+}
+
+extension ArchiveActions {
+    /// Which room of its place a session of yours is in, and the rooms you may pick.
+    public func roomChoices(serverSessionId: UUID) async -> SessionRoomChoices? {
+        let path = "api/field-sessions/\(serverSessionId.uuidString.lowercased())/room"
+        return await api.load(Endpoint(.get, path), as: SessionRoomChoices.self).value
+    }
+
+    /// Puts the session in one of the rooms offered, or in a room by name. Both nil takes it out of any room.
+    public func setRoom(serverSessionId: UUID, placeRoomId: UUID?, name: String?) async -> Result<SessionRoomChoices, FeedActionError> {
+        struct Body: Encodable { let placeRoomId: UUID?; let name: String? }
+        let path = "api/field-sessions/\(serverSessionId.uuidString.lowercased())/room"
+        guard let endpoint = try? Endpoint.json(.put, path, payload: Body(placeRoomId: placeRoomId, name: name))
+        else { return .failure(.failed(reason: nil)) }
+        switch await api.load(endpoint, as: SessionRoomChoices.self) {
+        case .ok(let choices): return .success(choices)
+        case .failed(let reason, _): return .failure(.failed(reason: reason))
+        case .sessionEnded: return .failure(.sessionEnded)
+        case .rateLimited(let after): return .failure(.rateLimited(retryAfter: after))
+        }
+    }
+}

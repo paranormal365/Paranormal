@@ -4473,6 +4473,9 @@ namespace Ben.Data.Source.Migrations
                     b.Property<DateTime?>("PlaceOptOutUtc")
                         .HasColumnType("datetime2");
 
+                    b.Property<Guid?>("PlaceRoomId")
+                        .HasColumnType("uniqueidentifier");
+
                     b.Property<bool>("PositionResolved")
                         .HasColumnType("bit");
 
@@ -4488,6 +4491,10 @@ namespace Ben.Data.Source.Migrations
                     b.Property<string>("RecordedByName")
                         .HasMaxLength(200)
                         .HasColumnType("nvarchar(200)");
+
+                    b.Property<string>("RoomName")
+                        .HasMaxLength(120)
+                        .HasColumnType("nvarchar(120)");
 
                     b.Property<DateTime?>("ShownWithEventResultsAtUtc")
                         .HasColumnType("datetime2");
@@ -4509,6 +4516,8 @@ namespace Ben.Data.Source.Migrations
                     b.HasIndex("CreatedByAppUserId");
 
                     b.HasIndex("DocumentUploadFileId");
+
+                    b.HasIndex("PlaceRoomId");
 
                     b.HasIndex("RecordedByAppUserId");
 
@@ -18394,6 +18403,11 @@ namespace Ben.Data.Source.Migrations
                         .HasForeignKey("PlaceId")
                         .OnDelete(DeleteBehavior.NoAction);
 
+                    b.HasOne("Ben.Data.Source.Entities.PlaceRoom", "PlaceRoom")
+                        .WithMany()
+                        .HasForeignKey("PlaceRoomId")
+                        .OnDelete(DeleteBehavior.NoAction);
+
                     b.HasOne("Ben.Data.Source.Entities.AppUser", "RecordedByAppUser")
                         .WithMany()
                         .HasForeignKey("RecordedByAppUserId")
@@ -18417,6 +18431,8 @@ namespace Ben.Data.Source.Migrations
                     b.Navigation("Investigation");
 
                     b.Navigation("Place");
+
+                    b.Navigation("PlaceRoom");
 
                     b.Navigation("RecordedByAppUser");
 

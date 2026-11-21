@@ -140,6 +140,23 @@ namespace Ben.Data.Source.Entities
         public Guid? PlaceId { get; set; }
 
         /// <summary>
+        /// The room at <see cref="PlaceId"/> this session was recorded in, when its sender picked one of the
+        /// rooms a group has named there (11/21/2026).
+        /// </summary>
+        /// <remarks>
+        /// Ben: "I recorded on the Paranormal Platform and want to attach it to my room at the site." The phone
+        /// stamps a typed room name on each reading as it goes; this is the session's room as a whole, chosen
+        /// afterwards, so a night can be found by room on the place's page.
+        /// </remarks>
+        public Guid? PlaceRoomId { get; set; }
+
+        /// <summary>
+        /// The room's name: the picked room's name when it was picked, or what the sender typed when the place
+        /// has no room by that name. Kept when a picked room is later removed, so the session still says where.
+        /// </summary>
+        public string? RoomName { get; set; }
+
+        /// <summary>
         /// When the owner published this session to its place's public archive, or null.
         /// </summary>
         /// <remarks>
@@ -237,6 +254,7 @@ namespace Ben.Data.Source.Entities
         public Guid? UpdatedByAppUserId { get; set; }
 
         public virtual Place? Place { get; set; }
+        public virtual PlaceRoom? PlaceRoom { get; set; }
         public virtual Investigation? Investigation { get; set; }
         public virtual AppUser SubmittedByAppUser { get; set; } = null!;
         public virtual AppUser? RecordedByAppUser { get; set; }

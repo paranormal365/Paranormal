@@ -526,8 +526,11 @@ struct UploadSessionView: View {
             } header: {
                 Text("Share what you found")
             } footer: {
+                // It said photos and audio stay private and that it could be undone. The recordings you chose to send
+                // are shared with it, and only a paid plan can take a session back out (Ben, 11/21/2026).
                 Text("Puts your readings on the location's own page, next to everyone else who "
-                   + "has recorded there. Photos and audio stay private. You can undo it later.")
+                   + "has recorded there, with any photos, video and audio you chose to send. "
+                   + "Only a paid plan can take it back out later.")
             }
             .sheet(isPresented: $offeringArchive) {
                 PublishToArchiveView(serverSessionId: serverId, localSessionId: sessionId)

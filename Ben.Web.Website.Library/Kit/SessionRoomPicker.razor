@@ -1,0 +1,93 @@
+@namespace Ben.Web.Website.Library.Kit
+@inject IBenAdminClient AdminClient
+@inject IBenUserState UserState
+
+@*
+    Which room of its place a session was recorded in (Ben, 11/21/2026): "I recorded on the Paranormal Platform
+    and want to attach it to my room at the site." Shown to the session's sender on its page. The rooms offered
+    are the place's public rooms and the rooms the sender's own groups have named there; any other room can be
+    typed. The place's page then says which room each night was in.
+*@
+
+<div class="w-100" id="session-room" data-testid="session-room">
+    @if (_r.Failed)
+    {
+        <div class="text-secondary small">@(_r.Reason ?? "The room couldn't be loaded just now.")</div>
+    }
+    else if (_r.Item is { } r)
+    {
+        <div class="small fw-semibold mb-1">
+            Room@(r.PlaceName is { Length: > 0 } place ? $" at {place}" : "")
+        </div>
+        <div class="small mb-2" data-testid="session-room-now">
+            @if (r.RoomName is { Length: > 0 } room)
+            {
+                <span>Recorded in <strong>@room</strong>.</span>
+            }
+            else
+            {
+                <span class="text-secondary">No room yet. Say which room this was recorded in, and the place's page shows it with that room.</span>
+            }
+        </div>
+
+        @if (r.Rooms.Count > 0)
+        {
+            <div class="d-flex flex-wrap gap-2 mb-2" data-testid="session-room-choices">
+                @foreach (var choice in r.Rooms)
+                {
+                    var pick = choice;
+                    var picked = r.PlaceRoomId == pick.Id;
+                    <button type="button" class="btn btn-sm @(picked ? "btn-primary" : "btn-outline-secondary")"
+                            disabled="@(_busy || picked)" title="@($"Named by {pick.GroupName}")"
+                            @onclick="() => SaveAsync(pick.Id, null)">
+                        @pick.Name@(pick.Floor is { Length: > 0 } floor ? $" · {floor}" : "")
+                    </button>
+                }
+            </div>
+        }
+
+        <div class="d-flex flex-wrap gap-2 align-items-start" style="max-width:520px;">
+            <BenTextBox id="session-room-name" class="form-control form-control-sm" style="flex:1 1 14rem;"
+                        placeholder="@(r.Rooms.Count > 0 ? "Another room — type its name" : "The room's name, such as Room 217")"
+                        Value="@_text" OnInput="@(e => _text = e.Value?.ToString() ?? "")" />
+            <button type="button" class="btn btn-outline-primary btn-sm" id="session-room-save"
+                    disabled="@(_busy || string.IsNullOrWhiteSpace(_text))" @onclick="() => SaveAsync(null, _text)">Save</button>
+            @if (r.RoomName is { Length: > 0 })
+            {
+                <button type="button" class="btn btn-link btn-sm text-secondary" id="session-room-clear"
+                        disabled="@_busy" @onclick="() => SaveAsync(null, null)">No room</button>
+            }
+        </div>
+        @if (_error is { Length: > 0 })
+        {
+            <div class="alert alert-warning small py-2 mt-2 mb-0" role="alert" id="session-room-error">@_error</div>
+        }
+    }
+</div>
+
+@code {
+    [Parameter, EditorRequired] public Guid SessionId { get; set; }
+
+    private Ben.Web.Services.WebApi.ItemResult<SessionRoomChoices> _r;
+    private string _text = "";
+    private bool _busy;
+    private string? _error;
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (!firstRender) return;
+        if (!await UserState.WaitUntilAuthReadyAsync(RendererInfo.IsInteractive)) return;
+        _r = await AdminClient.GetSessionRoomAsync(SessionId);
+        StateHasChanged();
+    }
+
+    private async Task SaveAsync(Guid? roomId, string? name)
+    {
+        _busy = true; _error = null;
+        var (saved, error) = await AdminClient.SetSessionRoomAsync(SessionId, roomId, name?.Trim());
+        _busy = false;
+        if (saved is null) { _error = error ?? "The room couldn't be saved just now."; return; }
+        _r = Ben.Web.Services.WebApi.ItemResult<SessionRoomChoices>.Ok(saved);
+        _text = "";
+    }
+}

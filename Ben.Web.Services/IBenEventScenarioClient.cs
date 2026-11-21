@@ -21,6 +21,12 @@ public interface IBenEventScenarioClient
     /// <summary>The sender keeps their session off the place's page, or lets the organizers show it there.</summary>
     Task<(bool Done, string? Error)> SetSessionKeptOffPlaceAsync(Guid sessionId, bool keepOff, CancellationToken token = default);
 
+    /// <summary>The room a session of the sender's was recorded in, and the rooms of its place they may pick (11/21/2026).</summary>
+    Task<ItemResult<SessionRoomChoices>> GetSessionRoomAsync(Guid sessionId, CancellationToken token = default);
+
+    /// <summary>Puts the sender's session in one of its place's rooms, or a room by name; both empty clears it.</summary>
+    Task<(SessionRoomChoices? Result, string? Error)> SetSessionRoomAsync(Guid sessionId, Guid? placeRoomId, string? name, CancellationToken token = default);
+
     /// <summary>An event's findings, for its organizer: who can see them, and what the place's page shows.</summary>
     Task<ItemResult<EventFindingsRecord>> GetEventFindingsAsync(Guid orgId, Guid eventId, CancellationToken token = default);
 

@@ -1574,6 +1574,11 @@ The rooms themselves are set up on the venue's own **Rooms** page, which the eve
 links to as *Describe the venue's rooms*. Each room can say how many it sleeps, whether it can be
 booked, and what beds it has.
 
+The same rooms are offered to people publishing a field session at the venue, so they can say which
+room it was recorded in. Rooms marked public are offered to anyone. The others are offered only to
+your group's members. Renaming a room renames it on those sessions too. Removing a room that has
+sessions in it retires it instead: it's no longer offered, and the sessions keep its name.
+
 A blank **Sleeps** means nobody has entered a number yet. Ask the venue, and any event that offers
 the room will need to enter its own number. **Zero** is a deliberate choice — a room nobody sleeps
 in, such as a parlor or a séance room that guests visit and leave. Blank and zero look similar on a

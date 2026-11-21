@@ -530,14 +530,28 @@
                 @(_sessions.Sum(x => x.MarkerCount) == 1 ? "moment" : "moments") between them.
                 Readings are what people recorded; what they mean is for you to judge.
             </p>
+            @* Which room each night was in, when its sender said (11/21/2026), so a room's nights can be read together. *@
+            @if (RoomGroups.Count > 0)
+            {
+                <div class="d-flex flex-wrap gap-2 mb-2" data-testid="archive-rooms">
+                    <button type="button" class="btn btn-sm @(_room is null ? "btn-primary" : "btn-outline-secondary")"
+                            @onclick="() => _room = null">Every room</button>
+                    @foreach (var g in RoomGroups)
+                    {
+                        var key = g.Key;
+                        <button type="button" class="btn btn-sm @(_room == key ? "btn-primary" : "btn-outline-secondary")"
+                                @onclick="() => _room = key">@g.Name <span class="opacity-75">(@g.Count)</span></button>
+                    }
+                </div>
+            }
             <div class="table-responsive">
                 <table class="table table-sm align-middle mb-0">
                     <thead><tr>
-                        <th>When</th><th>Who</th><th>Where they stood</th>
+                        <th>When</th><th>Who</th><th>Room</th><th>Where they stood</th>
                         <th class="text-end">Readings</th><th class="text-end">Flagged</th><th>Device</th>
                     </tr></thead>
                     <tbody>
-                        @foreach (var fs in _sessions)
+                        @foreach (var fs in _sessions.Where(x => _room is null || RoomKey(x) == _room))
                         {
                             <tr>
                                 <td class="text-nowrap">
@@ -549,6 +563,7 @@
                                        href="@($"/places/{PlaceId}/sessions/{fs.Id}")">Play it back</a>
                                 </td>
                                 <td><UserNameLink AppUserId="@fs.ContributorAppUserId" DisplayName="@fs.ContributorName" /></td>
+                                <td data-testid="archive-room">@(string.IsNullOrWhiteSpace(fs.Room) ? "—" : fs.Room)</td>
                                 <td>@(string.IsNullOrWhiteSpace(fs.LocationLabel) ? "—" : fs.LocationLabel)</td>
                                 <td class="text-end">@fs.ReadingCount.ToString("N0")</td>
                                 @* The single most comparable number across visits — "eleven of
@@ -572,7 +587,7 @@
                             @if (fs.ApprovedMediaCount > 0)
                             {
                                 <tr>
-                                    <td colspan="6" class="pt-0 pb-3">
+                                    <td colspan="7" class="pt-0 pb-3">
                                         <div class="d-flex flex-wrap gap-2 align-items-start">
                                             @foreach (var m in fs.Media!)
                                             {
@@ -866,6 +881,23 @@
     [Parameter] public Guid PlaceId { get; set; }
 
     private List<Ben.Web.Services.PublicPlaceSessionRow>? _sessions;
+
+    /// <summary>The room the archive is narrowed to, by <see cref="RoomKey"/>; null for every room.</summary>
+    private string? _room;
+
+    /// <summary>A picked room by its id, so two groups' rooms of one name stay apart; a typed one by its name.</summary>
+    private static string? RoomKey(Ben.Web.Services.PublicPlaceSessionRow row)
+        => row.PlaceRoomId is Guid id ? id.ToString("N")
+         : string.IsNullOrWhiteSpace(row.Room) ? null : row.Room.Trim().ToLowerInvariant();
+
+    /// <summary>The rooms the archive's sessions were recorded in, most sessions first.</summary>
+    private List<(string Key, string Name, int Count)> RoomGroups
+        => (_sessions ?? [])
+            .Where(x => RoomKey(x) is not null)
+            .GroupBy(x => RoomKey(x)!)
+            .Select(g => (g.Key, g.First().Room!.Trim(), g.Count()))
+            .OrderByDescending(g => g.Item3).ThenBy(g => g.Item2)
+            .ToList();
 
     private PlaceRecord? _place;
     private PlaceSummary? _summary;

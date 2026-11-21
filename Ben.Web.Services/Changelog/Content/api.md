@@ -35,6 +35,9 @@ belongs there; this is for the part underneath.
 
 ## Unreleased
 
+- A field session can be put in a room of its place, picked or typed, by the person who sent it. A
+  place's archive and a session's public summary carry the room.
+
 - A field session can be read as a timeline, worked out once and shared by everybody watching it.
   Shared links and the public archive get their own versions, with locations removed or replaced by
   the place's public point.

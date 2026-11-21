@@ -1057,7 +1057,9 @@ public sealed partial class FieldSessionUploadController : BenControllerBase
             session.EventResultsConsentAtUtc,
             session.ShownWithEventResultsAtUtc,
             session.OnPlaceChosenUtc,
-            session.PlaceOptOutUtc);
+            session.PlaceOptOutUtc,
+            PlaceRoomId: session.PlaceRoomId,
+            RoomName: session.RoomName);
 }
 
 /// <summary>The few facts read out of a session document so sessions can be listed without
@@ -1186,7 +1188,10 @@ public sealed record FieldSessionRecord(
     // What the person reading it may do with it on that page: their own session's delete and
     // switches, or the hosted event's "show with the results". Only the single-session read fills them.
     bool SentByViewer = false,
-    bool ViewerRunsTheEvent = false);
+    bool ViewerRunsTheEvent = false,
+    // The room at its place its sender put it in (11/21/2026). Trailing and defaulted.
+    Guid? PlaceRoomId = null,
+    string? RoomName = null);
 
 /// <summary>A session and its document, for playing back.</summary>
 public sealed record FieldSessionDetail(FieldSessionRecord Session, string Document);

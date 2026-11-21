@@ -169,6 +169,7 @@
                     <tr>
                         <th>Recorded</th>
                         <th>Where they stood</th>
+                        <th>Room</th>
                         <th class="text-end">Readings</th>
                         <th class="text-end">Flagged</th>
                         <th class="text-end">Files</th>
@@ -182,6 +183,10 @@
                         <tr data-testid="session-row">
                             <td class="text-nowrap">@row.StartedAt.ToViewerLocalTime(UserState).ToDisplayDate()</td>
                             <td>@(string.IsNullOrWhiteSpace(row.LocationLabel) ? "—" : row.LocationLabel)</td>
+                            @* The room it was recorded in (11/21/2026); set or changed on the session's own page. *@
+                            <td data-testid="session-row-room">
+                                <a class="small" href="@($"/field-sessions/{row.Id}#session-room")">@(string.IsNullOrWhiteSpace(row.RoomName) ? "Say which" : row.RoomName)</a>
+                            </td>
                             <td class="text-end font-monospace">@row.ReadingCount.ToString("N0")</td>
                             <td class="text-end">
                                 @if (row.MarkerCount > 0)

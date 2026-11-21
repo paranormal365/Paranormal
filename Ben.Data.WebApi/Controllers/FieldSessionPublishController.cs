@@ -396,6 +396,8 @@ public sealed class FieldSessionPublishController : BenControllerBase
                                 + "that place's archive.");
         }
 
+        // A room picked at another place isn't a room of this one. The name stays, as the sender typed or picked it.
+        if (session.PlaceId != place.Id) session.PlaceRoomId = null;
         session.PlaceId = place.Id;
         // Re-publishing an already-public session keeps its original date: the answer to "when
         // did this become public" must not move because somebody pressed the button twice.

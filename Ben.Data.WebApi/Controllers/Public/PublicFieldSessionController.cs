@@ -172,6 +172,7 @@ public sealed class PublicFieldSessionController : ControllerBase
                 s.StartedAt, s.EndedAt, s.DeviceModel,
                 RecordedBy = s.RecordedByName ?? s.SubmittedByAppUser.DisplayName ?? "A contributor",
                 EventTitle = (string?)null, EventOrg = (string?)null, EventUrlName = (string?)null, GroupName = (string?)null,
+                s.RoomName,
             })
             .FirstOrDefaultAsync(ct)
             // Or shown with a hosted event's results (event-scenario-gaps): the event's place stands in.
@@ -190,6 +191,7 @@ public sealed class PublicFieldSessionController : ControllerBase
                     EventOrg = db.HostedEvents.Where(h => h.Id == s.HostedEventId).Select(h => (string?)h.Organization.UrlName).First(),
                     EventUrlName = db.HostedEvents.Where(h => h.Id == s.HostedEventId).Select(h => (string?)h.UrlName).First(),
                     GroupName = db.HostedEvents.Where(h => h.Id == s.HostedEventId).Select(h => (string?)h.Organization.Name).First(),
+                    s.RoomName,
                 })
                 .FirstOrDefaultAsync(ct);
         if (session is null) return NotFound();
@@ -205,7 +207,8 @@ public sealed class PublicFieldSessionController : ControllerBase
             session.StartedAt, session.EndedAt, session.DeviceModel, session.RecordedBy, files,
             EventTitle: session.EventTitle,
             EventUrl: session.EventOrg is { } org && session.EventUrlName is { } slug ? $"/o/{org}/events/{slug}" : null,
-            GroupName: session.GroupName));
+            GroupName: session.GroupName,
+            Room: session.RoomName));
     }
 
     /// <summary>
