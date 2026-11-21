@@ -692,15 +692,17 @@ private struct StartSessionSheet: View {
                             .font(.caption)
                             .accessibilityIdentifier("start-locate-again")
                     }
-                } else if whereOutcome == .noName, label.trimmingCharacters(in: .whitespaces).isEmpty {
+                } else if whereOutcome == .noName, label.trimmingCharacters(in: .whitespaces).isEmpty, offeredPlaces.isEmpty {
                     Text("Nothing nearby to name this spot by — type where you are.")
                         .font(.caption).foregroundStyle(Theme.fog)
-                } else if nearbyPlaces.count > 1 {
-                    // Other known places close by, one tap each — the phone's first guess is not
-                    // always the building somebody is standing in.
+                } else if !offeredPlaces.isEmpty {
+                    // Known public places close by, one tap each — the phone's first guess is not
+                    // always the building somebody is standing in. Shown for one place too (Ben,
+                    // 11/21/2026): a campus's point can be more than a quarter mile from where you
+                    // stand, so its name wasn't filled in and, with only the one, wasn't offered.
                     ScrollView(.horizontal, showsIndicators: false) {
                         HStack {
-                            ForEach(nearbyPlaces.prefix(5)) { place in
+                            ForEach(offeredPlaces) { place in
                                 Button(place.name ?? "Unnamed place") { useName(place.name) }
                                     .buttonStyle(.signalSecondary)
                                     .font(.caption)
@@ -736,6 +738,12 @@ private struct StartSessionSheet: View {
             return "Filled in from where your phone is. Change it to anything you'll recognize later."
         }
         return "Your own words. This is what you'll recognize the session by later."
+    }
+
+    /// The nearby public places to offer as buttons: the closest five, less the one already in the box.
+    private var offeredPlaces: [ArchivePlaceCandidate] {
+        let typed = label.trimmingCharacters(in: .whitespaces)
+        return Array(nearbyPlaces.filter { ($0.name ?? "") != typed }.prefix(5))
     }
 
     private func useName(_ name: String?) {

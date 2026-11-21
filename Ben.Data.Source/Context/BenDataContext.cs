@@ -4615,6 +4615,13 @@ namespace Ben.Data.Source.Context
             // The archive's one query: everything published at this place, newest first.
             modelBuilder.Entity<FieldSessionUpload>()
                 .HasIndex(e => new { e.PlaceId, e.PublishedAtUtc });
+            // NoAction, like the place: removing a room must never take a night's recording with it. A room
+            // somebody's session is in is retired instead (PlaceRoomController.Delete), and a group's purge
+            // clears the link first and leaves the name.
+            modelBuilder.Entity<FieldSessionUpload>()
+                .HasOne(e => e.PlaceRoom).WithMany()
+                .HasForeignKey(e => e.PlaceRoomId).IsRequired(false).OnDelete(DeleteBehavior.NoAction);
+            modelBuilder.Entity<FieldSessionUpload>().Property(e => e.RoomName).HasMaxLength(120);
             modelBuilder.Entity<FieldSessionUpload>().Property(e => e.MediaReviewNote).HasMaxLength(500);
             // The same declaration every other coordinate column carries; CoordinatePrecisionTests
             // refuses anything narrower, and matching the rest means one index shape across tables.

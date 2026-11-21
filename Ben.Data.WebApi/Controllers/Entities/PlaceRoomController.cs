@@ -179,6 +179,9 @@ public sealed class PlaceRoomController : BenControllerBase
         room.UpdatedByAppUserId = GetCurrentUserId();
 
         await db.SaveChangesAsync(ct);
+        // Sessions put in this room carry its name (11/21/2026), so a renamed room renames them.
+        await db.FieldSessionUploads.Where(s => s.PlaceRoomId == roomId && s.RoomName != name)
+            .ExecuteUpdateAsync(u => u.SetProperty(s => s.RoomName, name), ct);
         return Ok(ToRecord(room));
     }
 
@@ -187,9 +190,9 @@ public sealed class PlaceRoomController : BenControllerBase
     /// </summary>
     /// <remarks>
     /// <para>A room that has been used is deactivated rather than removed, so anything recorded in
-    /// it still reads afterwards — the same rule equipment and duties follow. Field sessions do not
-    /// attribute to a room row yet, so today this deletes; the branch is kept so that when they do,
-    /// retiring one cannot orphan a night's work.</para>
+    /// it still reads afterwards — the same rule equipment and duties follow. A room a field session
+    /// has been put in (11/21/2026) is retired: it leaves the rooms people can pick, and the session
+    /// still reads as recorded there.</para>
     ///
     /// <para><b>A room on an event's plan is refused, by name</b> (item 235 phase 1). The plan's
     /// unit points at the room with a NoAction key, so the delete used to reach SQL and come back
@@ -229,7 +232,13 @@ public sealed class PlaceRoomController : BenControllerBase
             return Conflict($"{room.Name} is on the plan of {plans}. Take it off the plan first.");
         }
 
-        db.PlaceRooms.Remove(room);
+        if (await db.FieldSessionUploads.AnyAsync(s => s.PlaceRoomId == roomId, ct))
+        {
+            room.IsActive = false;
+            room.DateUpdated = DateTime.UtcNow;
+            room.UpdatedByAppUserId = GetCurrentUserId();
+        }
+        else db.PlaceRooms.Remove(room);
         await db.SaveChangesAsync(ct);
         return NoContent();
     }

@@ -649,6 +649,10 @@ public sealed class OrganizationPurge
             await db.HostedEventSessions
                 .Where(x => x.PlaceRoomId != null && x.PlaceRoom!.OrganizationId == organizationId)
                 .ExecuteUpdateAsync(u => u.SetProperty(x => x.PlaceRoomId, (Guid?)null), ct);
+            // A field session someone put in one of this group's rooms keeps the room's name, not the link.
+            await db.FieldSessionUploads
+                .Where(x => x.PlaceRoomId != null && x.PlaceRoom!.OrganizationId == organizationId)
+                .ExecuteUpdateAsync(u => u.SetProperty(x => x.PlaceRoomId, (Guid?)null), ct);
             await db.PlaceRooms.Where(x => x.OrganizationId == organizationId).ExecuteDeleteAsync(ct);
             // A SuperAdmin's grant of a place's scans to this group (LiDAR plan). The scans stay
             // with the place; who looks after them falls back to the ordinary rule.

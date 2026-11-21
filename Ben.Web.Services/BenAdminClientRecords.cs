@@ -492,7 +492,10 @@ public sealed record PublicPlaceSessionRow(
     /// Media a reviewer has cleared for this page — empty until one has, by the fail-closed
     /// default, and empty again the moment somebody reports it.
     /// </summary>
-    IReadOnlyList<ArchiveMediaItem>? Media = null)
+    IReadOnlyList<ArchiveMediaItem>? Media = null,
+    /// <summary>The room it was recorded in, when its sender said (11/21/2026); grouped by <c>PlaceRoomId</c> when picked.</summary>
+    Guid? PlaceRoomId = null,
+    string? Room = null)
 {
     /// <summary>How many recordings this row can show. Derived, so it cannot disagree with the list.</summary>
     public int ApprovedMediaCount => Media?.Count ?? 0;
@@ -1694,7 +1697,10 @@ public sealed record FieldSessionSummaryRecord(
     /// <summary>The person reading it sent it: their delete and switches show on its page.</summary>
     bool SentByViewer = false,
     /// <summary>The person reading it runs the hosted event it was sent to.</summary>
-    bool ViewerRunsTheEvent = false)
+    bool ViewerRunsTheEvent = false,
+    /// <summary>The room at its place its sender put it in (11/21/2026), picked or typed.</summary>
+    Guid? PlaceRoomId = null,
+    string? RoomName = null)
 {
     /// <summary>Whether it belongs to a group's record rather than to the person alone.</summary>
     public bool IsGroupWork => InvestigationId is not null || OrgCalendarEventId is not null || HostedEventId is not null;
@@ -2044,3 +2050,10 @@ public sealed record SessionFileRecord(
     Guid? InvestigationId,
     string? InvestigationTitle,
     DateTime? PublishedAtUtc);
+
+/// <summary>A session's room, and the rooms it may be put in. Mirrors <c>SessionRoomChoices</c> in the WebApi.</summary>
+public sealed record SessionRoomChoices(
+    Guid? PlaceId, string? PlaceName, Guid? PlaceRoomId, string? RoomName, IReadOnlyList<SessionRoomChoice> Rooms);
+
+/// <summary>One room a session may be put in, with the group that named it.</summary>
+public sealed record SessionRoomChoice(Guid Id, string Name, string? Floor, string GroupName);

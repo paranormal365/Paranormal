@@ -108,3 +108,70 @@ struct ArchiveActionsTests {
 private extension Result where Success == Void {
     var isSuccess: Bool { if case .success = self { true } else { false } }
 }
+
+/// Which room of its place a session was recorded in (Ben, 11/21/2026).
+@Suite("Archive — the room a session was in")
+@MainActor
+struct SessionRoomTests {
+
+    private static func actions(_ transport: MockTransport) -> ArchiveActions {
+        let tokens = TokenSession(storage: InMemoryTokenStorage(), transport: transport, environment: { .dev })
+        return ArchiveActions(api: APIClient(environment: { .dev }, transport: transport, tokens: tokens))
+    }
+
+    /// The API's own shape for GET and PUT api/field-sessions/{id}/room.
+    nonisolated static let choicesJSON = """
+    {"placeId":"22222222-2222-2222-2222-222222222222","placeName":"Vanderbilt",
+     "placeRoomId":"33333333-3333-3333-3333-333333333333","roomName":"Room 217",
+     "rooms":[{"id":"33333333-3333-3333-3333-333333333333","name":"Room 217","floor":"Second floor",
+               "groupName":"Vanderbilt Paranormal"},
+              {"id":"44444444-4444-4444-4444-444444444444","name":"Kirkland Hall","floor":null,
+               "groupName":"Another Group"}]}
+    """
+
+    @Test func theRoomsOfThePlaceDecodeWithWhoNamedThem() async {
+        let transport = MockTransport { request in
+            (Data(Self.choicesJSON.utf8), MockTransport.response(for: request, status: 200))
+        }
+        let choices = await Self.actions(transport).roomChoices(serverSessionId: UUID())
+
+        #expect(choices?.placeName == "Vanderbilt")
+        #expect(choices?.roomName == "Room 217")
+        #expect(choices?.rooms.count == 2)
+        #expect(choices?.rooms.first?.groupName == "Vanderbilt Paranormal")
+        #expect(choices?.rooms.last?.floor == nil)
+    }
+
+    @Test func pickingARoomSendsItsIdWithAPut() async {
+        let seen = RequestBox()
+        let transport = MockTransport { request in
+            seen.request = request
+            return (Data(Self.choicesJSON.utf8), MockTransport.response(for: request, status: 200))
+        }
+        let room = UUID(uuidString: "33333333-3333-3333-3333-333333333333")!
+        let result = await Self.actions(transport).setRoom(serverSessionId: UUID(), placeRoomId: room, name: nil)
+
+        guard case .success(let saved) = result else { Issue.record("expected the saved room"); return }
+        #expect(saved.placeRoomId == room)
+        #expect(seen.request?.httpMethod == "PUT")
+        #expect(seen.request?.url?.path.hasSuffix("/room") == true)
+        let body = String(data: seen.request?.httpBody ?? Data(), encoding: .utf8) ?? ""
+        #expect(body.contains("33333333-3333-3333-3333-333333333333"))
+    }
+
+    @Test func aRefusalKeepsTheServersSentence() async {
+        let transport = MockTransport { request in
+            (Data("That room isn't one of this place's rooms you can pick.".utf8),
+             MockTransport.response(for: request, status: 400))
+        }
+        let result = await Self.actions(transport).setRoom(serverSessionId: UUID(), placeRoomId: UUID(), name: nil)
+
+        guard case .failure(let error) = result else { Issue.record("expected a refusal"); return }
+        #expect(error.message.contains("isn't one of this place's rooms"))
+    }
+}
+
+/// Holds the last request a mock transport saw, across its @Sendable closure.
+private final class RequestBox: @unchecked Sendable {
+    var request: URLRequest?
+}

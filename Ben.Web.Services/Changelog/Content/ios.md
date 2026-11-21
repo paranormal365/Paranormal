@@ -29,6 +29,13 @@ it is hidden from everybody else, but still takes its number. No other sub-headi
 
 ## Unreleased
 
+- After you add a session to a place's public archive, Which room? lets you tap one of the place's rooms
+  or type one.
+- Starting a session near a single public place offers it by name. Before, a place more than a quarter
+  mile away was only offered when there were two or more nearby.
+- Sending and publishing say what happens: your readings go public with the photos, video and audio you
+  chose to send, and only a paid plan can take them back out. It said they stayed private.
+
 - In a session's review, Next and Previous mark pressed while it plays go to the mark just ahead and
   the one just passed. Before, Next skipped a mark less than three seconds away.
 - A session sent to the website carries the time zone it was recorded in, so the website shows the time

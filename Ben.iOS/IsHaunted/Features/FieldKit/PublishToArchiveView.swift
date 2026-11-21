@@ -29,6 +29,10 @@ struct PublishToArchiveView: View {
     @State private var busy = false
     @State private var failure: String?
     @State private var published = false
+    /// The room step after publishing (Ben, 11/21/2026): which room of the place this was recorded in.
+    @State private var rooms: SessionRoomChoices?
+    @State private var roomName = ""
+    @State private var roomFailure: String?
 
     private var coordinates: (latitude: Double, longitude: Double)? {
         dependencies.fieldKit.coordinates(for: localSessionId)
@@ -42,9 +46,10 @@ struct PublishToArchiveView: View {
                         Label("Published", systemImage: "checkmark.circle")
                             .foregroundStyle(Theme.success)
                         Text("Your readings are on the location's page now, alongside everyone "
-                           + "else who has recorded there. You can take them back out at any time.")
+                           + "else who has recorded there. On a paid plan, you can take them back out.")
                             .font(.callout).foregroundStyle(Theme.fog)
                     }
+                    roomSection
                 } else {
                     explainer
                     if loading {
@@ -74,9 +79,11 @@ struct PublishToArchiveView: View {
     @ViewBuilder
     private var explainer: some View {
         Section {
+            // It said photos, video and audio stay private. The ones you chose to send are shared with the
+            // readings, and anyone can report one (Ben, 11/21/2026).
             Text("Your readings become public on this location's page, with your name and the "
-               + "times you recorded. Photos, video and audio stay private — only the numbers "
-               + "are shared.")
+               + "times you recorded, and any photos, video and audio you chose to send. "
+               + "Anyone can report one. Next, you can say which room it was.")
             Text("One person's readings are a story. A location recorded by ten people is "
                + "something anyone can check.")
                 .font(.callout).foregroundStyle(Theme.fog)
@@ -160,7 +167,71 @@ struct PublishToArchiveView: View {
         }
     }
 
+    /// Which room it was recorded in. One tap on a room the place already has, or a typed name.
+    @ViewBuilder
+    private var roomSection: some View {
+        if let rooms {
+            Section {
+                if let current = rooms.roomName, !current.isEmpty {
+                    Label("Recorded in \(current)", systemImage: "door.left.hand.open")
+                        .foregroundStyle(Theme.success)
+                        .accessibilityIdentifier("archive-room-now")
+                }
+                ForEach(rooms.rooms) { room in
+                    Button {
+                        Task { await saveRoom(placeRoomId: room.id, name: nil) }
+                    } label: {
+                        HStack {
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text(room.name).foregroundStyle(Theme.bone)
+                                Text([room.floor, "named by \(room.groupName)"].compactMap { $0 }.joined(separator: " · "))
+                                    .font(.caption).foregroundStyle(Theme.fog)
+                            }
+                            Spacer()
+                            if rooms.placeRoomId == room.id {
+                                Image(systemName: "checkmark").foregroundStyle(Theme.ecto)
+                            }
+                        }
+                    }
+                    .disabled(busy)
+                }
+                HStack {
+                    TextField(rooms.rooms.isEmpty ? "The room's name, such as Room 217" : "Another room — type its name",
+                              text: $roomName)
+                        .accessibilityIdentifier("archive-room-name")
+                    Button("Save") {
+                        Task { await saveRoom(placeRoomId: nil, name: roomName.trimmingCharacters(in: .whitespaces)) }
+                    }
+                    .disabled(busy || roomName.trimmingCharacters(in: .whitespaces).isEmpty)
+                    .accessibilityIdentifier("archive-room-save")
+                }
+                if let roomFailure {
+                    Text(roomFailure).foregroundStyle(Theme.danger)
+                }
+            } header: {
+                Text("Which room?")
+            } footer: {
+                Text("The location's page shows each session with its room, so a room's nights can be read together. "
+                   + "You can change it later on the website.")
+            }
+        }
+    }
+
     // MARK: - Work
+
+    private func saveRoom(placeRoomId: UUID?, name: String?) async {
+        busy = true
+        roomFailure = nil
+        defer { busy = false }
+        switch await dependencies.archiveActions.setRoom(
+            serverSessionId: serverSessionId, placeRoomId: placeRoomId, name: name) {
+        case .success(let saved):
+            rooms = saved
+            roomName = ""
+        case .failure(let error):
+            roomFailure = error.message
+        }
+    }
 
     private func loadCandidates() async {
         let here = coordinates
@@ -180,6 +251,7 @@ struct PublishToArchiveView: View {
         switch await action() {
         case .success:
             published = true
+            rooms = await dependencies.archiveActions.roomChoices(serverSessionId: serverSessionId)
         case .failure(let error):
             // The server's sentence, when it wrote one — "Only public locations have an open
             // archive" tells somebody what to do, and "couldn't publish" tells them nothing.

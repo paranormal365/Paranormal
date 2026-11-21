@@ -33,6 +33,13 @@ day-by-day account of building it would say nothing to anyone using it now.
 
 ## Unreleased
 
+- You can say which room of a place a published field session was recorded in: pick one of the place's
+  rooms or type one, from the session's page. My field sessions has a Room column that opens it.
+- A place's field archive shows each session's room, with a button for each room to see only its sessions,
+  and a session's public playback says which room it was in.
+- A group's rooms are offered to people publishing a session at its place: public rooms to anyone, the
+  others to the group's members. Removing a room a session is in retires it, and the session keeps its name.
+
 - The founding groups: the first groups that gather their members in a week get the plan their size earns, free for a year, and can grow for free. The home page and Pricing say how many spots are left, and the promotion has its own page and rules.
 - Only paranormal investigation groups can claim a founding group spot. The Founding groups page offers a spot only
   for your investigation groups, and its rules say ghost walking tours, event providers and haunted properties can't take part.

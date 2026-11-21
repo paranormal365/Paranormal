@@ -8,8 +8,8 @@
     My field sessions and the event's list of sessions, so somebody watching their own night had to
     leave it to delete it or to say whether the organizers may show it.
 
-    The sender: delete (not for the group's record of a night), "May be shown with the results"
-    and "Keep it off the place's page". Whoever runs the hosted event: show it with the results, or
+    The sender: delete (not for the group's record of a night), "May be shown with the results",
+    "Keep it off the place's page", and which room it was recorded in (11/21/2026). Whoever runs the hosted event: show it with the results, or
     stop. Every refusal is the server's own sentence.
 *@
 
@@ -58,6 +58,11 @@
                         </div>
                     }
                 }
+            }
+
+            @if (Session.SentByViewer)
+            {
+                <SessionRoomPicker SessionId="@Session.Id" />
             }
 
             @if (ShowsOrganizer)

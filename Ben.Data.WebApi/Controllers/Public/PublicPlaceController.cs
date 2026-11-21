@@ -284,7 +284,10 @@ public sealed class PublicPlaceController : ControllerBase
                             f.UploadFile != null ? f.UploadFile.ContentType : (f.ContentType ?? ""),
                             f.UploadFile != null ? f.UploadFile.FileName : f.RelativePath))
                         .ToList()
-                    : new List<ArchiveMediaItem>()))
+                    : new List<ArchiveMediaItem>(),
+                s.PlaceRoomId,
+                // The picked room's name, kept in step when the room is renamed, or what the sender typed.
+                s.RoomName))
             .ToListAsync(ct);
         return rows.Select(r => r with { Media = r.Media!.Select(Finish).ToList() }).ToList();
     }
@@ -395,7 +398,9 @@ public sealed record PublicPlaceSessionRow(
     string DeviceModel,
     DateTime PublishedAtUtc,
     Guid DocumentUploadFileId,
-    IReadOnlyList<ArchiveMediaItem>? Media = null)
+    IReadOnlyList<ArchiveMediaItem>? Media = null,
+    Guid? PlaceRoomId = null,
+    string? Room = null)
 {
     /// <summary>
     /// How many recordings this row can show.

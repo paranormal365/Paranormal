@@ -21,6 +21,13 @@ public sealed partial class BenAdminClientAdapter
     public Task<(bool Done, string? Error)> SetSessionKeptOffPlaceAsync(Guid sessionId, bool keepOff, CancellationToken token = default)
         => SendNoBodyAsync(keepOff ? HttpMethod.Post : HttpMethod.Delete, $"/api/field-sessions/{sessionId}/keep-off-place", token);
 
+    public Task<ItemResult<SessionRoomChoices>> GetSessionRoomAsync(Guid sessionId, CancellationToken token = default)
+        => _api.GetItemAsync<SessionRoomChoices>($"/api/field-sessions/{sessionId}/room", token);
+
+    public Task<(SessionRoomChoices? Result, string? Error)> SetSessionRoomAsync(Guid sessionId, Guid? placeRoomId, string? name, CancellationToken token = default)
+        => _api.SendExpectingReasonAsync<object, SessionRoomChoices>(
+               HttpMethod.Put, $"/api/field-sessions/{sessionId}/room", new { placeRoomId, name }, token);
+
     private static string FindingsUrl(Guid orgId, Guid eventId) => $"/api/organizations/{orgId}/events/{eventId}/after/findings";
 
     public Task<ItemResult<EventFindingsRecord>> GetEventFindingsAsync(Guid orgId, Guid eventId, CancellationToken token = default)
